@@ -8,8 +8,13 @@ export default async function handler(req, res) {
        return res.status(400).json({ error: 'Invalid or missing URL parameter' });
    }
 
-   async function getCookieTiktok(headers) {
+   async function getCookieTiktok() {
       try {
+         const headers = {
+            'User-Agent': req.headers['user-agent'],
+            'Referer': 'https://www.tiktok.com/'
+           };
+
           const response = await axios.get("https://www.tiktok.com", { headers: headers });
           const setCookieHeader = response.headers['set-cookie'];
           const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;

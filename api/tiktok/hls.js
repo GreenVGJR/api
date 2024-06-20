@@ -8,7 +8,7 @@ export default async function handler(req, res) {
        return res.status(400).json({ error: 'Invalid or missing URL parameter' });
    }
 
-   if(url.includes("vt.tiktok.com") || url.includes("vm.tiktok.com")) {
+   if(!url.includes("vt.tiktok.com") || !url.includes("vm.tiktok.com")) {
        const realurl = url;
        const headers = {
         'User-Agent': req.headers['user-agent'] || 'undici',

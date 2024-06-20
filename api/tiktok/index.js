@@ -8,14 +8,18 @@ export default async function handler(req, res) {
         'Referer': 'https://www.tiktok.com/'
     };
 
+    const ua = req.headers['user-agent'] || 'undici';
+
     try {
         const response = await axios.get(url, { headers: headers });
         const setCookieHeader = response.headers['set-cookie'];
         const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
-        const match = setCookieString.match(/tt_chain_token=[^;]+/);
+        let match = setCookieString.match(/tt_chain_token=[^;]+/);
+        match = match ? match[0] : '';
         res.status(200).json({
             status: 'true', 
-            cookies: match ? match[0] : ''
+            cookies: match,
+            user_agent: ua
         });
     } catch (error) {
         res.status(500).json({

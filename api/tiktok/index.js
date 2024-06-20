@@ -4,11 +4,11 @@ import axios from 'axios/dist/node/axios.cjs';
 export default async function handler(req, res) {
     const url = 'https://www.tiktok.com';
     const headers = {
-        'User-Agent': req.headers['user-agent'] || 'undici',
+        'User-Agent': 'undici',
         'Referer': 'https://www.tiktok.com/'
     };
 
-    const ua = req.headers['user-agent'] || 'undici';
+    const ua = 'undici';
 
     try {
         const response = await axios.get(url, { headers: headers });

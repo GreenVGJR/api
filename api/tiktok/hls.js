@@ -56,6 +56,7 @@ export default async function handler(req, res) {
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
+            'Content-Disposition': 'attachment; filename="video.mp4"',
             'Cache-Cookie': token // Use the retrieved token as a cookie
         });
         }
@@ -63,7 +64,6 @@ export default async function handler(req, res) {
          res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
-            'Content-Disposition': 'attachment; filename="video.mp4"',
             'Cache-Cookie': token // Use the retrieved token as a cookie
         });
         }

@@ -18,7 +18,8 @@ export default async function handler(req, res) {
         match = match ? match[0] : '';
         res.status(200).json({
             status: 'true', 
-            cookies: match,
+            cookies: setCookieString,
+            filter_cookie: match,
             user_agent: ua
         });
     } catch (error) {

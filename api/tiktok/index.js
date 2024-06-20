@@ -8,7 +8,7 @@ export default async function handler(req, res) {
         'Referer': 'https://www.tiktok.com/'
     };
 
-    const ua = 'undici';
+    const ua = req.headers['user-agent'];
 
     try {
         const response = await axios.get(url, { headers: headers });

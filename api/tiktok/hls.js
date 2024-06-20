@@ -2,20 +2,19 @@
 import axios from 'axios/dist/node/axios.cjs';
 
 export default async function handler(req, res) {
-   const { url } = req.query;
-   const { tt_token } = req.query;
+   const { url, token } = req.query;
 
    if (!url && typeof url !== 'string' && url.includes('tiktok.com')) {
        return res.status(400).json({ error: 'Invalid or missing URL parameter' });
    }
 
    try {
-      
       const headers = {
-         'User-Agent': 'undici',
+         'User-Agent': req.headers['user-agent'],
          'Referer': 'https://www.tiktok.com/',
          'Cookie': tt_token
       };
+
       const response = await axios.get(url, { headers: headers });
 
       const data = response.data;
@@ -40,7 +39,7 @@ export default async function handler(req, res) {
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
-         'Cookie': tt_token
+         'Set-Cookie': tt_token
      });
 
      // Pipe the video stream to the client's response

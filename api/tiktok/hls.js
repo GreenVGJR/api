@@ -61,7 +61,7 @@ export default async function handler(req, res) {
          res.status(error.response.status).json({ 
             error: `Request failed with status code ${error.response.status}`,
             data: [{
-               hls: playAddr,
+               hls: `${playAddr}`,
                cookie: getCookieTiktok()
             }]
          });

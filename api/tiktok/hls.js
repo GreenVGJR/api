@@ -76,7 +76,6 @@ export default async function handler(req, res) {
         // Set appropriate headers for video streaming
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
-            'Content-Disposition': 'attachment; filename="video.mp4"',
             'Cache-Cookie': token
         });
 

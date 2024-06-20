@@ -52,24 +52,20 @@ export default async function handler(req, res) {
         const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
 
         // Set appropriate headers for video streaming
-        if (videoResponse.headers['content-length'] > 4500000) {
-        res.writeHead(200, {
-            'Content-Type': 'video/mp4',
-            'Content-Length': videoResponse.headers['content-length'],
-            'Content-Disposition': 'attachment; filename="video.mp4"',
-            'Cache-Cookie': token // Use the retrieved token as a cookie
-        });
-        }
+        if (videoResponse.headers['content-length'] > 4400000) {
+         res.status(500).json({ error: 'Video size exceeded limit. (4.5MB)' });
+         }
         else {
-         res.writeHead(200, {
+         res.writeHead(200, { 
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
             'Cache-Cookie': token // Use the retrieved token as a cookie
         });
-        }
 
         // Pipe the video stream to the client's response
         videoResponse.data.pipe(res);
+        }
+
     } catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling

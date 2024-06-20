@@ -49,7 +49,7 @@ export default async function handler(req, res) {
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
-         'Set-Cookie': match
+         'Set-Cookie': getCookieTiktok()
      });
 
      // Pipe the video stream to the client's response
@@ -58,7 +58,13 @@ export default async function handler(req, res) {
       if (error.response) {
          // The request was made and the server responded with a status code
          console.error('Request failed with status code:', error.response.status);
-         res.status(error.response.status).json({ error: `Request failed with status code ${error.response.status}` });
+         res.status(error.response.status).json({ 
+            error: `Request failed with status code ${error.response.status}`,
+            data: [{
+               hls: playAddr,
+               cookie: getCookieTiktok()
+            }]
+         });
      } else if (error.request) {
          // The request was made but no response was received
          console.error('Request made but no response received:', error.request);

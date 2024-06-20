@@ -12,7 +12,8 @@ export default async function handler(req, res) {
       
       const headers = {
          'User-Agent': req.headers['user-agent'] || 'undici',
-         'Referer': 'https://www.tiktok.com/'
+         'Referer': 'https://www.tiktok.com/',
+         'Cookie': 'tt_chain_token=XbG1q/8epF4nX8DP7P4zjQ=='
       };
       const response = await axios.get(url, { headers: headers });
 
@@ -31,12 +32,13 @@ export default async function handler(req, res) {
          url: playAddr,
          method: 'GET',
          responseType: 'stream'
-     });
+     }, { headers: headers });
 
      // Set appropriate headers for video streaming
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
+         'Set-Cookie': 'tt_chain_token=XbG1q/8epF4nX8DP7P4zjQ=='
      });
 
      // Pipe the video stream to the client's response

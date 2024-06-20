@@ -1,4 +1,3 @@
-// api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
@@ -19,10 +18,6 @@ async function getCookieTiktok() {
         const response = await axios.get("https://www.tiktok.com", { headers });
         const setCookieHeader = response.headers['set-cookie'];
         return Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
-        /*
-        const match = setCookieString.match(/tt_chain_token=[^;]+/);
-        return match ? match[0] : ''; // Return the matched token or an empty string if not found
-        */
     } catch (error) {
         console.error('Failed to fetch TikTok cookie:', error);
         throw new Error('Failed to fetch TikTok cookie'); // Re-throw the error to be caught by the caller
@@ -36,8 +31,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid or missing URL parameter' });
     }
 
+    let token;
     try {
-        const token = await getCookieTiktok(); // Wait for the cookie to be fetched
+        token = await getCookieTiktok(); // Wait for the cookie to be fetched
 
         const headers = {
             'User-Agent': 'undici',
@@ -81,7 +77,7 @@ export default async function handler(req, res) {
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Content-Disposition': 'attachment; filename="video.mp4"',
-            'Cache-Cookie': cookie
+            'Cache-Cookie': token
         });
 
         // Pipe the compressed video stream to the client's response
@@ -91,11 +87,11 @@ export default async function handler(req, res) {
             // Axios error handling
             if (error.response) {
                 console.error('Request failed with status code:', error.response.status);
-                res.status(error.response.status).json({ 
+                res.status(error.response.status).json({
                     error: `Request failed with status code ${error.response.status}`,
                     data: [{
-                        hls: `${playAddr}`,
-                        cookie: `${token}`
+                        hls: `${playAddr || 'N/A'}`,
+                        cookie: `${token || 'N/A'}`
                     }]
                 });
             } else if (error.request) {
@@ -108,7 +104,7 @@ export default async function handler(req, res) {
         } else {
             // Other non-Axios errors
             console.error('Unhandled error:', error.message);
-            res.status(500).json({ error: 'Unhandled error', cookie: token });
+            res.status(500).json({ error: 'Unhandled error', cookie: token || 'N/A' });
         }
     }
 }

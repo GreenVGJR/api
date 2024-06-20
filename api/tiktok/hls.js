@@ -12,7 +12,7 @@ export default async function handler(req, res) {
       const headers = {
          'User-Agent': req.headers['user-agent'],
          'Referer': 'https://www.tiktok.com/',
-         'Cookie': tt_token
+         'Cookie': token
       };
 
       const response = await axios.get(url, { headers: headers });
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
-         'Set-Cookie': tt_token
+         'Set-Cookie': token
      });
 
      // Pipe the video stream to the client's response

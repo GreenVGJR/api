@@ -18,11 +18,14 @@ export default async function handler(req, res) {
 
       const data = response.data;
       const playAddrPart = data.split('"playAddr":"')[1];
-      const playAddr = playAddrPart.split('"')[0];
+      let playAddr = playAddrPart.split('"')[0];
 
       // Replace occurrences of \\u002F with /
       playAddr = playAddr.replace(/\\u002F/g, '/');
 
+      // Decode URI component
+      playAddr = decodeURIComponent(playAddr);
+      
        // Process the URL parameter as needed (e.g., fetch data)
        const responseData = { message: 'Data fetched for URL: ' + playAddr };
 

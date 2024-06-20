@@ -9,10 +9,21 @@ export default async function handler(req, res) {
    }
 
    try {
+      const response = await axios.get(url, { headers: headers });
+      const setCookieHeader = response.headers['set-cookie'];
+      const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
+      let match = setCookieString.match(/tt_chain_token=[^;]+/);
+      match = match ? match[0] : '';
+   }
+   catch {
+      res.status(500).json({ error: 'Failed to fetch TikTok video' });
+   }
+   try {
+
       const headers = {
          'User-Agent': req.headers['user-agent'],
          'Referer': 'https://www.tiktok.com/',
-         'Cookie': token
+         'Cookie': match
       };
 
       const response = await axios.get(url, { headers: headers });
@@ -35,7 +46,7 @@ export default async function handler(req, res) {
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
-         'Set-Cookie': token
+         'Set-Cookie': match
      });
 
      // Pipe the video stream to the client's response

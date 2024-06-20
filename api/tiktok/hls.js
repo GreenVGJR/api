@@ -3,6 +3,7 @@ import axios from 'axios/dist/node/axios.cjs';
 
 export default async function handler(req, res) {
    const { url } = req.query;
+   const { tt_token } = req.query;
 
    if (!url && typeof url !== 'string' && url.includes('tiktok.com')) {
        return res.status(400).json({ error: 'Invalid or missing URL parameter' });
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
       const headers = {
          'User-Agent': 'undici',
          'Referer': 'https://www.tiktok.com/',
-         'Cookie': 'tt_chain_token=XbG1q/8epF4nX8DP7P4zjQ=='
+         'Cookie': tt_token
       };
       const response = await axios.get(url, { headers: headers });
 
@@ -39,13 +40,24 @@ export default async function handler(req, res) {
      res.writeHead(200, {
          'Content-Type': 'video/mp4',
          'Content-Length': videoResponse.headers['content-length'],
-         'Set-Cookie': 'tt_chain_token=XbG1q/8epF4nX8DP7P4zjQ=='
+         'Cookie': tt_token
      });
 
      // Pipe the video stream to the client's response
      videoResponse.data.pipe(res);
    } catch (error) {
-       console.error('Error fetching data:', error);
-       res.status(500).json({ error: 'Failed to fetch data' });
+      if (error.response) {
+         // The request was made and the server responded with a status code
+         console.error('Request failed with status code:', error.response.status);
+         res.status(error.response.status).json({ error: `Request failed with status code ${error.response.status}` });
+     } else if (error.request) {
+         // The request was made but no response was received
+         console.error('Request made but no response received:', error.request);
+         res.status(500).json({ error: 'Request made but no response received' });
+     } else {
+         // Something happened in setting up the request that triggered an error
+         console.error('Error setting up request:', error.message);
+         res.status(500).json({ error: 'Error setting up request' });
+     }
    }
 }

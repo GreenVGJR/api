@@ -44,6 +44,7 @@ export default async function handler(req, res) {
        // Stream the video from TikTok to the client
 
      const videoResponse = await axios.get(playAddr, { headers: headers, responseType: 'stream' });
+     console.log(playAddr);
 
      // Set appropriate headers for video streaming
      res.writeHead(200, {
@@ -61,7 +62,6 @@ export default async function handler(req, res) {
          res.status(error.response.status).json({ 
             error: `Request failed with status code ${error.response.status}`,
             data: [{
-               hls: `${playAddr}`,
                cookie: getCookieTiktok()
             }]
          });

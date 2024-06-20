@@ -1,5 +1,9 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
+
+const pipelineAsync = promisify(pipeline);
 
 async function getCookieTiktok() {
     try {
@@ -55,11 +59,11 @@ export default async function handler(req, res) {
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
-            'Set-Cookie': token // Use the retrieved token as a cookie
+            'Cache-Cookie': token // Use the retrieved token as a cookie
         });
 
         // Pipe the video stream to the client's response
-        videoResponse.data.pipe(res);
+        await pipelineAsync(videoResponse.data, res);
     } catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling

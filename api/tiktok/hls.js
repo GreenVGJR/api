@@ -23,9 +23,6 @@ export default async function handler(req, res) {
       // Replace occurrences of \\u002F with /
       playAddr = playAddr.replace(/\\u002F/g, '/');
 
-      // Decode URI component
-      playAddr = decodeURIComponent(playAddr);
-      
        // Process the URL parameter as needed (e.g., fetch data)
        const responseData = { message: 'Data fetched for URL: ' + playAddr };
 

@@ -3,7 +3,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { PassThrough } from 'stream';
 import { promisify } from 'util';
-import concat from 'concat-stream';
+import concat from 'concat-stream'; // Import concat-stream
 
 const pipelineAsync = promisify(PassThrough.pipeline);
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -57,34 +57,30 @@ export default async function handler(req, res) {
         const passThrough = new PassThrough();
         const videoStream = videoResponse.data;
 
-        const bufferPromise = new Promise((resolve, reject) => {
-            const concatStream = concat((buffer) => {
-                resolve(buffer);
+        // Use concat-stream to collect ffmpeg output into a single Buffer
+        const concatStream = concat((videoBuffer) => {
+            res.writeHead(200, {
+                'Content-Type': 'video/mp4',
+                'Content-Length': videoBuffer.length,
+                'Set-Cookie': token
             });
-            ffmpeg(videoStream)
-                .videoCodec('libx264')
-                .outputOptions('-crf 32')
-                .outputOptions('-preset', 'veryfast')
-                .format('mp4')
-                .on('error', (err) => {
-                    console.error('Compression error:', err);
-                    reject(err);
-                })
-                .pipe(concatStream, { end: true });
+
+            res.end(videoBuffer);
+            console.log('Video compression finished and sent to client');
         });
 
-        const videoBuffer = await bufferPromise;
-        console.log('Video compression finished');
+        ffmpeg(videoStream)
+            .videoCodec('libx264')
+            .outputOptions('-crf 32')
+            .outputOptions('-preset', 'veryfast')
+            .format('mp4')
+            .pipe(concatStream)
+            .on('error', (err) => {
+                console.error('Compression error:', err);
+                res.status(500).json({ error: 'Failed to compress video' });
+            });
 
-        res.writeHead(200, {
-            'Content-Type': 'video/mp4',
-            'Content-Length': videoBuffer.length,
-            'Set-Cookie': token
-        });
-
-        passThrough.end(videoBuffer);
-        await pipelineAsync(passThrough, res);
-        console.log('Video stream piped successfully');
+        await pipelineAsync(videoStream, passThrough);
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {

@@ -14,8 +14,14 @@ export default async function handler(req, res) {
         const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
         const match = setCookieString.match(/tt_chain_token=[^;]+/);
 
-        res.status(200).json({ cookies: match ? match[0] : '' });
+        res.status(200).json({
+            status: 'true', 
+            cookies: match ? match[0] : ''
+        });
     } catch (error) {
-        res.status(403).json({ error: 'Failed to fetch cookies' });
+        res.status(500).json({
+            status: 'false',
+            cookie: 'Failed to fetch cookies',
+            error: 'Rate-limited' });
     }
 }

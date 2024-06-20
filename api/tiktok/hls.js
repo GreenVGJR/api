@@ -24,15 +24,12 @@ async function getCookieTiktok() {
 export default async function handler(req, res) {
     const { url, watermark } = req.query;
 
-    if (!url || typeof url != 'string') {
-        if(!url.includes('tiktok.com')) {
-        return res.status(400).json({ error: 'Invalid URL parameter (url)' });
-       }
+      if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
+      return res.status(400).json({ error: 'Invalid or missing URL parameter (url)' });
+      }
        else if(!watermark) {
          return res.status(400).json({ error: 'Invalid or missing URL parameter (watermark)' });
        }
-       return res.status(400).json({ error: 'Invalid or missing URL parameter (url)' });
-    }
 
     let wm;
     if(watermark == 'true') {

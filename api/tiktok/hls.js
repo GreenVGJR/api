@@ -25,13 +25,13 @@ export default async function handler(req, res) {
     const { url, watermark } = req.query;
 
     if (!url || typeof url !== 'string') {
-        if(!url.includes('tiktok.com') && typeof watermark !== 'boolean') {
+        if(!url.includes('tiktok.com') && typeof watermark != 'boolean') {
         return res.status(400).json({ error: 'Invalid or missing URL parameter' });
        }
     }
 
     let wm;
-    if(!watermark) {
+    if(watermark == 'true') {
       wm = '"downloadAddr":"';
     }
     else {

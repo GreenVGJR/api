@@ -28,12 +28,8 @@ export default async function handler(req, res) {
       playAddr = decodeURIComponent(playAddr);
       
        // Stream the video from TikTok to the client
-       const videoResponse = await axios({
-         url: playAddr,
-         method: 'GET',
-         responseType: 'stream',
-         headers: headers // Include headers directly in the axios options
-     });
+
+     const videoResponse = await axios.get(playAddr, { headers: headers, responseType: 'stream' });
 
      // Set appropriate headers for video streaming
      res.writeHead(200, {

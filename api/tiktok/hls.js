@@ -8,22 +8,25 @@ export default async function handler(req, res) {
        return res.status(400).json({ error: 'Invalid or missing URL parameter' });
    }
 
-   try {
-      const response = await axios.get("https://www.tiktok.com", { headers: headers });
-      const setCookieHeader = response.headers['set-cookie'];
-      const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
-      let match = setCookieString.match(/tt_chain_token=[^;]+/);
-      match = match ? match[0] : '';
-   }
-   catch {
-      res.status(500).json({ error: 'Failed to fetch TikTok video' });
-   }
+   async function getCookieTiktok(headers) {
+      try {
+          const response = await axios.get("https://www.tiktok.com", { headers: headers });
+          const setCookieHeader = response.headers['set-cookie'];
+          const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
+          let match = setCookieString.match(/tt_chain_token=[^;]+/);
+          return match ? match[0] : ''; // Return the matched token or an empty string if not found
+      } catch (error) {
+          console.error('Failed to fetch TikTok video:', error);
+          throw new Error('Failed to fetch TikTok video'); // Re-throw the error to be caught by the caller
+      }
+  }
+
    try {
 
       const headers = {
          'User-Agent': req.headers['user-agent'],
          'Referer': 'https://www.tiktok.com/',
-         'Cookie': match
+         'Cookie': getCookieTiktok()
       };
 
       const response = await axios.get(url, { headers: headers });

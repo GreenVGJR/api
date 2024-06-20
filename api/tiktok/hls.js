@@ -52,11 +52,21 @@ export default async function handler(req, res) {
         const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
 
         // Set appropriate headers for video streaming
+        if (videoResponse.headers['content-length'] > 4500000) {
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
             'Cache-Cookie': token // Use the retrieved token as a cookie
         });
+        }
+        else {
+         res.writeHead(200, {
+            'Content-Type': 'video/mp4',
+            'Content-Length': videoResponse.headers['content-length'],
+            'Content-Disposition': 'attachment; filename="video.mp4"',
+            'Cache-Cookie': token // Use the retrieved token as a cookie
+        });
+        }
 
         // Pipe the video stream to the client's response
         videoResponse.data.pipe(res);

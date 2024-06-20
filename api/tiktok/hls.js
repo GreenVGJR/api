@@ -58,25 +58,24 @@ export default async function handler(req, res) {
         // PassThrough stream to handle video processing
         const passThrough = new PassThrough();
 
-        // Use ffmpeg to compress the video with additional options
         ffmpeg(videoResponse.data)
             .videoCodec('libx264')
             .outputOptions('-crf 32') // Compression options
             .outputOptions('-preset', 'veryfast')
             .format('mp4')
-            .pipe(passThrough, { end: true })
             .on('end', () => {
                 console.log('Compression finished');
             })
             .on('error', (err) => {
                 console.error('Compression error:', err);
                 res.status(500).json({ error: 'Failed to compress video' });
-            });
+            })
+            .pipe(passThrough, { end: true });
 
         // Set appropriate headers for video streaming
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
-            'Cache-Cookie': token
+            'Set-Cookie': token
         });
 
         // Pipe the compressed video stream to the client's response

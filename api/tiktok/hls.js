@@ -1,9 +1,13 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
+import { PassThrough } from 'stream';
 
 const pipelineAsync = promisify(pipeline);
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 async function getCookieTiktok() {
     try {
@@ -55,15 +59,31 @@ export default async function handler(req, res) {
         // Stream the video from TikTok to the client
         const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
 
+        // PassThrough stream to handle video processing
+        const passThrough = new PassThrough();
+
+        // Use ffmpeg to compress the video with additional options
+        ffmpeg(videoResponse.data)
+            .outputOptions('-c:v libx264', '-crf 32', '-preset veryfast') // Compression options
+            .format('mp4')
+            .pipe(passThrough, { end: true })
+            .on('end', () => {
+                console.log('Compression finished');
+            })
+            .on('error', (err) => {
+                console.error('Compression error:', err);
+                res.status(500).json({ error: 'Failed to compress video' });
+            });
+
         // Set appropriate headers for video streaming
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
-            'Content-Length': videoResponse.headers['content-length'],
-            'Cache-Cookie': token // Use the retrieved token as a cookie
+            'Content-Disposition': 'attachment; filename="video.mp4"',
+            'Cache-Cookie': cookie
         });
 
-        // Pipe the video stream to the client's response
-        await pipelineAsync(videoResponse.data, res);
+        // Pipe the compressed video stream to the client's response
+        await pipelineAsync(passThrough, res);
     } catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling

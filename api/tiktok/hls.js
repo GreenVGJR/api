@@ -22,12 +22,26 @@ async function getCookieTiktok() {
 }
 
 export default async function handler(req, res) {
-    const { url } = req.query;
+    const { url, watermark } = req.query;
 
-    if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
+    if (!url || typeof url !== 'string') {
+        if(!url.includes('tiktok.com') || typeof watermark !== 'boolean') {
         return res.status(400).json({ error: 'Invalid or missing URL parameter' });
+       }
     }
 
+    let wm;
+    if(watermark == true) {
+      wm = '"playAddr":"';
+    }
+    else if(watermark == false) {
+      wm = '"downloadAddr":"';
+    }
+    else {
+      wm = '"playAddr":"';
+    }
+
+    
     try {
         const token = await getCookieTiktok(); // Wait for the cookie to be fetched
 
@@ -39,7 +53,7 @@ export default async function handler(req, res) {
 
         const response = await axios.get(url, { headers });
         const data = response.data;
-        const playAddrPart = data.split('"playAddr":"')[1];
+        const playAddrPart = data.split(wm)[1];
         let playAddr = playAddrPart.split('"')[0];
 
         // Replace occurrences of \\u002F with /

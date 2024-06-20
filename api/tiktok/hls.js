@@ -1,11 +1,11 @@
 import axios from 'axios/dist/node/axios.cjs';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import { pipeline } from 'stream';
-import { promisify } from 'util';
 import { PassThrough } from 'stream';
+import { promisify } from 'util';
+import concat from 'concat-stream';
 
-const pipelineAsync = promisify(pipeline);
+const pipelineAsync = promisify(PassThrough.pipeline);
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 async function getCookieTiktok() {
@@ -55,39 +55,34 @@ export default async function handler(req, res) {
         console.log('Fetched video response with status:', videoResponse.status);
 
         const passThrough = new PassThrough();
+        const videoStream = videoResponse.data;
 
-        ffmpeg(videoResponse.data)
-            .videoCodec('libx264')
-            .outputOptions('-crf 32')
-            .outputOptions('-preset', 'veryfast')
-            .format('mp4')
-            .on('start', (commandLine) => {
-                console.log('Spawned Ffmpeg with command: ' + commandLine);
-            })
-            .on('codecData', (data) => {
-                console.log('Input is ' + data.audio + ' audio ' + 'with ' + data.video + ' video');
-            })
-            .on('progress', (progress) => {
-                console.log('Processing: ' + progress.percent + '% done');
-            })
-            .on('error', (err, stdout, stderr) => {
-                console.error('Error: ' + err.message);
-                console.error('ffmpeg stdout: ' + stdout);
-                console.error('ffmpeg stderr: ' + stderr);
-                res.status(500).json({ error: 'Failed to compress video' });
-            })
-            .on('end', () => {
-                console.log('Compression finished');
-            })
-            .pipe(passThrough, { end: true });
+        const bufferPromise = new Promise((resolve, reject) => {
+            const concatStream = concat((buffer) => {
+                resolve(buffer);
+            });
+            ffmpeg(videoStream)
+                .videoCodec('libx264')
+                .outputOptions('-crf 32')
+                .outputOptions('-preset', 'veryfast')
+                .format('mp4')
+                .on('error', (err) => {
+                    console.error('Compression error:', err);
+                    reject(err);
+                })
+                .pipe(concatStream, { end: true });
+        });
+
+        const videoBuffer = await bufferPromise;
+        console.log('Video compression finished');
 
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
+            'Content-Length': videoBuffer.length,
             'Set-Cookie': token
         });
 
-        console.log('Piping video stream to response');
-
+        passThrough.end(videoBuffer);
         await pipelineAsync(passThrough, res);
         console.log('Video stream piped successfully');
     } catch (error) {

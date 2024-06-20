@@ -13,7 +13,6 @@ export default async function handler(req, res) {
         const setCookieHeader = response.headers['set-cookie'];
         const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
         const match = setCookieString.match(/tt_chain_token=[^;]+/);
-
         res.status(200).json({
             status: 'true', 
             cookies: match ? match[0] : ''

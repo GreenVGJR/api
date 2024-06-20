@@ -26,11 +26,21 @@ export default async function handler(req, res) {
       // Decode URI component
       playAddr = decodeURIComponent(playAddr);
       
-       // Process the URL parameter as needed (e.g., fetch data)
-       const responseData = { message: 'Data fetched for URL: ' + playAddr };
+       // Stream the video from TikTok to the client
+       const videoResponse = await axios({
+         url: playAddr,
+         method: 'GET',
+         responseType: 'stream'
+     });
 
-       // Return a JSON response with the processed data
-       res.status(200).json(responseData);
+     // Set appropriate headers for video streaming
+     res.writeHead(200, {
+         'Content-Type': 'video/mp4',
+         'Content-Length': videoResponse.headers['content-length'],
+     });
+
+     // Pipe the video stream to the client's response
+     videoResponse.data.pipe(res);
    } catch (error) {
        console.error('Error fetching data:', error);
        res.status(500).json({ error: 'Failed to fetch data' });

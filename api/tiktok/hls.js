@@ -9,7 +9,7 @@ export default async function handler(req, res) {
    }
 
    try {
-      const response = await axios.get(url, { headers: headers });
+      const response = await axios.get("https://www.tiktok.com", { headers: headers });
       const setCookieHeader = response.headers['set-cookie'];
       const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
       let match = setCookieString.match(/tt_chain_token=[^;]+/);

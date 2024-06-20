@@ -64,7 +64,9 @@ export default async function handler(req, res) {
 
         // Use ffmpeg to compress the video with additional options
         ffmpeg(videoResponse.data)
-            .outputOptions('-c:v libx264', '-crf 32', '-preset veryfast') // Compression options
+            .videoCodec('libx264')
+            .outputOptions('-crf 32') // Compression options
+            .outputOptions('-preset', 'veryfast')
             .format('mp4')
             .pipe(passThrough, { end: true })
             .on('end', () => {
@@ -106,7 +108,7 @@ export default async function handler(req, res) {
         } else {
             // Other non-Axios errors
             console.error('Unhandled error:', error.message);
-            res.status(500).json({ error: 'Unhandled error' });
+            res.status(500).json({ error: 'Unhandled error', cookie: token });
         }
     }
 }

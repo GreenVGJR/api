@@ -10,9 +10,11 @@ async function getCookieTiktok() {
 
         const response = await axios.get("https://www.tiktok.com", { headers });
         const setCookieHeader = response.headers['set-cookie'];
-        const setCookieString = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
+        return Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
+        /*
         const match = setCookieString.match(/tt_chain_token=[^;]+/);
         return match ? match[0] : ''; // Return the matched token or an empty string if not found
+        */
     } catch (error) {
         console.error('Failed to fetch TikTok cookie:', error);
         throw new Error('Failed to fetch TikTok cookie'); // Re-throw the error to be caught by the caller
@@ -64,7 +66,11 @@ export default async function handler(req, res) {
             if (error.response) {
                 console.error('Request failed with status code:', error.response.status);
                 res.status(error.response.status).json({ 
-                    error: `Request failed with status code ${error.response.status}`
+                    error: `Request failed with status code ${error.response.status}`,
+                    data: [{
+                        hls: `${playAddr}`,
+                        cookie: `${token}`
+                    }]
                 });
             } else if (error.request) {
                 console.error('Request made but no response received:', error.request);

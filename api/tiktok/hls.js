@@ -11,7 +11,7 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 async function getCookieTiktok() {
     try {
         const headers = {
-            'User-Agent': 'undici', // Replace with an appropriate user agent
+            'User-Agent': 'undici',
             'Referer': 'https://www.tiktok.com/'
         };
 
@@ -20,7 +20,7 @@ async function getCookieTiktok() {
         return Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
     } catch (error) {
         console.error('Failed to fetch TikTok cookie:', error);
-        throw new Error('Failed to fetch TikTok cookie'); // Re-throw the error to be caught by the caller
+        throw new Error('Failed to fetch TikTok cookie');
     }
 }
 
@@ -33,12 +33,12 @@ export default async function handler(req, res) {
 
     let token;
     try {
-        token = await getCookieTiktok(); // Wait for the cookie to be fetched
+        token = await getCookieTiktok();
 
         const headers = {
             'User-Agent': 'undici',
             'Referer': 'https://www.tiktok.com/',
-            'Cookie': token // Use the retrieved token as a cookie
+            'Cookie': token
         };
 
         const response = await axios.get(url, { headers });
@@ -46,43 +46,52 @@ export default async function handler(req, res) {
         const playAddrPart = data.split('"playAddr":"')[1];
         let playAddr = playAddrPart.split('"')[0];
 
-        // Replace occurrences of \\u002F with /
         playAddr = playAddr.replace(/\\u002F/g, '/');
-
-        // Decode URI component
         playAddr = decodeURIComponent(playAddr);
 
-        // Stream the video from TikTok to the client
-        const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
+        console.log('Fetching video from playAddr:', playAddr);
 
-        // PassThrough stream to handle video processing
+        const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
+        console.log('Fetched video response with status:', videoResponse.status);
+
         const passThrough = new PassThrough();
 
         ffmpeg(videoResponse.data)
             .videoCodec('libx264')
-            .outputOptions('-crf 32') // Compression options
+            .outputOptions('-crf 32')
             .outputOptions('-preset', 'veryfast')
             .format('mp4')
+            .on('start', (commandLine) => {
+                console.log('Spawned Ffmpeg with command: ' + commandLine);
+            })
+            .on('codecData', (data) => {
+                console.log('Input is ' + data.audio + ' audio ' + 'with ' + data.video + ' video');
+            })
+            .on('progress', (progress) => {
+                console.log('Processing: ' + progress.percent + '% done');
+            })
+            .on('error', (err, stdout, stderr) => {
+                console.error('Error: ' + err.message);
+                console.error('ffmpeg stdout: ' + stdout);
+                console.error('ffmpeg stderr: ' + stderr);
+                res.status(500).json({ error: 'Failed to compress video' });
+            })
             .on('end', () => {
                 console.log('Compression finished');
             })
-            .on('error', (err) => {
-                console.error('Compression error:', err);
-                res.status(500).json({ error: 'Failed to compress video' });
-            })
             .pipe(passThrough, { end: true });
 
-        // Set appropriate headers for video streaming
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
             'Set-Cookie': token
         });
 
-        // Pipe the compressed video stream to the client's response
+        console.log('Piping video stream to response');
+
         await pipelineAsync(passThrough, res);
+        console.log('Video stream piped successfully');
     } catch (error) {
         if (axios.isAxiosError(error)) {
-            // Axios error handling
             if (error.response) {
                 console.error('Request failed with status code:', error.response.status);
                 res.status(error.response.status).json({
@@ -100,7 +109,6 @@ export default async function handler(req, res) {
                 res.status(500).json({ error: 'Error setting up request' });
             }
         } else {
-            // Other non-Axios errors
             console.error('Unhandled error:', error.message);
             res.status(500).json({ error: 'Unhandled error', cookie: token || 'N/A' });
         }

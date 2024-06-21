@@ -38,6 +38,8 @@ export default async function handler(req, res) {
 
     // Check if request count exceeds maximum allowed
     if (requestCount >= maxRequestsPerCooldown) {
+        lastRequestTime = 0
+        requestCount = 0;
         return res.status(429).end();
     }
 

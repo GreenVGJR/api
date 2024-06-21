@@ -1,11 +1,11 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
 
-const cooldownTime = 3 * 1000; // Cooldown period in milliseconds (10 seconds)
+const cooldownTime = 15 * 1000; // Cooldown period in milliseconds (10 seconds)
 let lastRequestTime = Date.now(); // Initialize with current time
 
 let requestCount = 0;
-const maxRequestsPerCooldown = 5; // Maximum requests allowed per cooldown period
+const maxRequestsPerCooldown = 30; // Maximum requests allowed per cooldown period
 
 export default async function handler(req, res) {
     const { url, watermark, audio } = req.query;

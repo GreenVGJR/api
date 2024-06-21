@@ -1,6 +1,19 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
 
+const cooldownTime = 5 * 1000; // Cooldown period in milliseconds (10 seconds)
+let lastRequestTime = 0;
+let requestCount = 0;
+const maxRequestsPerCooldown = 2; // Maximum requests allowed per cooldown period
+
+const currentTime = Date.now();
+
+// Reset request count if cooldown period has elapsed
+if (currentTime - lastRequestTime > cooldownTime) {
+    lastRequestTime = currentTime;
+    requestCount = 0;
+}
+
 async function getCookieTiktok() {
     try {
         const headers = {
@@ -16,12 +29,20 @@ async function getCookieTiktok() {
         return match ? match[0] : ''; // Return the matched token or an empty string if not found
         */
     } catch (error) {
-        return res.status(400).json({ status: false, error: 'Failed to fetch cookies' });
+        return res.status(429).end();
     }
 }
 
 export default async function handler(req, res) {
     const { url, watermark, audio } = req.query;
+
+    // Check if request count exceeds maximum allowed
+    if (requestCount >= maxRequestsPerCooldown) {
+        return res.status(429).end();
+    }
+
+    // Increment request count
+    requestCount++;
 
       if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
       return res.status(400).json({ status: false, error: 'Invalid or missing URL parameter (url)' });

@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
 
         // Set appropriate headers for video streaming
-        if (videoResponse.headers['content-length'] > 4400000) {
+        if (videoResponse.headers['content-length'] > 4500000) {
          res.status(500).json({ 
             status: false,
             error: 'Vercel Errors: Video size exceeded limit.',

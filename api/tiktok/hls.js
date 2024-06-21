@@ -1,7 +1,7 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
 
-const cooldownTime = 5 * 1000; // Cooldown period in milliseconds (10 seconds)
+const cooldownTime = 2 * 1000; // Cooldown period in milliseconds (10 seconds)
 let lastRequestTime = 0;
 let requestCount = 0;
 const maxRequestsPerCooldown = 5; // Maximum requests allowed per cooldown period
@@ -14,27 +14,28 @@ if (currentTime - lastRequestTime > cooldownTime) {
     requestCount = 0;
 }
 
-async function getCookieTiktok() {
-    try {
-        const headers = {
-            'User-Agent': 'undici', // Replace with an appropriate user agent
-            'Referer': 'https://www.tiktok.com/'
-        };
-
-        const response = await axios.get("https://www.tiktok.com", { headers });
-        const setCookieHeader = response.headers['set-cookie'];
-        return Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
-        /*
-        const match = setCookieString.match(/tt_chain_token=[^;]+/);
-        return match ? match[0] : ''; // Return the matched token or an empty string if not found
-        */
-    } catch (error) {
-        return res.status(429).end();
-    }
-}
 
 export default async function handler(req, res) {
     const { url, watermark, audio } = req.query;
+
+    async function getCookieTiktok() {
+        try {
+            const headers = {
+                'User-Agent': 'undici', // Replace with an appropriate user agent
+                'Referer': 'https://www.tiktok.com/'
+            };
+    
+            const response = await axios.get("https://www.tiktok.com", { headers });
+            const setCookieHeader = response.headers['set-cookie'];
+            return Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader;
+            /*
+            const match = setCookieString.match(/tt_chain_token=[^;]+/);
+            return match ? match[0] : ''; // Return the matched token or an empty string if not found
+            */
+        } catch (error) {
+            return res.status(429).end();
+        }
+    }
 
     // Check if request count exceeds maximum allowed
     if (requestCount >= maxRequestsPerCooldown) {

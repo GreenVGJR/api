@@ -16,8 +16,7 @@ async function getCookieTiktok() {
         return match ? match[0] : ''; // Return the matched token or an empty string if not found
         */
     } catch (error) {
-        console.error('Failed to fetch TikTok cookie:', error);
-        throw new Error('Failed to fetch TikTok cookie'); // Re-throw the error to be caught by the caller
+        return res.status(400).json({ status: false, error: 'Failed to fetch cookies' });
     }
 }
 
@@ -25,7 +24,7 @@ export default async function handler(req, res) {
     const { url, watermark } = req.query;
 
       if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
-      return res.status(400).json({ error: 'Invalid or missing URL parameter (url)' });
+      return res.status(400).json({ status: false, error: 'Invalid or missing URL parameter (url)' });
       }
 
     let wm;
@@ -75,10 +74,15 @@ export default async function handler(req, res) {
             });
          }
         else {
+        const cacheDuration = 60 * 60 * 24 * 1; // 1 days in seconds
+
          res.writeHead(200, { 
             'Content-Type': 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
-            'Cache-Cookie': token // Use the retrieved token as a cookie
+            'Cache-Control': `public, max-age=${cacheDuration}`, // HTTP caching header
+            'Cache-Cookie': token, // Use the retrieved token as a cookie
+            'video': `${playAddr}`,
+            'audio': null
         });
 
         // Pipe the video stream to the client's response
@@ -89,25 +93,22 @@ export default async function handler(req, res) {
         if (axios.isAxiosError(error)) {
             // Axios error handling
             if (error.response) {
-                console.error('Request failed with status code:', error.response.status);
                 res.status(error.response.status).json({ 
+                    status: false,
                     error: `Request failed with status code ${error.response.status}`,
                     data: [{
                         hls: `${playAddr}`,
                         cookie: `${token}`
-                    }]
+                    }],
+                    alternative: "https://tikcdn.io/ssstik/" + url.split('/')[5]
                 });
             } else if (error.request) {
-                console.error('Request made but no response received:', error.request);
-                res.status(500).json({ error: 'Request made but no response received' });
+                res.status(500).json({ status: false, error: 'Request made but no response received' });
             } else {
-                console.error('Error setting up request:', error.message);
-                res.status(500).json({ error: 'Error setting up request' });
+                res.status(500).json({ status: false, error: 'Error setting up request' });
             }
         } else {
-            // Other non-Axios errors
-            console.error('Unhandled error:', error.message);
-            res.status(500).json({ error: 'Unhandled error' });
+            res.status(500).end();
         }
     }
 }

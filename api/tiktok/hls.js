@@ -4,7 +4,7 @@ import axios from 'axios/dist/node/axios.cjs';
 const cooldownTime = 5 * 1000; // Cooldown period in milliseconds (10 seconds)
 let lastRequestTime = 0;
 let requestCount = 0;
-const maxRequestsPerCooldown = 2; // Maximum requests allowed per cooldown period
+const maxRequestsPerCooldown = 5; // Maximum requests allowed per cooldown period
 
 const currentTime = Date.now();
 

@@ -27,9 +27,6 @@ export default async function handler(req, res) {
       if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
       return res.status(400).json({ error: 'Invalid or missing URL parameter (url)' });
       }
-       else if(!watermark) {
-         return res.status(400).json({ error: 'Invalid or missing URL parameter (watermark)' });
-       }
 
     let wm;
     if(watermark == 'true') {
@@ -65,7 +62,17 @@ export default async function handler(req, res) {
 
         // Set appropriate headers for video streaming
         if (videoResponse.headers['content-length'] > 4400000) {
-         res.status(500).json({ error: 'Video size exceeded limit. (4.5MB)' });
+         res.status(500).json({ 
+            status: false,
+            error: 'Vercel Errors: Video size exceeded limit.',
+            payload_limit: '4.5 MB',
+            video_size: videoResponse.headers['content-length'] / 1024 + ' MB',
+            data: [{
+                hls: `${playAddr}`,
+                cookie: `${token}`
+            }],
+            alternative: "https://tikcdn.io/ssstik/" + url.split('/')[5]
+            });
          }
         else {
          res.writeHead(200, { 

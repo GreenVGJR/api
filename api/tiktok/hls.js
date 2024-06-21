@@ -89,8 +89,8 @@ export default async function handler(req, res) {
             'Content-Length': videoResponse.headers['content-length'],
             'Cache-Control': `public, max-age=${cacheDuration}`, // HTTP caching header
             'Cache-Cookie': token, // Use the retrieved token as a cookie
-            'video': `${playAddr}`,
-            'audio': null
+            'video': !audio ? `${playAddr}` : null,
+            'audio': audio == 'true' ? `${playAddr}` : null,
         });
 
         // Pipe the video stream to the client's response

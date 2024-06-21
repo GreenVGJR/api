@@ -21,7 +21,7 @@ async function getCookieTiktok() {
 }
 
 export default async function handler(req, res) {
-    const { url, watermark } = req.query;
+    const { url, watermark, audio } = req.query;
 
       if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
       return res.status(400).json({ status: false, error: 'Invalid or missing URL parameter (url)' });
@@ -47,8 +47,16 @@ export default async function handler(req, res) {
 
         const response = await axios.get(url, { headers });
         const data = response.data;
+        let playAddr;
+        if(audio == 'true') {
+            const playAddrPart = data.split('"music"')[1];
+            const playAddrPart2 = playAddrPart.split('"playUrl":"')[1];
+            playAddr = playAddrPart2.split('"')[0];
+        }
+        else {
         const playAddrPart = data.split(wm)[1];
-        let playAddr = playAddrPart.split('"')[0];
+        playAddr = playAddrPart.split('"')[0];
+        }
 
         // Replace occurrences of \\u002F with /
         playAddr = playAddr.replace(/\\u002F/g, '/');
@@ -77,7 +85,7 @@ export default async function handler(req, res) {
         const cacheDuration = 60 * 60 * 24 * 1; // 1 days in seconds
 
          res.writeHead(200, { 
-            'Content-Type': 'video/mp4',
+            'Content-Type': audio == 'true' ? 'audio/aac' : 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
             'Cache-Control': `public, max-age=${cacheDuration}`, // HTTP caching header
             'Cache-Cookie': token, // Use the retrieved token as a cookie

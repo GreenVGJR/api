@@ -25,7 +25,7 @@ export default async function handler(req, res) {
             return match ? match[0] : ''; // Return the matched token or an empty string if not found
             */
         } catch (error) {
-            return res.status(429).end();
+            return res.status(502).end();
         }
     }
 

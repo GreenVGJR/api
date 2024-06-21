@@ -66,7 +66,7 @@ export default async function handler(req, res) {
             status: false,
             error: 'Vercel Errors: Video size exceeded limit.',
             payload_limit: '4.5 MB',
-            video_size: videoResponse.headers['content-length'] / 1000 / 1000 + ' MB',
+            video_size: Math.floor(videoResponse.headers['content-length'] / 1000 / 1000 * 10) / 10 + ' MB',
             data: [{
                 hls: `${playAddr}`,
                 cookie: `${token}`

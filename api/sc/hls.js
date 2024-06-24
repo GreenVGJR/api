@@ -31,10 +31,9 @@ export default async function handler(req, res) {
    const response = await axios.get(url);
    const data = response.data;
    const firstSplit = data.split('\"quality\":\"sq\"},{\"url\":\"')[1];
-   const secondSplit = firstSplit.split('\"')[0];
+   const secondSplit = firstSplit.split('\"')[0] + "?client_id=" + clientid;
 
-   res.status(200).json({ 
-      status: true,
-      data: secondSplit
-   })
+   const secresponse = await axios.get(secondSplit);
+   res.status(302).setHeader('Location', secresponse.data.url);
+   res.end();
 }

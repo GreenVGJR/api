@@ -31,11 +31,11 @@ export default async function handler(req, res) {
    const response = await axios.get(url);
    let data = response.data;
    data = data.split['{"url":'];
-   data = data[1].split['"'];
+   const data2 = data.split['"'];
 
 
    res.status(200).json({ 
       status: true,
-      data: data[1] + "?client_id=" + clientid
+      data: data2[1] + "?client_id=" + clientid
    })
 }

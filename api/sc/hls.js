@@ -28,6 +28,7 @@ export default async function handler(req, res) {
    // Increment request count
    requestCount++;
 
+   try {
    const response = await axios.get(url);
    const data = response.data;
    const firstSplit = data.split('\"quality\":\"sq\"},{\"url\":\"')[1];
@@ -36,4 +37,8 @@ export default async function handler(req, res) {
    const secresponse = await axios.get(secondSplit);
    res.status(302).setHeader('Location', secresponse.data.url);
    res.end();
+   }
+   catch {
+   res.status(500).end();
+   }
 }

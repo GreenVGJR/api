@@ -30,6 +30,8 @@ export default async function handler(req, res) {
             twitter: "/tw",
             facebook: "/fb"
          }]
-      }]
+      }],
+      message: "This API is hosted by Vercel.",
+      issue: ["Any issues you can DM me", "Discord", "vgjr"]
    })
 }

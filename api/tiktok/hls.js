@@ -112,7 +112,7 @@ export default async function handler(req, res) {
             'Cache-Control': `public, max-age=${cacheDuration}, immutable, preload`, // HTTP caching header
             'Cache-Cookie': token, // Use the retrieved token as a cookie
             'video': !audio ? `${playAddr}` : null,
-            'audio': audio == 'true' ? `${playAddr}` : null,
+            'audio': audio == 'true' ? `${playAddr}` : null
         });
 
         // Pipe the video stream to the client's response

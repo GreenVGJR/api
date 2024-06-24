@@ -31,7 +31,7 @@ export default async function handler(req, res) {
    const response = await axios.get(url);
    let data = response.data;
    data = data.split['{"url":'];
-   data = data[2].split['"'];
+   data = data[1].split['"'];
 
 
    res.status(200).json({ 

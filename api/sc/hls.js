@@ -1,4 +1,6 @@
 import soundcloud from 'soundcloud-key-fetch';
+import axios from 'axios/dist/node/axios.cjs';
+
 
 const cooldownTime = 15 * 1000;
 let lastRequestTime = Date.now();
@@ -7,6 +9,8 @@ let requestCount = 0;
 const maxRequestsPerCooldown = 5;
 
 export default async function handler(req, res) {
+    const { url } = req.query;
+
    const currentTime = Date.now();
    const clientid = await soundcloud.fetchKey();
 
@@ -24,8 +28,14 @@ export default async function handler(req, res) {
    // Increment request count
    requestCount++;
 
+   const response = await axios.get(url);
+   let data = response.data;
+   data = data.split['{"url":'];
+   data = data[2].split['"'];
+
+
    res.status(200).json({ 
       status: true,
-      client_id: clientid
+      data: data[1] + "?client_id=" + clientid
    })
 }

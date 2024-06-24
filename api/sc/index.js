@@ -8,6 +8,7 @@ const maxRequestsPerCooldown = 5;
 
 export default async function handler(req, res) {
    const currentTime = Date.now();
+   const clientid = await soundcloud.fetchKey();
 
    // Reset request count if cooldown period has elapsed
    if (currentTime - lastRequestTime > cooldownTime) {
@@ -25,6 +26,6 @@ export default async function handler(req, res) {
 
    res.status(200).json({ 
       status: true,
-      client_id: soundcloud.fetchKey()
+      client_id: clientid
    })
 }

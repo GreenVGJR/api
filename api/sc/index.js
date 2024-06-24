@@ -1,4 +1,4 @@
-import soundcloud from soundcloud-key-fetch;
+import soundcloud from 'soundcloud-key-fetch';
 
 const cooldownTime = 15 * 1000;
 let lastRequestTime = Date.now();

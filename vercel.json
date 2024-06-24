@@ -9,7 +9,7 @@
   "routes": [
     { "src": "/api/tiktok/(.*)", "dest": "/api/tiktok/$1" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/api/soundcloud/(.*)", "dest": "/api/sc/$1" }
+    { "src": "/api/sc/(.*)", "dest": "/api/soundcloud/$1" }
   ]
 
 }

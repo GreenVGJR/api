@@ -87,7 +87,7 @@ export default async function handler(req, res) {
          res.writeHead(200, { 
             'Content-Type': audio == 'true' ? 'audio/aac' : 'video/mp4',
             'Content-Length': videoResponse.headers['content-length'],
-            'Cache-Control': `public, max-age=${cacheDuration}`, // HTTP caching header
+            'Cache-Control': `public, max-age=${cacheDuration}, immutable'`, // HTTP caching header
             'Cache-Cookie': token, // Use the retrieved token as a cookie
             'video': `${playAddr}`,
             'audio': null

@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       list: [{
          downloader: [{
             tiktok: ["/tiktok", "/tiktok/hls.js"],
-            soundcloud: "/sc",
+            soundcloud: ["/sc", "/sc/hls.js"],
             twitter: "/tw",
             facebook: "/fb"
          }]

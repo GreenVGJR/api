@@ -106,19 +106,23 @@ export default async function handler(req, res) {
         else {
         const cacheDuration = 60 * 60 * 24 * 1; // 1 days in seconds
 
-         res.writeHead(200, { 
-            'Content-Type': audio == 'true' ? 'audio/aac' : 'video/mp4',
-            'Content-Length': videoResponse.headers['content-length'],
-            'Cache-Control': `public, max-age=${cacheDuration}, immutable, preload`, // HTTP caching header
-            'Cache-Cookie': token, // Use the retrieved token as a cookie
-            'video': !audio ? `${playAddr}` : null,
-            'audio': audio == 'true' ? `${playAddr}` : null
-        });
 
-        // Pipe the video stream to the client's response
-        videoResponse.data.pipe(res);
+        // Set headers
+        res.setHeader('Content-Type', audio === 'true' ? 'audio/aac' : 'video/mp4');
+        res.setHeader('Content-Length', videoResponse.headers['content-length']);
+        res.setHeader('Cache-Control', `public, max-age=${cacheDuration}, immutable, preload`);
+        res.setHeader('Cache-Cookie', token);
+        if (!audio) {
+            res.setHeader('video', playAddr);
+        }
+        if (audio === 'true') {
+            res.setHeader('audio', playAddr);
         }
 
+        // Temporary redirect to the final URL
+        res.setHeader('Location', playAddr);
+        res.status(307).end(); // 307 Temporary Redirect       
+        }
     } catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling

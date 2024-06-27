@@ -1,14 +1,19 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
+import Cooldown from 'cooldown/cooldown.js';;
 
-const cooldownTime = 15 * 1000;
-let lastRequestTime = Date.now();
-
-let requestCount = 0;
+const cooldownTime = 15 * 1000; // 15 seconds
 const maxRequestsPerCooldown = 30;
+const cooldown = new Cooldown(cooldownTime, maxRequestsPerCooldown);
 
 export default async function handler(req, res) {
     const { url, watermark, audio } = req.query;
+
+
+    if (!cooldown.checkCooldown()) {
+        res.status(429).end();
+        return;
+    }
 
     async function getCookieTiktok() {
         try {
@@ -28,23 +33,6 @@ export default async function handler(req, res) {
             return res.status(502).end();
         }
     }
-
-    const currentTime = Date.now();
-
-    // Reset request count if cooldown period has elapsed
-    if (currentTime - lastRequestTime > cooldownTime) {
-        lastRequestTime = currentTime;
-        requestCount = 0;
-    }
-
-    // Check if request count exceeds maximum allowed
-    if (requestCount >= maxRequestsPerCooldown) {
-        return res.status(429).end();
-    }
-
-    // Increment request count
-    requestCount++;
-
       if (!url || typeof url !== 'string' || !url.includes('tiktok.com')) {
       return res.status(400).json({ status: false, error: 'Invalid or missing URL parameter (url)' });
       }
@@ -106,23 +94,19 @@ export default async function handler(req, res) {
         else {
         const cacheDuration = 60 * 60 * 24 * 1; // 1 days in seconds
 
+         res.writeHead(200, { 
+            'Content-Type': audio == 'true' ? 'audio/aac' : 'video/mp4',
+            'Content-Length': videoResponse.headers['content-length'],
+            'Cache-Control': `public, max-age=${cacheDuration}, immutable, prefetch`, // HTTP caching header
+            'Cache-Cookie': token, // Use the retrieved token as a cookie
+            'video': !audio ? `${playAddr}` : null,
+            'audio': audio == 'true' ? `${playAddr}` : null
+        });
 
-        // Set headers
-        res.setHeader('Content-Type', audio === 'true' ? 'audio/aac' : 'video/mp4');
-        res.setHeader('Content-Length', videoResponse.headers['content-length']);
-        res.setHeader('Cache-Control', `public, max-age=${cacheDuration}, immutable, preload`);
-        res.setHeader('Cache-Cookie', token);
-        if (!audio) {
-            res.setHeader('video', playAddr);
-        }
-        if (audio === 'true') {
-            res.setHeader('audio', playAddr);
+        // Pipe the video stream to the client's response
+        videoResponse.data.pipe(res);
         }
 
-        // Temporary redirect to the final URL
-        res.setHeader('Location', playAddr);
-        res.status(307).end(); // 307 Temporary Redirect       
-        }
     } catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling

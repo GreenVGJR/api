@@ -1,11 +1,11 @@
 // api/getCookieTiktok.js
 import axios from 'axios/dist/node/axios.cjs';
+import Cooldown from 'cooldown/cooldown.js';
 
-const cooldownTime = 15 * 1000;
-let lastRequestTime = Date.now();
-
-let requestCount = 0;
+const cooldownTime = 10 * 1000; // 15 seconds
 const maxRequestsPerCooldown = 5;
+const cooldown = new Cooldown(cooldownTime, maxRequestsPerCooldown);
+
 
 export default async function handler(req, res) {
     const url = 'https://www.tiktok.com';
@@ -16,21 +16,10 @@ export default async function handler(req, res) {
 
     const ua = req.headers['user-agent'];
 
-    const currentTime = Date.now();
-
-    // Reset request count if cooldown period has elapsed
-    if (currentTime - lastRequestTime > cooldownTime) {
-        lastRequestTime = currentTime;
-        requestCount = 0;
+    if (!cooldown.checkCooldown()) {
+        res.status(429).end();
+        return;
     }
-
-    // Check if request count exceeds maximum allowed
-    if (requestCount >= maxRequestsPerCooldown) {
-        return res.status(429).end();
-    }
-
-    // Increment request count
-    requestCount++;
 
     try {
         const response = await axios.get(url, { headers: headers });

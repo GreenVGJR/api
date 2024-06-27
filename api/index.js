@@ -1,4 +1,4 @@
-import Cooldown from '../../cooldown/cooldown';
+import Cooldown from '../cooldown/cooldown';
 
 export default async function handler(req, res) {
    if (!Cooldown.checkCooldown()) {

@@ -1,32 +1,30 @@
-// cooldown.js
+// utils/cooldown.js
 class Cooldown {
-   constructor(cooldownTime, maxRequestsPerCooldown) {
-       this.cooldownTime = cooldownTime;
-       this.maxRequestsPerCooldown = maxRequestsPerCooldown;
-       this.lastRequestTime = Date.now();
-       this.requestCount = 0;
-   }
+    static cooldownTime = 10 * 1000; // 15 seconds
+    static maxRequestsPerCooldown = 1;
+    static lastRequestTime = Date.now();
+    static requestCount = 1;
 
-   checkCooldown() {
-       const currentTime = Date.now();
+    static checkCooldown() {
+        const currentTime = Date.now();
 
-       // Check if the cooldown period has expired
-       if (currentTime - this.lastRequestTime > this.cooldownTime) {
-           // Reset the cooldown
-           this.lastRequestTime = currentTime;
-           this.requestCount = 0;
-       }
+        // Check if the cooldown period has expired
+        if (currentTime - Cooldown.lastRequestTime > Cooldown.cooldownTime) {
+            // Reset the cooldown
+            Cooldown.lastRequestTime = currentTime;
+            Cooldown.requestCount = 0;
+        }
 
-       // Increment the request count
-       this.requestCount += 1;
+        // Increment the request count
+        Cooldown.requestCount += 1;
 
-       // Check if the request count exceeds the maximum allowed within the cooldown period
-       if (this.requestCount > this.maxRequestsPerCooldown) {
-           return false; // Cooldown in effect
-       }
+        // Check if the request count exceeds the maximum allowed within the cooldown period
+        if (Cooldown.requestCount > Cooldown.maxRequestsPerCooldown) {
+            return false; // Cooldown in effect
+        }
 
-       return true; // Allowed to proceed
-   }
+        return true; // Allowed to proceed
+    }
 }
 
 export default Cooldown;

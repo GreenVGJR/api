@@ -2,11 +2,6 @@
 import axios from 'axios/dist/node/axios.cjs';
 import Cooldown from '../../cooldown/cooldown';
 
-const cooldownTime = 10 * 1000; // 15 seconds
-const maxRequestsPerCooldown = 5;
-const cooldown = new Cooldown(cooldownTime, maxRequestsPerCooldown);
-
-
 export default async function handler(req, res) {
     const url = 'https://www.tiktok.com';
     const headers = {
@@ -16,10 +11,11 @@ export default async function handler(req, res) {
 
     const ua = req.headers['user-agent'];
 
-    if (!cooldown.checkCooldown()) {
+    if (!Cooldown.checkCooldown()) {
         res.status(429).end();
         return;
     }
+
 
     try {
         const response = await axios.get(url, { headers: headers });

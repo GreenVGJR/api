@@ -2,15 +2,10 @@
 import axios from 'axios/dist/node/axios.cjs';
 import Cooldown from '../../cooldown/cooldown';
 
-const cooldownTime = 15 * 1000; // 15 seconds
-const maxRequestsPerCooldown = 30;
-const cooldown = new Cooldown(cooldownTime, maxRequestsPerCooldown);
-
 export default async function handler(req, res) {
     const { url, watermark, audio } = req.query;
 
-
-    if (!cooldown.checkCooldown()) {
+    if (!Cooldown.checkCooldown()) {
         res.status(429).end();
         return;
     }

@@ -1,32 +1,17 @@
 import soundcloud from 'soundcloud-key-fetch';
 import axios from 'axios/dist/node/axios.cjs';
-
-
-const cooldownTime = 15 * 1000;
-let lastRequestTime = Date.now();
-
-let requestCount = 0;
-const maxRequestsPerCooldown = 5;
+import Cooldown from '../../cooldown/cooldown';
 
 export default async function handler(req, res) {
     const { url } = req.query;
 
-   const currentTime = Date.now();
+    
+    if (!Cooldown.checkCooldown()) {
+        res.status(429).end();
+        return;
+    }
+
    const clientid = await soundcloud.fetchKey();
-
-   // Reset request count if cooldown period has elapsed
-   if (currentTime - lastRequestTime > cooldownTime) {
-       lastRequestTime = currentTime;
-       requestCount = 0;
-   }
-
-   // Check if request count exceeds maximum allowed
-   if (requestCount >= maxRequestsPerCooldown) {
-       return res.status(429).end();
-   }
-
-   // Increment request count
-   requestCount++;
 
    try {
    const response = await axios.get(url);

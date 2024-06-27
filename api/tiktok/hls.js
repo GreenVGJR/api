@@ -1,6 +1,6 @@
 // api/tiktok/hls.js
 import axios from 'axios/dist/node/axios.cjs';
-import Cooldown from 'cooldown/cooldown';
+import Cooldown from '../../cooldown/cooldown';
 
 const cooldownTime = 15 * 1000; // 15 seconds
 const maxRequestsPerCooldown = 30;

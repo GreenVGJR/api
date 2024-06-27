@@ -1,6 +1,6 @@
 // api/getCookieTiktok.js
 import axios from 'axios/dist/node/axios.cjs';
-import Cooldown from 'cooldown/cooldown';
+import Cooldown from '../../cooldown/cooldown';
 
 const cooldownTime = 10 * 1000; // 15 seconds
 const maxRequestsPerCooldown = 5;

@@ -1,9 +1,9 @@
 // utils/cooldown.js
 class Cooldown {
-    static cooldownTime = 10 * 1000; // 15 seconds
-    static maxRequestsPerCooldown = 1;
+    static cooldownTime = 60 * 1000; // 15 seconds
+    static maxRequestsPerCooldown = 100;
     static lastRequestTime = Date.now();
-    static requestCount = 1;
+    static requestCount = 0;
 
     static checkCooldown() {
         const currentTime = Date.now();

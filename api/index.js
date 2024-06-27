@@ -13,10 +13,11 @@ export default async function handler(req, res) {
             tiktok: ["/tiktok", "/tiktok/hls.js"],
             soundcloud: ["/sc", "/sc/hls.js"],
             twitter: "/tw",
-            facebook: "/fb"
+            facebook: "/fb",
+            youtube: null
          }]
       }],
-      message: "This API is hosted by Vercel.",
-      issue: ["Any issues you can DM me", "Discord", "vgjr"]
+      rate_limit: "100 Requests / 1 Minute",
+      message: "This API is hosted by Vercel."
    })
 }

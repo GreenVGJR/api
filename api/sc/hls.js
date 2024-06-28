@@ -4,20 +4,18 @@ import Cooldown from '../../cooldown/cooldown';
 
 export default async function handler(req, res) {
     const { url } = req.query;
-
     
     if (!Cooldown.checkCooldown()) {
         res.status(429).end();
         return;
     }
 
-   const clientid = await soundcloud.fetchKey();
-
    try {
+   const clientid = await soundcloud.fetchKey();
    const response = await axios.get(url);
    const data = response.data;
    const firstSplit = data.split('\"quality\":\"sq\"},{\"url\":\"')[1];
-   if(firstSplit.contains('/hls')) {
+   if(firstSplit.includes('/hls')) {
     res.status(500).json({ 
         status: false,
         error: 'Unavailable.'
@@ -31,7 +29,8 @@ export default async function handler(req, res) {
    res.status(302).setHeader('Location', secresponse.data.url);
    res.end();
    }
-   catch {
+   catch (error) {
+   console.error(error);
    res.status(500).end();
     }
 }

@@ -15,7 +15,6 @@ export default async function handler(req, res) {
             tiktok: ["/tiktok", "/tiktok/hls.js"],
             soundcloud: ["/sc", "/sc/hls.js"],
             twitter: "/tw",
-            facebook: "/fb",
             youtube: null
          }]
       }],

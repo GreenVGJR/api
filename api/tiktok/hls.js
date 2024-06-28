@@ -73,7 +73,7 @@ export default async function handler(req, res) {
         
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', `public, max-age=${cacheDuration}, immutable, preload`);
-        res.setHeader('Cache-Cookie', token);
+        res.setHeader('Set-Cookie', token);
         if (!audio) {
             res.setHeader('video', playAddr);
         }
@@ -83,10 +83,7 @@ export default async function handler(req, res) {
 
         // Temporary redirect to the final URL
         res.setHeader('Location', playAddr);
-        res.status(307).end(JSON.stringify({
-            status: 'Temporary Redirect',
-            location: playAddr
-        }, null, 2)); // Pretty-print the response 
+        res.status(307).end();
     }
      catch (error) {
         if (axios.isAxiosError(error)) {

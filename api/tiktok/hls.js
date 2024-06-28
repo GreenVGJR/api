@@ -124,6 +124,7 @@ export default async function handler(req, res) {
                 res.status(500).json({ status: false, error: 'Error setting up request' });
             }
         } else {
+            console.error(error);
             res.status(500).end();
         }
     }

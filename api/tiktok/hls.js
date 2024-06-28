@@ -69,9 +69,6 @@ export default async function handler(req, res) {
         // Decode URI component
         playAddr = decodeURIComponent(playAddr);
 
-        // Stream the video from TikTok to the client
-        const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
-
         // Set appropriate headers for video streaming
         if (videoResponse.headers['content-length'] > 4500000) {
          res.status(500).json({ 
@@ -88,21 +85,27 @@ export default async function handler(req, res) {
          }
         else {
         const cacheDuration = 60 * 60 * 24 * 1; // 1 days in seconds
-
-         res.writeHead(200, { 
-            'Content-Type': audio == 'true' ? 'audio/aac' : 'video/mp4',
-            'Content-Length': videoResponse.headers['content-length'],
-            'Cache-Control': `public, max-age=${cacheDuration}, immutable, prefetch`, // HTTP caching header
-            'Cache-Cookie': token, // Use the retrieved token as a cookie
-            'video': !audio ? `${playAddr}` : null,
-            'audio': audio == 'true' ? `${playAddr}` : null
-        });
-
-        // Pipe the video stream to the client's response
-        videoResponse.data.pipe(res);
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Length', videoResponse.headers['content-length']);
+        res.setHeader('Cache-Control', `public, max-age=${cacheDuration}, immutable, preload`);
+        res.setHeader('Cache-Cookie', token);
+        if (!audio) {
+            res.setHeader('video', playAddr);
+        }
+        if (audio === 'true') {
+            res.setHeader('audio', playAddr);
         }
 
-    } catch (error) {
+        // Temporary redirect to the final URL
+        res.setHeader('Location', playAddr);
+        res.status(307).end(JSON.stringify({
+            status: 'Temporary Redirect',
+            location: playAddr
+        }, null, 2)); // Pretty-print the response 
+        }
+    }
+     catch (error) {
         if (axios.isAxiosError(error)) {
             // Axios error handling
             if (error.response) {

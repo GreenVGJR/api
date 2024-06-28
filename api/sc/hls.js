@@ -31,7 +31,10 @@ export default async function handler(req, res) {
    res.status(302).setHeader('Location', secresponse.data.url);
    res.end();
    }
-   catch {
-   res.status(500).end();
+   catch (error) {
+   res.status(500).json({
+    status: false,
+    message: error.response.data
+   });
    }
 }

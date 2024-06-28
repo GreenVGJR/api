@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         status: false,
         error: 'Unavailable.'
    })
-   return;
+   res.end();
    }
 
    const secondSplit = firstSplit.split('\"')[0] + "?client_id=" + clientid;
@@ -31,10 +31,7 @@ export default async function handler(req, res) {
    res.status(302).setHeader('Location', secresponse.data.url);
    res.end();
    }
-   catch (error) {
-   res.status(500).json({
-    status: false,
-    message: error.response.status
-   });
-   }
+   catch {
+   res.status(500).end();
+    }
 }

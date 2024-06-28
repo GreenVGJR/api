@@ -69,6 +69,9 @@ export default async function handler(req, res) {
         // Decode URI component
         playAddr = decodeURIComponent(playAddr);
 
+        // Stream the video from TikTok to the client
+        const videoResponse = await axios.get(playAddr, { headers, responseType: 'stream' });
+
         // Set appropriate headers for video streaming
         if (videoResponse.headers['content-length'] > 4500000) {
          res.status(500).json({ 

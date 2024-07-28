@@ -13,12 +13,10 @@ export default async function handler(req, res) {
       list: [{
          downloader: [{
             tiktok: ["/tiktok", "/tiktok/hls.js"],
-            soundcloud: ["/sc", "/sc/hls.js"],
-            twitter: "/tw",
-            youtube: null
+            soundcloud: ["/sc", "/sc/hls.js"]
          }]
       }],
-      rate_limit: "100 Requests / 1 Minute",
-      message: "This API is hosted by Vercel."
+      rate_limit: "100 Requests / 1 Minute (Global)",
+      message: "I do not track any your activity. This API purely made for testing."
    })
 }

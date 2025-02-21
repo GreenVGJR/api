@@ -1,7 +1,7 @@
 {
   "version": 2,
   "routes": [
-    { "src": "/api/.*", "status": 403 },
+    { "src": "/api/.*", "status": 404 },
     { "src": "/page/(.*)", "dest": "/page/$1" }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "routes": [
-    { "src": "/", "dest": "/page/index.js" },
+    { "src": "/", "dest": "/page/" },
     { "src": "/(.*)", "status": 401 }
   ]
 }

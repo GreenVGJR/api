@@ -2,6 +2,6 @@
   "version": 2,
   "routes": [
     { "src": "/", "dest": "/page/index.html" },
-    { "src": "/(.*)", "dest": "/page/error.php" }
+    { "src": "/(.*)", "status": 401 }
   ]
 }

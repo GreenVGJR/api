@@ -33,7 +33,10 @@ app.get('/', (req, res) => {
                 "/lyrics/youtube?url="
             ]
         },
-        _info: { uptime: Date.now() - starttime }
+        _info: { 
+            uptime: Date.now() - starttime,
+            note: "These functions are made in reference to the AMC Discord Bot"
+        }
     };
     res.json(listapi);
 });

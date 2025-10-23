@@ -14,7 +14,10 @@ const starttime = Date.now();
 
 // Middleware
 app.use((req, res, next) => {
-  res.write('');
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'X-Stream': 'failed'
+  });
   next();
 });
 

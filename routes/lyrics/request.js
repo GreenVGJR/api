@@ -10,7 +10,7 @@ ro.get('/youtube', async (req, res) => {
     a = await YTLyrics(query);
     }
     catch {}
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 

@@ -10,7 +10,7 @@ ro.get('/youtube/video', async (req, res) => {
     a = await YTVideo(query);
     }
     catch {}
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 
@@ -21,7 +21,7 @@ ro.get('/youtube/music', async (req, res) => {
     a = await YTMusic(query);
     }
     catch {}
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 
@@ -32,7 +32,7 @@ ro.get('/soundcloud', async (req, res) => {
     a = await SCMusic(query);
     }
     catch {}
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 
@@ -40,7 +40,7 @@ ro.get('/spotify', async (req, res) => {
     let a = null;
     const query = req.query.q;
     a = await SPMusic(query);
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 
@@ -56,7 +56,7 @@ ro.get('/applemusic', async (req, res) => {
         }
     }
     catch {}
-    res.write(JSON.stringify(a));
+    res.json(JSON.stringify(a));
     res.end();
 });
 

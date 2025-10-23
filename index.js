@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const request = require('./routes/search/request');
 const lyrics = require('./routes/lyrics/request');
 
-const port = 80;
+const port = 3000;
 const starttime = Date.now();
 
 // Middleware

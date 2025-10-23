@@ -14,27 +14,29 @@ const starttime = Date.now();
 
 // Middleware
 app.use((req, res, next) => {
-  next();
+    res.set('Content-Type', 'application/json');
+    res.set('X-Stream', 'fail');
+    next();
 });
 
 app.get('/', (req, res) => {
-  console.log(req);
-  const listapi = {
-    routes: {
-      search: [
-        "/search/youtube/video?q=",
-        "/search/youtube/music?q=",
-        "/search/soundcloud?q=",
-        "/search/spotify?q=",
-        "/search/applemusic?q=",
-      ],
-      lyrics: [
-        "/lyrics/youtube?url="
-      ]
-    },
-    _info: { uptime: Date.now() - starttime }
-  };
-  res.json(listapi);
+    console.log(req);
+    const listapi = {
+        routes: {
+            search: [
+                "/search/youtube/video?q=",
+                "/search/youtube/music?q=",
+                "/search/soundcloud?q=",
+                "/search/spotify?q=",
+                "/search/applemusic?q=",
+            ],
+            lyrics: [
+                "/lyrics/youtube?url="
+            ]
+        },
+        _info: { uptime: Date.now() - starttime }
+    };
+    res.json(listapi);
 });
 
 app.use('/search', request);

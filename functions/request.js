@@ -138,7 +138,6 @@ async function YTLyrics(url) {
         method: "POST"
     });
     const res = await response.json();
-    console.log(`Browse: ${res.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[1].tabRenderer.endpoint.browseEndpoint.browseId}`);
 
     const bodyload2 = JSON.stringify({
         browseId: res.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[1].tabRenderer.endpoint.browseEndpoint.browseId,
@@ -164,6 +163,7 @@ async function YTLyrics(url) {
     });
 
     const res2 = await pull.json();
+    console.log(res2);
 
     return res2.contents.sectionListRenderer.contents[0].musicDescriptionShelfRenderer.description.runs[0].text.split('\n');
 }

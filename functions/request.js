@@ -163,9 +163,8 @@ async function YTLyrics(url) {
     });
 
     const res2 = await pull.json();
-    console.log(res2);
-
-    return res2.contents.sectionListRenderer.contents[0].musicDescriptionShelfRenderer.description.runs[0].text.split('\n');
+    
+    return res2;
 }
 
 module.exports = { 

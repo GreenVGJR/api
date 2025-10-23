@@ -35,7 +35,7 @@ app.get('/', (req, res) => {
         },
         _info: { 
             uptime: Date.now() - starttime,
-            note: "These functions are made in reference to the AMC Discord Bot"
+            note: "These functions are made in reference to AMC Discord Bot"
         }
     };
     res.json(listapi);

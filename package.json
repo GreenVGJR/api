@@ -1,27 +1,10 @@
 {
-  "name": "vgjrnet",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/GreenVGJR/vgjrnet.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/GreenVGJR/vgjrnet/issues"
-  },
-  "homepage": "https://github.com/GreenVGJR/vgjrnet#readme",
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "axios": "^1.7.2",
-    "soundcloud-key-fetch": "^1.0.13",
-    "stream": "^0.0.2",
-    "util": "^0.12.5"
+    "@discordjs/voice": "^0.19.0",
+    "dotenv": "^17.2.3",
+    "entities": "^7.0.0",
+    "express": "^5.1.0",
+    "ffmpeg-static": "^5.2.0",
+    "opusscript": "^0.1.1"
   }
 }

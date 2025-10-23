@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const request = require('./routes/search/request');
 const lyrics = require('./routes/lyrics/request');
 
-const port = 3000;
+const port = 80;
 const starttime = Date.now();
 
 // Middleware
@@ -20,7 +20,6 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-    console.log(req);
     const listapi = {
         routes: {
             search: [

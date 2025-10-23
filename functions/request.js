@@ -138,6 +138,7 @@ async function YTLyrics(url) {
         method: "POST"
     });
     const res = await response.json();
+    console.log(res);
 
     const bodyload2 = JSON.stringify({
         browseId: res.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[1].tabRenderer.endpoint.browseEndpoint.browseId,

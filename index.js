@@ -14,7 +14,6 @@ const starttime = Date.now();
 
 // Middleware
 app.use((req, res, next) => {
-  if (req.header('Sec-Fetch-Site') === 'same-origin') return res.status(412).end();
   res.writeHead(200, {
     'Content-Type': 'application/json',
     'X-Stream': 1

@@ -23,6 +23,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
+  console.log(req);
   const listapi = {
     routes: {
       search: [

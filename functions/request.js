@@ -152,7 +152,7 @@ async function YTLyrics(url) {
         }
     });
 
-    const pull = await fetch('https://youtubei.googleapis.com/youtubei/v1/browse?prettyPrint=false&fields=', {
+    const pull = await fetch('https://youtubei.googleapis.com/youtubei/v1/browse?prettyPrint=false&fields=contents', {
         headers: {
             'Accept-Encoding': 'gzip',
             'Content-Type': 'application/json',
@@ -163,8 +163,8 @@ async function YTLyrics(url) {
     });
 
     const res2 = await pull.json();
-    
-    return res2;
+
+    return res2.contents;
 }
 
 module.exports = { 

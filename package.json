@@ -1,6 +1,11 @@
 {
   "dependencies": {
+    "@hono/node-server": "^1.19.6",
     "entities": "^7.0.0",
-    "express": "^5.1.0"
+    "hono": "^4.10.7",
+    "undici": "^7.16.0"
+  },
+  "scripts": {
+    "start": "node index.js"
   }
 }

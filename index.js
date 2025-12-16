@@ -8,11 +8,15 @@ setGlobalDispatcher(new Agent({
 
 const { Hono } = require('hono');
 const { serve } = require('@hono/node-server');
+const fs = require('fs');
 
 const app = new Hono();
 
 // Routes
 // Note: Ensure these files export a Hono instance via module.exports
+const robots = fs.readFileSync('./public/robots.txt');
+const favicon = fs.readFileSync('./public/favicon.ico');
+
 const reqs = require('./routes/search/request');
 const lyrics = require('./routes/lyrics/request');
 const { soundcloudKey, spotifyKey, tidalKeys, deezerKeys, setKeys } = require('./functions/request');
@@ -37,6 +41,15 @@ app.use('*', async (c, next) => {
     c.header('X-Stream', c.req.path === '/' ? '0' : '1');
     c.header('Access-Control-Allow-Origin', '*');
     await next();
+});
+
+app.get('/robots.txt', (c) => {
+    return c.text(robots, 200);
+});
+
+app.get('/favicon.ico', (c) => {
+    c.header('Content-Type', 'image/x-icon');
+    return c.body(favicon);
 });
 
 app.get('/', (c) => {

@@ -86,7 +86,7 @@ app.route('/search', reqs);
 app.route('/lyrics', lyrics);
 
 app.notFound((c) => {
-    return c.body(null, 204);
+    return c.body(null, 200);
 });
 
 serve({

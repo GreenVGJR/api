@@ -8,14 +8,15 @@ setGlobalDispatcher(new Agent({
 
 const { Hono } = require('hono');
 const { serve } = require('@hono/node-server');
+const path = require('path');
 const fs = require('fs');
 
 const app = new Hono();
 
 // Routes
 // Note: Ensure these files export a Hono instance via module.exports
-const robots = fs.readFileSync('./public/robots.txt');
-const favicon = fs.readFileSync('./public/favicon.ico');
+const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
+const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 
 const reqs = require('./routes/search/request');
 const lyrics = require('./routes/lyrics/request');

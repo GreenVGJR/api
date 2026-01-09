@@ -442,9 +442,14 @@ exports.Gemini = async function Gemini(que, convo) {
         body: reqPayload
     });
 
+    if(req.statusCode === 302) {
+        return {
+            "error": "Google asking to verify you're not a bot"
+        }
+    }
+
     const cookiess = await req.headers?.['set-cookie'];
     const resText = await req.body.text();
-    console.log(resText);
     let response;
 
     try {

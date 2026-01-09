@@ -395,6 +395,13 @@ exports.Genius = async function Genius(que) {
                 ...commonHeaders
             }
         });
+
+        if(req.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
         console.log(await pull.body.text());
 
         const res = await pull.body.json();

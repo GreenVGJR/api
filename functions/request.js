@@ -395,7 +395,7 @@ exports.Genius = async function Genius(que) {
                 ...commonHeaders
             }
         });
-        console.log(pull.body.text());
+        console.log(await pull.body.text());
 
         const res = await pull.body.json();
         return res?.response?.sections?.[0]?.hits?.map(a => a?.result) || res;

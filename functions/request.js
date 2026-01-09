@@ -786,7 +786,7 @@ exports.infoYoutube = async function infoYoutube(que) {
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
-                request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
+                request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp),
                 headers: {

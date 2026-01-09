@@ -26,6 +26,7 @@ app.use('*', cors({
 
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
+const { generate_hash } = require('./config.json');
 
 const reqs = require('./routes/search');
 const lyrics = require('./routes/lyrics');
@@ -47,12 +48,14 @@ const port = 3000;
 const starttime = Date.now();
 
 app.use('*', async (c, next) => {
+    if(generate_hash) {
     if (c.env.incoming.httpVersion === '1.0' || c.env.incoming.httpVersion === '0.9') {
         return c.body(null, 501);
     }
     const geturl = new URL(c.req.url);
     if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
     if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
+    }
     await next();
     if (c.error) {
         return c.body(null, 500);

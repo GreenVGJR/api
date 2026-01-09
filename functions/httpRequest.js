@@ -1,6 +1,7 @@
 const { stream } = require('hono/streaming');
 const crypto = require('crypto');
 const { getCookie, setCookie, deleteCookie } = require('hono/cookie');
+const { generate_hash } = require('../config.json');
 
 const blobDispatch = async (c, body, headers) => {
   if (typeof body === 'function' || body instanceof Promise) {
@@ -49,6 +50,7 @@ const blobDispatch = async (c, body, headers) => {
 };
 
 const dispatch = async (c, promiseFactory) => {
+  if(generate_hash) {
     const sh = c.req.query('sh') || '';
     const ua = c.req.header('user-agent') || '';
     const uaHash = crypto.createHash('md5').update(ua).digest('hex').slice(0, 8);
@@ -112,6 +114,7 @@ const dispatch = async (c, promiseFactory) => {
         c.header('X-If-Cache', true);
         return c.body(null, 304);
     }
+  }
 
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'max-age=30');

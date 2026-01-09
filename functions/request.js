@@ -786,11 +786,12 @@ exports.infoYoutube = async function infoYoutube(que) {
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
-                request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=', {
+                request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp),
                 headers: {
-                    ...commonHeaders
+                    ...commonHeaders,
+                    'User-Agent': 'Bot'
                 }
             }),
                 request(`https://www.youtube.com/watch?v=${videoId}`, {
@@ -804,12 +805,11 @@ exports.infoYoutube = async function infoYoutube(que) {
                 method: "POST",
                 body: JSON.stringify(bodyhttp2),
                 headers: {
-                    ...commonHeaders
+                    ...commonHeaders,
+                    'User-Agent': 'Bot'
                 }
             }),
         ]);
-
-        console.log(await res.body.text());
 
         const pull = await res.body.json();
         const pull2 = await res2.body.text();

@@ -809,6 +809,8 @@ exports.infoYoutube = async function infoYoutube(que) {
             }),
         ]);
 
+        console.log(await res.body.text());
+
         const pull = await res.body.json();
         const pull2 = await res2.body.text();
         const pull3 = await res3.body.json();

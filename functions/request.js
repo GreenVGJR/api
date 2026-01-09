@@ -326,6 +326,7 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
         });
 
         const res = await pull.body.json();
+        console.log(res);
 
         if (res?.errors?.[0]) {
             return await deezerLyrics(que, true);

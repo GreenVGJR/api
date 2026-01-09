@@ -326,7 +326,6 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
         });
 
         const res = await pull.body.json();
-        console.log(res);
 
         if (res?.errors?.[0]) {
             return await deezerLyrics(que, true);
@@ -360,6 +359,7 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
         });
 
         const res2 = await pull2.body.json();
+        console.log(res2);
 
         if (res2?.errors?.[0]) {
             return await deezerLyrics(que, true);

@@ -359,7 +359,6 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
         });
 
         const res2 = await pull2.body.json();
-        console.log(res2);
 
         if (res2?.errors?.[0]?.message.includes('Given jwt')) {
             return await deezerLyrics(que, true);

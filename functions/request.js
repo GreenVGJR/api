@@ -854,8 +854,7 @@ exports.infoSoundcloud = async function infoSoundcloud(que, refresh_auth = false
                 ...commonHeaders
             }
         });
-        console.log(res.statusCode);
-        if([400, 401].includes(res.statusCode)) {
+        if(res.statusCode === 401 || res.statusCode === 400) {
             return await infoSoundcloud(que, true);
         }
         const pull = await res.body.json();

@@ -824,7 +824,6 @@ exports.infoYoutube = async function infoYoutube(que) {
         };
     }
     catch (e) {
-        console.error(e);
         return null;
     }
 }

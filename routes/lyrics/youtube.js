@@ -1,15 +1,16 @@
 "use strict";
 
 const { Hono } = require('hono');
-const { dispatch } = require('../../functions/httpRequest');
+const { dispatch, blobDispatch } = require('../../functions/httpRequest');
 const app = new Hono();
-const { YTMusic, YTLyrics, deezerLyrics } = require('../../functions/request');
+const { YTMusic, YTLyrics } = require('../../functions/request');
 
 app.get('/youtube', async (c) => {
     const query = c.req.query('q');
+    if(!query) return c.json(["Missing parameter required"], 202);
     c.header('X-Route', 'm.youtube.com');
 
-    const task = (async () => {
+    const task = async () => {
         let q = query;
         let isUrl = false;
         try {
@@ -29,15 +30,9 @@ app.get('/youtube', async (c) => {
         } catch {
             return null;
         }
-    })();
+    };
 
-    return dispatch(c, task);
-});
-
-app.get('/deezer', async (c) => {
-    const query = c.req.query('q');
-    c.header('X-Route', 'pipe.deezer.com');
-    return dispatch(c, deezerLyrics(query));
+    return await dispatch(c, task);
 });
 
 module.exports = app;

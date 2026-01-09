@@ -1,49 +1,127 @@
 const { stream } = require('hono/streaming');
 const crypto = require('crypto');
+const { getCookie, setCookie, deleteCookie } = require('hono/cookie');
 
-const dispatch = (c, promise) => {
-    const pathHash = crypto.createHash('md5').update(c.req.path).digest('hex').slice(0, 8);
-    const sh = c.req.query('sh');
-    let isValid = sh && sh.length === 53 && sh.endsWith(pathHash);
+const blobDispatch = async (c, body, headers) => {
+  if (typeof body === 'function' || body instanceof Promise) {
+    const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
+    c.header('Content-Type', type || 'application/octet-stream');
 
-    if (isValid) {
-        const ts = parseInt(sh.slice(32, 45));
-        const isForceRefresh = c.req.header('cache-control') === 'no-cache';
-        
-        if (isForceRefresh) {
-            const timeDiff = Date.now() - ts;
-            // If token is old (> 10s), invalidate to force a new one.
-            if (timeDiff > 10000) {
-                isValid = false;
-            } else if (timeDiff > 3000) {
-                // If token is fresh (< 10s) but not brand new (> 3s), 
-                // it's likely a user spamming refresh. Return 204.
-                return c.body(null, 204);
-            }
-            // If < 3s, allow it to pass (return 200) as it's the redirect follow-up.
-        } else if (c.req.header('cache-control') === 'max-age=0') {
-            return c.body(null, 204);
+    return stream(c, async (s) => {
+      await s.write(new Uint8Array(0));
+      try {
+        let res = typeof body === 'function' ? body() : body;
+        if (res instanceof Promise) res = await res;
+        const b = res?.body || res;
+        if (b) await s.pipe(b);
+      } catch (err) {
+        console.error('Streaming error:', err);
+      }
+    });
+  }
+
+  try {
+    const type = headers?.get('content-type');
+    const filtype1 = type?.split('/')?.[0];
+    
+    const defaultExtensions = {
+      'video': 'mp4',
+      'image': 'png',
+      'audio': 'mp3',
+      'text': 'plain',
+      'application': 'octet-stream'
+    };
+    
+    const subtype = type?.split('/')?.[1]?.split(';')?.[0];
+    const filtype2 = subtype === '*' ? (defaultExtensions[filtype1] || null) : subtype;
+    
+    const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
+    c.header('Content-Type', contentType);
+
+    return stream(c, async (s) => {
+      await s.write(new Uint8Array(0));
+      await s.pipe(body);
+    });
+  } catch (err) {
+    console.error('Streaming error:', err);
+    return c.body(null, 500);
+  }
+};
+
+const dispatch = async (c, promiseFactory) => {
+    const sh = c.req.query('sh') || '';
+    const ua = c.req.header('user-agent') || '';
+    const uaHash = crypto.createHash('md5').update(ua).digest('hex').slice(0, 8);
+    const checkcookie = getCookie(c, '_sign');
+    
+    // Use URL searchParams for consistent query hashing
+    const urlObj = new URL(c.req.url);
+    const queryKeys = Array.from(urlObj.searchParams.keys()).filter(k => k !== 'sh').sort();
+    const queryStr = queryKeys.map(k => `${k}=${urlObj.searchParams.get(k)}`).join('&');
+
+    const providedUaHash = sh.slice(0, 8);
+    const providedQHash = sh.slice(8, 16);
+    const ts = parseInt(sh.slice(16), 16);
+
+    const qHash = crypto.createHash('md5').update(urlObj.pathname + '?' + queryStr + (isNaN(ts) ? '' : ts.toString())).digest('hex').slice(0, 8);
+    const letSh = uaHash + qHash;
+
+    const now = Date.now();
+    const isForceRefresh = c.req.header('cache-control') === 'no-cache';
+    const timeDiff = now - ts;
+
+    if (sh && (providedUaHash !== uaHash || (providedQHash !== qHash && (isNaN(ts) || new String(ts).length !== 13)))) {
+        return c.body(null, 403);
+    }
+
+    if (!sh || providedQHash !== qHash || (isForceRefresh && timeDiff > 1000) || timeDiff >= 30000) {
+        const newQHash = crypto.createHash('md5').update(urlObj.pathname + '?' + queryStr + now.toString()).digest('hex').slice(0, 8);
+        const newLetSh = uaHash + newQHash;
+        const newSh = newLetSh + now.toString(16);
+        const newUrl = `${urlObj.origin}${urlObj.pathname}?sh=${newSh}${queryStr ? '&' + queryStr : ''}`;
+
+        setCookie(c, '_sign', newLetSh.split('').reverse().join(''), { 
+            path: '/',
+            secure: false,
+            sameSite: 'Lax'
+        });
+        if(c.req.header('sec-fetch-site') === 'none') {
+          c.header('Cache-Control', 'no-store, must-revalidate');
+          c.header('Refresh', '0, url=' + newUrl);
+          return c.text('', 303);
+        }
+        else {
+          c.header('Cache-Control', 'no-store, must-revalidate');
+          return c.redirect(newUrl, 302);
         }
     }
 
-    if (!isValid) {
-        if (!c.req.query('q')) return c.json(["Missing parameter required"], 202);
-
-        const url = new URL(c.req.url);
-        // proper structure: UUID (32) + Timestamp (13) + Hash (8) = 53 chars
-        url.searchParams.set('sh', crypto.randomUUID().replaceAll('-', '') + Date.now() + pathHash);
-        return c.redirect(url.toString());
+    if(checkcookie) {
+      deleteCookie(c, '_sign', { 
+          path: '/', 
+          secure: false,
+          domain: '',
+          sameSite: 'Lax'
+      });
+      if ((checkcookie !== letSh.split('').reverse().join('')) && c.req.header('referer')) {
+        return c.json(["Signature mismatch", "Refresh this page for gain access"], 200);
+      }
     }
+
+    if (timeDiff > 1000) {
+        c.header('X-If-Cache', true);
+        return c.body(null, 304);
+    }
+
     c.header('Content-Type', 'application/json');
+    c.header('Cache-Control', 'max-age=30');
     return stream(c, async (stream) => {
-        // Send initial response to establish stream
-        const [_, data] = await Promise.all([
-            stream.write(''),
-            promise.catch((e) => {
-                console.error('Promise error:', e);
-                return null;
-            })
-        ]);
+        await stream.write('');
+        const data = await (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory).catch((e) => {
+            console.error('Promise error:', e);
+            return null;
+        });
+
         if (!data) {
             await stream.write('null');
         } else if (typeof data === 'object') {
@@ -54,4 +132,4 @@ const dispatch = (c, promise) => {
     });
 };
 
-module.exports = { dispatch };
+module.exports = { dispatch, blobDispatch };

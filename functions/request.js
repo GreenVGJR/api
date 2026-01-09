@@ -829,9 +829,9 @@ exports.infoYoutube = async function infoYoutube(que) {
                 "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.map(e => Object.fromEntries(Object.entries(e || {}).filter(([key]) => ['lockupViewModel'].includes(key)))?.lockupViewModel?.metadata?.lockupMetadataViewModel).filter(Boolean)
             },
             "youtubeMusicWeb": {
-                "musicDetails": pull3?.videoDetails || {
+                ...(pull3?.videoDetails ? {"musicDetails": pull3?.videoDetails} : {
                 "error": "Google asking to verify you're not a bot"
-            }
+            })
             }
         };
     }

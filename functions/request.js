@@ -444,6 +444,7 @@ exports.Gemini = async function Gemini(que, convo) {
 
     const cookiess = await req.headers?.['set-cookie'];
     const resText = await req.body.text();
+    console.log(resText);
     let response;
 
     try {

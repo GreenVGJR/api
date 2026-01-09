@@ -786,7 +786,7 @@ exports.infoYoutube = async function infoYoutube(que) {
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
-                request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
+                request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp),
                 headers: {
@@ -800,7 +800,7 @@ exports.infoYoutube = async function infoYoutube(que) {
                 'User-Agent': 'Bot'
                 }
             }),
-            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
+            request('https://www.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp2),
                 headers: {
@@ -819,13 +819,17 @@ exports.infoYoutube = async function infoYoutube(que) {
         catch { }
 
         return {
-            "innerTube": pull.videoDetails,
+            "innerTube": pull?.videoDetails || {
+                "error": "Google asking to verify you're not a bot"
+            },
             "youtubeWeb": {
                 "videoDetails": testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer || testpar?.videoDetails,
                 "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.map(e => Object.fromEntries(Object.entries(e || {}).filter(([key]) => ['lockupViewModel'].includes(key)))?.lockupViewModel?.metadata?.lockupMetadataViewModel).filter(Boolean)
             },
             "youtubeMusicWeb": {
-                "musicDetails": pull3.videoDetails
+                "musicDetails": pull3?.videoDetails || {
+                "error": "Google asking to verify you're not a bot"
+            }
             }
         };
     }

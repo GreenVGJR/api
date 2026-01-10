@@ -370,8 +370,11 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
     } catch { return null; }
 }
 
-exports.Tidal = async function Tidal(que) {
+exports.Tidal = async function Tidal(que, refresh) {
     if (!que) return null;
+    if(refresh) {
+        keytidal = await tidalKeys();
+    }
 
     try {
         const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${que}`, {
@@ -380,6 +383,10 @@ exports.Tidal = async function Tidal(que) {
                 'X-Tidal-Token': keytidal
             }
         });
+
+        if(pull.statusCode === 400 || pull.statusCode === 401) {
+            return await Tidal(que, true);
+        }
 
         const res = await pull.body.json();
         return res.items;

@@ -782,7 +782,7 @@ exports.Translate = async function Translate(que, from, to) {
                     (lFrom && lTo) ? "specific" : "auto",
                     "flash"
                 ],
-                accuration: data?.ld_result?.srclangs_confidences?.[0] ? new String(data?.ld_result?.srclangs_confidences?.[0] * 100) : null
+                accuracy: data?.ld_result?.srclangs_confidences?.[0] ? new String(data?.ld_result?.srclangs_confidences?.[0] * 100) : null
             }
         };
     } catch {

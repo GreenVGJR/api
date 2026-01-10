@@ -28,8 +28,7 @@ const blobDispatch = async (c, body, headers) => {
             const b = res?.body || res;
             if (b) return await s.pipe(b);
         } catch (err) {
-            console.error('Streaming error:', err);
-            return c.body(null, 500);
+            return c.body(null, 401);
         }
     });
   }
@@ -66,8 +65,7 @@ const blobDispatch = async (c, body, headers) => {
       return await s.pipe(body);
     });
   } catch (err) {
-    console.error('Streaming error:', err);
-    return c.body(null, 500);
+    return c.body(null, 401);
   }
 };
 

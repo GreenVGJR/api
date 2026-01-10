@@ -1040,4 +1040,29 @@ exports.GettyImage = async function GettyImage(que) {
 
 };
 
+exports.Unsplash = async function Unsplash(que) {
+    if(!que) return null;
+
+    try {
+    const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${que}`, {
+        headers: {
+            ...commonHeaders,
+            'client-geo-region': 'global'
+        }
+    });
+
+    if(pull.statusCode === 403) {
+        return {
+            "error": "IP Blocked"
+        }
+    }
+
+    const res = await pull.body.json();
+    return res?.results?.[0] ? {
+        non_premium: res?.results.filter(a => !a.premium),
+        premium: res?.results.filter(a => a.premium)
+    } : null;
+    } catch { return null; }
+}
+
 exports.setKeys = (sc, sp, tidal, deezer) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

@@ -3,6 +3,7 @@
 const { Hono } = require('hono');
 const app = new Hono();
 
+const { request } = require('undici');
 const { dispatch, blobDispatch } = require('../../functions/httpRequest');
 
 app.get('/applemusic', async (c) => {
@@ -12,8 +13,8 @@ app.get('/applemusic', async (c) => {
 
     const task = async () => {
         if (query) {
-            return fetch(`https://itunes.apple.com/search?media=music&limit=10&country=US&term=${query}`, { method: 'GET' })
-                .then(res => res.json())
+            return request(`https://itunes.apple.com/search?media=music&limit=10&country=US&term=${query}`, { method: 'GET' })
+                .then(res => res.body.json())
                 .then(d => d.results)
                 .catch(() => null);
         }

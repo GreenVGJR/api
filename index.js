@@ -87,7 +87,8 @@ app.get('/', (c) => {
                 "/search/tidal?q=",
                 "/search/genius?q=",
                 "/search/pinterest?q=",
-                "/search/istockphoto?q="
+                "/search/istockphoto?q=",
+                "/search/unsplash?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",

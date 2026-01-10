@@ -416,11 +416,7 @@ exports.Gemini = async function Gemini(que, convo) {
     if (convo) {
         try {
             parsebody = JSON.parse(
-                new TextDecoder().decode(
-                Uint8Array.fromBase64(convo.split('').reverse().join(''), {
-                    alphabet: 'base64url',
-                    omitPadding: true,
-                }))
+                Buffer.from(convo.split('').reverse().join(''), 'base64url').toString('utf-8')
             );
         }
         catch {
@@ -491,10 +487,7 @@ exports.Gemini = async function Gemini(que, convo) {
 
     const responseBody = {
         response: response,
-        conversation: new TextEncoder().encode(JSON.stringify(objectbody)).toBase64({
-            alphabet: 'base64url',
-            omitPadding: true,
-        }).split('').reverse().join(''),
+        conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
         model: 'gemini-3-flash'
     }
 

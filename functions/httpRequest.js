@@ -9,15 +9,28 @@ const blobDispatch = async (c, body, headers) => {
     c.header('Content-Type', type || 'application/octet-stream');
 
     return stream(c, async (s) => {
-      await s.write(new Uint8Array(0));
-      try {
-        let res = typeof body === 'function' ? body() : body;
-        if (res instanceof Promise) res = await res;
-        const b = res?.body || res;
-        if (b) await s.pipe(b);
-      } catch (err) {
-        console.error('Streaming error:', err);
-      }
+        s.onAbort(() => {
+          return;
+        });
+        
+        if (c.req.raw.signal.aborted) return;
+        
+        await s.write(new Uint8Array(0));
+        
+        if (c.req.raw.signal.aborted) return;
+
+        try {
+            let res = typeof body === 'function' ? body() : body;
+            if (res instanceof Promise) res = await res;
+            
+            if (c.req.raw.signal.aborted) return;
+
+            const b = res?.body || res;
+            if (b) return await s.pipe(b);
+        } catch (err) {
+            console.error('Streaming error:', err);
+            return c.body(null, 500);
+        }
     });
   }
 
@@ -40,8 +53,17 @@ const blobDispatch = async (c, body, headers) => {
     c.header('Content-Type', contentType);
 
     return stream(c, async (s) => {
+      s.onAbort(() => {
+          return;
+      });
+      
+      if (c.req.raw.signal.aborted) return;
+      
       await s.write(new Uint8Array(0));
-      await s.pipe(body);
+      
+      if (c.req.raw.signal.aborted) return;
+
+      return await s.pipe(body);
     });
   } catch (err) {
     console.error('Streaming error:', err);
@@ -76,7 +98,7 @@ const dispatch = async (c, promiseFactory) => {
         return c.body(null, 403);
     }
 
-    if (!sh || providedQHash !== qHash || (isForceRefresh && timeDiff > 1000) || timeDiff >= 30000) {
+    if (!sh || providedQHash !== qHash || (isForceRefresh && timeDiff > 3000) || timeDiff >= 30000) {
         const newQHash = crypto.createHash('md5').update(urlObj.pathname + '?' + queryStr + now.toString()).digest('hex').slice(0, 8);
         const newLetSh = uaHash + newQHash;
         const newSh = newLetSh + now.toString(16);
@@ -110,7 +132,7 @@ const dispatch = async (c, promiseFactory) => {
       }
     }
 
-    if (timeDiff > 1000) {
+    if (timeDiff > 1000 && !isForceRefresh) {
         c.header('X-If-Cache', true);
         return c.body(null, 304);
     }
@@ -119,11 +141,22 @@ const dispatch = async (c, promiseFactory) => {
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'max-age=30');
     return stream(c, async (stream) => {
+        stream.onAbort(() => {
+            return;
+        });
+
+        if (c.req.raw.signal.aborted) return;
+
         await stream.write('');
+        
+        if (c.req.raw.signal.aborted) return;
+
         const data = await (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory).catch((e) => {
             console.error('Promise error:', e);
             return null;
         });
+
+        if (c.req.raw.signal.aborted) return;
 
         if (!data) {
             await stream.write('null');

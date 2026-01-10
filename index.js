@@ -48,12 +48,12 @@ const port = 3000;
 const starttime = Date.now();
 
 app.use('*', async (c, next) => {
-    if(generate_hash) {
     if (c.env.incoming.httpVersion === '1.0' || c.env.incoming.httpVersion === '0.9') {
         return c.body(null, 501);
     }
     const geturl = new URL(c.req.url);
     if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
+    if(generate_hash) {
     if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
     }
     await next();
@@ -85,18 +85,29 @@ app.get('/', (c) => {
                 "/search/shazam?q=",
                 "/search/deezer?q=",
                 "/search/tidal?q=",
-                "/search/genius?q="
+                "/search/genius?q=",
+                "/search/pinterest?q=",
+                "/search/istockphoto?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",
                 "/lyrics/deezer?q="
             ],
-            tools: [
-                "/tools/chat/gemini?prompt=&conversation=",
-                "/tools/translate?q=&from=&to=",
-                "/tools/ai-image/flux_demo?prompt=",
-                "/tools/ai-image/magicstudio?prompt=",
-            ],
+            tools: {
+                ai: [
+                    "/tools/chat/gemini?prompt=&conversation="
+                ],
+                discord: [
+                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner="
+                ],
+                generate_image: [
+                    "/tools/ai-image/flux_demo?prompt=",
+                    "/tools/ai-image/magicstudio?prompt="
+                ],
+                misc: [
+                    "/tools/translate?q=&from=&to="
+                ]
+            },
             info: [
                 "/info/youtube?url=",
                 "/info/soundcloud?url=",
@@ -111,7 +122,9 @@ app.get('/', (c) => {
     },
     {
         uptime: Date.now() - starttime,
-        service: "Hono"
+        service: "Hono",
+        proxied: false,
+        fluid: true
     }];
     c.header('Cache-Control', 'no-store, must-revalidate');
     return c.body(JSON.stringify(listapi, null, 3), 200);
@@ -132,7 +145,7 @@ info.forEach((val) => {
 
 app.notFound((c) => {
     c.header('Cache-Control', 'no-store, must-revalidate');
-    return c.json(["No route available"], 404);
+    return c.json({"notfound":"No route available"}, 404);
 });
 
 const server = serve({

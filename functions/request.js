@@ -415,7 +415,13 @@ exports.Gemini = async function Gemini(que, convo) {
 
     if (convo) {
         try {
-            parsebody = JSON.parse(atob(convo));
+            parsebody = JSON.parse(
+                new TextDecoder().decode(
+                Uint8Array.fromBase64(convo.split('').reverse().join(''), {
+                    alphabet: 'base64url',
+                    omitPadding: true,
+                }))
+            );
         }
         catch {
             return `["JSON Parsing Error"]`;
@@ -485,7 +491,10 @@ exports.Gemini = async function Gemini(que, convo) {
 
     const responseBody = {
         response: response,
-        conversation: btoa(JSON.stringify(objectbody)),
+        conversation: new TextEncoder().encode(JSON.stringify(objectbody)).toBase64({
+            alphabet: 'base64url',
+            omitPadding: true,
+        }).split('').reverse().join(''),
         model: 'gemini-3-flash'
     }
 
@@ -768,7 +777,12 @@ exports.Translate = async function Translate(que, from, to) {
             data: {
                 query: que,
                 fromLang: [data.src || sourceLang, listcodes.find(l => l.code === (data.src || sourceLang))?.name || sourceLang],
-                toLang: [targetLang, listcodes.find(l => l.code === targetLang)?.name || targetLang]
+                toLang: [targetLang, listcodes.find(l => l.code === targetLang)?.name || targetLang],
+                translateType: [
+                    (lFrom && lTo) ? "specific" : "auto",
+                    "flash"
+                ],
+                accuration: data?.ld_result?.srclangs_confidences?.[0] ? new String(data?.ld_result?.srclangs_confidences?.[0] * 100) : null
             }
         };
     } catch {
@@ -920,5 +934,110 @@ exports.infoITunes = async function infoITunes(que) {
         return null;
     }
 }
+
+exports.pinterest = async function pinterest(que) {
+    if(!que) return null;
+    try {
+        const feat = {"options":{"query":que,"scope":"pins"},"context":{}};
+        const req = await request(`https://id.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`,{
+            method: 'GET',
+            headers: {
+                ...commonHeaders,
+                'X-Pinterest-PWS-Handler': 'www/search/[scope].js'
+            }
+        });
+
+        const res = await req.body.json();
+        return res.resource_response.data.results[0] ? res.resource_response.data.results : {
+            'error': 'Looks like your search violate our terms of service'
+        };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => {
+    const url = `https://discord.com/api/v10/guilds/${guildId}`;
+
+    try {
+        // First try to fetch current info (GET) to verify access/token
+        const req = await request(url, {
+        method: 'GET',
+        headers: {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json'
+        }
+        });
+
+        let currentInfo = null;
+        try {
+        currentInfo = await req.body.json();
+        } catch {
+        // If we can't parse the body, it might be an empty or error response
+        }
+
+        if(req.statusCode !== 200) {
+            return { 
+                data: null, 
+                error: currentInfo || { status: req.statusCode, statusText: req.statusText }
+            };   
+        }
+
+        // Use fetch for the PATCH request as before
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'X-Audit-Log-Reason': reasonAudit
+            },
+            body: JSON.stringify(payload)
+        });
+
+        let patchResponse = null;
+        try {
+            patchResponse = await response.json();
+        } catch (e) {}
+
+        if (!response.ok) {
+            return { 
+                data: currentInfo.code === 0 ? null : currentInfo, 
+                error: patchResponse || { status: response.status, statusText: response.statusText }
+            };
+        }
+
+        return { 
+            data: [[currentInfo, patchResponse], response.status, reasonAudit],
+            ...(payloadError?.[0] && {
+                error: payloadError,
+                errorMessage: 'Continuing anyways'
+            })
+        };
+    } catch {
+        return { error: 'Something just happened' };
+    }
+};
+
+exports.GettyImage = async function GettyImage(que) {
+    if(!que) return null;
+    try {
+        const req = await request(`https://www.istockphoto.com/en/search/2/image?phrase=${que}&page=1`, {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/json'
+            }
+        });
+
+        const res = await req.body.json();
+        return {
+            data: [res?.gallery?.assets ?? null, res?.relatedTerms ?? null]
+        };
+    }
+    catch {
+        return null;
+    }
+
+};
 
 exports.setKeys = (sc, sp, tidal, deezer) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

@@ -50,9 +50,16 @@ const starttime = Date.now();
 
 app.use('*', async (c, next) => {
     const geturl = new URL(c.req.url);
-    if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
+    const getHeader = (key) => {
+        if (c.req.raw.headers && typeof c.req.raw.headers.get === 'function') {
+            return c.req.raw.headers.get(key);
+        }
+        return c.req.raw.headers[key] || c.req.raw.headers[key.toLowerCase()];
+    }
+
+    if (c.req.method !== 'GET' || !getHeader('user-agent') || (geturl.host !== getHeader('host')) || (!getHeader('sec-fetch-site') && c.req.method !== 'GET')) return c.body(null, 403);
     if(generate_hash) {
-    if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
+    if(getHeader('If-None-Match') && (getHeader('cache-control') !== 'no-cache')) return c.body(null, 304);
     }
     await next();
     if (c.error) {

@@ -18,8 +18,6 @@ const { handle } = require('hono/vercel');
 
 const app = new Hono();
 
-app.use('*', compress());
-
 // Manual CORS middleware to avoid Hono internals issues with Vercel adapter
 app.use('*', async (c, next) => {
     await next();
@@ -62,7 +60,7 @@ const port = 3000;
 const starttime = Date.now();
 
 app.use('*', async (c, next) => {
-    const geturl = new URL(c.req.url);
+    const geturl = new URL(c.req.url, 'http://localhost');
     const getHeader = (key) => {
         if (c.req.raw.headers && typeof c.req.raw.headers.get === 'function') {
             return c.req.raw.headers.get(key);

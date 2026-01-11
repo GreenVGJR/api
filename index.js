@@ -7,34 +7,22 @@ setGlobalDispatcher(new Agent({
 }));
 
 const { Hono } = require('hono');
-
-
+const { serve } = require('@hono/node-server');
+const { cors } = require('hono/cors');
 const { etag } = require('hono/etag');
 const { compress } = require('hono/compress');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { handle } = require('hono/vercel');
 
 const app = new Hono();
 
-// Manual CORS middleware to avoid Hono internals issues with Vercel adapter
-app.use('*', async (c, next) => {
-    await next();
-    c.header('Access-Control-Allow-Origin', '*');
-    c.header('Access-Control-Allow-Credentials', 'true');
-    c.header('Access-Control-Expose-Headers', 'X-Route');
-});
+app.use('*', compress());
 
-app.options('*', (c) => {
-    return c.text('', 204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Route',
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Expose-Headers': 'X-Route'
-    });
-});
+app.use('*', cors({
+    credentials: true,
+    exposeHeaders: ['X-Route']
+}));
 
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
@@ -60,17 +48,10 @@ const port = 3000;
 const starttime = Date.now();
 
 app.use('*', async (c, next) => {
-    const geturl = new URL(c.req.url, 'http://localhost');
-    const getHeader = (key) => {
-        if (c.req.raw.headers && typeof c.req.raw.headers.get === 'function') {
-            return c.req.raw.headers.get(key);
-        }
-        return c.req.raw.headers[key] || c.req.raw.headers[key.toLowerCase()];
-    }
-
-    if (c.req.method !== 'GET' || !getHeader('user-agent') || (geturl.host !== getHeader('host')) || (!getHeader('sec-fetch-site') && c.req.method !== 'GET')) return c.body(null, 403);
+    const geturl = new URL(c.req.url);
+    if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
     if(generate_hash) {
-    if(getHeader('If-None-Match') && (getHeader('cache-control') !== 'no-cache')) return c.body(null, 304);
+    if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
     }
     await next();
     if (c.error) {
@@ -131,12 +112,15 @@ app.get('/', (c) => {
                 "/info/spotify?url=",
                 "/info/applemusic?url=",
             ]
-        }
+        },
+        unavailable_routes: [
+            "/search/tiktok/video",
+            "/search/tiktok/music",
+        ],
     },
     {
         uptime: Date.now() - starttime,
         service: "Hono",
-        runtime: typeof Bun !== "undefined" ? "Bun" : "Node.js",
         proxied: false,
         fluid: true
     }];
@@ -162,13 +146,18 @@ app.notFound((c) => {
     return c.json({"notfound":"No route available"}, 404);
 });
 
-
-if (typeof Bun !== "undefined") {
-    Bun.serve({
-        fetch: app.fetch,
-        port: port
-    });
+if(typeof Bun !== "object") {
+const server = serve({
+    fetch: app.fetch,
+    port: port
+}, async (info) => {
     console.log(`Listening on ${port}`);
+});
 }
-
-module.exports = handle(app);
+else {
+    Bun.serve({
+    fetch: app.fetch,
+    port: port
+})
+console.log(`Listening on ${port}`);
+}

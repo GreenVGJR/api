@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@hono/node-server": "^1.19.8",
     "entities": "^7.0.0",
     "hono": "^4.11.3",
     "undici": "^7.18.2"

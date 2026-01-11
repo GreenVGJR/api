@@ -64,13 +64,7 @@ app.get('/discord/modifyServer', async (c) => {
     if (description) payload.description = description;
     
     if (verificationLevel) {
-        const levels = { 'none': 0, 'low': 1, 'medium': 2, 'high': 3, 'veryhigh': 4 };
-        let vLevel = parseInt(verificationLevel);
-
-        if (levels[String(verificationLevel).toLowerCase()] !== undefined) {
-            vLevel = levels[String(verificationLevel).toLowerCase()];
-        }
-
+        const vLevel = parseInt(verificationLevel);
         if (!isNaN(vLevel) && vLevel >= 0 && vLevel <= 4) {
             payload.verification_level = vLevel;
         }

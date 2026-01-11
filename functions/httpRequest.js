@@ -4,6 +4,9 @@ const { getCookie, setCookie, deleteCookie } = require('hono/cookie');
 const { generate_hash } = require('../config.json');
 
 const blobDispatch = async (c, body, headers) => {
+  const checkurl = new URL(c.req.url);
+  if(Object.entries(c.req.queries()).length !== 1) return c.body(null, 403);
+  if(c.req.url.split(checkurl.searchParams.toString()).includes('&')) return c.body(null, 403);
   if (typeof body === 'function' || body instanceof Promise) {
     const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
     c.header('Content-Type', type || 'application/octet-stream');

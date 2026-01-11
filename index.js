@@ -121,6 +121,7 @@ app.get('/', (c) => {
     {
         uptime: Date.now() - starttime,
         service: "Hono",
+        runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
         proxied: false,
         fluid: true
     }];

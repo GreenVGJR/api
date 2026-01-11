@@ -49,7 +49,7 @@ const starttime = Date.now();
 
 app.use('*', async (c, next) => {
     const geturl = new URL(c.req.url);
-    if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
+    if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host'))) return c.body(null, 403);
     if(generate_hash) {
     if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
     }

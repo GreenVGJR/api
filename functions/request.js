@@ -1072,4 +1072,81 @@ exports.Unsplash = async function Unsplash(que) {
     } catch { return null; }
 }
 
+exports.Pixiv = async function Pixiv(que) {
+    if(!que) return null;
+
+    try {
+        const per = await request(`https://www.pixiv.net/ajax/search/top/${que}?lang=en`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        const res = await per.body.json();
+        const items = res?.body?.illust?.data || res?.body?.illustManga?.data || [];
+        return {
+            relatedTags: res?.body?.relatedTags || null,
+            tagTranslation: res?.body?.tagTranslation || null,
+            data: items.map(item => {
+                const { url, profileImageUrl, ...rest } = item;
+                return rest;
+            })
+        }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.DiscordServers = async function DiscordServers(que) {
+    if(!que) return null;
+
+    try {
+        const per = await request(`https://discord.com/api/v10/discovery/search?query=${que}&limit=10`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        if(per.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        const res = await per.body.json();
+        return { data: res?.hits || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.Bilibili = async function Bilibili(que) {
+    if(!que) return null;
+
+    try {
+        const per = await request(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${que}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        if(per.statusCode === 403) {
+            return {
+                "error": "Akamai Captcha asking to verify you're not a bot"
+            }
+        }
+
+        const res = await per.body.json();
+        return { data: (res?.data?.modules?.[0]?.items || res?.data?.modules?.[1]?.items) || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
 exports.setKeys = (sc, sp, tidal, deezer) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

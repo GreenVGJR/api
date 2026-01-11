@@ -4,6 +4,12 @@ const { getCookie, setCookie, deleteCookie } = require('hono/cookie');
 const { generate_hash } = require('../config.json');
 
 const blobDispatch = async (c, body, headers) => {
+  try {
+  if(c.req.method !== 'GET') return c.text('', 200);
+  }
+  catch {
+    return c.text('', 200);
+  }
   if(Object.entries(c.req.queries()).length !== 1) {
     return c.body(null, 403);
   }
@@ -73,6 +79,12 @@ const blobDispatch = async (c, body, headers) => {
 };
 
 const dispatch = async (c, promiseFactory) => {
+  try {
+  if(c.req.method !== 'GET') return c.text('', 200);
+  }
+  catch {
+    return c.text('', 200);
+  }
   if(generate_hash) {
     const sh = c.req.query('sh') || '';
     const ua = c.req.header('user-agent') || '';
@@ -140,7 +152,12 @@ const dispatch = async (c, promiseFactory) => {
   }
 
     c.header('Content-Type', 'application/json');
-    c.header('Cache-Control', 'max-age=30');
+    if(generate_hash) {
+      c.header('Cache-Control', 'max-age=30');
+    }
+    else {
+      c.header('Cache-Control', 'no-store, must-revalidate');
+    }
     return stream(c, async (stream) => {
         stream.onAbort(() => {
             return;

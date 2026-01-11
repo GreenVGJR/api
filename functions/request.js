@@ -12,6 +12,7 @@ const commonHeaders = {
 }
 
 const { request } = require('undici');
+const { isDeepStrictEqual } = require('util');
 
 let keysc;
 let keysp;
@@ -1007,8 +1008,14 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
             };
         }
 
+        const checkSpecificFields = (a, b) => {
+            if (!a || !b) return false;
+            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level'];
+            return fields.every(field => a[field] === b[field]);
+        };
+
         return { 
-            data: [[currentInfo, patchResponse], response.status, ...(reasonAudit ? [reasonAudit] : [])],
+            data: [...(checkSpecificFields(currentInfo, patchResponse) ? [false] : [currentInfo, patchResponse]), response.status, ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'

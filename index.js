@@ -8,7 +8,7 @@ setGlobalDispatcher(new Agent({
 
 const { Hono } = require('hono');
 
-const { cors } = require('hono/cors');
+
 const { etag } = require('hono/etag');
 const { compress } = require('hono/compress');
 const path = require('path');
@@ -20,10 +20,23 @@ const app = new Hono();
 
 app.use('*', compress());
 
-app.use('*', cors({
-    credentials: true,
-    exposeHeaders: ['X-Route']
-}));
+// Manual CORS middleware to avoid Hono internals issues with Vercel adapter
+app.use('*', async (c, next) => {
+    await next();
+    c.header('Access-Control-Allow-Origin', '*');
+    c.header('Access-Control-Allow-Credentials', 'true');
+    c.header('Access-Control-Expose-Headers', 'X-Route');
+});
+
+app.options('*', (c) => {
+    return c.text('', 204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Route',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Expose-Headers': 'X-Route'
+    });
+});
 
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));

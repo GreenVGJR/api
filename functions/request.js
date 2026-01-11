@@ -990,7 +990,7 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
             headers: {
                 'Authorization': `Bot ${token}`,
                 'Content-Type': 'application/json',
-                'X-Audit-Log-Reason': reasonAudit
+                ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
             },
             body: JSON.stringify(payload)
         });
@@ -1008,7 +1008,7 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
         }
 
         return { 
-            data: [[currentInfo, patchResponse], response.status, reasonAudit],
+            data: [[currentInfo, patchResponse], response.status, ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'

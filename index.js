@@ -7,13 +7,14 @@ setGlobalDispatcher(new Agent({
 }));
 
 const { Hono } = require('hono');
-const { serve } = require('@hono/node-server');
+
 const { cors } = require('hono/cors');
 const { etag } = require('hono/etag');
 const { compress } = require('hono/compress');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { handle } = require('hono/vercel');
 
 const app = new Hono();
 
@@ -48,9 +49,6 @@ const port = 3000;
 const starttime = Date.now();
 
 app.use('*', async (c, next) => {
-    if (c.env.incoming.httpVersion === '1.0' || c.env.incoming.httpVersion === '0.9') {
-        return c.body(null, 501);
-    }
     const geturl = new URL(c.req.url);
     if (c.req.method !== 'GET' || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || (c.req.header('sec-fetch-site') == '' && c.req.method !== 'GET')) return c.body(null, 403);
     if(generate_hash) {
@@ -115,20 +113,17 @@ app.get('/', (c) => {
                 "/info/spotify?url=",
                 "/info/applemusic?url=",
             ]
-        },
-        unavailable_routes: [
-            "/search/tiktok/video",
-            "/search/tiktok/music",
-        ],
+        }
     },
     {
         uptime: Date.now() - starttime,
         service: "Hono",
+        runtime: typeof Bun !== "undefined" ? "Bun" : "Node.js",
         proxied: false,
         fluid: true
     }];
     c.header('Cache-Control', 'no-store, must-revalidate');
-    return c.body(JSON.stringify(listapi, null, 3), 200);
+    return c.json(listapi, 200);
 });
 
 reqs.forEach((val) => {
@@ -149,9 +144,13 @@ app.notFound((c) => {
     return c.json({"notfound":"No route available"}, 404);
 });
 
-const server = serve({
-    fetch: app.fetch,
-    port: port
-}, async (info) => {
+
+if (typeof Bun !== "undefined") {
+    Bun.serve({
+        fetch: app.fetch,
+        port: port
+    });
     console.log(`Listening on ${port}`);
-});
+}
+
+module.exports = handle(app);

@@ -16,6 +16,25 @@ const fs = require('fs');
 
 const app = new Hono({ strict: false });
 
+const port = 3000;
+const starttime = Date.now();
+
+if(typeof Bun !== "object") {
+const server = serve({
+    fetch: app.fetch,
+    port: port
+}, async (info) => {
+    console.log(`Listening on ${port}`);
+});
+}
+else {
+    Bun.serve({
+    fetch: app.fetch,
+    port: port
+})
+console.log(`Listening on ${port}`);
+}
+
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const { generate_hash } = require('./config.json');
@@ -25,6 +44,16 @@ const lyrics = require('./routes/lyrics');
 const tools = require('./routes/tools');
 const info = require('./routes/info');
 const { soundcloudKey, spotifyKey, tidalKeys, deezerKeys, setKeys } = require('./functions/request');
+
+(async () => {
+    const [sc, sp, tidal, deezer] = await Promise.all([
+        soundcloudKey(),
+        spotifyKey(),
+        tidalKeys(),
+        deezerKeys()
+    ]);
+    setKeys(sc, sp, tidal, deezer);
+})();
 
 app.use('*', async (c, next) => {
     const check2 = c.req.header('Priority');
@@ -62,8 +91,13 @@ app.get('/', (c) => {
                 "/search/istockphoto?q=",
                 "/search/unsplash?q=",
                 "/search/pixiv?q=",
-                "/search/discord/discovery?q=",
-                "/search/bilibili?q="
+                "/search/discord/discovery/apps?q=",
+                "/search/discord/discovery/servers?q=",
+                "/search/bilibili?q=",
+                "/search/jiosaavn?q=",
+                "/search/twitch?q=",
+                "/search/instagram/users?q=",
+                "/search/threads/users?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",
@@ -121,25 +155,12 @@ app.use('*', async (c, next) => {
     }
 });
 
-// app.use('*', compress());
+app.use('*', compress());
 
 app.use('*', cors({
     credentials: true,
     exposeHeaders: ['X-Route']
 }));
-
-(async () => {
-    const [sc, sp, tidal, deezer] = await Promise.all([
-        soundcloudKey(),
-        spotifyKey(),
-        tidalKeys(),
-        deezerKeys()
-    ]);
-    setKeys(sc, sp, tidal, deezer);
-})();
-
-const port = 3000;
-const starttime = Date.now();
 
 reqs.forEach((val) => {
     app.route('/search', val);
@@ -163,19 +184,3 @@ app.use('*', async (c, next) => {
     }
     await next();
 });
-
-if(typeof Bun !== "object") {
-const server = serve({
-    fetch: app.fetch,
-    port: port
-}, async (info) => {
-    console.log(`Listening on ${port}`);
-});
-}
-else {
-    Bun.serve({
-    fetch: app.fetch,
-    port: port
-})
-console.log(`Listening on ${port}`);
-}

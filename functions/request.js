@@ -11,501 +11,7 @@ const commonHeaders = {
     'User-Agent': userAgent
 }
 
-const { request } = require('undici');
-const { isDeepStrictEqual } = require('util');
-
-let keysc;
-let keysp;
-let keytidal;
-let keydeezer;
-
-function filterCookies(cookie) {
-    if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
-    const cookieStr = Array.isArray(cookie) ? cookie.join('; ') : cookie;
-    return cookieStr
-        .split(';')
-        .map(c => c.trim())
-        .filter(c => {
-            const key = c.split('=')[0];
-            return key && !/^(domain|path|expires|max-age|secure|httponly|samesite)$/i.test(key);
-        })
-        .join('; ') + ';';
-}
-
-function filterSpecificCookies(cookie, allowedKeys = []) {
-    if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
-    const cookieStr = Array.isArray(cookie) ? cookie.join('; ') : cookie;
-    return cookieStr
-        .split(';')
-        .map(c => c.trim())
-        .filter(c => allowedKeys.includes(c.split('=')[0]))
-        .join('; ');
-}
-
-
-
-const soundcloudKey = exports.soundcloudKey = async function soundcloudKey() {
-    const rest = await request('https://m.soundcloud.com', {
-        method: 'GET',
-        headers: {
-            ...commonHeaders,
-        }
-    })
-        .then(a => a.body.text())
-        .then(b => b.split('"clientId":"')[1].split('"')[0])
-        .catch(() => null);
-    return rest;
-}
-
-const spotifyKey = exports.spotifyKey = async function spotifyKey() {
-    const rest = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", "3BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
-        headers: {
-            ...commonHeaders,
-        }
-    })
-        .then(a => a.body.text())
-        .then(b => b.split('"accessToken":"')[1].split('"')[0])
-        .catch(() => null);
-    return rest;
-}
-
-const tidalKeys = exports.tidalKeys = async function tidalKeys() {
-    try {
-        const rest = await request(`https://embed.tidal.com/tracks/${[230917825, 432597859, 355309145, 416356151, 434875762][Math.floor(Math.random() * 5)]}`, {
-            method: "GET",
-            headers: {
-                ...commonHeaders,
-            }
-        });
-        const rest_get = await rest.body.text();
-        const rest2 = await request("https://embed.tidal.com" + rest_get.split('type="module"')[0].split('script src="')[1].split('"')[0], {
-            headers: {
-                ...commonHeaders,
-            }
-        });
-        const rest2_get = await rest2.body.text();
-        return rest2_get.split('"X-Tidal-Token","')[1].split('"')[0];
-    } catch { return null; }
-}
-
-const deezerKeys = exports.deezerKeys = async function deezerKeys() {
-    try {
-        const rest = await request("https://auth.deezer.com/login/anonymous?jo=p&rto=p", {
-            headers: {
-                ...commonHeaders,
-            }
-        });
-        let rest_get = await rest.body.text();
-        rest_get = JSON.parse(rest_get);
-        return rest_get.jwt;
-    } catch { return null; }
-}
-
-exports.YTVideo = async function YTVideo(que) {
-    if (!que) return null;
-    try {
-        const bodyload = JSON.stringify({
-            query: que,
-            context: {
-                client:
-                {
-                    clientName: "WEB",
-                    clientVersion: "2.20251212",
-                    hl: "en",
-                    gl: "US"
-                }
-            }
-        });
-        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer(videoId,detailedMetadataSnippets(snippetText/runs/text),title(runs/text),richThumbnail(movingThumbnailRenderer/movingThumbnailDetails/thumbnails/url),lengthText(simpleText),ownerText(runs/navigationEndpoint/browseEndpoint))', {
-            headers: {
-                ...commonHeaders,
-                'content-type': 'application/json'
-            },
-            body: bodyload,
-            method: "POST"
-        });
-        const res = await response.body.json();
-        return res.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.videoRenderer);
-    } catch { return null; }
-}
-
-exports.YTMusic = async function YTMusic(que) {
-    if (!que) return null;
-    try {
-        const bodyload = JSON.stringify({
-            query: que,
-            params: "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D",
-            context: {
-                client:
-                {
-                    clientName: "WEB_REMIX",
-                    clientVersion: "1.20251212",
-                    hl: "en",
-                    gl: "US"
-                }
-            }
-        });
-        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer(flexColumns(musicResponsiveListItemFlexColumnRenderer(text(runs(text,navigationEndpoint(watchEndpoint/videoId))))),thumbnail(musicThumbnailRenderer(thumbnail(thumbnails(url)))))', {
-            headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/json'
-            },
-            body: bodyload,
-            method: "POST"
-        });
-        const res = await response.body.json();
-        return res.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.musicResponsiveListItemRenderer);
-    } catch { return null; }
-}
-
-exports.SCMusic = async function SCMusic(que) {
-    if (!que) return null;
-
-    try {
-        const per = await request(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
-            headers: {
-                ...commonHeaders,
-            }
-        });
-        const pes = await per.body.json();
-        return Object.fromEntries(Object.entries(pes.collection).filter(([key]) => !['media', 'track_authorization'].includes(key)));;
-    } catch { return null; }
-}
-
-exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
-    if (!que) return null;
-
-    if (refresh_auth) {
-        keysp = await spotifyKey();
-    }
-
-    try {
-        const per = await request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=10&market=US`, {
-            headers: {
-                'Authorization': 'Bearer ' + keysp,
-                'App-Platform': 'WebPlayer',
-                ...commonHeaders,
-            }
-        });
-
-        if (per.statusCode === 401 || per.statusCode === 400) {
-            return await SPMusic(que, true);
-        }
-        else {
-            const pes = await per.body.json();
-            return pes.tracks.items;
-        }
-    } catch { return null; }
-}
-
-exports.YTLyrics = async function YTLyrics(url) {
-    let videoId = url.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
-    videoId = videoId || null;
-    if (!videoId) return null;
-
-    try {
-        const responseBody = {
-            "data": null,
-            "lyrics": null,
-            "footer": null,
-        };
-
-        const bodyload = JSON.stringify({
-            videoId: videoId,
-            context: {
-                client:
-                {
-                    clientName: "WEB_REMIX",
-                    clientVersion: "1.20251212",
-                    hl: "en",
-                    gl: "US"
-                }
-            }
-        });
-        const response = await request('https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))', {
-            headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/json',
-            },
-            body: bodyload,
-            method: "POST"
-        });
-        const res = await response.body.json();
-
-        const bodyload2 = JSON.stringify({
-            browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
-            context: {
-                client:
-                {
-                    clientName: "WEB_REMIX",
-                    clientVersion: "1.20251212",
-                    hl: "en",
-                    gl: "US"
-                }
-            }
-        });
-
-        const pull = await request('https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents', {
-            headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/json'
-            },
-            body: bodyload2,
-            method: "POST"
-        });
-
-        const res2 = await pull.body.json();
-
-        responseBody['data'] = {
-            browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
-            url: url,
-            other: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer
-        };
-        responseBody['lyrics'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text;
-        responseBody['footer'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text;
-
-        return responseBody;
-    } catch { return null; }
-}
-
-exports.Shazam = async function Shazam(que) {
-    if (!que) return null;
-    try {
-        const pull = await request(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${que}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-        const res = await pull.body.json();
-        return res.results.songs.data;
-    } catch { return null; }
-}
-
-exports.Deezer = async function Deezer(que) {
-    if (!que) return null;
-    try {
-        const pull = await request(`https://api.deezer.com/search?limit=10&q=${que}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-        const res = await pull.body.json();
-        return res.data;
-    } catch { return null; }
-}
-
-exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
-    if (!que) return null;
-
-    try {
-        if (refresh_auth) {
-            keydeezer = await deezerKeys();
-        }
-
-        const body = {
-            "operationName": "SearchFull",
-            "variables": {
-                "query": que,
-                "firstList": 1
-            },
-            "query": "query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title album { cover { thumbnail: urls(pictureRequest: {width: 500, height: 500}) } } } } } } } }"
-        };
-
-        const responseBody = {
-            "data": null,
-            "lyrics": null
-        }
-
-        const pull = await request(`https://pipe.deezer.com/api`, {
-            method: "POST",
-            headers: {
-                ...commonHeaders,
-                'Authorization': 'Bearer ' + keydeezer,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
-
-        const res = await pull.body.json();
-
-        if (res?.errors?.[0]) {
-            return await deezerLyrics(que, true);
-        }
-
-        const edges = res?.data?.instantSearch?.results?.tracks?.edges;
-
-        if (!edges || edges.length === 0) {
-            return null;
-        }
-
-        const trackNode = edges[0].node;
-        responseBody['data'] = trackNode;
-
-        const body2 = {
-            "operationName": "GetLyrics",
-            "variables": {
-                "trackId": trackNode.id
-            },
-            "query": "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }"
-        };
-
-        const pull2 = await request(`https://pipe.deezer.com/api`, {
-            method: "POST",
-            headers: {
-                ...commonHeaders,
-                'Authorization': 'Bearer ' + keydeezer,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body2)
-        });
-
-        const res2 = await pull2.body.json();
-
-        if (res2?.errors?.[0]?.message.includes('Given jwt')) {
-            return await deezerLyrics(que, true);
-        }
-
-        responseBody['lyrics'] = res2?.data?.track?.lyrics || null;
-
-        return responseBody;
-    } catch { return null; }
-}
-
-exports.Tidal = async function Tidal(que, refresh) {
-    if (!que) return null;
-    if(refresh) {
-        keytidal = await tidalKeys();
-    }
-
-    try {
-        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${que}`, {
-            headers: {
-                ...commonHeaders,
-                'X-Tidal-Token': keytidal
-            }
-        });
-
-        if(pull.statusCode === 400 || pull.statusCode === 401) {
-            return await Tidal(que, true);
-        }
-
-        const res = await pull.body.json();
-        return res.items;
-    } catch { return null; }
-}
-
-exports.Genius = async function Genius(que) {
-    if (!que) return null;
-
-    try {
-        const pull = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
-        if(pull.statusCode === 403) {
-            return {
-                "error": "Cloudflare Turnstile asking to verify you're not a bot"
-            }
-        }
-
-        const res = await pull.body.json();
-        return res?.response?.sections?.[0]?.hits?.map(a => a?.result) || res;
-    } catch { return null; }
-}
-
-exports.Gemini = async function Gemini(que, convo) {
-    if (!que) return null;
-
-    let objectbody = { cid: null, rid: null, rcid: null, cookies: null };
-    let parsebody = null;
-
-    if (convo) {
-        try {
-            parsebody = JSON.parse(
-                Buffer.from(convo.split('').reverse().join(''), 'base64url').toString('utf-8')
-            );
-        }
-        catch {
-            return `["JSON Parsing Error"]`;
-        }
-    }
-
-    if (convo != null && typeof (parsebody) === 'object') {
-        objectbody['cid'] = parsebody?.cid;
-        objectbody['rid'] = parsebody?.rid;
-        objectbody['rcid'] = parsebody?.rcid;
-        objectbody['cookies'] = parsebody?.cookies;
-    }
-
-
-    const qQue = encodeURIComponent(que.replaceAll('"', '\\\\\\"'));
-    const qCid = objectbody.cid ? `\\"${objectbody.cid}\\"` : "null";
-    const qRid = objectbody.rid ? `\\"${objectbody.rid}\\"` : "null";
-    const qRcid = objectbody.rcid ? `\\"${objectbody.rcid}\\"` : "null";
-    const qCookies = objectbody.cookies ?? (filterSpecificCookies(objectbody.cookies, ['NID', '__Secure-ENID']) || null);
-
-    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en%5C%22%5D%2C%5B${qCid}%2C${qRid}%2C${qRcid}%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%5D%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B0%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%22%5D`;
-
-    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en`, {
-        method: 'POST',
-        headers: {
-            ...commonHeaders,
-            ...(qCookies ? { 'Cookie': qCookies } : {}),
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: reqPayload
-    });
-
-    if(req.statusCode === 302) {
-        return {
-            "error": "Google asking to verify you're not a bot"
-        }
-    }
-
-    const cookiess = await req.headers?.['set-cookie'];
-    const resText = await req.body.text();
-    let response;
-
-    try {
-        const cleanText = resText.split(")]}'\n\n")[1];
-        const data = JSON.parse(cleanText);
-        let innerData;
-
-        data.forEach(dt => {
-            let check;
-            if (dt?.[0] === 'wrb.fr') {
-                check = JSON.parse(dt[2]);
-                if (check?.[4]?.[0]?.[8]?.[0] === 2) {
-                    innerData = check;
-                }
-            }
-        });
-
-        objectbody.cid = innerData[1][0];
-        objectbody.rid = innerData[1][1];
-        objectbody.rcid = innerData[4][0][0];
-        objectbody.cookies = filterCookies(cookiess) || convo;
-
-        response = innerData[4]?.[0]?.[1]?.[0] || null;
-    } catch (e) {
-        response = null;
-    }
-
-    const responseBody = {
-        response: response,
-        conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
-        model: 'gemini-3-flash'
-    }
-
-    return responseBody;
-}
-
-exports.Translate = async function Translate(que, from, to) {
-    if (!que) return null;
-
-    const listcodes = [
+const listcodes = [
         { "name": "Abkhaz", "code": "ab" },
         { "name": "Acehnese", "code": "ace" },
         { "name": "Acholi", "code": "ach" },
@@ -738,6 +244,569 @@ exports.Translate = async function Translate(que, from, to) {
         { "name": "Zulu", "code": "zu" }
     ];
 
+const { request } = require('undici');
+const entities = require("entities");
+
+let keysc;
+let keysp;
+let keytidal;
+let keydeezer;
+
+function filterCookies(cookie) {
+    if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
+    const cookieStr = Array.isArray(cookie) ? cookie.join('; ') : cookie;
+    return cookieStr
+        .split(';')
+        .map(c => c.trim())
+        .filter(c => {
+            const key = c.split('=')[0];
+            return key && !/^(domain|path|expires|max-age|secure|httponly|samesite)$/i.test(key);
+        })
+        .join('; ') + ';';
+}
+
+function filterSpecificCookies(cookie, allowedKeys = []) {
+    if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
+    const cookieStr = Array.isArray(cookie) ? cookie.join('; ') : cookie;
+    return cookieStr
+        .split(';')
+        .map(c => c.trim())
+        .filter(c => allowedKeys.includes(c.split('=')[0]))
+        .join('; ');
+}
+
+
+
+const soundcloudKey = exports.soundcloudKey = async function soundcloudKey() {
+    const rest = await request('https://m.soundcloud.com', {
+        method: 'GET',
+        headers: {
+            ...commonHeaders,
+        }
+    })
+        .then(a => a.body.text())
+        .then(b => b.split('"clientId":"')[1].split('"')[0])
+        .catch(() => null);
+    return rest;
+}
+
+const spotifyKey = exports.spotifyKey = async function spotifyKey() {
+    const rest = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", "3BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
+        headers: {
+            ...commonHeaders,
+        }
+    })
+        .then(a => a.body.text())
+        .then(b => b.split('"accessToken":"')[1].split('"')[0])
+        .catch(() => null);
+    return rest;
+}
+
+const tidalKeys = exports.tidalKeys = async function tidalKeys() {
+    try {
+        const rest = await request(`https://embed.tidal.com/tracks/${[230917825, 432597859, 355309145, 416356151, 434875762][Math.floor(Math.random() * 5)]}`, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        const rest_get = await rest.body.text();
+        const rest2 = await request("https://embed.tidal.com" + rest_get.split('type="module"')[0].split('script src="')[1].split('"')[0], {
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        const rest2_get = await rest2.body.text();
+        return rest2_get.split('"X-Tidal-Token","')[1].split('"')[0];
+    } catch { return null; }
+}
+
+const deezerKeys = exports.deezerKeys = async function deezerKeys() {
+    try {
+        const rest = await request("https://auth.deezer.com/login/anonymous?jo=p&rto=p", {
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        let rest_get = await rest.body.text();
+        rest_get = JSON.parse(rest_get);
+        return rest_get.jwt;
+    } catch { return null; }
+}
+
+exports.YTVideo = async function YTVideo(que) {
+    if (!que) return null;
+    try {
+        const bodyload = JSON.stringify({
+            query: que,
+            context: {
+                client:
+                {
+                    clientName: "WEB",
+                    clientVersion: "2.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+        const [response, res2] = await Promise.all([
+        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
+        }),
+        request(`https://www.youtube.com/results?search_query=${que}`, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+            }
+        })
+        ]);
+        const res = await response.body.json();
+        const per = await res2.body.text();
+        let testpar = null;
+        try {
+            testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
+        }
+        catch { }
+        return { data: { innerTube: res.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.videoRenderer), youtubeWeb: testpar.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.videoRenderer).filter(Boolean) } };
+    } catch { return null; }
+}
+
+exports.YTMusic = async function YTMusic(que) {
+    if (!que) return null;
+    try {
+        const bodyload = JSON.stringify({
+            query: que,
+            params: "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D",
+            context: {
+                client:
+                {
+                    clientName: "WEB_REMIX",
+                    clientVersion: "1.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+        const [response, res2] = await Promise.all([
+        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
+        }),
+        request(`https://music.youtube.com/search?q=${que}`, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+            }
+        })
+        ]);
+        const res = await response.body.json();
+        const per = await res2.body.text();
+
+        let testper = null;
+        try {
+            const dataStr = per.split("data: '")[2]?.split("'")[0];
+            if (dataStr) {
+                const unescaped = dataStr.replace(/\\(x[0-9a-fA-F]{2}|.)/g, (match, p1) => {
+                    if (p1.startsWith('x')) return String.fromCharCode(parseInt(p1.slice(1), 16));
+                    if (p1 === '\\') return '\\';
+                    if (p1 === "'") return "'";
+                    return match;
+                });
+                testper = JSON.parse(unescaped);
+            }
+        } catch {}
+
+        // 1. Safely extract InnerTube results
+        const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
+
+        // 2. Safely extract YouTube Music Web results
+        let youtubeMusicWebResults = [];
+        if (testper) {
+            const sections = testper?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+            // Find the section that actually contains the musicShelfRenderer
+            const musicShelf = sections.find(section => section.musicShelfRenderer)?.musicShelfRenderer;
+            youtubeMusicWebResults = musicShelf?.contents || [];
+        }
+
+        return {
+            data: {
+                innerTube: innerTubeResults.filter(o => o.musicResponsiveListItemRenderer).map(v => v.musicResponsiveListItemRenderer) || null,
+                youtubeMusicWeb: youtubeMusicWebResults.filter(o => o.musicResponsiveListItemRenderer).map(v => v.musicResponsiveListItemRenderer) || null
+            }
+        };
+    } catch { return null; }
+}
+
+exports.SCMusic = async function SCMusic(que) {
+    if (!que) return null;
+
+    try {
+
+        const [per, per2] = await Promise.all([
+        request(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
+            headers: {
+                ...commonHeaders,
+            }
+        }),
+        request(`https://m.soundcloud.com/search/tracks?q=${que}`, {
+            headers: {
+                ...commonHeaders,
+            }
+        })
+        ]);
+        const pes = await per.body.json();
+        const pes2 = await per2.body.text();
+        let testpes;
+        try {
+            testpes = JSON.parse(pes2.split('type="application/json">')[1].split('</script>')[0]);
+        }
+        catch {}
+        return { data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null] };
+    } catch (e) { console.error(e); return null; }
+}
+
+exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
+    if (!que) return null;
+
+    if (refresh_auth) {
+        keysp = await spotifyKey();
+    }
+
+    try {
+        const per = await request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=10&market=US`, {
+            headers: {
+                'Authorization': 'Bearer ' + keysp,
+                'App-Platform': 'WebPlayer',
+                ...commonHeaders,
+            }
+        });
+
+        if (per.statusCode === 401 || per.statusCode === 400) {
+            return await SPMusic(que, true);
+        }
+        else {
+            const pes = await per.body.json();
+            return pes.tracks.items;
+        }
+    } catch { return null; }
+}
+
+exports.YTLyrics = async function YTLyrics(url) {
+    let videoId = url.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
+    videoId = videoId || null;
+    if (!videoId) return null;
+
+    try {
+        const responseBody = {
+            "data": null,
+            "lyrics": null,
+            "footer": null,
+        };
+
+        const bodyload = JSON.stringify({
+            videoId: videoId,
+            context: {
+                client:
+                {
+                    clientName: "WEB_REMIX",
+                    clientVersion: "1.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+        const response = await request('https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))', {
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json',
+            },
+            body: bodyload,
+            method: "POST"
+        });
+        const res = await response.body.json();
+
+        const bodyload2 = JSON.stringify({
+            browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
+            context: {
+                client:
+                {
+                    clientName: "WEB_REMIX",
+                    clientVersion: "1.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+
+        const pull = await request('https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents', {
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json'
+            },
+            body: bodyload2,
+            method: "POST"
+        });
+
+        const res2 = await pull.body.json();
+
+        responseBody['data'] = {
+            browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
+            url: url,
+            other: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer
+        };
+        responseBody['lyrics'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text;
+        responseBody['footer'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text;
+
+        return responseBody;
+    } catch { return null; }
+}
+
+exports.Shazam = async function Shazam(que) {
+    if (!que) return null;
+    try {
+        const pull = await request(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${que}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+        const res = await pull.body.json();
+        return res.results.songs.data;
+    } catch { return null; }
+}
+
+exports.Deezer = async function Deezer(que) {
+    if (!que) return null;
+    try {
+        const pull = await request(`https://api.deezer.com/search?limit=10&q=${que}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+        const res = await pull.body.json();
+        return res.data;
+    } catch { return null; }
+}
+
+exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
+    if (!que) return null;
+
+    try {
+        if (refresh_auth) {
+            keydeezer = await deezerKeys();
+        }
+
+        const body = {
+            "operationName": "SearchFull",
+            "variables": {
+                "query": que,
+                "firstList": 1
+            },
+            "query": "query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title album { cover { thumbnail: urls(pictureRequest: {width: 500, height: 500}) } } } } } } } }"
+        };
+
+        const responseBody = {
+            "data": null,
+            "lyrics": null
+        }
+
+        const pull = await request(`https://pipe.deezer.com/api`, {
+            method: "POST",
+            headers: {
+                ...commonHeaders,
+                'Authorization': 'Bearer ' + keydeezer,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        const res = await pull.body.json();
+
+        if (res?.errors?.[0]) {
+            return await deezerLyrics(que, true);
+        }
+
+        const edges = res?.data?.instantSearch?.results?.tracks?.edges;
+
+        if (!edges || edges.length === 0) {
+            return null;
+        }
+
+        const trackNode = edges[0].node;
+        responseBody['data'] = trackNode;
+
+        const body2 = {
+            "operationName": "GetLyrics",
+            "variables": {
+                "trackId": trackNode.id
+            },
+            "query": "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }"
+        };
+
+        const pull2 = await request(`https://pipe.deezer.com/api`, {
+            method: "POST",
+            headers: {
+                ...commonHeaders,
+                'Authorization': 'Bearer ' + keydeezer,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body2)
+        });
+
+        const res2 = await pull2.body.json();
+
+        if (res2?.errors?.[0]?.message.includes('Given jwt')) {
+            return await deezerLyrics(que, true);
+        }
+
+        responseBody['lyrics'] = res2?.data?.track?.lyrics || null;
+
+        return responseBody;
+    } catch { return null; }
+}
+
+exports.Tidal = async function Tidal(que, refresh) {
+    if (!que) return null;
+    if(refresh) {
+        keytidal = await tidalKeys();
+    }
+
+    try {
+        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${que}`, {
+            headers: {
+                ...commonHeaders,
+                'X-Tidal-Token': keytidal
+            }
+        });
+
+        if(pull.statusCode === 400 || pull.statusCode === 401) {
+            return await Tidal(que, true);
+        }
+
+        const res = await pull.body.json();
+        return res.items;
+    } catch { return null; }
+}
+
+exports.Genius = async function Genius(que) {
+    if (!que) return null;
+
+    try {
+        const pull = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'WhatsApp/2.23.20.0'
+            }
+        });
+
+        if(pull.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        const res = await pull.body.json();
+        return res?.response?.sections?.[0]?.hits?.map(a => a?.result) || res;
+    } catch { return null; }
+}
+
+exports.Gemini = async function Gemini(que, convo) {
+    if (!que) return null;
+
+    let objectbody = { cid: null, rid: null, rcid: null, cookies: null };
+    let parsebody = null;
+
+    if (convo) {
+        try {
+            parsebody = JSON.parse(
+                Buffer.from(convo.split('').reverse().join(''), 'base64url').toString('utf-8')
+            );
+        }
+        catch {
+            return `["JSON Parsing Error"]`;
+        }
+    }
+
+    if (convo != null && typeof (parsebody) === 'object') {
+        objectbody['cid'] = parsebody?.cid;
+        objectbody['rid'] = parsebody?.rid;
+        objectbody['rcid'] = parsebody?.rcid;
+        objectbody['cookies'] = parsebody?.cookies;
+    }
+
+    const qQue = encodeURIComponent(que.replaceAll('"', '\\\\\\"'));
+    const qCid = objectbody.cid ? `\\"${objectbody.cid}\\"` : "null";
+    const qRid = objectbody.rid ? `\\"${objectbody.rid}\\"` : "null";
+    const qRcid = objectbody.rcid ? `\\"${objectbody.rcid}\\"` : "null";
+    const qCookies = objectbody.cookies ?? (filterSpecificCookies(objectbody.cookies, ['NID', '__Secure-ENID']) || null);
+
+    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en%5C%22%5D%2C%5B${qCid}%2C${qRid}%2C${qRcid}%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%5D%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B0%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%22%5D`;
+
+    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en`, {
+        method: 'POST',
+        headers: {
+            ...commonHeaders,
+            ...(qCookies ? { 'Cookie': qCookies } : {}),
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: reqPayload
+    });
+
+    if(req.statusCode === 302) {
+        return {
+            "error": "Google asking to verify you're not a bot"
+        }
+    }
+
+    const cookiess = await req.headers?.['set-cookie'];
+    const resText = await req.body.text();
+    let response;
+
+    try {
+        const cleanText = resText.split(")]}'\n\n")[1];
+        const data = JSON.parse(cleanText);
+        let innerData;
+
+        data.forEach(dt => {
+            let check;
+            if (dt?.[0] === 'wrb.fr') {
+                check = JSON.parse(dt[2]);
+                if (check?.[4]?.[0]?.[8]?.[0] === 2) {
+                    innerData = check;
+                }
+            }
+        });
+
+        objectbody.cid = innerData[1][0];
+        objectbody.rid = innerData[1][1];
+        objectbody.rcid = innerData[4][0][0];
+        objectbody.cookies = filterCookies(cookiess) || convo;
+
+        response = innerData[4]?.[0]?.[1]?.[0] || null;
+    } catch (e) {
+        response = null;
+    }
+
+    const responseBody = {
+        response: response,
+        conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
+        model: 'gemini-3-flash'
+    }
+
+    return responseBody;
+}
+
+exports.Translate = async function Translate(que, from, to) {
+    if (!que) return null;
+
     const lFrom = from?.toLowerCase();
     const lTo = to?.toLowerCase();
 
@@ -797,7 +866,7 @@ exports.infoYoutube = async function infoYoutube(que) {
     if (!videoId) return null;
 
     try {
-        const bodyhttp = { videoId: videoId, context: { client: { clientName: 1, clientVersion: "1.20261231" } } }
+        const bodyhttp = { videoId: videoId, context: { client: { clientName: 2, clientVersion: "2.20261231" } } }
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
@@ -834,19 +903,21 @@ exports.infoYoutube = async function infoYoutube(que) {
             testpar = JSON.parse(pull2.split('ytInitialData =')[1].split(';')[0]);
         }
         catch { }
-
+        
         return {
-            "innerTube": pull?.videoDetails || {
-                "error": "Google asking to verify you're not a bot"
-            },
+            "innerTube": [
+                pull?.videoDetails ? { "videoDetails": pull?.videoDetails } : {
+                    "error": "Google asking to verify you're not a bot"
+                },
+                {
+                    ...(pull3?.videoDetails ? { "musicDetails": pull3?.videoDetails } : {
+                        "error": "Google asking to verify you're not a bot"
+                    })
+                }
+            ],
             "youtubeWeb": {
-                "videoDetails": testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer || testpar?.videoDetails,
-                "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.map(e => Object.fromEntries(Object.entries(e || {}).filter(([key]) => ['lockupViewModel'].includes(key)))?.lockupViewModel?.metadata?.lockupMetadataViewModel).filter(Boolean)
-            },
-            "youtubeMusicWeb": {
-                ...(pull3?.videoDetails ? {"musicDetails": pull3?.videoDetails} : {
-                "error": "Google asking to verify you're not a bot"
-            })
+                ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc, obj) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
+                "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null
             }
         };
     }
@@ -873,7 +944,8 @@ exports.infoSoundcloud = async function infoSoundcloud(que, refresh_auth = false
             return await infoSoundcloud(que, true);
         }
         const pull = await res.body.json();
-        return Object.fromEntries(Object.entries(pull).filter(([key]) => !['media', 'track_authorization'].includes(key)));
+
+        return pull;
     }
     catch {
         return null;
@@ -1142,6 +1214,126 @@ exports.Bilibili = async function Bilibili(que) {
 
         const res = await per.body.json();
         return { data: (res?.data?.modules?.[0]?.items || res?.data?.modules?.[1]?.items) || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.DiscordApps = async function DiscordApps(que) {
+    if(!que) return null;
+
+    try {
+        const per = await request(`https://discord.com/api/v10/application-directory/search?query=${que}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        if(per.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        const res = await per.body.json();
+        return { data: res?.results || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.Jiosaavn = async function Jiosaavn(que) {
+    if(!que) return null;
+
+    try {
+        const per = await request(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${que}`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        const res = await per.body.json();
+
+        const items = res?.results || [];
+
+        return { data: items.map(item => {
+                const { encrypted_media_url, encrypted_drm_media_url, encrypted_media_path, ...rest } = item;
+                return rest;
+            }) || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.Twitch = async function Twitch(que) {
+    if(!que) return null;
+
+    try {
+        const bodyhttp = {"operationName":"SearchResultsPage_SearchResults","variables":{"query":que,"includeIsDJ":true},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5"}}}
+        const per = await request(`https://gql.twitch.tv/gql`, {
+        method: "POST",
+        body: JSON.stringify(bodyhttp),
+        headers: {
+            ...commonHeaders,
+            'Client-Id': 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+            'Content-Type': 'application/json'
+            }
+        });
+
+        const res = await per.body.json();
+
+        return { data: res?.data?.searchFor || null };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.InstagramUser = async function InstagramUser(que) {
+    if(!que) return null;
+
+    try {
+        const bodyhttp = {"data":{"include_reel":"true","query":que},"hasQuery":true};
+        const per = await request(`https://i.instagram.com/graphql/query/?doc_id=24146980661639222&variables=${JSON.stringify(bodyhttp)}`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        const res = await per.body.json();
+
+        return { data: res?.data?.xdt_api__v1__fbsearch__topsearch_connection?.users || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.ThreadUser = async function ThreadUser(que) {
+    if(!que) return null;
+
+    try {
+        const bodyhttp = {"query":que,"first":50,"should_fetch_ig_inactive_on_text_app":true,"should_fetch_friendship_status":false,"should_fetch_fediverse_profiles":true,"hide_unconnected_private":false,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaIsCrawlerrelayprovider":false,"__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider":false};
+        const per = await request(`https://www.threads.com/graphql/query?doc_id=24871030029227550&variables=${JSON.stringify(bodyhttp)}`, {
+        headers: {
+            ...commonHeaders,
+            'Origin': 'https://www.threads.com',
+            'X-IG-App-ID': '1412234116260832',
+            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': true
+            }
+        });
+
+        const res = await per.body.json();
+
+        return { data: res?.data?.xdt_api__v1__users__search_connection?.edges?.map(a => a?.node) || null }
     }
     catch (e) {
         console.error(e);

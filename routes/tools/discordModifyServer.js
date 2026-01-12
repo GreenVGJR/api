@@ -24,6 +24,7 @@ async function processImage(url) {
     try {
         const res = await fetch(url, { headers: { ...commonHeaders }});
         if(!res.ok) return '';
+        if(!res.headers?.get('content-type').startsWith('image/') || !res.headers?.get('content-type').startsWith('video/')) return '';
         const arrayBuffer = await res.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const type = res.headers.get('content-type');
@@ -43,8 +44,8 @@ app.get('/discord/modifyServer', async (c) => {
     catch {}
     const guildId = Number.isInteger(parseInt(c.req.query('guildId'))) ? c.req.query('guildId') : null;
 
-    if (!token) return c.json(["Missing parameter: token"], 202);
-    if (!guildId) return c.json(["Missing parameter: guildId"], 202);
+    if (!token) return c.json(["Missing valid parameter: token"], 202);
+    if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
 
     const payload = {};
     let payloadError = [];
@@ -56,8 +57,11 @@ app.get('/discord/modifyServer', async (c) => {
     const splash = c.req.query('guildSplash');
     const banner = c.req.query('guildBanner');
 
-    if(!(name || description || verificationLevel || icon || splash || banner)) {
-        return c.json(["Missing parameter required"], 202);   
+    if(!(name === undefined || description === undefined || verificationLevel === undefined || icon === undefined || splash === undefined || banner === undefined )) {
+        return c.json({"error":"Missing parameter required"}, 202);   
+    }
+    else if(!(name === '' || description === '' || verificationLevel === '' || icon === '' || splash === '' || banner === '' )) {
+        return c.json({"error":"Nothing to do"}, 202);   
     }
 
     if (name) payload.name = name;

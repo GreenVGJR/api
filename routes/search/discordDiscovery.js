@@ -6,9 +6,14 @@ const app = new Hono();
 const { DiscordServers } = require('../../functions/request');
 const { dispatch, blobDispatch } = require('../../functions/httpRequest');
 
-app.get('/discord/discovery', async (c) => {
+app.get('/discord/discovery/servers', async (c) => {
     const query = c.req.query('q');
-    if(!query) return c.json(["Missing parameter required"], 202);
+    if(query === undefined) { 
+return c.json({"error":"Missing parameter required"}, 202);
+}
+else if(query === '') {
+return c.json({"error":"Nothing to do"}, 202);
+}
     c.header('X-Route', 'discord.com');
     return await dispatch(c, () => DiscordServers(query));
 });

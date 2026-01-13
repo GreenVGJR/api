@@ -14,7 +14,7 @@ return c.json({"error":"Missing parameter required"}, 202);
 else if(query === '') {
 return c.json({"error":"Nothing to do"}, 202);
 }
-    c.header('X-Route', 'm.youtube.com');
+    c.header('X-Route', 'm.youtube.com, www.youtube.com');
     return await dispatch(c, () => YTVideo(query));
 });
 

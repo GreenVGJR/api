@@ -245,7 +245,7 @@ const listcodes = [
     ];
 
 const { request } = require('undici');
-const entities = require("entities");
+const { CurlImpersonateHttpClient, CurlImpersonate } = require('apify-node-curl-impersonate');
 
 let keysc;
 let keysp;
@@ -457,7 +457,7 @@ exports.SCMusic = async function SCMusic(que) {
                 ...commonHeaders,
             }
         }),
-        request(`https://m.soundcloud.com/search/tracks?q=${que}`, {
+        request(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
             headers: {
                 ...commonHeaders,
             }
@@ -495,7 +495,7 @@ exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
         }
         else {
             const pes = await per.body.json();
-            return pes.tracks.items;
+            return { data: pes?.tracks?.items || null };
         }
     } catch { return null; }
 }
@@ -579,7 +579,7 @@ exports.Shazam = async function Shazam(que) {
             }
         });
         const res = await pull.body.json();
-        return res.results.songs.data;
+        return { data: res?.results?.songs?.data || null };
     } catch { return null; }
 }
 
@@ -592,7 +592,7 @@ exports.Deezer = async function Deezer(que) {
             }
         });
         const res = await pull.body.json();
-        return res.data;
+        return { data: res?.data || null };
     } catch { return null; }
 }
 
@@ -692,7 +692,7 @@ exports.Tidal = async function Tidal(que, refresh) {
         }
 
         const res = await pull.body.json();
-        return res.items;
+        return { data: res?.items || null };
     } catch { return null; }
 }
 
@@ -700,21 +700,21 @@ exports.Genius = async function Genius(que) {
     if (!que) return null;
 
     try {
-        const pull = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
-            headers: {
-                ...commonHeaders,
-                'User-Agent': 'WhatsApp/2.23.20.0'
-            }
+        const client = new CurlImpersonate(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
+        method: 'GET',
+        impersonate: 'edge-101',
+        debugLogger: () => {}
         });
+        const checkres = await client.makeRequest();
 
-        if(pull.statusCode === 403) {
+        if(checkres.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             }
         }
 
-        const res = await pull.body.json();
-        return res?.response?.sections?.[0]?.hits?.map(a => a?.result) || res;
+        const res = JSON.parse(checkres.response);
+        return { data: res?.response?.sections?.[0]?.hits?.map(a => a?.result) || null };
     } catch { return null; }
 }
 
@@ -797,8 +797,10 @@ exports.Gemini = async function Gemini(que, convo) {
 
     const responseBody = {
         response: response,
+        data: {
         conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
         model: 'gemini-3-flash'
+        }
     }
 
     return responseBody;
@@ -905,6 +907,7 @@ exports.infoYoutube = async function infoYoutube(que) {
         catch { }
         
         return {
+            "data": { 
             "innerTube": [
                 pull?.videoDetails ? { "videoDetails": pull?.videoDetails } : {
                     "error": "Google asking to verify you're not a bot"
@@ -918,6 +921,7 @@ exports.infoYoutube = async function infoYoutube(que) {
             "youtubeWeb": {
                 ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc, obj) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
                 "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null
+                }
             }
         };
     }
@@ -945,7 +949,7 @@ exports.infoSoundcloud = async function infoSoundcloud(que, refresh_auth = false
         }
         const pull = await res.body.json();
 
-        return pull;
+        return { data: pull || null };
     }
     catch {
         return null;
@@ -977,7 +981,7 @@ exports.infoSpotify = async function infoSpotify(que) {
 
         const pull2 = await res2.body.text();
         const test2 = JSON.parse(pull2.split('type="application/json">')[1].split('</script>')[0]);
-        return test2.props.pageProps.state.data.entity;
+        return { data: test2?.props?.pageProps?.state?.data?.entity || null };
     }
     catch {
         return null;
@@ -1001,7 +1005,7 @@ exports.infoITunes = async function infoITunes(que) {
         const pull = await res.body.text();
         const trypar = JSON.parse(pull.split('id="serialized-server-data">')[1].split('</script>')[0]);
 
-        return trypar[0].data.sections;
+        return { data: trypar[0]?.data?.sections || null };
     }
     catch {
         return null;
@@ -1012,7 +1016,7 @@ exports.pinterest = async function pinterest(que) {
     if(!que) return null;
     try {
         const feat = {"options":{"query":que,"scope":"pins"},"context":{}};
-        const req = await request(`https://id.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`,{
+        const req = await request(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`,{
             method: 'GET',
             headers: {
                 ...commonHeaders,
@@ -1021,7 +1025,7 @@ exports.pinterest = async function pinterest(que) {
         });
 
         const res = await req.body.json();
-        return res.resource_response.data.results[0] ? res.resource_response.data.results : {
+        return res.resource_response.data.results[0] ? { data: res.resource_response.data.results } : {
             'error': 'Looks like your search violate our terms of service'
         };
     }
@@ -1055,6 +1059,10 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
                 data: null, 
                 error: currentInfo || { status: req.statusCode, statusText: req.statusText }
             };   
+        }
+
+        if (Object.keys(payload).length === 0) {
+            return { data: currentInfo };
         }
 
         // Use fetch for the PATCH request as before
@@ -1340,5 +1348,33 @@ exports.ThreadUser = async function ThreadUser(que) {
         return null;
     }
 }
+
+exports.Pexels = async function Pexels(que) {
+    if(!que) return null;
+
+    try {
+        const client = new CurlImpersonate(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
+            method: 'GET',
+            impersonate: 'edge-101',
+            debugLogger: () => {}
+        });
+        const res = await client.makeRequest();
+        if(res.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+        let pull = null;
+        try {
+        pull = JSON.parse(res.response?.split('"application/json">')?.[1]?.split('</script>')?.[0]);
+        }
+        catch {}
+        return { data: pull?.props?.pageProps?.initialData || null };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+};
 
 exports.setKeys = (sc, sp, tidal, deezer) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

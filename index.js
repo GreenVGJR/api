@@ -45,16 +45,6 @@ const tools = require('./routes/tools');
 const info = require('./routes/info');
 const { soundcloudKey, spotifyKey, tidalKeys, deezerKeys, setKeys } = require('./functions/request');
 
-(async () => {
-    const [sc, sp, tidal, deezer] = await Promise.all([
-        soundcloudKey(),
-        spotifyKey(),
-        tidalKeys(),
-        deezerKeys()
-    ]);
-    setKeys(sc, sp, tidal, deezer);
-})();
-
 app.use('*', async (c, next) => {
     const check2 = c.req.header('Priority');
     if(c.req.raw.headers.has('Priority') && check2.startsWith('u=') === false) {
@@ -97,7 +87,8 @@ app.get('/', (c) => {
                 "/search/jiosaavn?q=",
                 "/search/twitch?q=",
                 "/search/instagram/users?q=",
-                "/search/threads/users?q="
+                "/search/threads/users?q=",
+                "/search/pexels?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",
@@ -108,7 +99,7 @@ app.get('/', (c) => {
                     "/tools/chat/gemini?prompt=&conversation="
                 ],
                 discord: [
-                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner="
+                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=&guildRulesChannelId=&guildCommunityChannelId=&guildPreferredLocale=&guildVanityCode="
                 ],
                 generate_image: [
                     "/tools/ai-image/flux_demo?prompt=",
@@ -184,3 +175,13 @@ app.use('*', async (c, next) => {
     }
     await next();
 });
+
+setTimeout(async() => {
+    const [sc, sp, tidal, deezer] = await Promise.all([
+        soundcloudKey(),
+        spotifyKey(),
+        tidalKeys(),
+        deezerKeys()
+    ]);
+    setKeys(sc, sp, tidal, deezer);
+}, 1000);

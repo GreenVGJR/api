@@ -151,6 +151,8 @@ const dispatch = async (c, promiseFactory) => {
     }
   }
 
+    c.header('X-Enc-Route', 'v1');
+    c.header('X-Id-Route', crypto.randomUUID());
     c.header('Content-Type', 'application/json');
     if(generate_hash) {
       c.header('Cache-Control', 'max-age=30');
@@ -158,6 +160,7 @@ const dispatch = async (c, promiseFactory) => {
     else {
       c.header('Cache-Control', 'no-store, must-revalidate');
     }
+
     return stream(c, async (stream) => {
         stream.onAbort(() => {
             return;

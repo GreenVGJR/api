@@ -56,16 +56,18 @@ app.get('/discord/modifyServer', async (c) => {
     const icon = c.req.query('guildIcon');
     const splash = c.req.query('guildSplash');
     const banner = c.req.query('guildBanner');
-
-    if(!(name === undefined || description === undefined || verificationLevel === undefined || icon === undefined || splash === undefined || banner === undefined )) {
-        return c.json({"error":"Missing parameter required"}, 202);   
-    }
-    else if(!(name === '' || description === '' || verificationLevel === '' || icon === '' || splash === '' || banner === '' )) {
-        return c.json({"error":"Nothing to do"}, 202);   
-    }
+    const rulesChannelId = c.req.query('guildRulesChannelId');
+    const publicUpdatesChannelId = c.req.query('guildCommunityChannelId');
+    const preferredLocale = c.req.query('guildPreferredLocale');
+    const vanityCode = c.req.query('guildVanityCode');
 
     if (name) payload.name = name;
     if (description) payload.description = description;
+
+    if (rulesChannelId) payload.rules_channel_id = rulesChannelId;
+    if (publicUpdatesChannelId) payload.public_updates_channel_id = publicUpdatesChannelId;
+    if (preferredLocale) payload.preferred_locale = preferredLocale;
+    if (vanityCode) payload.vanity_code = vanityCode;
     
     if (verificationLevel) {
         const vLevel = parseInt(verificationLevel);
@@ -99,8 +101,6 @@ app.get('/discord/modifyServer', async (c) => {
     }
 
     c.header('X-Route', 'discord.com');
-    c.header('X-Enc-Route', 'api/v10');
-    c.header('X-While-Match', 'none');
     return await dispatch(c, () => Discord(token, guildId, payload, payloadError, reason));
 });
 

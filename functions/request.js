@@ -1095,7 +1095,7 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
         };
 
         return { 
-            data: [...(checkSpecificFields(currentInfo, patchResponse) ? [false, false] : [currentInfo, patchResponse]), checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
+            data: [...(checkSpecificFields(currentInfo, patchResponse) ? [currentInfo, false] : [currentInfo, patchResponse]), checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'

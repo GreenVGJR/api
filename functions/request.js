@@ -1090,7 +1090,7 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
         const checkSpecificFields = (a, b) => {
             if (!a || !b) return false;
-            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level'];
+            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level', 'rules_channel_id', 'public_updates_channel_id', 'preferred_locale'];
             return fields.every(field => a[field] === b[field]);
         };
 

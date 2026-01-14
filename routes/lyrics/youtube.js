@@ -26,13 +26,17 @@ return c.json({"error":"Nothing to do"}, 202);
         try {
             if (!isUrl) {
                 const tes = await YTMusic(q);
-                if (tes && tes[0]) {
-                    q = "https://youtu.be/" + tes[0].flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.videoId;
+                const item = tes?.data?.innerTube?.[0];
+                const videoId = item?.navigationEndpoint?.watchEndpoint?.videoId || 
+                                item?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+                
+                if (videoId) {
+                    q = "https://youtu.be/" + videoId;
                 }
             }
             const a = await YTLyrics(q);
             return a;
-        } catch {
+        } catch (e) {
             return null;
         }
     };

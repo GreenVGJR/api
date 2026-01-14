@@ -47,36 +47,40 @@ app.get('/discord/modifyServer', async (c) => {
     if (!token) return c.json(["Missing valid parameter: token"], 202);
     if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
 
+    const getQuery = (key) => {
+        const val = c.req.query(key);
+        if (val === undefined) return undefined;
+        if (val === 'null') return null;
+        return val;
+    };
+
     const payload = {};
-    let payloadError = [];
-    const name = c.req.query('guildName');
-    const reason = c.req.query('reason');
-    const description = c.req.query('guildDescription');
-    const verificationLevel = c.req.query('guildVerifyLevel');
-    const icon = c.req.query('guildIcon');
-    const splash = c.req.query('guildSplash');
-    const banner = c.req.query('guildBanner');
-    const rulesChannelId = c.req.query('guildRulesChannelId');
-    const publicUpdatesChannelId = c.req.query('guildCommunityChannelId');
-    const preferredLocale = c.req.query('guildPreferredLocale');
-    const vanityCode = c.req.query('guildVanityCode');
+    const payloadError = [];
 
-    if (name) payload.name = name;
-    if (description) payload.description = description;
-
-    if (rulesChannelId) payload.rules_channel_id = rulesChannelId;
-    if (publicUpdatesChannelId) payload.public_updates_channel_id = publicUpdatesChannelId;
-    if (preferredLocale) payload.preferred_locale = preferredLocale;
-    if (vanityCode) payload.vanity_code = vanityCode;
+    const name = getQuery('guildName');
+    const reason = getQuery('reason');
+    const description = getQuery('guildDescription');
+    const verificationLevel = getQuery('guildVerifyLevel');
     
-    if (verificationLevel) {
-        const vLevel = parseInt(verificationLevel);
-        if (!isNaN(vLevel) && vLevel >= 0 && vLevel <= 4) {
-            payload.verification_level = vLevel;
+    const icon = getQuery('guildIcon');
+    const splash = getQuery('guildSplash');
+    const banner = getQuery('guildBanner');
+
+    if (name !== undefined) payload.name = name;
+    if (description !== undefined) payload.description = description;
+
+    if (verificationLevel !== undefined) {
+        if (verificationLevel === null) {
+            payload.verification_level = 0;
+        } else {
+            const vLevel = parseInt(verificationLevel);
+            if (!isNaN(vLevel) && vLevel >= 0 && vLevel <= 4) {
+                payload.verification_level = vLevel;
+            }
         }
     }
 
-    if (icon === 'null') {
+    if (icon === null) {
         payload.icon = null;
     } else if (icon) {
         const pIcon = await processImage(icon);
@@ -84,7 +88,7 @@ app.get('/discord/modifyServer', async (c) => {
         if (pIcon) payload.icon = pIcon;
     }
     
-    if (splash === 'null') {
+    if (splash === null) {
         payload.splash = null;
     } else if (splash) {
         const pSplash = await processImage(splash);
@@ -92,7 +96,7 @@ app.get('/discord/modifyServer', async (c) => {
         if (pSplash) payload.splash = pSplash;
     }
     
-    if (banner === 'null') {
+    if (banner === null) {
         payload.banner = null;
     } else if (banner) {
         const pBanner = await processImage(banner);

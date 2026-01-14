@@ -35,9 +35,14 @@ else {
 console.log(`Listening on ${port}`);
 }
 
+const crypto = require('crypto');
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'));
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
-const { generate_hash } = require('./config.json');
+const { generate_hash, buildId: buildIdConfig } = require('./config.json');
+
+const BUILD_ID = buildIdConfig === true 
+    ? crypto.randomBytes(10).toString('base64url')
+    : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
 const reqs = require('./routes/search');
 const lyrics = require('./routes/lyrics');
@@ -52,6 +57,42 @@ app.use('*', async (c, next) => {
     }
     await next();
 });
+
+if (BUILD_ID) {
+    const apiPrefixes = ['search', 'lyrics', 'tools', 'info'];
+    const excludedPaths = ['favicon.ico', 'robots.txt'];
+    
+    app.use('*', async (c, next) => {
+        const url = new URL(c.req.url);
+        const pathname = url.pathname;
+        const pathParts = pathname.split('/').filter(Boolean);
+        
+        if (pathParts.length >= 1) {
+            const firstSegment = pathParts[0];
+            
+            if (excludedPaths.includes(firstSegment)) {
+                await next();
+                return;
+            }
+            
+            if (pathParts.length >= 2) {
+                const secondSegment = pathParts[1];
+                
+                if (apiPrefixes.includes(secondSegment)) {
+                    if (firstSegment !== BUILD_ID) {
+                        return c.text('', 403);
+                    }
+                }
+            } else if (pathParts.length === 1) {
+                if (firstSegment !== BUILD_ID && !apiPrefixes.includes(firstSegment)) {
+                    return c.text('', 403);
+                }
+            }
+        }
+        
+        await next();
+    });
+}
 
 app.get('/favicon.ico', etag(), (c) => {
     c.header('Cache-Control', 'max-age=3600');
@@ -88,7 +129,10 @@ app.get('/', (c) => {
                 "/search/twitch?q=",
                 "/search/instagram/users?q=",
                 "/search/threads/users?q=",
-                "/search/pexels?q="
+                "/search/pexels?q=",
+                "/search/tiktok/video?q=",
+                "/search/tiktok/music?q=",
+                "/search/tiktok/users?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",
@@ -99,7 +143,7 @@ app.get('/', (c) => {
                     "/tools/chat/gemini?prompt=&conversation="
                 ],
                 discord: [
-                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=&guildRulesChannelId=&guildCommunityChannelId=&guildPreferredLocale=&guildVanityCode="
+                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner="
                 ],
                 generate_image: [
                     "/tools/ai-image/flux_demo?prompt=",
@@ -153,18 +197,37 @@ app.use('*', cors({
     exposeHeaders: ['X-Route']
 }));
 
+const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
+
 reqs.forEach((val) => {
-    app.route('/search', val);
+    app.route(`${routeBase}/search`, val);
 });
 lyrics.forEach((val) => {
-    app.route('/lyrics', val);
+    app.route(`${routeBase}/lyrics`, val);
 });
 tools.forEach((val) => {
-    app.route('/tools', val);
+    app.route(`${routeBase}/tools`, val);
 });
 info.forEach((val) => {
-    app.route('/info', val);
+    app.route(`${routeBase}/info`, val);
 });
+
+if (BUILD_ID) {
+    const apiPrefixes = ['/search', '/lyrics', '/tools', '/info'];
+    
+    app.use('*', async (c, next) => {
+        const url = new URL(c.req.url);
+        const pathname = url.pathname;
+        
+        if (apiPrefixes.some(prefix => pathname.startsWith(prefix))) {
+            const redirectUrl = new URL(c.req.url);
+            redirectUrl.pathname = `/${BUILD_ID}${pathname}`;
+            return c.redirect(redirectUrl.toString(), 302);
+        }
+        
+        await next();
+    });
+}
 
 app.use('*', async (c, next) => {
     const checkexists = c.notFound();

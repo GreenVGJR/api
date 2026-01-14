@@ -495,7 +495,7 @@ exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
         }
         else {
             const pes = await per.body.json();
-            return { data: pes?.tracks?.items || null };
+            return { data: [pes?.tracks?.items || null, {"error": "Google asking to verify you're not a bot" }] };
         }
     } catch { return null; }
 }
@@ -1040,29 +1040,30 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
     try {
         // First try to fetch current info (GET) to verify access/token
         const req = await request(url, {
-        method: 'GET',
-        headers: {
-        'Authorization': `Bot ${token}`,
-        'Content-Type': 'application/json'
-        }
+            method: 'GET',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+            }
         });
 
         let currentInfo = null;
         try {
-        currentInfo = await req.body.json();
+            currentInfo = await req.body.json();
         } catch {
-        // If we can't parse the body, it might be an empty or error response
+            // If we can't parse the body, it might be an empty or error response
         }
 
         if(req.statusCode !== 200) {
             return { 
-                data: null, 
+                data: [null, null], 
                 error: currentInfo || { status: req.statusCode, statusText: req.statusText }
             };   
         }
 
         if (Object.keys(payload).length === 0) {
-            return { data: currentInfo };
+            return { data: [currentInfo, null] };
         }
 
         // Use fetch for the PATCH request as before
@@ -1071,6 +1072,7 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
             headers: {
                 'Authorization': `Bot ${token}`,
                 'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)',
                 ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
             },
             body: JSON.stringify(payload)
@@ -1083,19 +1085,19 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
         if (!response.ok) {
             return { 
-                data: currentInfo.code === 0 ? null : currentInfo, 
+                data: [currentInfo.code === 0 ? null : currentInfo, null], 
                 error: patchResponse || { status: response.status, statusText: response.statusText }
             };
         }
 
         const checkSpecificFields = (a, b) => {
             if (!a || !b) return false;
-            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level', 'rules_channel_id', 'public_updates_channel_id', 'preferred_locale'];
+            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level'];
             return fields.every(field => a[field] === b[field]);
         };
 
         return { 
-            data: [...(checkSpecificFields(currentInfo, patchResponse) ? [currentInfo, false] : [currentInfo, patchResponse]), checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
+            data: [currentInfo, patchResponse, checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'
@@ -1376,5 +1378,90 @@ exports.Pexels = async function Pexels(que) {
         return null;
     }
 };
+
+exports.TiktokVideo = async function TiktokVideo(que) {
+    if(!que) return null;
+
+    try {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${que}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+        headers: {
+            ...commonHeaders,
+            'X-Khronos': Math.floor(Date.now() / 1000)
+            }
+        });
+
+        const res = await pul.body.text();
+        if(res === '') {
+            return {
+                "error": "Akamai Captcha asking to verify you're not a bot"
+            }
+        }
+        let testres;
+        try {
+            testres = JSON.parse(res);
+        }
+        catch {}
+        return { data: testres?.aweme_list || null };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.TiktokMusic = async function TiktokMusic(que) {
+    if(!que) return null;
+
+    try {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${que}`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        const res = await pul.body.text();
+        if(res === '') {
+            return {
+                "error": "Akamai Captcha asking to verify you're not a bot"
+            }
+        }
+        let testres;
+        try {
+            testres = JSON.parse(res);
+        }
+        catch {}
+        return { data: [testres?.music || null, testres?.music_info_list || null] };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.TiktokUser = async function TiktokUser(que) {
+    if(!que) return null;
+
+    try {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${que}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
+        headers: {
+            ...commonHeaders
+            }
+        });
+
+        const res = await pul.body.text();
+        if(res === '') {
+            return {
+                "error": "Akamai Captcha asking to verify you're not a bot"
+            }
+        }
+        let testres;
+        try {
+            testres = JSON.parse(res);
+        }
+        catch {}
+        return { data: testres?.user_list?.map(a => a.user_info) || null };
+    }
+    catch {
+        return null;
+    }
+}
 
 exports.setKeys = (sc, sp, tidal, deezer) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

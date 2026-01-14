@@ -17,9 +17,12 @@ const app = new Hono();
 const { Discord } = require('../../functions/request');
 const { dispatch } = require('../../functions/httpRequest');
 
-async function processImage(url) {
+async function processImage(c, url) {
     if (!url) return undefined;
     if (!url.startsWith('http')) return undefined;
+
+    const checkurl = new URL(url);
+    if(checkurl.host === c.req.header('host')) return '';
     
     try {
         const res = await fetch(url, { headers: { ...commonHeaders }});
@@ -83,7 +86,7 @@ app.get('/discord/modifyServer', async (c) => {
     if (icon === null) {
         payload.icon = null;
     } else if (icon) {
-        const pIcon = await processImage(icon);
+        const pIcon = await processImage(c, icon);
         if(pIcon == '') payloadError.push('[guildIcon] Failed to download image');
         if (pIcon) payload.icon = pIcon;
     }
@@ -91,7 +94,7 @@ app.get('/discord/modifyServer', async (c) => {
     if (splash === null) {
         payload.splash = null;
     } else if (splash) {
-        const pSplash = await processImage(splash);
+        const pSplash = await processImage(c, splash);
         if(pSplash == '') payloadError.push('[guildSplash] Failed to download image');
         if (pSplash) payload.splash = pSplash;
     }
@@ -99,7 +102,7 @@ app.get('/discord/modifyServer', async (c) => {
     if (banner === null) {
         payload.banner = null;
     } else if (banner) {
-        const pBanner = await processImage(banner);
+        const pBanner = await processImage(c, banner);
         if(pBanner == '') payloadError.push('[guildBanner] Failed to download image');
         if (pBanner) payload.banner = pBanner;
     }

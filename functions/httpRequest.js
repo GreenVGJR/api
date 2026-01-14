@@ -123,12 +123,10 @@ const dispatch = async (c, promiseFactory) => {
             sameSite: 'Lax'
         });
         if(c.req.header('sec-fetch-site') === 'none') {
-          c.header('Cache-Control', 'no-store, must-revalidate');
           c.header('Refresh', '0, url=' + newUrl);
           return c.text('', 303);
         }
         else {
-          c.header('Cache-Control', 'no-store, must-revalidate');
           return c.redirect(newUrl, 302);
         }
     }
@@ -154,12 +152,6 @@ const dispatch = async (c, promiseFactory) => {
     c.header('X-Enc-Route', 'v1');
     c.header('X-Id-Route', crypto.randomUUID());
     c.header('Content-Type', 'application/json');
-    if(generate_hash) {
-      c.header('Cache-Control', 'max-age=30');
-    }
-    else {
-      c.header('Cache-Control', 'no-store, must-revalidate');
-    }
 
     return stream(c, async (stream) => {
         stream.onAbort(() => {

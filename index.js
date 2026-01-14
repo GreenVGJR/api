@@ -48,7 +48,14 @@ const reqs = require('./routes/search');
 const lyrics = require('./routes/lyrics');
 const tools = require('./routes/tools');
 const info = require('./routes/info');
-const { soundcloudKey, spotifyKey, tidalKeys, deezerKeys, setKeys } = require('./functions/request');
+
+app.use('*', async (c, next) => {
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    c.header('Pragma', 'no-cache');
+    c.header('Expires', '0');
+    c.header('Surrogate-Control', 'no-store');
+    await next();
+});
 
 app.use('*', async (c, next) => {
     const check2 = c.req.header('Priority');
@@ -75,18 +82,13 @@ if (BUILD_ID) {
                 return;
             }
             
-            if (pathParts.length >= 2) {
-                const secondSegment = pathParts[1];
-                
-                if (apiPrefixes.includes(secondSegment)) {
-                    if (firstSegment !== BUILD_ID) {
-                        return c.text('', 403);
-                    }
-                }
-            } else if (pathParts.length === 1) {
-                if (firstSegment !== BUILD_ID && !apiPrefixes.includes(firstSegment)) {
-                    return c.text('', 403);
-                }
+            if (apiPrefixes.includes(firstSegment)) {
+                await next();
+                return;
+            }
+            
+            if (firstSegment !== BUILD_ID) {
+                return c.text('', 403);
             }
         }
         
@@ -94,14 +96,12 @@ if (BUILD_ID) {
     });
 }
 
-app.get('/favicon.ico', etag(), (c) => {
-    c.header('Cache-Control', 'max-age=3600');
+app.get('/favicon.ico', (c) => {
     c.header('Content-Type', 'image/x-icon');
     return c.body(favicon);
 });
 
-app.get('/robots.txt', etag(), (c) => {
-    c.header('Cache-Control', 'max-age=3600');
+app.get('/robots.txt', (c) => {
     return c.text(robots, 200);
 });
 
@@ -158,6 +158,8 @@ app.get('/', (c) => {
                 "/info/soundcloud?url=",
                 "/info/spotify?url=",
                 "/info/applemusic?url=",
+                "/info/twitter/user?q=",
+                "/info/twitter/tweet?url="
             ]
         }
     },
@@ -168,7 +170,6 @@ app.get('/', (c) => {
         proxied: false,
         fluid: true
     }];
-    c.header('Cache-Control', 'no-store, must-revalidate');
     return c.json(listapi, 200);
 });
 
@@ -181,9 +182,6 @@ app.use('*', async (c, next) => {
         return c.body(null, 403);
     }
     if (!['GET', 'HEAD'].includes(c.req.method) || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || c.req.raw.headers.has('sec-fetch-site') ? !['none', 'cross-site', 'same-origin', 'same-site'].includes(c.req.header('sec-fetch-site')) : false || c.req.raw.headers.has('origin') ? geturl.origin !== c.req.header('origin') : false) return c.text('', 403);
-    if(generate_hash) {
-    if(c.req.header('If-None-Match') && (c.req.header('cache-control') !== 'no-cache')) return c.body(null, 304);
-    }
     await next();
     if (c.error) {
         return c.body(null, 500);
@@ -233,18 +231,7 @@ app.use('*', async (c, next) => {
     const checkexists = c.notFound();
 
     if(checkexists) {
-        c.header('Cache-Control', 'no-store, must-revalidate');
         return c.json({error: "Route not available"}, 404);
     }
     await next();
 });
-
-setTimeout(async() => {
-    const [sc, sp, tidal, deezer] = await Promise.all([
-        soundcloudKey(),
-        spotifyKey(),
-        tidalKeys(),
-        deezerKeys()
-    ]);
-    setKeys(sc, sp, tidal, deezer);
-}, 1000);

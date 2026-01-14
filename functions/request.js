@@ -3,7 +3,7 @@
 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
 const commonHeaders = {
     'Accept': 'text/html, application/json, video/*, image/*, */*',
-    'Accept-Encoding': '',
+    'Accept-Encoding': 'identify',
     'Accept-Language': 'en',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
@@ -246,11 +246,18 @@ const listcodes = [
 
 const { request } = require('undici');
 const { CurlImpersonateHttpClient, CurlImpersonate } = require('apify-node-curl-impersonate');
+const { ClientTransaction } = require("x-client-transaction-id");
+const { parseHTML } = require('linkedom');
 
 let keysc;
 let keysp;
 let keytidal;
 let keydeezer;
+
+let twitterDocument;
+let twitterTransaction;
+let twitterAuth;
+let twitterObj = {};
 
 function filterCookies(cookie) {
     if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
@@ -334,6 +341,44 @@ const deezerKeys = exports.deezerKeys = async function deezerKeys() {
     } catch { return null; }
 }
 
+const twitterKey = exports.twitterKey = async function twitterKey(typeName) {
+    try {
+        const response = await request("https://x.com/", {headers:{...commonHeaders}});
+        const html = await response.body.text();
+        const { document } = parseHTML(html);
+        twitterDocument = document;
+
+        twitterTransaction = new ClientTransaction(twitterDocument);
+        await twitterTransaction.initialize();
+
+        const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], {headers:{...commonHeaders}});
+
+        const res1 = await pul1.body.text();
+        twitterAuth = res1.split('return"Bearer ')[1].split('"')[0];
+        const queryId_user = res1.split('e.exports={queryId:')
+        .find(e => e.includes(`operationName:"${typeName}"`))
+        .split('"')[1];
+        const features_user = JSON.parse(res1.split('e.exports={queryId:')
+        .find(e => e.includes(`operationName:"${typeName}"`))
+        .split('featureSwitches:')[1].split(',field')[0]).reduce((acc, key) => {
+            acc[key] = true;
+            return acc;
+        }, {});
+
+        twitterObj[typeName] = [
+            queryId_user,
+            features_user,
+            await twitterTransaction.generateTransactionId(
+                "GET",
+                "/graphql/" + queryId_user + "/" + typeName,
+            )
+        ];
+    }
+    catch (e) { 
+        console.error(e);
+    }
+}
+
 exports.YTVideo = async function YTVideo(que) {
     if (!que) return null;
     try {
@@ -372,7 +417,7 @@ exports.YTVideo = async function YTVideo(que) {
             testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
         }
         catch { }
-        return { data: { innerTube: res.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.videoRenderer), youtubeWeb: testpar.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents.filter(o => Object.keys(o).length > 0).map(v => v.videoRenderer).filter(Boolean) } };
+        return { data: { innerTube: res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer.contents?.filter(o => Object.keys(o).length > 0)?.map(v => v?.videoRenderer) || null, youtubeWeb: testpar?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.filter(o => Object.keys(o).length > 0).map(v => v?.videoRenderer)?.filter(Boolean) || null } };
     } catch { return null; }
 }
 
@@ -446,8 +491,12 @@ exports.YTMusic = async function YTMusic(que) {
     } catch { return null; }
 }
 
-exports.SCMusic = async function SCMusic(que) {
+exports.SCMusic = async function SCMusic(que, refresh_auth) {
     if (!que) return null;
+
+    if(refresh_auth) {
+        keysc = await soundcloudKey();
+    }
 
     try {
 
@@ -463,9 +512,12 @@ exports.SCMusic = async function SCMusic(que) {
             }
         })
         ]);
+        if(per.statusCode === 401) {
+            return await SCMusic(que, true);
+        }
         const pes = await per.body.json();
         const pes2 = await per2.body.text();
-        let testpes;
+        let testpes = null;
         try {
             testpes = JSON.parse(pes2.split('type="application/json">')[1].split('</script>')[0]);
         }
@@ -1458,6 +1510,92 @@ exports.TiktokUser = async function TiktokUser(que) {
         }
         catch {}
         return { data: testres?.user_list?.map(a => a.user_info) || null };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
+    if(!que) return null;
+    if(refresh_auth) {
+        await twitterKey("UserByScreenName");
+    }
+
+    try {
+        const queryId = twitterObj?.UserByScreenName?.[0];
+        const features = JSON.stringify(twitterObj?.UserByScreenName?.[1]);
+        const variables = JSON.stringify({ screen_name: que, withGrokTranslatedBio: true });
+        const fieldToggles = JSON.stringify({ withPayments: false, withAuxiliaryUserLabels: true });
+
+        const pul = await request(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json',
+                'authorization': 'Bearer ' + twitterAuth,
+                'x-client-transaction-id': twitterObj?.UserByScreenName?.[2],
+            }
+        });
+
+        if(pul.statusCode === 429) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        if(pul.statusCode === 401) return await infoTwitterUser(que, true);
+
+        const res = await pul.body.json();
+        return { data: res?.data?.user?.result || null };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
+    if(!que) return null;
+    if(refresh_auth) {
+        await twitterKey("TweetResultByRestId");
+    }
+
+    try {
+        const queryId = twitterObj?.TweetResultByRestId?.[0];
+        const features = JSON.stringify(twitterObj?.TweetResultByRestId?.[1]);
+        const variables = JSON.stringify({tweetId: que,includePromotedContent:true,withBirdwatchNotes:true,withVoice:true,withCommunity:true});
+
+        const [pul, pul2] = await Promise.all([
+            request(`https://api.x.com/graphql/${queryId}/TweetResultByRestId?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`, {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json',
+                'authorization': 'Bearer ' + twitterAuth,
+                // 'x-client-transaction-id': twitterObj?.TweetResultByRestId?.[2],
+            }
+        }),
+            request(`https://cdn.syndication.twimg.com/tweet-result?id=${que}&lang=en&token=abc`, {
+                headers: {
+                    ...commonHeaders,
+                }
+            })
+        ]);
+
+        let res = null;
+
+        if(pul.statusCode === 429) {
+            res = {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+        else {
+            res = await pul.body.json();
+        }
+
+        if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterTweet(que, true);
+
+        const res2 = await pul2.body.json();
+
+        return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
     }
     catch {
         return null;

@@ -150,7 +150,6 @@ const dispatch = async (c, promiseFactory) => {
   }
 
     c.header('X-Enc-Route', 'v1');
-    c.header('X-Id-Route', crypto.randomUUID());
     c.header('Content-Type', 'application/json');
 
     return stream(c, async (stream) => {

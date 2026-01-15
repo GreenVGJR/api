@@ -1199,10 +1199,11 @@ exports.Unsplash = async function Unsplash(que) {
     }
 
     const res = await pull.body.json();
-    return res?.results?.[0] ? {
+    return { data: res?.results?.[0] ? {
         non_premium: res?.results.filter(a => !a.premium),
         premium: res?.results.filter(a => a.premium)
-    } : null;
+    } : null
+    };
     } catch { return null; }
 }
 
@@ -1219,12 +1220,14 @@ exports.Pixiv = async function Pixiv(que) {
         const res = await per.body.json();
         const items = res?.body?.illust?.data || res?.body?.illustManga?.data || [];
         return {
-            relatedTags: res?.body?.relatedTags || null,
-            tagTranslation: res?.body?.tagTranslation || null,
-            data: items.map(item => {
+            data: {
+                data: items?.map(item => {
                 const { url, profileImageUrl, ...rest } = item;
                 return rest;
-            })
+            }) || null,
+            relatedTags: res?.body?.relatedTags || null,
+            tagTranslation: res?.body?.tagTranslation || null,
+            }
         }
     }
     catch (e) {
@@ -1322,7 +1325,7 @@ exports.Jiosaavn = async function Jiosaavn(que) {
 
         const items = res?.results || [];
 
-        return { data: items.map(item => {
+        return { data: items?.map(item => {
                 const { encrypted_media_url, encrypted_drm_media_url, encrypted_media_path, ...rest } = item;
                 return rest;
             }) || null }
@@ -1537,9 +1540,9 @@ exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
             }
         });
 
-        if(pul.statusCode === 429) {
+        if(pul.statusCode === 403) {
             return {
-                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+                "error": "Bad auth"
             }
         }
 
@@ -1582,9 +1585,9 @@ exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
 
         let res = null;
 
-        if(pul.statusCode === 429) {
+        if(pul.statusCode === 403) {
             res = {
-                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+                "error": "Bad auth"
             }
         }
         else {
@@ -1596,6 +1599,30 @@ exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
         const res2 = await pul2.body.json();
 
         return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.redditMedia = async function redditMedia(que) {
+    if(!que) return null;
+
+    try {
+        const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media&limit=10`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        if(req.statusCode !== 200) {
+            return {
+                "error": "Google asking to verify you're not a bot"
+            }
+        }
+
+        const res = await req.body?.json();
+        return { data: res?.data?.children?.map(a => a?.data) || null }
     }
     catch {
         return null;

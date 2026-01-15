@@ -9,7 +9,6 @@ setGlobalDispatcher(new Agent({
 const { Hono } = require('hono');
 const { serve } = require('@hono/node-server');
 const { cors } = require('hono/cors');
-const { etag } = require('hono/etag');
 const { compress } = require('hono/compress');
 const path = require('path');
 const fs = require('fs');
@@ -41,7 +40,7 @@ const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const { generate_hash, buildId: buildIdConfig } = require('./config.json');
 
 const BUILD_ID = buildIdConfig === true 
-    ? crypto.randomBytes(10).toString('base64url')
+    ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
 const reqs = require('./routes/search');
@@ -51,19 +50,15 @@ const info = require('./routes/info');
 
 app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-    c.header('Pragma', 'no-cache');
-    c.header('Expires', '0');
-    c.header('Surrogate-Control', 'no-store');
     await next();
 });
 
-app.use('*', async (c, next) => {
-    const check2 = c.req.header('Priority');
-    if(c.req.raw.headers.has('Priority') && check2.startsWith('u=') === false) {
-        return c.text('', 403);
-    }
-    await next();
-});
+app.use('*', compress());
+
+app.use('*', cors({
+    credentials: true,
+    exposeHeaders: ['X-Route']
+}));
 
 if (BUILD_ID) {
     const apiPrefixes = ['search', 'lyrics', 'tools', 'info'];
@@ -88,7 +83,7 @@ if (BUILD_ID) {
             }
             
             if (firstSegment !== BUILD_ID) {
-                return c.text('', 403);
+                return c.json({error: "Signature mismatch"}, 403);
             }
         }
         
@@ -132,7 +127,8 @@ app.get('/', (c) => {
                 "/search/pexels?q=",
                 "/search/tiktok/video?q=",
                 "/search/tiktok/music?q=",
-                "/search/tiktok/users?q="
+                "/search/tiktok/users?q=",
+                "/search/reddit/media?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",
@@ -173,29 +169,8 @@ app.get('/', (c) => {
     return c.json(listapi, 200);
 });
 
-app.use('*', async (c, next) => {
-    let geturl;
-    try {
-    geturl = new URL(c.req.url);
-    }
-    catch {
-        return c.body(null, 403);
-    }
-    if (!['GET', 'HEAD'].includes(c.req.method) || c.req.header('user-agent') == '' || (geturl.host !== c.req.header('host')) || c.req.raw.headers.has('sec-fetch-site') ? !['none', 'cross-site', 'same-origin', 'same-site'].includes(c.req.header('sec-fetch-site')) : false || c.req.raw.headers.has('origin') ? geturl.origin !== c.req.header('origin') : false) return c.text('', 403);
-    await next();
-    if (c.error) {
-        return c.body(null, 500);
-    }
-});
-
-app.use('*', compress());
-
-app.use('*', cors({
-    credentials: true,
-    exposeHeaders: ['X-Route']
-}));
-
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
+const apiPrefixes = ['/search', '/lyrics', '/tools', '/info'];
 
 reqs.forEach((val) => {
     app.route(`${routeBase}/search`, val);
@@ -211,8 +186,6 @@ info.forEach((val) => {
 });
 
 if (BUILD_ID) {
-    const apiPrefixes = ['/search', '/lyrics', '/tools', '/info'];
-    
     app.use('*', async (c, next) => {
         const url = new URL(c.req.url);
         const pathname = url.pathname;
@@ -228,6 +201,12 @@ if (BUILD_ID) {
 }
 
 app.use('*', async (c, next) => {
+    const url = new URL(c.req.url);
+    const pathname = url.pathname;
+    const checkElement = pathname.split('/').slice(1);
+    if(checkElement[0] !== BUILD_ID) {
+        return c.json({error: "Signature mismatch"}, 403);
+    }
     const checkexists = c.notFound();
 
     if(checkexists) {

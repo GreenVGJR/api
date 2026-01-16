@@ -251,6 +251,7 @@ const { parseHTML } = require('linkedom');
 
 let keysc;
 let keysp;
+let keysptoken;
 let keytidal;
 let keydeezer;
 
@@ -307,6 +308,29 @@ const spotifyKey = exports.spotifyKey = async function spotifyKey() {
         .then(b => b.split('"accessToken":"')[1].split('"')[0])
         .catch(() => null);
     return rest;
+}
+
+const spotifyKeyToken = exports.spotifyKeyToken = async function spotifyKeyToken() {
+    const bodyhttp = {"client_data":{"client_version":"1.0","client_id":"d8a5ed958d274c2e8ee717e6a4b0971d","js_sdk_data":{}}};
+
+    try {
+    const req = await request(`https://clienttoken.spotify.com/v1/clienttoken`, {
+        method: "POST",
+        body: JSON.stringify(bodyhttp),
+        headers: {
+            ...commonHeaders,
+            'Origin': 'https://clienttoken.spotify.com',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+    });
+
+    const res = await req.body.json();
+    return res.granted_token.token;
+    }
+    catch {
+        return null;
+    }
 }
 
 const tidalKeys = exports.tidalKeys = async function tidalKeys() {
@@ -530,24 +554,45 @@ exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
     if (!que) return null;
 
     if (refresh_auth) {
-        keysp = await spotifyKey();
+        const [a,b] = await Promise.all([
+            spotifyKeyToken(),
+            spotifyKey()
+        ]);
+        keysptoken = a;
+        keysp = b;
     }
 
     try {
-        const per = await request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=10&market=US`, {
+        const perbody = {"variables":{"searchTerm":que,"offset":0,"limit":20,"numberOfTopResults":20,"includeAudiobooks":true,"includeArtistHasConcertsField":true,"includePreReleases":true,"includeAuthors":true},"operationName":"searchDesktop","extensions":{"persistedQuery":{"version":1,"sha256Hash":"fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c"}}};
+        const [per, per2] = await Promise.all([
+        request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=20&market=US`, {
             headers: {
                 'Authorization': 'Bearer ' + keysp,
                 'App-Platform': 'WebPlayer',
                 ...commonHeaders,
             }
-        });
+        }),
+        request(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+            method: "POST",
+            body: JSON.stringify(perbody),
+            headers: {
+                'Content-Type': 'application/json',
+                'Origin': 'https://open.spotify.com',
+                'Authorization': 'Bearer ' + keysp,
+                'App-Platform': 'WebPlayer',
+                'Client-Token': keysptoken,
+                ...commonHeaders,
+            }
+        })
+        ]);
 
-        if (per.statusCode === 401 || per.statusCode === 400) {
+        if (per.statusCode === 401 || per.statusCode === 400 || per2.statusCode === 401 || per2.statusCode === 400) {
             return await SPMusic(que, true);
         }
         else {
-            const pes = await per.body.json();
-            return { data: [pes?.tracks?.items || null, {"error": "Google asking to verify you're not a bot" }] };
+            const pes = await per.body?.json();
+            const pes2 = await per2.body?.json();
+            return { data: [pes?.tracks?.items || null, pes2?.data?.searchV2 || null] };
         }
     } catch { return null; }
 }
@@ -1529,7 +1574,7 @@ exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
         const queryId = twitterObj?.UserByScreenName?.[0];
         const features = JSON.stringify(twitterObj?.UserByScreenName?.[1]);
         const variables = JSON.stringify({ screen_name: que, withGrokTranslatedBio: true });
-        const fieldToggles = JSON.stringify({ withPayments: false, withAuxiliaryUserLabels: true });
+        const fieldToggles = JSON.stringify({ withPayments: true, withAuxiliaryUserLabels: true });
 
         const pul = await request(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
             headers: {
@@ -1546,12 +1591,39 @@ exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
             }
         }
 
-        if(pul.statusCode === 401) return await infoTwitterUser(que, true);
+        if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
 
-        const res = await pul.body.json();
-        return { data: res?.data?.user?.result || null };
+        const responseText = await pul.body.text();
+        let res;
+        try {
+            res = JSON.parse(responseText);
+        } catch {
+            return null;
+        }
+        let pul2;
+        let res2 = {};
+        if(res?.data?.user?.result?.rest_id) {
+            pul2 = await request(`https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`, {
+                headers: {
+                    ...commonHeaders
+                }
+            });
+            try {
+            res2 = await pul2.body.text();
+            res2 = JSON.parse(res2.split('type="application/json">')[1].split('</script>')[0]);
+            }
+            catch {}
+        }
+
+        const finalres = {
+            ...(res?.data?.user?.result || null),
+            timeline: res2?.props?.pageProps?.timeline?.entries?.[0] ? res2?.props?.pageProps?.timeline?.entries : null
+        }
+        
+        return { data: finalres?.rest_id ? finalres : null };
     }
-    catch {
+    catch (e) {
+        console.error(e);
         return null;
     }
 }
@@ -1609,13 +1681,20 @@ exports.redditMedia = async function redditMedia(que) {
     if(!que) return null;
 
     try {
-        const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media&limit=10`, {
+        const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media`, {
             headers: {
-                ...commonHeaders
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
             }
         });
 
-        if(req.statusCode !== 200) {
+        if(req.statusCode === 403) {
+            return {
+                "error": "IP Blocked"
+            }
+        }
+
+        if(req.statusCode === 302) {
             return {
                 "error": "Google asking to verify you're not a bot"
             }
@@ -1623,6 +1702,43 @@ exports.redditMedia = async function redditMedia(que) {
 
         const res = await req.body?.json();
         return { data: res?.data?.children?.map(a => a?.data) || null }
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.robloxGames = async function robloxGames(que) {
+    if(!que) return null;
+
+    try {
+        const pul1 = await request(`https://apis.roblox.com/search-api/omni-search?searchQuery=${que}&sessionId=abc`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const res1 = await pul1.body.json();
+        const gamesList = res1.searchResults?.flatMap(group => group.contents) || [];
+        const restIds = gamesList.filter(b => b?.universeId).map(b => b.universeId).join(',');
+
+        if(!restIds) return { data: gamesList };
+
+        const pul2 = await request(`https://games.roblox.com/v1/games?universeIds=${restIds}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const res2 = await pul2.body.json();
+        const detailsMap = new Map(res2.data.map(game => [game.id, game]));
+
+        return {
+            data: gamesList.map(b => ({
+                ...b,
+                details: b.universeId ? (detailsMap.get(b.universeId) || null) : null
+            }))
+        };
     }
     catch {
         return null;

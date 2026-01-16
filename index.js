@@ -128,7 +128,8 @@ app.get('/', (c) => {
                 "/search/tiktok/video?q=",
                 "/search/tiktok/music?q=",
                 "/search/tiktok/users?q=",
-                "/search/reddit/media?q="
+                "/search/reddit/media?q=",
+                "/search/roblox/games?q="
             ],
             lyrics: [
                 "/lyrics/youtube?q=",

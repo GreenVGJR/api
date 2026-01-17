@@ -48,13 +48,6 @@ const lyrics = require('./routes/lyrics');
 const tools = require('./routes/tools');
 const info = require('./routes/info');
 
-app.use('*', async (c, next) => {
-    c.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-    await next();
-});
-
-app.use('*', compress());
-
 app.use('*', cors({
     credentials: true,
     exposeHeaders: ['X-Route']

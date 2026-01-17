@@ -14,6 +14,7 @@ const commonHeaders = {
 const { Hono } = require('hono');
 const app = new Hono();
 
+const { request } = require('undici');
 const { Discord } = require('../../functions/request');
 const { dispatch } = require('../../functions/httpRequest');
 
@@ -25,14 +26,14 @@ async function processImage(c, url) {
     if(checkurl.host === c.req.header('host')) return '';
     
     try {
-        const res = await fetch(url, { headers: { ...commonHeaders }});
-        if(!res.ok) return '';
-        if(!res.headers?.get('content-type').startsWith('image/') || !res.headers?.get('content-type').startsWith('video/')) return '';
-        const arrayBuffer = await res.arrayBuffer();
+        const res = await request(url, { headers: { ...commonHeaders }});
+        if(res.statusCode < 200 || res.statusCode >= 300) return '';
+        const contentType = res.headers['content-type'];
+        if(!contentType?.startsWith('image/') && !contentType?.startsWith('video/')) return '';
+        const arrayBuffer = await res.body.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const type = res.headers.get('content-type');
-        return `data:${type};base64,${buffer.toString('base64')}`;
-    } catch {
+        return `data:${contentType};base64,${buffer.toString('base64')}`;
+    } catch (e) {
         return '';
     }
 }

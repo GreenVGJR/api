@@ -139,9 +139,22 @@ app.get('/', (c) => {
                 ai: [
                     "/tools/chat/gemini?prompt=&conversation="
                 ],
-                discord: [
-                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner="
-                ],
+                discord: {
+                    server: [
+                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+                    ],
+                    webhook: [
+                    "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
+                    [
+                        "/tools/discord/webhook/info?token=&webhookId=",
+                        "/tools/discord/webhook/info?webhookToken=&webhookId=",
+                    ],
+                    [
+                    "/tools/discord/webhook/delete?token=&webhookId=",
+                    "/tools/discord/webhook/delete?webhookToken=&webhookId=",
+                    ]
+                    ]
+                },
                 generate_image: [
                     "/tools/ai-image/flux_demo?prompt=",
                     "/tools/ai-image/magicstudio?prompt="
@@ -202,11 +215,13 @@ if (BUILD_ID) {
 }
 
 app.use('*', async (c, next) => {
+    if(BUILD_ID) {
     const url = new URL(c.req.url);
     const pathname = url.pathname;
     const checkElement = pathname.split('/').slice(1);
     if(checkElement[0] !== BUILD_ID) {
         return c.json({error: "Signature mismatch"}, 403);
+        }
     }
     const checkexists = c.notFound();
 

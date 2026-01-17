@@ -852,9 +852,12 @@ exports.Gemini = async function Gemini(que, convo) {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': 'https://gemini.google.com'
         },
-        body: reqPayload
+        body: reqPayload,
+        bodyTimeout: 60000,
+        headersTimeout: 60000
     });
 
     if(req.statusCode === 302) {
@@ -867,9 +870,10 @@ exports.Gemini = async function Gemini(que, convo) {
     const resText = await req.body.text();
     let response;
 
+    let data;
     try {
         const cleanText = resText.split(")]}'\n\n")[1];
-        const data = JSON.parse(cleanText);
+        data = JSON.parse(cleanText);
         let innerData;
 
         data.forEach(dt => {
@@ -881,6 +885,12 @@ exports.Gemini = async function Gemini(que, convo) {
                 }
             }
         });
+
+        if(!innerData) {
+            return {
+                error: "Rate-limited"
+            }
+        }
 
         objectbody.cid = innerData[1][0];
         objectbody.rid = innerData[1][1];
@@ -1163,8 +1173,8 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
             return { data: [currentInfo, null] };
         }
 
-        // Use fetch for the PATCH request as before
-        const response = await fetch(url, {
+        // Use request for the PATCH request
+        const response = await request(url, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bot ${token}`,
@@ -1177,13 +1187,13 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
         let patchResponse = null;
         try {
-            patchResponse = await response.json();
+            patchResponse = await response.body.json();
         } catch (e) {}
 
-        if (!response.ok) {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
             return { 
                 data: [currentInfo.code === 0 ? null : currentInfo, null], 
-                error: patchResponse || { status: response.status, statusText: response.statusText }
+                error: patchResponse || { status: response.statusCode }
             };
         }
 
@@ -1202,6 +1212,74 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
         };
     } catch {
         return { error: 'Something just happened' };
+    }
+};
+
+exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
+    const action = payload.action;
+    const webhookId = payload.webhookId || (action !== 'create' ? guildId : null);
+    const channelId = payload.channelId || (action === 'create' ? guildId : null);
+    const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+
+    let url = '';
+    let method = 'GET';
+
+    const webhookToken = payload.webhookToken;
+
+    if (action === 'create') {
+        if (!channelId) return { error: 'Missing channelId' };
+        url = `https://discord.com/api/v10/channels/${channelId}/webhooks`;
+        method = 'POST';
+    } else if (action === 'info') {
+        if (!webhookId) return { error: 'Missing webhookId' };
+        url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;
+        method = 'GET';
+    } else if (action === 'delete') {
+        if (!webhookId) return { error: 'Missing webhookId' };
+        url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;
+        method = 'DELETE';
+    } else {
+        return { error: 'Nothing to do' };
+    }
+
+    try {
+        const headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': botUserAgent
+        };
+
+        if (token && token !== 'null') {
+            headers['Authorization'] = `Bot ${token}`;
+        }
+
+        const response = await request(url, {
+            method: method,
+            headers: headers,
+            ...(method === 'POST' && {
+                body: JSON.stringify({
+                    name: payload.name || 'New Webhook',
+                    avatar: payload.avatar || null
+                })
+            })
+        });
+
+        let result = null;
+        if (response.statusCode !== 204) {
+            try {
+                result = await response.body.json();
+            } catch (e) {}
+        }
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+            return {
+                data: null,
+                error: result || { status: response.statusCode }
+            };
+        }
+
+        return { data: [result || true, null, response.statusCode] };
+    } catch (e) {
+        return { error: e.message };
     }
 };
 

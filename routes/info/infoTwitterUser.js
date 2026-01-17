@@ -14,7 +14,7 @@ return c.json({"error":"Missing parameter required"}, 202);
 else if(query === '') {
 return c.json({"error":"Nothing to do"}, 202);
 }
-    c.header('X-Route', 'api.x.com');
+    c.header('X-Route', 'api.x.com, syndication.twitter.com');
     return await dispatch(c, () => infoTwitterUser(query));
 });
 

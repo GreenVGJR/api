@@ -1,4 +1,4 @@
 {
     "generate_hash": false,
-    "buildId": true
+    "buildId": false
 }

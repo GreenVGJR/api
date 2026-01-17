@@ -12,12 +12,11 @@ const commonHeaders = {
 }
 
 const { Hono } = require('hono');
-const { etag } = require('hono/etag');
 const app = new Hono();
 
 const { dispatch, blobDispatch } = require('../../functions/httpRequest');
 
-app.get('/ai-image/magicstudio', etag(), async (c) => {
+app.get('/ai-image/magicstudio', async (c) => {
     const query = c.req.query('prompt');
     if(query === undefined) { 
 return c.json({"error":"Missing parameter required"}, 202);

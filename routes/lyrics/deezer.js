@@ -6,6 +6,7 @@ const app = new Hono();
 const { deezerLyrics } = require('../../functions/request');
 
 app.get('/deezer', async (c) => {
+    return c.json({ error: "Temporary unavailable due to copyright issue" }, 403);
     const query = c.req.query('q');
     if(query === undefined) { 
 return c.json({"error":"Missing parameter required"}, 202);

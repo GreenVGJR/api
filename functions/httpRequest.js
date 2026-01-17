@@ -5,77 +5,60 @@ const { generate_hash } = require('../config.json');
 
 const blobDispatch = async (c, body, headers) => {
   try {
-  if(c.req.method !== 'GET') return c.text('', 200);
-  }
-  catch {
+    if (c.req.method !== 'GET') return c.text('', 200);
+  } catch {
     return c.text('', 200);
   }
-  if(Object.entries(c.req.queries()).length !== 1) {
+
+  if (Object.entries(c.req.queries()).length !== 1) {
     return c.body(null, 403);
   }
-  if (typeof body === 'function' || body instanceof Promise) {
-    const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
-    c.header('Content-Type', type || 'application/octet-stream');
 
-    return stream(c, async (s) => {
-        s.onAbort(() => {
-          return;
-        });
-        
-        if (c.req.raw.signal.aborted) return;
-        
-        await s.write(new Uint8Array(0));
-        
-        if (c.req.raw.signal.aborted) return;
+  c.header('X-Enc-Route', 'v2');
+  c.header('Cache-Control', 'no-transform');
+  
+  const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
+  const filtype1 = type?.split('/')?.[0];
+  const defaultExtensions = {
+    'video': 'mp4',
+    'image': 'png',
+    'audio': 'mp3',
+    'text': 'plain',
+    'application': 'octet-stream'
+  };
+  const subtype = type?.split('/')?.[1]?.split(';')?.[0];
+  const filtype2 = subtype === '*' ? (defaultExtensions[filtype1] || null) : subtype;
+  const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
+  
+  c.header('Content-Type', contentType);
 
-        try {
-            let res = typeof body === 'function' ? body() : body;
-            if (res instanceof Promise) res = await res;
-            
-            if (c.req.raw.signal.aborted) return;
+  return stream(c, async (s) => {
+    s.onAbort(() => {});
 
-            const b = res?.body || res;
-            if (b) return await s.pipe(b);
-        } catch (err) {
-            return c.body(null, 401);
+    if (c.req.raw.signal.aborted) return;
+
+    await s.write(new Uint8Array(0));
+
+    if (c.req.raw.signal.aborted) return;
+
+    try {
+      let resolvedBody = typeof body === 'function' ? body() : body;
+      if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+
+      if (c.req.raw.signal.aborted) return;
+
+      const dataToPipe = resolvedBody?.body || resolvedBody;
+      if (dataToPipe) {
+        if (dataToPipe.pipe || dataToPipe.pipeTo || dataToPipe.getReader) {
+          return await s.pipe(dataToPipe);
+        } else {
+          await s.write(dataToPipe);
         }
-    });
-  }
-
-  try {
-    const type = headers?.get('content-type');
-    const filtype1 = type?.split('/')?.[0];
-    
-    const defaultExtensions = {
-      'video': 'mp4',
-      'image': 'png',
-      'audio': 'mp3',
-      'text': 'plain',
-      'application': 'octet-stream'
-    };
-    
-    const subtype = type?.split('/')?.[1]?.split(';')?.[0];
-    const filtype2 = subtype === '*' ? (defaultExtensions[filtype1] || null) : subtype;
-    
-    const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
-    c.header('Content-Type', contentType);
-
-    return stream(c, async (s) => {
-      s.onAbort(() => {
-          return;
-      });
-      
-      if (c.req.raw.signal.aborted) return;
-      
-      await s.write(new Uint8Array(0));
-      
-      if (c.req.raw.signal.aborted) return;
-
-      return await s.pipe(body);
-    });
-  } catch (err) {
-    return c.body(null, 401);
-  }
+      }
+    } catch (err) {
+      console.error('blobDispatch internal error:', err);
+    }
+  });
 };
 
 const dispatch = async (c, promiseFactory) => {
@@ -149,8 +132,10 @@ const dispatch = async (c, promiseFactory) => {
     }
   }
 
-    c.header('X-Enc-Route', 'v1');
-    c.header('Content-Type', 'application/json');
+  c.header('X-Enc-Route', 'v2');
+  c.header('ETag', '"streaming"');
+  c.header('Cache-Control', 'no-transform');
+  c.header('Content-Type', 'application/json');
 
     return stream(c, async (stream) => {
         stream.onAbort(() => {

@@ -176,6 +176,8 @@ app.get('/', (c) => {
     return c.json(listapi, 200);
 });
 
+app.use('*', compress());
+
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
 const apiPrefixes = ['/search', '/lyrics', '/tools', '/info'];
 

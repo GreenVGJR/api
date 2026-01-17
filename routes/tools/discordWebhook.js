@@ -6,6 +6,13 @@ const app = new Hono();
 const { DiscordWebhook } = require('../../functions/request');
 const { dispatch } = require('../../functions/httpRequest');
 
+const getQuery = (c, key) => {
+    const val = c.req.query(key);
+    if (val === undefined) return undefined;
+    if (val === 'null') return null;
+    return val;
+};
+
 const getToken = (c) => {
     try {
         const token = c.req.query('token');
@@ -19,8 +26,8 @@ const getToken = (c) => {
 
 app.get('/discord/webhook/info', async (c) => {
     const token = getToken(c);
-    const webhookId = c.req.query('webhookId');
-    const webhookToken = c.req.query('webhookToken');
+    const webhookId = getQuery(c, 'webhookId');
+    const webhookToken = getQuery(c, 'webhookToken');
 
     if (!token && !webhookToken) return c.json(["Missing valid parameter: token or webhookToken"], 202);
     if (!webhookId) return c.json(["Missing valid parameter: webhookId"], 202);
@@ -31,9 +38,9 @@ app.get('/discord/webhook/info', async (c) => {
 
 app.get('/discord/webhook/create', async (c) => {
     const token = getToken(c);
-    const channelId = c.req.query('channelId');
-    const name = c.req.query('name');
-    const avatar = c.req.query('avatar');
+    const channelId = getQuery(c, 'channelId');
+    const name = getQuery(c, 'name');
+    const avatar = getQuery(c, 'avatar');
 
     if (!token) return c.json(["Missing valid parameter: token"], 202);
     if (!channelId) return c.json(["Missing valid parameter: channelId"], 202);
@@ -44,8 +51,8 @@ app.get('/discord/webhook/create', async (c) => {
 
 app.get('/discord/webhook/delete', async (c) => {
     const token = getToken(c);
-    const webhookId = c.req.query('webhookId');
-    const webhookToken = c.req.query('webhookToken');
+    const webhookId = getQuery(c, 'webhookId');
+    const webhookToken = getQuery(c, 'webhookToken');
 
     if (!token && !webhookToken) return c.json(["Missing valid parameter: token or webhookToken"], 202);
     if (!webhookId) return c.json(["Missing valid parameter: webhookId"], 202);

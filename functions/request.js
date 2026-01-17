@@ -1257,6 +1257,20 @@ exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
         if (!channelId) return { error: 'Missing channelId' };
         url = `https://discord.com/api/v10/channels/${channelId}/webhooks`;
         method = 'POST';
+
+        if (payload.avatar && payload.avatar.startsWith('http')) {
+            try {
+                const res = await request(payload.avatar, { headers: { ...commonHeaders } });
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    const contentType = res.headers['content-type'];
+                    if (contentType?.startsWith('image/') || contentType?.startsWith('video/')) {
+                        const arrayBuffer = await res.body.arrayBuffer();
+                        const buffer = Buffer.from(arrayBuffer);
+                        payload.avatar = `data:${contentType};base64,${buffer.toString('base64')}`;
+                    }
+                }
+            } catch (e) { }
+        }
     } else if (action === 'info') {
         if (!webhookId) return { error: 'Missing webhookId' };
         url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;

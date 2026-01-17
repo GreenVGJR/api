@@ -15,6 +15,7 @@ const blobDispatch = async (c, body, headers) => {
   }
 
   c.header('X-Enc-Route', 'v2');
+  c.header('ETag', '"streaming"');
   c.header('Cache-Control', 'no-transform');
   
   const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];

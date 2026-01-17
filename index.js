@@ -48,6 +48,8 @@ const lyrics = require('./routes/lyrics');
 const tools = require('./routes/tools');
 const info = require('./routes/info');
 
+app.use('*', compress());
+
 app.use('*', cors({
     credentials: true,
     exposeHeaders: ['X-Route']
@@ -175,8 +177,6 @@ app.get('/', (c) => {
     }];
     return c.json(listapi, 200);
 });
-
-app.use('*', compress());
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
 const apiPrefixes = ['/search', '/lyrics', '/tools', '/info'];

@@ -434,8 +434,10 @@ exports.YTVideo = async function YTVideo(que) {
             }
         })
         ]);
-        const res = await response.body.json();
-        const per = await res2.body.text();
+        const [res, per] = await Promise.all([
+            response.body.json(),
+            res2.body.text()
+        ]);
         let testpar = null;
         try {
             testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
@@ -477,8 +479,10 @@ exports.YTMusic = async function YTMusic(que) {
             }
         })
         ]);
-        const res = await response.body.json();
-        const per = await res2.body.text();
+        const [res, per] = await Promise.all([
+            response.body.json(),
+            res2.body.text()
+        ]);
 
         let testper = null;
         try {
@@ -518,7 +522,7 @@ exports.YTMusic = async function YTMusic(que) {
 exports.SCMusic = async function SCMusic(que, refresh_auth) {
     if (!que) return null;
 
-    if(refresh_auth) {
+    if (refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
 
@@ -539,8 +543,10 @@ exports.SCMusic = async function SCMusic(que, refresh_auth) {
         if(per.statusCode === 401) {
             return await SCMusic(que, true);
         }
-        const pes = await per.body.json();
-        const pes2 = await per2.body.text();
+        const [pes, pes2] = await Promise.all([
+            per.body.json(),
+            per2.body.text()
+        ]);
         let testpes = null;
         try {
             testpes = JSON.parse(pes2.split('type="application/json">')[1].split('</script>')[0]);
@@ -553,8 +559,8 @@ exports.SCMusic = async function SCMusic(que, refresh_auth) {
 exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
     if (!que) return null;
 
-    if (refresh_auth) {
-        const [a,b] = await Promise.all([
+    if (refresh_auth || !keysp || !keysptoken) {
+        const [a, b] = await Promise.all([
             spotifyKeyToken(),
             spotifyKey()
         ]);
@@ -590,8 +596,10 @@ exports.SPMusic = async function SPMusic(que, refresh_auth = false) {
             return await SPMusic(que, true);
         }
         else {
-            const pes = await per.body?.json();
-            const pes2 = await per2.body?.json();
+            const [pes, pes2] = await Promise.all([
+                per.body?.json(),
+                per2.body?.json()
+            ]);
             return { data: [pes?.tracks?.items || null, pes2?.data?.searchV2 || null] };
         }
     } catch { return null; }
@@ -697,7 +705,7 @@ exports.deezerLyrics = async function deezerLyrics(que, refresh_auth = false) {
     if (!que) return null;
 
     try {
-        if (refresh_auth) {
+        if (refresh_auth || !keydeezer) {
             keydeezer = await deezerKeys();
         }
 
@@ -1004,9 +1012,11 @@ exports.infoYoutube = async function infoYoutube(que) {
             }),
         ]);
 
-        const pull = await res.body.json();
-        const pull2 = await res2.body.text();
-        const pull3 = await res3.body.json();
+        const [pull, pull2, pull3] = await Promise.all([
+            res.body.json(),
+            res2.body.text(),
+            res3.body.json()
+        ]);
         let testpar = null;
         try {
             testpar = JSON.parse(pull2.split('ytInitialData =')[1].split(';')[0]);
@@ -1039,26 +1049,43 @@ exports.infoYoutube = async function infoYoutube(que) {
 
 exports.infoSoundcloud = async function infoSoundcloud(que, refresh_auth = false) {
     if(!que) return null;
-    if(refresh_auth) {
+    if(refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
     try {
         const test = new URL(que);
-        if(test.host !== 'soundcloud.com') return null;
-        const res = await request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${que}`, {
+        if(!test.host.endsWith('soundcloud.com')) return null;
+        const [res, res2] = await Promise.all([
+            request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
             method: 'GET',
             headers: {
                 ...commonHeaders
             }
-        });
+        }),
+            request("https://mobi.soundcloud.com" + test.pathname, {
+            method: 'GET',
+            headers: {
+                ...commonHeaders
+            }
+        })    
+        ]);
         if(res.statusCode === 401 || res.statusCode === 400) {
             return await infoSoundcloud(que, true);
         }
-        const pull = await res.body.json();
+        const [pull, pull2Text] = await Promise.all([
+            res.body.json(),
+            res2.body.text()
+        ]);
+        
+        let pull2 = null;
+        try {
+            pull2 = JSON.parse(pull2Text.split('type="application/json">')[1].split('</script>')[0]);
+        } catch {}
 
-        return { data: pull || null };
+        return { data: [pull || null, pull2?.props?.pageProps?.initialStoreState?.entities || null] };
     }
-    catch {
+    catch (e) {
+        console.error("infoSoundcloud error:", e);
         return null;
     }
 }
@@ -1334,7 +1361,7 @@ exports.Pixiv = async function Pixiv(que) {
     if(!que) return null;
 
     try {
-        const per = await request(`https://www.pixiv.net/ajax/search/top/${que}?lang=en`, {
+        const per = await request(`https://www.pixiv.net/ajax/search/artworks/${que}?word=${que}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
         headers: {
             ...commonHeaders
             }
@@ -1644,7 +1671,7 @@ exports.TiktokUser = async function TiktokUser(que) {
 
 exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
     if(!que) return null;
-    if(refresh_auth) {
+    if (refresh_auth || !twitterAuth || !twitterObj?.UserByScreenName) {
         await twitterKey("UserByScreenName");
     }
 
@@ -1708,7 +1735,7 @@ exports.infoTwitterUser = async function infoTwitterUser(que, refresh_auth) {
 
 exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
     if(!que) return null;
-    if(refresh_auth) {
+    if (refresh_auth || !twitterAuth || !twitterObj?.TweetResultByRestId) {
         await twitterKey("TweetResultByRestId");
     }
 
@@ -1733,20 +1760,12 @@ exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
             })
         ]);
 
-        let res = null;
-
-        if(pul.statusCode === 403) {
-            res = {
-                "error": "Bad auth"
-            }
-        }
-        else {
-            res = await pul.body.json();
-        }
-
         if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterTweet(que, true);
 
-        const res2 = await pul2.body.json();
+        const [res, res2] = await Promise.all([
+             pul.statusCode === 403 ? Promise.resolve({ "error": "Bad auth" }) : pul.body.json(),
+             pul2.body.json()
+        ]);
 
         return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
     }

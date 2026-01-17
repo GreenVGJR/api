@@ -16,7 +16,6 @@ const blobDispatch = async (c, body, headers) => {
 
   c.header('X-Enc-Route', 'v2');
   c.header('ETag', '"streaming"');
-  c.header('Cache-Control', 'no-transform');
   
   const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
   const filtype1 = type?.split('/')?.[0];
@@ -135,7 +134,6 @@ const dispatch = async (c, promiseFactory) => {
 
   c.header('X-Enc-Route', 'v2');
   c.header('ETag', '"streaming"');
-  c.header('Cache-Control', 'no-transform');
   c.header('Content-Type', 'application/json');
 
     return stream(c, async (stream) => {

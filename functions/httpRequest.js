@@ -11,7 +11,7 @@ const blobDispatch = async (c, body, headers) => {
   }
 
   if (Object.entries(c.req.queries()).length !== 1) {
-    return c.body(null, 403);
+    return c.text('', 403);
   }
 
   c.header('X-Enc-Route', 'v2');
@@ -30,13 +30,10 @@ const blobDispatch = async (c, body, headers) => {
   const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
   
   c.header('Content-Type', contentType);
-
+  c.header('Cache-Control', 'no-transform');
+  
   return stream(c, async (s) => {
     s.onAbort(() => {});
-
-    if (c.req.raw.signal.aborted) return;
-
-    await s.write(new Uint8Array(0));
 
     if (c.req.raw.signal.aborted) return;
 
@@ -46,17 +43,24 @@ const blobDispatch = async (c, body, headers) => {
 
       if (c.req.raw.signal.aborted) return;
 
+      if (resolvedBody?.ok === false) {
+          console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
+          await s.write(JSON.stringify({ error: `Upstream returned ${resolvedBody.status}` }));
+          return;
+      }
+
       const dataToPipe = resolvedBody?.body || resolvedBody;
       if (dataToPipe) {
-        if (dataToPipe.pipe || dataToPipe.pipeTo || dataToPipe.getReader) {
-          return await s.pipe(dataToPipe);
+        if (dataToPipe.getReader || dataToPipe.pipeTo) {
+          await s.pipe(dataToPipe);
+        } else if (dataToPipe.pipe) {
+          const { Readable } = require('stream');
+          await s.pipe(Readable.toWeb(dataToPipe));
         } else {
           await s.write(dataToPipe);
         }
       }
-    } catch (err) {
-      console.error('blobDispatch internal error:', err);
-    }
+    } catch (err) {}
   });
 };
 
@@ -139,10 +143,8 @@ const dispatch = async (c, promiseFactory) => {
             return;
         });
 
-        if (c.req.raw.signal.aborted) return;
-
         await stream.write('');
-        
+
         if (c.req.raw.signal.aborted) return;
 
         const data = await (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory).catch((e) => {
@@ -157,7 +159,7 @@ const dispatch = async (c, promiseFactory) => {
         } else if (typeof data === 'object') {
             await stream.write(JSON.stringify(data));
         } else {
-            await stream.write(data);
+            await stream.write(String(data));
         }
     });
 };

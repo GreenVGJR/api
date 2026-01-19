@@ -10,6 +10,7 @@ const { Hono } = require('hono');
 const { serve } = require('@hono/node-server');
 const { cors } = require('hono/cors');
 const { compress } = require('hono/compress');
+const { stream } = require('hono/streaming');
 const path = require('path');
 const fs = require('fs');
 
@@ -96,86 +97,104 @@ app.get('/robots.txt', (c) => {
 });
 
 app.get('/', (c) => {
-    const listapi = [{
-        routes: {
-            search: [
-                "/search/youtube/video?q=",
-                "/search/youtube/music?q=",
-                "/search/soundcloud?q=",
-                "/search/spotify?q=",
-                "/search/applemusic?q=",
-                "/search/shazam?q=",
-                "/search/deezer?q=",
-                "/search/tidal?q=",
-                "/search/genius?q=",
-                "/search/pinterest?q=",
-                "/search/istockphoto?q=",
-                "/search/unsplash?q=",
-                "/search/pixiv?q=",
-                "/search/discord/discovery/apps?q=",
-                "/search/discord/discovery/servers?q=",
-                "/search/bilibili?q=",
-                "/search/jiosaavn?q=",
-                "/search/twitch?q=",
-                "/search/instagram/users?q=",
-                "/search/threads/users?q=",
-                "/search/pexels?q=",
-                "/search/tiktok/video?q=",
-                "/search/tiktok/music?q=",
-                "/search/tiktok/users?q=",
-                "/search/reddit/media?q=",
-                "/search/roblox/games?q="
-            ],
-            lyrics: [
-                "/lyrics/youtube?q=",
-                "/lyrics/deezer?q="
-            ],
-            tools: {
-                ai: [
-                    "/tools/chat/gemini?prompt=&conversation="
+    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    c.header('Content-Type', 'application/json');
+    c.header('X-Net', isMozilla ? 'true' : 'false');
+
+    return stream(c, async (stream) => {
+        await stream.write('');
+        const listapi = [{
+            routes: {
+                search: [
+                    "/search/youtube/video?q=",
+                    "/search/youtube/music?q=",
+                    "/search/soundcloud?q=",
+                    "/search/spotify?q=",
+                    "/search/applemusic?q=",
+                    "/search/shazam?q=",
+                    "/search/deezer?q=",
+                    "/search/tidal?q=",
+                    "/search/genius?q=",
+                    "/search/pinterest?q=",
+                    "/search/istockphoto?q=",
+                    "/search/unsplash?q=",
+                    "/search/pixiv?q=",
+                    "/search/discord/discovery/apps?q=",
+                    "/search/discord/discovery/servers?q=",
+                    "/search/bilibili?q=",
+                    "/search/jiosaavn?q=",
+                    "/search/twitch?q=",
+                    "/search/instagram/users?q=",
+                    "/search/threads/users?q=",
+                    "/search/pexels?q=",
+                    "/search/tiktok/video?q=",
+                    "/search/tiktok/music?q=",
+                    "/search/tiktok/users?q=",
+                    "/search/reddit/media?q=",
+                    "/search/roblox/games?q="
                 ],
-                discord: {
-                    server: [
-                    "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+                lyrics: [
+                    "/lyrics/youtube?q=",
+                    "/lyrics/deezer?q="
+                ],
+                tools: {
+                    ai: [
+                        "/tools/chat/gemini?prompt=&conversation="
                     ],
-                    webhook: [
-                    "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
-                    [
-                        "/tools/discord/webhook/info?token=&webhookId=",
-                        "/tools/discord/webhook/info?webhookToken=&webhookId=",
+                    discord: {
+                        server: [
+                        "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+                        ],
+                        webhook: [
+                        "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
+                        [
+                            "/tools/discord/webhook/info?token=&webhookId=",
+                            "/tools/discord/webhook/info?webhookToken=&webhookId=",
+                            "/tools/discord/webhook/info?webhookUrl="
+                        ],
+                        [
+                        "/tools/discord/webhook/delete?token=&webhookId=",
+                        "/tools/discord/webhook/delete?webhookToken=&webhookId=",
+                        "/tools/discord/webhook/delete?webhookUrl="
+                        ],
+                        [
+                        "/tools/discord/webhook/send?webhookId=&webhookToken=&content=&username=&avatar=",
+                        "/tools/discord/webhook/send?webhookUrl=&content=&username=&avatar="
+                        ]
+                        ]
+                    },
+                    generate_image: [
+                        "/tools/ai-image/flux_demo?prompt=",
+                        "/tools/ai-image/magicstudio?prompt="
                     ],
-                    [
-                    "/tools/discord/webhook/delete?token=&webhookId=",
-                    "/tools/discord/webhook/delete?webhookToken=&webhookId=",
-                    ]
+                    misc: [
+                        "/tools/translate?q=&from=&to="
                     ]
                 },
-                generate_image: [
-                    "/tools/ai-image/flux_demo?prompt=",
-                    "/tools/ai-image/magicstudio?prompt="
-                ],
-                misc: [
-                    "/tools/translate?q=&from=&to="
+                info: [
+                    "/info/youtube?url=",
+                    "/info/soundcloud?url=",
+                    "/info/spotify?url=",
+                    "/info/applemusic?url=",
+                    "/info/twitter/user?q=",
+                    "/info/twitter/tweet?url="
                 ]
-            },
-            info: [
-                "/info/youtube?url=",
-                "/info/soundcloud?url=",
-                "/info/spotify?url=",
-                "/info/applemusic?url=",
-                "/info/twitter/user?q=",
-                "/info/twitter/tweet?url="
-            ]
-        }
-    },
-    {
-        uptime: Date.now() - starttime,
-        service: "Hono",
-        runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-        proxied: false,
-        fluid: true
-    }];
-    return c.json(listapi, 200);
+            }
+        },
+        {
+            uptime: new Date(Date.now() - starttime).toISOString().slice(11, 22),
+            service: "Hono",
+            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
+            proxied: [false, null],
+            fluid: true
+        }];
+
+        stream.onAbort(() => {
+            return;
+        });
+
+        await stream.write(JSON.stringify(listapi));
+    });
 });
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
@@ -221,7 +240,7 @@ app.use('*', async (c, next) => {
     const checkexists = c.notFound();
 
     if(checkexists) {
-        return c.json({error: "Route not available"}, 404);
+        return c.text('', 404);
     }
     await next();
 });

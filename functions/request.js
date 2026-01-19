@@ -1169,11 +1169,13 @@ exports.pinterest = async function pinterest(que) {
 }
 
 exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
     const url = `https://discord.com/api/v10/guilds/${guildId}`;
 
     try {
         // First try to fetch current info (GET) to verify access/token
-        const req = await request(url, {
+        const req = await fetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bot ${token}`,
@@ -1184,15 +1186,15 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
         let currentInfo = null;
         try {
-            currentInfo = await req.body.json();
+            currentInfo = await req.json();
         } catch {
             // If we can't parse the body, it might be an empty or error response
         }
 
-        if(req.statusCode !== 200) {
+        if(req.status !== 200) {
             return { 
                 data: [null, null], 
-                error: currentInfo || { status: req.statusCode, statusText: req.statusText }
+                error: currentInfo || { status: req.status, statusText: req.statusText }
             };   
         }
 
@@ -1200,8 +1202,8 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
             return { data: [currentInfo, null] };
         }
 
-        // Use request for the PATCH request
-        const response = await request(url, {
+        // Use fetch for the PATCH request
+        const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bot ${token}`,
@@ -1214,13 +1216,13 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
         let patchResponse = null;
         try {
-            patchResponse = await response.body.json();
+            patchResponse = await response.json();
         } catch (e) {}
 
-        if (response.statusCode < 200 || response.statusCode >= 300) {
+        if (response.status < 200 || response.status >= 300) {
             return { 
                 data: [currentInfo.code === 0 ? null : currentInfo, null], 
-                error: patchResponse || { status: response.statusCode }
+                error: patchResponse || { status: response.status }
             };
         }
 
@@ -1244,6 +1246,15 @@ exports.Discord = async (token, guildId, payload, payloadError, reasonAudit) => 
 
 exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
     const action = payload.action;
+
+    if (payload.webhookUrl) {
+        const match = payload.webhookUrl.match(/webhooks\/(\d+)\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+            payload.webhookId = match[1];
+            payload.webhookToken = match[2];
+        }
+    }
+
     const webhookId = payload.webhookId || (action !== 'create' ? guildId : null);
     const channelId = payload.channelId || (action === 'create' ? guildId : null);
     const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
@@ -1254,17 +1265,18 @@ exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
     const webhookToken = payload.webhookToken;
 
     if (action === 'create') {
+        if (!token || token === 'null') return { error: 'Missing token' };
         if (!channelId) return { error: 'Missing channelId' };
         url = `https://discord.com/api/v10/channels/${channelId}/webhooks`;
         method = 'POST';
 
         if (payload.avatar && payload.avatar.startsWith('http')) {
             try {
-                const res = await request(payload.avatar, { headers: { ...commonHeaders } });
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    const contentType = res.headers['content-type'];
+                const res = await fetch(payload.avatar, { headers: { ...commonHeaders } });
+                if (res.ok) {
+                    const contentType = res.headers.get('content-type');
                     if (contentType?.startsWith('image/') || contentType?.startsWith('video/')) {
-                        const arrayBuffer = await res.body.arrayBuffer();
+                        const arrayBuffer = await res.arrayBuffer();
                         const buffer = Buffer.from(arrayBuffer);
                         payload.avatar = `data:${contentType};base64,${buffer.toString('base64')}`;
                     }
@@ -1279,6 +1291,11 @@ exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
         if (!webhookId) return { error: 'Missing webhookId' };
         url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;
         method = 'DELETE';
+    } else if (action === 'send') {
+        if (!webhookId) return { error: 'Missing webhookId' };
+        if (!webhookToken) return { error: 'Missing webhookToken' };
+        url = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
+        method = 'POST';
     } else {
         return { error: 'Nothing to do' };
     }
@@ -1293,32 +1310,49 @@ exports.DiscordWebhook = async (token, guildId, payload, payloadError) => {
             headers['Authorization'] = `Bot ${token}`;
         }
 
-        const response = await request(url, {
-            method: method,
-            headers: headers,
-            ...(method === 'POST' && {
-                body: JSON.stringify({
+        let bodyPayload = null;
+        if (method === 'POST') {
+            if (action === 'create') {
+                bodyPayload = {
                     name: payload.name || 'New Webhook',
                     avatar: payload.avatar || null
-                })
-            })
+                };
+            } else if (action === 'send') {
+                bodyPayload = {
+                    content: payload.content || '',
+                    username: payload.username || null,
+                    avatar_url: payload.avatar_url || null
+                };
+                // Clean null values
+                Object.keys(bodyPayload).forEach(key => bodyPayload[key] === null && delete bodyPayload[key]);
+            }
+        }
+
+        const response = await fetch(url, {
+            method: method,
+            headers: headers,
+            ...(bodyPayload && { body: JSON.stringify(bodyPayload) })
         });
 
         let result = null;
-        if (response.statusCode !== 204) {
+        if (response.status !== 204) {
             try {
-                result = await response.body.json();
+                result = await response.json();
+
+                if (action === 'info' && result && typeof result === 'object') {
+                    if (result.user === undefined) result.user = null;
+                }
             } catch (e) {}
         }
 
-        if (response.statusCode < 200 || response.statusCode >= 300) {
+        if (response.status < 200 || response.status >= 300) {
             return {
                 data: null,
-                error: result || { status: response.statusCode }
+                error: result || { status: response.status }
             };
         }
 
-        return { data: [result || true, null, response.statusCode] };
+        return { data: [result || true, null, response.status] };
     } catch (e) {
         return { error: e.message };
     }
@@ -1776,14 +1810,20 @@ exports.infoTwitterTweet = async function infoTwitterTweet(que, refresh_auth) {
 
         if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterTweet(que, true);
 
+        const tryParseJson = async (p) => {
+            if (p.statusCode !== 200) return null;
+            try { return await p.body.json(); } catch { return null; }
+        };
+
         const [res, res2] = await Promise.all([
-             pul.statusCode === 403 ? Promise.resolve({ "error": "Bad auth" }) : pul.body.json(),
-             pul2.body.json()
+             pul.statusCode === 403 ? Promise.resolve({ "error": "Bad auth" }) : tryParseJson(pul),
+             tryParseJson(pul2)
         ]);
 
         return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
     }
-    catch {
+    catch (e) {
+        console.error(e);
         return null;
     }
 }
@@ -1795,7 +1835,7 @@ exports.redditMedia = async function redditMedia(que) {
         const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
             }
         });
 

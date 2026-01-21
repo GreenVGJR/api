@@ -1,6 +1,7 @@
 "use strict";
 
 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
+const crypto = require('crypto');
 const commonHeaders = {
     'Accept': 'text/html, application/json, video/*, image/*, */*',
     'Accept-Encoding': 'identify',
@@ -848,12 +849,12 @@ exports.Gemini = async function Gemini(que, convo) {
     }
 
     const qQue = encodeURIComponent(que.replaceAll('"', '\\\\\\"'));
-    const qCid = objectbody.cid ? `\\"${objectbody.cid}\\"` : "null";
-    const qRid = objectbody.rid ? `\\"${objectbody.rid}\\"` : "null";
-    const qRcid = objectbody.rcid ? `\\"${objectbody.rcid}\\"` : "null";
+    const qCid = objectbody.cid ? objectbody.cid : "";
+    const qRid = objectbody.rid ? objectbody.rid : "";
+    const qRcid = objectbody.rcid ? objectbody.rcid : "";
     const qCookies = objectbody.cookies ?? (filterSpecificCookies(objectbody.cookies, ['NID', '__Secure-ENID']) || null);
 
-    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en%5C%22%5D%2C%5B${qCid}%2C${qRid}%2C${qRcid}%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%5D%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B0%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%22%5D`;
+    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22%5C%22%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B1%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C2%5D%22%5D`;
 
     const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en`, {
         method: 'POST',
@@ -861,7 +862,10 @@ exports.Gemini = async function Gemini(que, convo) {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': 'https://gemini.google.com'
+            'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'Origin': 'https://gemini.google.com',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
         },
         body: reqPayload,
         bodyTimeout: 60000,
@@ -1890,6 +1894,235 @@ exports.robloxGames = async function robloxGames(que) {
                 details: b.universeId ? (detailsMap.get(b.universeId) || null) : null
             }))
         };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.YTChannel = async function YTChannel(que) {
+    if (!que) return null;
+    try {
+        const bodyload = JSON.stringify({
+            query: que,
+            params: "EgIQAg%3D%3D",
+            context: {
+                client:
+                {
+                    clientName: "WEB",
+                    clientVersion: "2.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+        const [response, res2] = await Promise.all([
+        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
+        }),
+        request(`https://www.youtube.com/results?search_query=${que}&sp=EgIQAg%3D%3D`, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+            }
+        })
+        ]);
+        const [res, per] = await Promise.all([
+            response.body.json(),
+            res2.body.text()
+        ]);
+        let testpar = null;
+        try {
+            testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
+        }
+        catch { }
+        return { data: { innerTube: res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer.contents?.filter(o => Object.keys(o).length > 0)?.map(v => v?.channelRenderer) || null, youtubeWeb: testpar?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.filter(o => Object.keys(o).length > 0).map(v => v?.channelRenderer)?.filter(Boolean) || null } };
+    } catch { return null; }
+}
+
+exports.robloxAudio = async function robloxAudio(que) {
+    if(!que) return null;
+
+    try {
+        const pul1 = await request(`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const res1 = await pul1.body.json();
+        const assetList = res1.data || [];
+        const assetIds = assetList.map(b => b.id).join(',');
+
+        if(!assetIds) return { data: null };
+
+        const [pul2, pul3] = await Promise.all([
+            request(`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`, {
+                headers: {
+                    ...commonHeaders
+                }
+            }),
+            request(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`, {
+                headers: {
+                    ...commonHeaders
+                }
+            })
+        ]);
+
+        const [res2, res3] = await Promise.all([
+            pul2.body.json(),
+            pul3.body.json()
+        ]);
+
+        const thumbnails = res3.data || [];
+        const details = res2.data || [];
+
+        return {
+            data: details.map(item => {
+                const thumb = thumbnails.find(t => t.targetId === item.asset.id);
+                return {
+                    title: item.asset.audioDetails?.title || item.asset.name,
+                    duration: item.asset.duration || 0,
+                    thumbnail: thumb?.imageUrl || "https://prod.docsiteassets.roblox.com/assets/feeds/robloxYoutubeAvatar.webp",
+                    url: `https://create.roblox.com/store/asset/${item.asset.id}`,
+                    ...item
+                };
+            })
+        };
+    }
+    catch {
+        return null;
+    }
+}
+
+exports.Bandcamp = async function Bandcamp(que) {
+    if(!que) return null;
+
+    try {
+        const body = {
+            "search_text": que,
+            "search_filter": "t",
+            "full_page": false
+        };
+
+        const pul = await request(`https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json',
+                'Origin': 'https://bandcamp.com'
+            }
+        });
+
+        const res = await pul.body.json();
+        const results = res?.auto?.results || [];
+
+        return {
+            data: results.map(b => ({
+                title: b.name,
+                thumbnail: b.img_id === null ? (b.img ? b.img.replace('/img/', '/img/a') : null) : `https://f4.bcbits.com/img/a${b.art_id || b.img_id}_10.jpg`,
+                url: b.item_url_path,
+                ...b
+            }))
+        };
+    }
+    catch (e) {
+        return null;
+    }
+}
+
+exports.Capcut = async function Capcut(que) {
+    if(!que) return null;
+
+    try {
+        const time = Math.round(Date.now() / 1000);
+        const linkhost = "https://edit-api-sg.capcut.com/lv/v1/cc_web/replicate/search_templates";
+        
+        // $cropText[$get[linkhost];-7] implementation: taking last 7 characters
+        const croppedHost = linkhost.slice(-7);
+        
+        const signStr = `9e2c|${croppedHost}|7|5.8.0|${time}||11ac`;
+        const sign = crypto.createHash('md5').update(signStr).digest('hex');
+
+        const body = {
+            "sdk_version": "100.0.0",
+            "count": 10,
+            "cursor": "0",
+            "query": que,
+            "scene": 1,
+            "search_version": 2
+        };
+
+        const pul = await request(linkhost, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: {
+                'Content-Type': 'application/json',
+                ...commonHeaders,
+                'Sign': sign,
+                'Sign-Ver': '1',
+                'Device-Time': time.toString(),
+                'Pf': '7',
+                'Appvr': '5.8.0',
+                'App-Sdk-Version': '48.0.0',
+                'Lan': 'en',
+                'Loc': 'sg',
+                'Origin': 'https://www.capcut.com',
+                'Referer': 'https://www.capcut.com',
+                'sec-fetch-site': 'same-site'
+            }
+        });
+
+        const res = await pul.body.json();
+        const templates = res?.data?.video_templates || [];
+
+        return {
+            data: templates.map(tp => ({
+                title: tp.short_title || tp.title,
+                duration: tp.duration,
+                thumbnail: tp.optimized_cover_url?.cover_url_large || tp.cover_url,
+                url: `https://capcut.com/templates/${tp.web_id}`,
+                ...tp
+            }))
+        };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+exports.redditSubreddit = async function redditSubreddit(que) {
+    if(!que) return null;
+
+    try {
+        const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/.json`, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
+            }
+        });
+
+        if(req.statusCode === 403) {
+            return {
+                "error": "IP Blocked"
+            }
+        }
+
+        if(req.statusCode === 302) {
+            return {
+                "error": "Google asking to verify you're not a bot"
+            }
+        }
+
+        const res = await req.body?.json();
+        return { data: res?.data?.children?.map(a => a?.data) || null }
     }
     catch {
         return null;

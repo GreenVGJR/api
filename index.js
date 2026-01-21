@@ -108,6 +108,7 @@ app.get('/', (c) => {
                 search: [
                     "/search/youtube/video?q=",
                     "/search/youtube/music?q=",
+                    "/search/youtube/channel?q=",
                     "/search/soundcloud?q=",
                     "/search/spotify?q=",
                     "/search/applemusic?q=",
@@ -131,7 +132,10 @@ app.get('/', (c) => {
                     "/search/tiktok/music?q=",
                     "/search/tiktok/users?q=",
                     "/search/reddit/media?q=",
-                    "/search/roblox/games?q="
+                    "/search/roblox/games?q=",
+                    "/search/roblox/audio?q=",
+                    "/search/bandcamp?q=",
+                    "/search/capcut/templates?q="
                 ],
                 lyrics: [
                     "/lyrics/youtube?q=",
@@ -177,7 +181,8 @@ app.get('/', (c) => {
                     "/info/spotify?url=",
                     "/info/applemusic?url=",
                     "/info/twitter/user?q=",
-                    "/info/twitter/tweet?url="
+                    "/info/twitter/tweet?url=",
+                    "/info/reddit/subreddit?q="
                 ]
             }
         },

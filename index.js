@@ -176,7 +176,7 @@ app.get('/', (c) => {
                         ]
                         ]
                     },
-                    generate_image: [
+                    image_generation: [
                         "/tools/ai-image/flux_demo?prompt=",
                         "/tools/ai-image/magicstudio?prompt="
                     ],
@@ -250,7 +250,7 @@ app.use('*', async (c, next) => {
     const checkexists = c.notFound();
 
     if(checkexists) {
-        return c.text('', 404);
+        return c.text('Not Found', 404);
     }
     await next();
 });

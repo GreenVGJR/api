@@ -1,11 +1,11 @@
 "use strict";
 
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0';
 const crypto = require('crypto');
 const commonHeaders = {
     'Accept': 'text/html, application/json, video/*, image/*, */*',
     'Accept-Encoding': 'identify',
-    'Accept-Language': 'en',
+    'Accept-Language': 'en-US,en;q=0.9',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
@@ -245,10 +245,11 @@ const listcodes = [
         { "name": "Zulu", "code": "zu" }
     ];
 
-const { request } = require('undici');
+const { request, Agent } = require('undici');
 const { CurlImpersonateHttpClient, CurlImpersonate } = require('apify-node-curl-impersonate');
 const { ClientTransaction } = require("x-client-transaction-id");
 const { parseHTML } = require('linkedom');
+const { decodeHTML, decodeXML } = require('entities');
 
 let keysc;
 let keysp;
@@ -2205,22 +2206,47 @@ exports.instagramUser = async function instagramUser(que) {
     if(!que) return null;
 
     try {
-        const req = await request(`https://i.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+        const req = await request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Instagram 1000.0.0 Android'
+                'User-Agent': 'Instagram 414.0.0 Android',
+                'Origin': 'https://www.instagram.com'
             }
         });
+
+        if(req.statusCode === 403 || req.statusCode === 429) {
+            return {
+                "error": "Instagram asking to verify you're not a bot"
+            }
+        }
 
         let res = null;
         try {
         res = await req.body.json();
         }
         catch {}
-        return { data: res?.data?.user || null };
-    }
-    catch {
+        const a = res?.data?.user;
+        const formatted = a ? {
+            avatar_url: a.profile_pic_url_hd,
+            userid: a.id,
+            username: a.username,
+            nickname: a.full_name,
+            profile_url: "https://www.instagram.com/" + a.username,
+            description: a.biography,
+            external_links: a.bio_links,
+            followed_count: a.edge_follow?.count,
+            follower_count: a.edge_followed_by?.count,
+            post_count: a.edge_owner_to_timeline_media?.count,
+            verified: a.is_verified,
+            private: a.is_private,
+            pronouns: a.pronouns?.[0] ? a.pronouns : null 
+        } : null;
 
+        return { data: [formatted ? [formatted] : null, a || null] };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
     }
 }
 

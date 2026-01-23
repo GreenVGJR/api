@@ -1053,12 +1053,19 @@ exports.infoYoutube = async function infoYoutube(que) {
 
 exports.infoYoutubeChannel = async function infoYoutubeChannel(url) {
     if (!url) return null;
+
+    const match = url.match(/^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(channel\/|c\/|user\/|@)([a-zA-Z0-9_\-.]+)/);
+    if (!match) return null;
+
+    const prefix = match[1];
+    const identifier = match[2];
+    const requestUrl = `https://www.youtube.com/${prefix}${identifier}`;
+
     try {
-        const response = await request(url, {
+        const response = await request(requestUrl, {
             method: "GET",
             headers: {
-                ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+                ...commonHeaders
             }
         });
         const html = await response.body.text();

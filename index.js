@@ -98,13 +98,22 @@ app.get('/robots.txt', (c) => {
 
 app.get('/', (c) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    c.header('Content-Type', 'application/json');
+    const renderJson = c.req.query('json') !== undefined;
+    const typeRender = renderJson ? 'application/json' : 'text/plain';
+    c.header('Content-Type', typeRender);
     c.header('X-Net', isMozilla ? 'true' : 'false');
 
     return stream(c, async (stream) => {
         await stream.write('');
         const listapi = [{
-            routes: {
+                domRendering: typeRender,
+                uptime: new Date(Date.now() - starttime).toISOString().slice(11,19),
+                service: "Hono",
+                runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
+                fluid: true
+            },
+            {
+                routes: {
                 search: [
                     "/search/youtube/video?q=",
                     "/search/youtube/music?q=",
@@ -188,20 +197,13 @@ app.get('/', (c) => {
                     "/info/threads/user?q="
                 ]
             }
-        },
-        {
-            uptime: new Date(Date.now() - starttime).toISOString().slice(11, 22),
-            service: "Hono",
-            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-            proxied: [false, null],
-            fluid: true
         }];
 
         stream.onAbort(() => {
             return;
         });
 
-        await stream.write(JSON.stringify(listapi));
+        await stream.write(JSON.stringify(listapi, null, 2));
     });
 });
 

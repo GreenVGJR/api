@@ -2266,6 +2266,13 @@ exports.infoThreadUser = async function infoThreadUser(que) {
             }
         });
 
+        if(per.statusCode !== 200) {
+            return {
+                "error": "Cannot process this",
+                "raw": await per.body.text()
+            }
+        }
+
         let finalres;
         let per2;
         let res2;

@@ -2216,7 +2216,8 @@ exports.instagramUser = async function instagramUser(que) {
 
         if(req.statusCode !== 200 && req.statusCode !== 404) {
             return {
-                "error": "Instagram asking to verify you're not a bot"
+                "error": "Cannot process this",
+                "raw": await req.body.text()
             }
         }
 

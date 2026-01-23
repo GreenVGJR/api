@@ -2214,7 +2214,7 @@ exports.instagramUser = async function instagramUser(que) {
             }
         });
 
-        if(req.statusCode === 403 || req.statusCode === 429) {
+        if(req.statusCode !== 200 && req.statusCode !== 404) {
             return {
                 "error": "Instagram asking to verify you're not a bot"
             }
@@ -2233,6 +2233,7 @@ exports.instagramUser = async function instagramUser(que) {
             nickname: a.full_name,
             profile_url: "https://www.instagram.com/" + a.username,
             description: a.biography,
+            category: a.category_name || null,
             external_links: a.bio_links,
             followed_count: a.edge_follow?.count,
             follower_count: a.edge_followed_by?.count,
@@ -2242,7 +2243,7 @@ exports.instagramUser = async function instagramUser(que) {
             pronouns: a.pronouns?.[0] ? a.pronouns : null 
         } : null;
 
-        return { data: [formatted || null, a || null], status: req.statusCode };
+        return { data: [formatted || null, a || null] };
     }
     catch (e) {
         console.error(e);

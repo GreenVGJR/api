@@ -2242,7 +2242,7 @@ exports.instagramUser = async function instagramUser(que) {
             pronouns: a.pronouns?.[0] ? a.pronouns : null 
         } : null;
 
-        return { data: [formatted ? [formatted] : null, a || null] };
+        return { data: [formatted || null, a || null] };
     }
     catch (e) {
         console.error(e);

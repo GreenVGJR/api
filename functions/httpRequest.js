@@ -11,7 +11,7 @@ const blobDispatch = async (c, body, headers) => {
   }
 
   if (Object.entries(c.req.queries()).length !== 1) {
-    return c.text('', 403);
+    return c.text('Forbidden', 403);
   }
 
   c.header('X-Enc-Route', 'v2');
@@ -94,7 +94,7 @@ const dispatch = async (c, promiseFactory) => {
     const timeDiff = now - ts;
 
     if (sh && (providedUaHash !== uaHash || (providedQHash !== qHash && (isNaN(ts) || new String(ts).length !== 13)))) {
-        return c.body(null, 403);
+        return c.text('Forbidden', 403);
     }
 
     if (!sh || providedQHash !== qHash || (isForceRefresh && timeDiff > 3000) || timeDiff >= 30000) {

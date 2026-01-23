@@ -176,13 +176,16 @@ app.get('/', (c) => {
                     ]
                 },
                 info: [
-                    "/info/youtube?url=",
+                    "/info/youtube/video?url=",
+                    "/info/youtube/channel?url=",
                     "/info/soundcloud?url=",
                     "/info/spotify?url=",
                     "/info/applemusic?url=",
                     "/info/twitter/user?q=",
                     "/info/twitter/tweet?url=",
-                    "/info/reddit/subreddit?q="
+                    "/info/reddit/subreddit?q=",
+                    "/info/instagram/user?q=",
+                    "/info/threads/user?q="
                 ]
             }
         },

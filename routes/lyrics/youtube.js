@@ -6,7 +6,7 @@ const app = new Hono();
 const { YTMusic, YTLyrics } = require('../../functions/request');
 
 app.get('/youtube', async (c) => {
-    return c.text('', 451);
+    return c.text('Unavailable For Legal Reasons', 451);
     const query = c.req.query('q');
     if(query === undefined) { 
 return c.json({"error":"Missing parameter required"}, 202);

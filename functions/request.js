@@ -991,7 +991,7 @@ exports.infoYoutube = async function infoYoutube(que) {
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
-                request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
+                request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp),
                 headers: {
@@ -1006,7 +1006,7 @@ exports.infoYoutube = async function infoYoutube(que) {
                 'User-Agent': 'Bot'
                 }
             }),
-            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails', {
+            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp2),
                 headers: {
@@ -1030,12 +1030,12 @@ exports.infoYoutube = async function infoYoutube(que) {
         return {
             "data": { 
             "innerTube": [
-                pull?.videoDetails ? { "videoDetails": pull?.videoDetails } : {
-                    "error": "Google asking to verify you're not a bot"
+                pull?.videoDetails || pull?.microformat ? { "videoDetails": pull } : {
+                    "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
                 },
                 {
-                    ...(pull3?.videoDetails ? { "musicDetails": pull3?.videoDetails } : {
-                        "error": "Google asking to verify you're not a bot"
+                    ...(pull3?.videoDetails || pull3?.microformat ? { "musicDetails": pull3 } : {
+                        "error": pull3?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }) => rest)(pull3.playabilityStatus) : "Google asking to verify you're not a bot"
                     })
                 }
             ],
@@ -1049,6 +1049,71 @@ exports.infoYoutube = async function infoYoutube(que) {
     catch (e) {
         return null;
     }
+}
+
+exports.infoYoutubeChannel = async function infoYoutubeChannel(url) {
+    if (!url) return null;
+    try {
+        const response = await request(url, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+            }
+        });
+        const html = await response.body.text();
+        let data;
+        try {
+            data = JSON.parse(html.split('ytInitialData =')[1].split(';')[0]);
+        } catch {}
+
+        const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map(t => t.tabRenderer).filter(Boolean) || [];
+        
+        const results = await Promise.all(tabs.map(async (tab) => {
+             if (tab.content) return { title: tab.title, content: tab.content };
+             if (!tab.endpoint?.browseEndpoint) return null;
+
+             const { browseId, params } = tab.endpoint.browseEndpoint;
+             
+             try {
+                 const bodyload = JSON.stringify({
+                    browseId: browseId,
+                    params: params,
+                    context: {
+                        client: {
+                            clientName: "WEB",
+                            clientVersion: "2.20251212",
+                            hl: "en",
+                            gl: "US"
+                        }
+                    }
+                });
+                
+                const req = await request('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+                     method: "POST",
+                     headers: {
+                         ...commonHeaders,
+                         'Content-Type': 'application/json'
+                     },
+                     body: bodyload
+                });
+                
+                const res = await req.body.json();
+                return { 
+                    title: tab.title, 
+                    content: res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(t => t?.tabRenderer?.selected)?.tabRenderer?.content || res 
+                };
+             } catch {
+                 return { title: tab.title, error: "Failed to fetch" };
+             }
+        }));
+
+        const finalres = results.filter(Boolean);
+        
+        return {
+            data: finalres?.[0] ? finalres : null
+        };
+    } catch { return null; }
 }
 
 exports.infoSoundcloud = async function infoSoundcloud(que, refresh_auth = false) {
@@ -2125,6 +2190,76 @@ exports.redditSubreddit = async function redditSubreddit(que) {
         return { data: res?.data?.children?.map(a => a?.data) || null }
     }
     catch {
+        return null;
+    }
+}
+
+exports.instagramUser = async function instagramUser(que) {
+    if(!que) return null;
+
+    try {
+        const req = await request(`https://i.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Instagram 1000.0.0 Android'
+            }
+        });
+
+        let res = null;
+        try {
+        res = await req.body.json();
+        }
+        catch {}
+        return { data: res?.data?.user || null };
+    }
+    catch {
+
+    }
+}
+
+exports.infoThreadUser = async function infoThreadUser(que) {
+    if(!que) return null;
+
+    try {
+        const bodyhttp = {"username":que,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false};
+        let bodyhttp2 = {"allow_page_info_for_lox_user":true,"first":50,"skipGhostPosts":false,"userID":null,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider":false,"__relay_internal__pv__BarcelonaHasInlineReplyComposerrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalsConsumptionEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasDearAlgoConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false,"__relay_internal__pv__BarcelonaIsSearchDiscoveryEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasPodcastConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasCommunitiesrelayprovider":false,"__relay_internal__pv__BarcelonaHasSelfThreadCountrelayprovider":false,"__relay_internal__pv__IsTagIndicatorEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDeepDiverelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostEmojiActivationrelayprovider":false,"__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDearAlgoWebProductionrelayprovider":false,"__relay_internal__pv__BarcelonaQuotedPostUFIEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasTopicTagsrelayprovider":true,"__relay_internal__pv__BarcelonaIsCrawlerrelayprovider":false,"__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider":false,"__relay_internal__pv__BarcelonaHasCommunityTopContributorsrelayprovider":false,"__relay_internal__pv__BarcelonaCanSeeSponsoredContentrelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaImplicitTrendsGKrelayprovider":false,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false};
+        const per = await request(`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`, {
+        headers: {
+            ...commonHeaders,
+            'Origin': 'https://www.threads.com',
+            'X-IG-App-ID': '1412234116260832',
+            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': true
+            }
+        });
+
+        let finalres;
+        let per2;
+        let res2;
+        const res = await per.body.json();
+        if(res?.data?.user) { 
+            bodyhttp2.userID = res?.data?.user?.id;
+            per2 = await request(`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`, {
+            headers: {
+            ...commonHeaders,
+            'Origin': 'https://www.threads.com',
+            'X-IG-App-ID': '1412234116260832',
+            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': true
+                }
+            });
+
+            res2 = await per2.body.json();
+            res2 = res2?.data?.mediaData?.edges?.map(a => a?.node?.thread_items?.[0]?.post) || null;
+
+            finalres = {
+                ...res?.data?.user,
+                edges: res2
+            };
+        }
+
+        return { data: finalres || null }
+    }
+    catch (e) {
+        console.error(e);
         return null;
     }
 }

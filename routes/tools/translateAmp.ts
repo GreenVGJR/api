@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { Translate  } from '../../functions/request';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { Translate  } from '../../functions/request.js';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/translate', async (c) => {
     const query = c.req.query('q');

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { robloxAudio  } from '../../functions/request';
-import { dispatch  } from '../../functions/httpRequest';
+import { robloxAudio  } from '../../functions/request.js';
+import { dispatch  } from '../../functions/httpRequest.js';
 
 app.get('/roblox/audio', async (c) => {
     const query = c.req.query('q');

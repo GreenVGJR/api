@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { SCMusic  } from '../../functions/request';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { SCMusic  } from '../../functions/request.js';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/soundcloud', async (c) => {
     const query = c.req.query('q');

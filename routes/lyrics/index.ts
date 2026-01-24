@@ -1,5 +1,5 @@
-import route0 from './youtube';
-import route1 from './deezer';
+import route0 from './youtube.js';
+import route1 from './deezer.js';
 
 const routes: any[] = [
     route0,

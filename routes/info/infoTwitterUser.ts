@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { infoTwitterUser  } from '../../functions/request';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { infoTwitterUser  } from '../../functions/request.js';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/twitter/user', async (c) => {
     const query = c.req.query('q');

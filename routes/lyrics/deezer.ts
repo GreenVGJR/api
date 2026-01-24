@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 const app = new Hono();
-import { deezerLyrics  } from '../../functions/request';
+import { deezerLyrics  } from '../../functions/request.js';
 
 app.get('/deezer', async (c) => {
     return c.text('Unavailable For Legal Reasons', 451);

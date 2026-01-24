@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { ThreadUser  } from '../../functions/request';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { ThreadUser  } from '../../functions/request.js';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/threads/users', async (c) => {
     const query = c.req.query('q');

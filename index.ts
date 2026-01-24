@@ -11,13 +11,13 @@ import crypto from 'crypto';
 import config from './config.json';
 
 // @ts-ignore
-import reqs_raw from './routes/search/index';
+import reqs_raw from './routes/search/index.js';
 // @ts-ignore
-import lyrics_raw from './routes/lyrics/index';
+import lyrics_raw from './routes/lyrics/index.js';
 // @ts-ignore
-import tools_raw from './routes/tools/index';
+import tools_raw from './routes/tools/index.js';
 // @ts-ignore
-import info_raw from './routes/info/index';
+import info_raw from './routes/info/index.js';
 
 const reqs: any[] = reqs_raw;
 const lyrics: any[] = lyrics_raw;

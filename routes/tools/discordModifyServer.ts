@@ -12,8 +12,8 @@ const commonHeaders = {
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { Discord  } from '../../functions/request';
-import { dispatch  } from '../../functions/httpRequest';
+import { Discord  } from '../../functions/request.js';
+import { dispatch  } from '../../functions/httpRequest.js';
 
 import { Context } from 'hono';
 

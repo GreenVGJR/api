@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { YTChannel  } from '../../functions/request';
-import { dispatch  } from '../../functions/httpRequest';
+import { YTChannel  } from '../../functions/request.js';
+import { dispatch  } from '../../functions/httpRequest.js';
 
 app.get('/youtube/channel', async (c) => {
     const query = c.req.query('q');

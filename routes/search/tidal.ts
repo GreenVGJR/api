@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { YTVideo, YTMusic, SCMusic, SPMusic, Shazam, Deezer, Tidal, Genius  } from '../../functions/request';
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { YTVideo, YTMusic, SCMusic, SPMusic, Shazam, Deezer, Tidal, Genius  } from '../../functions/request.js';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/tidal', async (c) => {
     const query = c.req.query('q');

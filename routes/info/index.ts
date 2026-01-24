@@ -1,12 +1,12 @@
-import route1 from './infoYoutube';
-import route2 from './infoSoundcloud';
-import route3 from './infoSpotify';
-import route4 from './infoITunes';
-import route5 from './infoTwitterUser';
-import route6 from './infoTwitterTweet';
-import route7 from './redditSubreddit';
-import route8 from './infoInstagramUser';
-import route9 from './infoThreadUser';
+import route1 from './infoYoutube.js';
+import route2 from './infoSoundcloud.js';
+import route3 from './infoSpotify.js';
+import route4 from './infoITunes.js';
+import route5 from './infoTwitterUser.js';
+import route6 from './infoTwitterTweet.js';
+import route7 from './redditSubreddit.js';
+import route8 from './infoInstagramUser.js';
+import route9 from './infoThreadUser.js';
 
 const routes: any[] = [
     route1,

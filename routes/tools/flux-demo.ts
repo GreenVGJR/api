@@ -12,7 +12,7 @@ const commonHeaders = {
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/ai-image/flux_demo', async (c) => {
     const query = c.req.query('prompt');

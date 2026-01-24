@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { DiscordWebhook  } from '../../functions/request';
-import { dispatch  } from '../../functions/httpRequest';
+import { DiscordWebhook  } from '../../functions/request.js';
+import { dispatch  } from '../../functions/httpRequest.js';
 
 import { Context } from 'hono';
 

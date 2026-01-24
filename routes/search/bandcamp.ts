@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { Bandcamp  } from '../../functions/request';
-import { dispatch  } from '../../functions/httpRequest';
+import { Bandcamp  } from '../../functions/request.js';
+import { dispatch  } from '../../functions/httpRequest.js';
 
 app.get('/bandcamp', async (c) => {
     const query = c.req.query('q');

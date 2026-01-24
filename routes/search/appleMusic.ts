@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 const app = new Hono();
 
 const { request } = require('undici');
-import { dispatch, blobDispatch  } from '../../functions/httpRequest';
+import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/applemusic', async (c) => {
     const query = c.req.query('q');

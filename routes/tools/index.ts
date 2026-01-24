@@ -1,9 +1,9 @@
-import route0 from './geminiAmp';
-import route2 from './translateAmp';
-import route3 from './flux-demo';
-import route4 from './magicstudio';
-import route5 from './discordModifyServer';
-import route6 from './discordWebhook';
+import route0 from './geminiAmp.js';
+import route2 from './translateAmp.js';
+import route3 from './flux-demo.js';
+import route4 from './magicstudio.js';
+import route5 from './discordModifyServer.js';
+import route6 from './discordWebhook.js';
 
 const routes: any[] = [
     route0,

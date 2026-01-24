@@ -8,7 +8,7 @@ import { stream } from 'hono/streaming';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import config from './config.json';
+import config from './config.json' with { type: 'json' };
 
 // @ts-ignore
 import reqs_raw from './routes/search/index.js';

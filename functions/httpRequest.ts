@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
-import config from '../config.json';
+import config from '../config.json' with { type: 'json' };
 
 const { generate_hash } = config;
 

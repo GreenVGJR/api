@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-const { request } = require('undici');
+import { request } from 'undici';
 import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/applemusic', async (c) => {
@@ -21,7 +21,7 @@ return c.json({"error":"Nothing to do"}, 202);
             request(`https://music.apple.com/us/search?term=${query}`, { method: 'GET' })
         ]);
 
-        const lks = await res.body.json();
+        const lks: any = await res.body.json();
         const lks2 = await res2.body.text();
         let parselks2 = [];
         try {

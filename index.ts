@@ -1,4 +1,5 @@
 import { setGlobalDispatcher, Agent } from 'undici';
+import { fileURLToPath } from 'url';
 import { Hono, Context, Next } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
@@ -10,13 +11,13 @@ import crypto from 'crypto';
 import config from './config.json';
 
 // @ts-ignore
-import reqs_raw from './routes/search/index.ts';
+import reqs_raw from './routes/search/index';
 // @ts-ignore
-import lyrics_raw from './routes/lyrics/index.ts';
+import lyrics_raw from './routes/lyrics/index';
 // @ts-ignore
-import tools_raw from './routes/tools/index.ts';
+import tools_raw from './routes/tools/index';
 // @ts-ignore
-import info_raw from './routes/info/index.ts';
+import info_raw from './routes/info/index';
 
 const reqs: any[] = reqs_raw;
 const lyrics: any[] = lyrics_raw;
@@ -48,8 +49,11 @@ if(typeof Bun !== "object") {
 // Bun automatically serves any object with a `fetch` method exported as default.
 
 
-const robots = fs.readFileSync(path.join(import.meta.dir, 'public/robots.txt'), 'utf-8');
-const favicon = fs.readFileSync(path.join(import.meta.dir, 'public/favicon.ico'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8');
+const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const { generate_hash, buildId: buildIdConfig } = config;
 
 const BUILD_ID = buildIdConfig === true 

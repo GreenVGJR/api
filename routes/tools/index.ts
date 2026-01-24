@@ -1,16 +1,17 @@
-import fs from 'fs';
-import path from 'path';
+import route0 from './geminiAmp';
+import route2 from './translateAmp';
+import route3 from './flux-demo';
+import route4 from './magicstudio';
+import route5 from './discordModifyServer';
+import route6 from './discordWebhook';
 
-const routes: any[] = [];
-
-const files = fs.readdirSync(import.meta.dir);
-
-for (const file of files) {
-    if (file.endsWith('.ts') && file !== 'index.ts' && file !== 'request.ts') {
-        // @ts-ignore
-        const route = require(path.join(import.meta.dir, file));
-        routes.push(route.default || route);
-    }
-}
+const routes: any[] = [
+    route0,
+    route2,
+    route3,
+    route4,
+    route5,
+    route6,
+];
 
 export default routes;

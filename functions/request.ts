@@ -2255,9 +2255,11 @@ export const instagramUser = async function instagramUser(que: string) {
         const testreq = await request(`https://www.instagram.com/${que}/embed`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
+                'Sec-Fetch-Dest': 'iframe'
             }
         });
+
+        console.log(testreq);
 
         if(testreq.statusCode === 302) {
             return {

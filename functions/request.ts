@@ -2261,6 +2261,8 @@ export const instagramUser = async function instagramUser(que: string) {
         const resreq = await testreq.body.text();
         const profile_id = resreq.split('"profile_id":"')[1]?.split('"')?.[0];
 
+        console.log("Test: " + resreq.split('"profile_id":"')[1]);
+
         if(!profile_id) {
             return {
                 data: null

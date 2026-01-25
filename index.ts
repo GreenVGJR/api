@@ -170,22 +170,31 @@ app.get('/', (c: Context) => {
                         server: [
                         "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
                         ],
-                        webhook: [
-                        "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
-                        [
-                            "/tools/discord/webhook/info?token=&webhookId=",
-                            "/tools/discord/webhook/info?webhookToken=&webhookId=",
-                            "/tools/discord/webhook/info?webhookUrl="
-                        ],
-                        [
-                        "/tools/discord/webhook/delete?token=&webhookId=",
-                        "/tools/discord/webhook/delete?webhookToken=&webhookId=",
-                        "/tools/discord/webhook/delete?webhookUrl="
-                        ],
-                        [
-                        "/tools/discord/webhook/send?webhookId=&webhookToken=&content=&username=&avatar=",
-                        "/tools/discord/webhook/send?webhookUrl=&content=&username=&avatar="
-                        ]
+                        webhook: [{
+                            create: [
+                                "/tools/discord/webhook/create?token=&channelId=&name=&avatar="
+                            ] 
+                        },
+                        {
+                            info: [
+                            "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="
+                            ]
+                        },
+                        {
+                            delete: [
+                            "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="
+                            ]
+                        },
+                        {
+                            send: [
+                            "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="
+                            ]
+                        },
+                        {
+                            list: [
+                            "/tools/discord/webhook/list?token=&channelId="
+                            ]
+                        }
                         ]
                     },
                     image_generation: [

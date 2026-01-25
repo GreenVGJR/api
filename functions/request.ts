@@ -829,7 +829,7 @@ export const Genius = async function Genius(que: string) {
     } catch { return null; }
 }
 
-export const Gemini = async function Gemini(que: string, convo: any) {
+export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {
     if (!que) return null;
 
     let objectbody: any = { cid: null, rid: null, rcid: null, cookies: null };
@@ -873,6 +873,7 @@ export const Gemini = async function Gemini(que: string, convo: any) {
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'Referer': 'https://gemini.google.com',
             'Origin': 'https://gemini.google.com',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin',
@@ -894,6 +895,7 @@ export const Gemini = async function Gemini(que: string, convo: any) {
     try {
         const cleanText = resText.split(")]}'\n\n")[1];
         data = JSON.parse(cleanText);
+
         let innerData;
 
         data.forEach((dt: any) => {
@@ -907,9 +909,8 @@ export const Gemini = async function Gemini(que: string, convo: any) {
         });
 
         if(!innerData) {
-            return {
-                error: "Rate-limited"
-            }
+            if (retry) return { error: "Rate-limited" };
+            return await Gemini(que, convo, true);
         }
 
         objectbody.cid = (innerData as any)[1][0];
@@ -1332,15 +1333,15 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
     const action = payload.action;
 
     if (payload.webhookUrl) {
-        const match = payload.webhookUrl.match(/webhooks\/(\d+)\/([a-zA-Z0-9_-]+)/);
+        const match = payload.webhookUrl.match(/webhooks\/(\d+)(?:\/([a-zA-Z0-9_-]+))?(?:[/?]|$)/);
         if (match) {
             payload.webhookId = match[1];
-            payload.webhookToken = match[2];
+            if (match[2]) payload.webhookToken = match[2];
         }
     }
 
-    const webhookId = payload.webhookId || (action !== 'create' ? guildId : null);
-    const channelId = payload.channelId || (action === 'create' ? guildId : null);
+    const webhookId = payload.webhookId || (action !== 'create' && action !== 'list' ? guildId : null);
+    const channelId = payload.channelId || ((action === 'create' || action === 'list') ? guildId : null);
     const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
 
     let url = '';
@@ -1369,17 +1370,22 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
         }
     } else if (action === 'info') {
         if (!webhookId) return { error: 'Missing webhookId' };
-        url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;
+        url = `https://discord.com/api/v10/webhooks/${webhookId}${(!token && webhookToken) ? `/${webhookToken}` : ''}`;
         method = 'GET';
     } else if (action === 'delete') {
         if (!webhookId) return { error: 'Missing webhookId' };
-        url = `https://discord.com/api/v10/webhooks/${webhookId}${webhookToken ? `/${webhookToken}` : ''}`;
+        url = `https://discord.com/api/v10/webhooks/${webhookId}${(!token && webhookToken) ? `/${webhookToken}` : ''}`;
         method = 'DELETE';
     } else if (action === 'send') {
         if (!webhookId) return { error: 'Missing webhookId' };
         if (!webhookToken) return { error: 'Missing webhookToken' };
         url = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
         method = 'POST';
+    } else if (action === 'list') {
+        if (!token || token === 'null') return { error: 'Missing token' };
+        if (!channelId) return { error: 'Missing channelId' };
+        url = `https://discord.com/api/v10/channels/${channelId}/webhooks`;
+        method = 'GET';
     } else {
         return { error: 'Nothing to do' };
     }
@@ -1395,6 +1401,7 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
         }
 
         let bodyPayload: any = null;
+        let checkUserFill: boolean = false;
         if (method === 'POST') {
             if (action === 'create') {
                 bodyPayload = {
@@ -1412,7 +1419,7 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
             }
         }
 
-        const response = await fetch(url, {
+        let response = await fetch(url, {
             method: method,
             headers: headers,
             ...(bodyPayload && { body: JSON.stringify(bodyPayload) })
@@ -1422,11 +1429,43 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
         if (response.status !== 204) {
             try {
                 result = await response.json();
-
-                if (action === 'info' && result && typeof result === 'object') {
-                    if (result.user === undefined) result.user = null;
-                }
             } catch (e) {}
+        }
+
+        // Fallback logic for info/delete if bot token fails but webhook token is available
+        if (token && webhookToken && (action === 'info' || action === 'delete') && (response.status === 403 || result?.code === 50013)) {
+            const fallbackUrl = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
+            const fallbackHeaders = { ...headers };
+            delete fallbackHeaders['Authorization'];
+            
+            response = await fetch(fallbackUrl, {
+                method: method,
+                headers: fallbackHeaders,
+                ...(bodyPayload && { body: JSON.stringify(bodyPayload) })
+            });
+
+            if (response.status !== 204) {
+                try {
+                    result = await response.json();
+                    checkUserFill = true;
+                } catch (e) {
+                    result = null;
+                }
+            } else {
+                result = null;
+            }
+        }
+
+        if (action === 'info' && result && typeof result === 'object') {
+            if (result.user === undefined) {
+                if (checkUserFill && response.status === 200) {
+                    result.user = {
+                        error: "Cannot access to this channel, " + result.channel_id
+                    };
+                } else {
+                    result.user = null;
+                }
+            }
         }
 
         if (response.status < 200 || response.status >= 300) {
@@ -2213,45 +2252,76 @@ export const instagramUser = async function instagramUser(que: string) {
     if(!que) return null;
 
     try {
-        const req = await request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+        const testreq = await request(`https://www.instagram.com/${que}`, {
             headers: {
-                ...commonHeaders,
-                'User-Agent': `Instagram ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (36/16; 540dpi; 1080x2340; samsung; SM-S928U; e3q; qcom; en_US; ${getRandomInt(100000000, 999999999)})`,
-                'Origin': 'https://www.instagram.com'
+                ...commonHeaders
             }
         });
 
-        if(req.statusCode !== 200 && req.statusCode !== 404) {
+        const resreq = await testreq.body.text();
+        const profile_id = resreq.split('"profile_id":"')[1]?.split('"')?.[0];
+
+        if(!profile_id) {
             return {
-                "error": "Cannot process this",
-                "raw": await req.body.json()
+                data: null
             }
         }
 
-        let res: any = null;
-        try {
-        res = await req.body.json();
+        const bodyhttp = {"enable_integrity_filters":true,"id":profile_id,"render_surface":"PROFILE","__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider":true,"__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider":false,"__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider":false};
+
+        const [req, req2] = await Promise.all([
+            request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+                headers: {
+                    ...commonHeaders,
+                    'User-Agent': `Instagram ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (36/16; 540dpi; 1080x2340; samsung; SM-S928U; e3q; qcom; en_US; ${getRandomInt(100000000, 999999999)})`,
+                    'Origin': 'https://www.instagram.com'
+                }
+            }),
+            request(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
+                headers: {
+                    ...commonHeaders,
+                    'Origin': 'https://www.instagram.com'
+                }
+            })
+        ]);
+
+        let a: any = null;
+        let b: any = null;
+
+        const [res, res2]: any = await Promise.all([
+            req.body.json().catch(() => null),
+            req2.body.json().catch(() => null)
+        ]);
+
+        a = res?.data?.user;
+        b = res2?.data?.user || res2?.data || res2;
+
+        if (!a && req.statusCode !== 200 && req.statusCode !== 404) {
+            a = {
+                "error": "Cannot process this",
+                "raw": res
+            };
         }
-        catch {}
-        const a = res?.data?.user;
-        const formatted = a ? {
-            avatar_url: a.profile_pic_url_hd,
-            userid: a.id,
-            username: a.username,
-            nickname: a.full_name,
-            profile_url: "https://www.instagram.com/" + a.username,
-            description: a.biography,
-            category: a.category_name || null,
-            external_links: a.bio_links,
-            followed_count: a.edge_follow?.count,
-            follower_count: a.edge_followed_by?.count,
-            post_count: a.edge_owner_to_timeline_media?.count,
-            verified: a.is_verified,
-            private: a.is_private,
-            pronouns: a.pronouns?.[0] ? a.pronouns : null 
+
+        const source = (a && a.id) ? a : (b?.user ? b.user : b);
+        const formatted = (source && source.id) ? {
+            avatar_url: source.profile_pic_url_hd || source.profile_pic_url,
+            userid: source.id,
+            username: source.username,
+            nickname: source.full_name,
+            profile_url: "https://www.instagram.com/" + source.username,
+            description: source.biography,
+            category: source.category_name || null,
+            external_links: source.bio_links,
+            followed_count: source.edge_follow?.count || source.following_count,
+            follower_count: source.edge_followed_by?.count || source.follower_count,
+            post_count: source.edge_owner_to_timeline_media?.count || source.media_count,
+            verified: source.is_verified,
+            private: source.is_private,
+            pronouns: source.pronouns?.[0] ? source.pronouns : null 
         } : null;
 
-        return { data: [formatted || null, a || null] };
+        return { data: [formatted || null, a || null, b || null] };
     }
     catch (e) {
         console.error(e);
@@ -2265,51 +2335,95 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
     try {
         const bodyhttp = {"username":que,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false};
         let bodyhttp2: any = {"allow_page_info_for_lox_user":true,"first":50,"skipGhostPosts":false,"userID":null,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider":false,"__relay_internal__pv__BarcelonaHasInlineReplyComposerrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalsConsumptionEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasDearAlgoConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false,"__relay_internal__pv__BarcelonaIsSearchDiscoveryEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasPodcastConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasCommunitiesrelayprovider":false,"__relay_internal__pv__BarcelonaHasSelfThreadCountrelayprovider":false,"__relay_internal__pv__IsTagIndicatorEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDeepDiverelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostEmojiActivationrelayprovider":false,"__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDearAlgoWebProductionrelayprovider":false,"__relay_internal__pv__BarcelonaQuotedPostUFIEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasTopicTagsrelayprovider":true,"__relay_internal__pv__BarcelonaIsCrawlerrelayprovider":false,"__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider":false,"__relay_internal__pv__BarcelonaHasCommunityTopContributorsrelayprovider":false,"__relay_internal__pv__BarcelonaCanSeeSponsoredContentrelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaImplicitTrendsGKrelayprovider":false,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false};
-        const per = await request(`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`, {
-        headers: {
-            ...commonHeaders,
-            'User-Agent': `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
-            'Origin': 'https://www.threads.com',
-            'X-IG-App-ID': '1412234116260832',
-            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
-            }
-        });
+        
+        const [per, per2] = await Promise.all([
+            request(`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`, {
+                headers: {
+                    ...commonHeaders,
+                    'User-Agent': `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
+                    'Origin': 'https://www.threads.com',
+                    'X-IG-App-ID': '1412234116260832',
+                    'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
+                }
+            }),
+            request(`https://www.threads.com/@${que}`, {
+                headers: { ...commonHeaders }
+            })
+        ]);
 
-        if(per.statusCode !== 200) {
-            return {
-                "error": "Cannot process this",
-                "raw": await per.body.json()
-            }
-        }
+        const [res, resText2]: [any, string] = await Promise.all([
+            per.statusCode === 200 ? per.body.json().catch(() => null) : Promise.resolve(null),
+            per2.statusCode === 200 ? per2.body.text().catch(() => "") : Promise.resolve("")
+        ]);
 
-        let finalres;
-        let per2;
-        let res2;
-        const res: any = await per.body.json();
-        if(res?.data?.user) { 
-            bodyhttp2.userID = res?.data?.user?.id;
-            per2 = await request(`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`, {
-            headers: {
-            ...commonHeaders,
-            'User-Agent': `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
-            'Origin': 'https://www.threads.com',
-            'X-IG-App-ID': '1412234116260832',
-            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
+        let webData: any[] = [];
+        try {
+            if (resText2) {
+                const sjsParts = resText2.split('data-sjs>');
+                sjsParts.shift(); // Remove first part before script tags
+                
+                for (const part of sjsParts) {
+                    if (part.includes('RelayPrefetchedStreamCache')) {
+                        try {
+                            const jsonStr = part.split('</script>')[0];
+                            const parsed = JSON.parse(jsonStr);
+                            
+                            // Traverse the specific path: require►0►3►0►__bbox►require►0►3►1►__bbox►result►data
+                            const reqs = parsed?.require || [];
+                            for (const req of reqs) {
+                                // req = ["ScheduledServerJS", "handle", null, [...]]
+                                const args = req?.[3] || [];
+                                for (const arg of args) {
+                                    const innerReqs = arg?.__bbox?.require || [];
+                                    for (const innerReq of innerReqs) {
+                                        // innerReq = ["RelayPrefetchedStreamCache", "next", [], [...]]
+                                        if (innerReq?.[0] === 'RelayPrefetchedStreamCache') {
+                                            const data = innerReq?.[3]?.[1]?.__bbox?.result?.data;
+                                            if (data) webData.push(data);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch {}
+                    }
+                }
+            }
+        } catch (e) {}
+
+        let finalres: any = res?.data?.user || null;
+        let edges: any = null;
+
+        if (finalres) { 
+            bodyhttp2.userID = finalres.id;
+            const per3 = await request(`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`, {
+                headers: {
+                    ...commonHeaders,
+                    'User-Agent': `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
+                    'Origin': 'https://www.threads.com',
+                    'X-IG-App-ID': '1412234116260832',
+                    'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
                 }
             });
 
-            res2 = await per2.body.json() as any;
-            res2 = res2?.data?.mediaData?.edges?.map((a: any) => a?.node?.thread_items?.[0]?.post) || null;
+            if (per3.statusCode === 200) {
+                const res3 = await per3.body.json() as any;
+                edges = res3?.data?.mediaData?.edges?.map((a: any) => a?.node?.thread_items?.[0]?.post) || null;
+            }
 
             finalres = {
-                ...res?.data?.user,
-                edges: res2
+                ...finalres,
+                edges: edges || finalres.edges || null
             };
         }
+        else if (res?.status !== 'ok') {
+            finalres = {
+                error: "Cannot process this",
+                raw: res?.data || res
+            }
+        }
 
-        return { data: finalres || null }
-    }
-    catch (e) {
+        return { data: [finalres || null, { user: webData[0]?.user || null, edges: webData[1]?.mediaData?.edges?.map((a: any) => a?.node) || null }] };
+    } catch (e) {
         console.error(e);
         return null;
     }

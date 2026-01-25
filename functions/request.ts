@@ -2259,8 +2259,6 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         });
 
-        console.log(testreq);
-
         if(testreq.statusCode === 302) {
             return {
                 error: "Please sign in"
@@ -2283,13 +2281,19 @@ export const instagramUser = async function instagramUser(que: string) {
                 headers: {
                     ...commonHeaders,
                     'User-Agent': `Instagram ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (36/16; 540dpi; 1080x2340; samsung; SM-S928U; e3q; qcom; en_US; ${getRandomInt(100000000, 999999999)})`,
-                    'Origin': 'https://www.instagram.com'
+                    'Origin': 'https://www.instagram.com',
+                    'X-Ig-App-Id': "936619743392459",
+                    'X-Asbd-Id': "198387",
+                    'X-Ig-Www-Claim': "0"
                 }
             }),
             request(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
                 headers: {
                     ...commonHeaders,
-                    'Origin': 'https://www.instagram.com'
+                    'Origin': 'https://www.instagram.com',
+                    'X-Ig-App-Id': "936619743392459",
+                    'X-Asbd-Id': "198387",
+                    'X-Ig-Www-Claim': "0"
                 }
             })
         ]);
@@ -2307,8 +2311,7 @@ export const instagramUser = async function instagramUser(que: string) {
 
         if (!a && req.statusCode !== 200 && req.statusCode !== 404) {
             a = {
-                "error": "Cannot process this",
-                "raw": res
+                ...res
             };
         }
 

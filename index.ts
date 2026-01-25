@@ -224,7 +224,7 @@ app.get('/', (c: Context) => {
             return;
         });
 
-        await stream.write(JSON.stringify(listapi, null, 2));
+        await stream.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
     });
 });
 

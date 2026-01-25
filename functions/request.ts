@@ -2258,10 +2258,15 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         });
 
+        if(testreq.statusCode === 302) {
+            return {
+                error: "Cannot process this",
+                raw: "Please sign in"
+            }
+        }
+
         const resreq = await testreq.body.text();
         const profile_id = resreq.split('"profile_id":"')[1]?.split('"')?.[0];
-
-        console.log("Test:\n" + resreq);
 
         if(!profile_id) {
             return {

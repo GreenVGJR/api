@@ -2252,20 +2252,14 @@ export const instagramUser = async function instagramUser(que: string) {
     if(!que) return null;
 
     try {
-        const testreq = await request(`https://www.instagram.com/${que}`, {
+        const testreq = await fetch(`https://www.instagram.com/${que}`, {
             headers: {
-                ...commonHeaders
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
             }
         });
 
-        if(testreq.statusCode === 302) {
-            return {
-                error: "Cannot process this",
-                raw: "Please sign in"
-            }
-        }
-
-        const resreq = await testreq.body.text();
+        const resreq = await testreq.text();
         const profile_id = resreq.split('"profile_id":"')[1]?.split('"')?.[0];
 
         if(!profile_id) {

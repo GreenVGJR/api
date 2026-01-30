@@ -383,7 +383,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
         const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], {headers:{...commonHeaders}});
 
         const res1 = await pul1.body.text();
-        twitterAuth = res1.split('return"Bearer ')[1].split('"')[0];
+        twitterAuth = 'AAAAAAAAA' + res1.split('"AAAAAAAAA')[1].split('"')[0];
         const queryId_user = res1.split('e.exports={queryId:')
         .find(e => e.includes(`operationName:"${typeName}"`))
         ?.split('"')[1];

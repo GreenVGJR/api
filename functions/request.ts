@@ -450,7 +450,7 @@ export const YTVideo = async function YTVideo(que: string) {
         }
         catch { }
         return { data: { innerTube: res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer.contents?.filter((o: any) => Object.keys(o).length > 0)?.map((v: any) => v?.videoRenderer) || null, youtubeWeb: testpar?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.filter((o: any) => Object.keys(o).length > 0).map((v: any) => v?.videoRenderer)?.filter(Boolean) || null } };
-    } catch { return null; }
+    } catch (e) { console.error(e); return null; }
 }
 
 export const YTMusic = async function YTMusic(que: string) {

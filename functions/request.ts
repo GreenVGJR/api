@@ -1,6 +1,14 @@
-import { request as undiciRequest, Agent } from 'undici';
+import { request as undiciRequest, Agent, interceptors } from 'undici';
 
-const request = (url: string | URL, options?: any) => undiciRequest(url, { maxRedirections: 5, ...options });
+const request = (url: string | URL, options?: any) => {
+    const { maxRedirections, ...rest } = options || {};
+    return undiciRequest(url, { 
+        ...rest, 
+        interceptors: { 
+            Client: [interceptors.redirect({ maxRedirections: maxRedirections ?? 5 })] 
+        } 
+    });
+};
 // @ts-ignore
 import { CurlImpersonateHttpClient, CurlImpersonate } from 'apify-node-curl-impersonate';
 // @ts-ignore

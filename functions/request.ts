@@ -1,4 +1,6 @@
-import { request, Agent } from 'undici';
+import { request as undiciRequest, Agent } from 'undici';
+
+const request = (url: string | URL, options?: any) => undiciRequest(url, { maxRedirections: 5, ...options });
 // @ts-ignore
 import { CurlImpersonateHttpClient, CurlImpersonate } from 'apify-node-curl-impersonate';
 // @ts-ignore
@@ -14,9 +16,8 @@ const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (m
 const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0';
 
 export const commonHeaders = {
-    'Accept': 'text/html, application/json, video/*, image/*, */*',
-    'Accept-Encoding': 'identify',
-    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept': 'text/html, application/json, */*',
+    'Accept-Language': 'en-US',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
@@ -810,21 +811,23 @@ export const Genius = async function Genius(que: string) {
     if (!que) return null;
 
     try {
-        const client = new CurlImpersonate(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
+        const client = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
         method: 'GET',
-        headers: {},
-        impersonate: 'edge-101',
-        debugLogger: () => {}
+        headers: {
+            ...commonHeaders,
+            'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'
+        }
         });
-        const checkres = await client.makeRequest();
 
-        if(checkres.statusCode === 403) {
+        if(client.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             }
         }
 
-        const res = JSON.parse(checkres.response);
+        const checkres: any = await client.body.text();
+
+        const res = JSON.parse(checkres);
         return { data: res?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null };
     } catch { return null; }
 }
@@ -1730,21 +1733,21 @@ export const Pexels = async function Pexels(que: string) {
     if(!que) return null;
 
     try {
-        const client = new CurlImpersonate(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
-            method: 'GET',
-            headers: {},
-            impersonate: 'edge-101',
-            debugLogger: () => {}
+        const response = await request(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'
+            }
         });
-        const res = await client.makeRequest();
-        if(res.statusCode === 403) {
+        if(response.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
-            }
+            };
         }
+        const html = await response.body.text();
         let pull = null;
         try {
-        pull = JSON.parse(res.response?.split('"application/json">')?.[1]?.split('</script>')?.[0]);
+            pull = JSON.parse(html.split('"application/json">')?.[1]?.split('</script>')?.[0]);
         }
         catch {}
         return { data: pull?.props?.pageProps?.initialData || null };

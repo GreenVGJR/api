@@ -26,7 +26,9 @@ const info: any[] = info_raw;
 
 setGlobalDispatcher(new Agent({
     connect: {
-        family: 4
+        family: 4,
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.3'
     }
 }));
 
@@ -110,6 +112,7 @@ app.get('/robots.txt', (c: Context) => {
 
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    if(!isMozilla) return c.body(null, 204);
     const renderJson = c.req.query('json') !== undefined;
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);

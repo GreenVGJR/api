@@ -1,13 +1,5 @@
 import { request as undiciRequest, Agent, interceptors } from 'undici';
 
-const agent = new Agent({
-    connect: {
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.3'
-    },
-    keepAliveTimeout: 10000
-});
-
 const request = async (url: string | URL, options?: any) => {
     let { maxRedirections = 5, ...rest } = options || {};
     let currentUrl = url;
@@ -16,14 +8,13 @@ const request = async (url: string | URL, options?: any) => {
     while (true) {
         // Ensure maxRedirections is NOT passed to undici
         const res = await undiciRequest(currentUrl, { 
-            dispatcher: agent,
             ...rest
         });
 
         const code = res.statusCode;
         if (code >= 300 && code < 400 && res.headers.location && redirectCount < maxRedirections) {
             // Consume the body of the redirect response to release resources
-            await res.body.dump();
+            await res.body.text();
 
             const location = Array.isArray(res.headers.location) ? res.headers.location[0] : res.headers.location;
             currentUrl = new URL(location as string, currentUrl).toString();

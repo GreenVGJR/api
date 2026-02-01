@@ -38,12 +38,7 @@ setGlobalDispatcher(new Agent({
     headersTimeout: 30000,
     bodyTimeout: 30000,
     connectTimeout: 15000,
-    keepAliveTimeout: 10000,
-    interceptors: {
-        Agent: [interceptors.redirect({ maxRedirections: 5 })],
-        Pool: [interceptors.redirect({ maxRedirections: 5 })],
-        Client: [interceptors.redirect({ maxRedirections: 5 })]
-    }
+    keepAliveTimeout: 10000
 }));
 
 const app = new Hono({ strict: false });

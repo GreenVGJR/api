@@ -5,20 +5,34 @@ const agent = new Agent({
         rejectUnauthorized: false,
         minVersion: 'TLSv1.3'
     },
-    keepAliveTimeout: 10000,
-    interceptors: {
-        Agent: [interceptors.redirect({ maxRedirections: 5 })],
-        Client: [interceptors.redirect({ maxRedirections: 5 })]
-    }
+    keepAliveTimeout: 10000
 });
 
-const request = (url: string | URL, options?: any) => {
-    const { maxRedirections, ...rest } = options || {};
-    return undiciRequest(url, { 
-        dispatcher: agent,
-        ...rest, 
-        maxRedirections: maxRedirections ?? 5
-    });
+const request = async (url: string | URL, options?: any) => {
+    let { maxRedirections = 5, ...rest } = options || {};
+    let currentUrl = url;
+    let redirectCount = 0;
+
+    while (true) {
+        // Ensure maxRedirections is NOT passed to undici
+        const res = await undiciRequest(currentUrl, { 
+            dispatcher: agent,
+            ...rest
+        });
+
+        const code = res.statusCode;
+        if (code >= 300 && code < 400 && res.headers.location && redirectCount < maxRedirections) {
+            // Consume the body of the redirect response to release resources
+            await res.body.dump();
+
+            const location = Array.isArray(res.headers.location) ? res.headers.location[0] : res.headers.location;
+            currentUrl = new URL(location as string, currentUrl).toString();
+            redirectCount++;
+            continue;
+        }
+
+        return res;
+    }
 };
 // @ts-ignore
 import { CurlImpersonateHttpClient, CurlImpersonate } from 'apify-node-curl-impersonate';

@@ -139,7 +139,8 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
     }
   }
 
-  c.header('X-Enc-Route', 'v2');
+  c.header('X-Enc-Route', 'v3');
+  c.header('X-Relay', 'false');
   c.header('Content-Type', 'application/json');
 
     return stream(c, async (stream) => {

@@ -25,13 +25,21 @@ const tools: any[] = tools_raw;
 const info: any[] = info_raw;
 
 setGlobalDispatcher(new Agent({
+    connections: 10,
+    pipelining: 1,
+    allowH2: true,
     connect: {
         family: 4,
         rejectUnauthorized: false,
-        minVersion: 'TLSv1.2'
-    }
+        minVersion: 'TLSv1.3',
+        noDelay: true,
+        keepAlive: true
+    },
+    headersTimeout: 30000,
+    bodyTimeout: 30000,
+    connectTimeout: 15000,
+    keepAliveTimeout: 10000
 }));
-
 
 const app = new Hono({ strict: false });
 
@@ -167,7 +175,8 @@ app.get('/', (c: Context) => {
                 ],
                 tools: {
                     ai: [
-                        "/tools/chat/gemini?prompt=&conversation="
+                        "/tools/chat/gemini?prompt=&conversation=",
+                        "/tools/chat/meta?prompt="
                     ],
                     discord: {
                         server: [
@@ -202,7 +211,8 @@ app.get('/', (c: Context) => {
                     },
                     image_generation: [
                         "/tools/ai-image/flux_demo?prompt=",
-                        "/tools/ai-image/magicstudio?prompt="
+                        "/tools/ai-image/magicstudio?prompt=",
+                        "/tools/ai-image/bing?prompt=",
                     ],
                     misc: [
                         "/tools/translate?q=&from=&to="

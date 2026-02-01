@@ -4,9 +4,7 @@ const request = (url: string | URL, options?: any) => {
     const { maxRedirections, ...rest } = options || {};
     return undiciRequest(url, { 
         ...rest, 
-        interceptors: { 
-            Client: [interceptors.redirect({ maxRedirections: maxRedirections ?? 5 })] 
-        } 
+        maxRedirections: maxRedirections ?? 5
     });
 };
 // @ts-ignore
@@ -349,7 +347,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
 
 export const tidalKeys = async function tidalKeys() {
     try {
-        const rest = await request(`https://embed.tidal.com/tracks/${[230917825, 432597859, 355309145, 416356151, 434875762][Math.floor(Math.random() * 5)]}`, {
+        const rest = await request(`https://embed.tidal.com/tracks/${[406956243, 1550546][Math.floor(Math.random() * 2)]}`, {
             method: "GET",
             headers: {
                 ...commonHeaders,
@@ -872,8 +870,9 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
 
     const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22%5C%22%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B1%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C2%5D%22%5D`;
 
-    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en`, {
+    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
         dispatcher: new Agent({
+            keepAliveTimeout: 30000,
             connectTimeout: 30000,
             bodyTimeout: 60000,
             headersTimeout: 60000
@@ -884,10 +883,12 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'x-goog-ext-73010989-jspb': '[0]',
             'Referer': 'https://gemini.google.com',
             'Origin': 'https://gemini.google.com',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin',
+            'X-Same-Domain': '1'
         },
         body: reqPayload
     });
@@ -902,10 +903,25 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const resText = await req.body.text();
     let response;
 
-    let data;
+    let data: any[] = [];
     try {
-        const cleanText = resText.split(")]}'\n\n")[1];
-        data = JSON.parse(cleanText);
+        const lines = resText.split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        // If it's an array of items (standard Gemini format)
+                        if (Array.isArray(parsed[0])) {
+                            data.push(...parsed);
+                        } else {
+                            data.push(parsed);
+                        }
+                    }
+                } catch {}
+            }
+        }
 
         let innerData;
 
@@ -931,6 +947,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
 
         response = (innerData as any)[4]?.[0]?.[1]?.[0] || null;
     } catch (e) {
+        console.error(e);
         response = null;
     }
 
@@ -943,6 +960,14 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     }
 
     return responseBody;
+}
+
+export const Chatplus = async function Chatplus(que: string) {
+    if (!que) return null;
+    return {
+        response: null,
+        data: null
+    }
 }
 
 export const Translate = async function Translate(que: string, from?: string, to?: string) {
@@ -1741,7 +1766,7 @@ export const Pexels = async function Pexels(que: string) {
     if(!que) return null;
 
     try {
-        const response = await request(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
+        const response = await request(`https://www.pexels.com/search/${que}`, {
             headers: {
                 ...commonHeaders,
                 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'

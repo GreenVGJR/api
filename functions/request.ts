@@ -1785,6 +1785,12 @@ export const Pexels = async function Pexels(que: string) {
 
     try {
         const response = await request(`https://www.pexels.com/search/${que}`, {
+            dispatch: new Agent({
+                connect: {
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1.3'
+                }
+            }),
             headers: {
                 ...commonHeaders,
                 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'

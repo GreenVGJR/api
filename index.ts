@@ -31,7 +31,7 @@ setGlobalDispatcher(new Agent({
     connect: {
         family: 4,
         rejectUnauthorized: false,
-        minVersion: 'TLSv1.3',
+        minVersion: 'TLSv1.2',
         noDelay: true,
         keepAlive: true
     },

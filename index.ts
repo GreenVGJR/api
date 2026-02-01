@@ -41,8 +41,8 @@ setGlobalDispatcher(new Agent({
     keepAliveTimeout: 10000,
     interceptors: {
         Agent: [interceptors.redirect({ maxRedirections: 5 })],
-        Pool: [],
-        Client: []
+        Pool: [interceptors.redirect({ maxRedirections: 5 })],
+        Client: [interceptors.redirect({ maxRedirections: 5 })]
     }
 }));
 

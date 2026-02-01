@@ -1,8 +1,21 @@
 import { request as undiciRequest, Agent, interceptors } from 'undici';
 
+const agent = new Agent({
+    connect: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.3'
+    },
+    keepAliveTimeout: 10000,
+    interceptors: {
+        Agent: [interceptors.redirect({ maxRedirections: 5 })],
+        Client: [interceptors.redirect({ maxRedirections: 5 })]
+    }
+});
+
 const request = (url: string | URL, options?: any) => {
     const { maxRedirections, ...rest } = options || {};
     return undiciRequest(url, { 
+        dispatcher: agent,
         ...rest, 
         maxRedirections: maxRedirections ?? 5
     });

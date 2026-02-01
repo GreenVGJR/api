@@ -853,7 +853,7 @@ export const Genius = async function Genius(que: string) {
 
         const res = JSON.parse(checkres);
         return { data: res?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null };
-    } catch { return null; }
+    } catch (e) { console.error(e); return null; }
 }
 
 export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {

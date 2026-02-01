@@ -1797,7 +1797,7 @@ export const Pexels = async function Pexels(que: string) {
             }),
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'
+                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/2.0) Chrome/145.0.0.0'
             }
         });
         if(response.statusCode === 403) {

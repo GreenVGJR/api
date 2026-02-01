@@ -1,4 +1,4 @@
-import { setGlobalDispatcher, Agent } from 'undici';
+import { setGlobalDispatcher, Agent, interceptors } from 'undici';
 import { fileURLToPath } from 'url';
 import { Hono, Context, Next } from 'hono';
 import { serve } from '@hono/node-server';
@@ -38,7 +38,10 @@ setGlobalDispatcher(new Agent({
     headersTimeout: 30000,
     bodyTimeout: 30000,
     connectTimeout: 15000,
-    keepAliveTimeout: 10000
+    keepAliveTimeout: 10000,
+    interceptors: {
+        Client: [interceptors.redirect({ maxRedirections: 5 })]
+    }
 }));
 
 const app = new Hono({ strict: false });

@@ -1786,6 +1786,7 @@ export const Pexels = async function Pexels(que: string) {
     try {
         const response = await request(`https://www.pexels.com/search/${que}`, {
             dispatch: new Agent({
+                allowH2: true,
                 connect: {
                 rejectUnauthorized: false,
                 minVersion: 'TLSv1.3'

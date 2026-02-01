@@ -1788,8 +1788,11 @@ export const Pexels = async function Pexels(que: string) {
             dispatch: new Agent({
                 allowH2: true,
                 connect: {
-                rejectUnauthorized: false,
-                minVersion: 'TLSv1.3'
+                    family: 4,
+                    rejectUnauthorized: false,
+                    minVersion: 'TLSv1.3',
+                    noDelay: true,
+                    keepAlive: true
                 }
             }),
             headers: {

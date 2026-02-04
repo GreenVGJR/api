@@ -12,253 +12,252 @@ import { Buffer } from 'buffer';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
+const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
 
 export const commonHeaders = {
     'Accept': 'text/html, application/json, */*',
-    'Accept-Language': 'en-US',
+    'Accept-Language': 'en',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
     'User-Agent': userAgent,
-    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="132", "Chromium";v="132"',
+    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="144", "Chromium";v="144"',
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"'
 }
 
-const listcodes: {name: string, code: string}[] = [
-        { "name": "Abkhaz", "code": "ab" },
-        { "name": "Acehnese", "code": "ace" },
-        { "name": "Acholi", "code": "ach" },
-        { "name": "Afar", "code": "aa" },
-        { "name": "Afrikaans", "code": "af" },
-        { "name": "Albanian", "code": "sq" },
-        { "name": "Alur", "code": "alz" },
-        { "name": "Amharic", "code": "am" },
-        { "name": "Arabic", "code": "ar" },
-        { "name": "Armenian", "code": "hy" },
-        { "name": "Assamese", "code": "as" },
-        { "name": "Avar", "code": "av" },
-        { "name": "Awadhi", "code": "awa" },
-        { "name": "Aymara", "code": "ay" },
-        { "name": "Azerbaijani", "code": "az" },
-        { "name": "Balinese", "code": "ban" },
-        { "name": "Bambara", "code": "bm" },
-        { "name": "Bashkir", "code": "ba" },
-        { "name": "Basque", "code": "eu" },
-        { "name": "Batak Karo", "code": "btx" },
-        { "name": "Batak Simalungun", "code": "bts" },
-        { "name": "Batak Toba", "code": "bbc" },
-        { "name": "Belarusian", "code": "be" },
-        { "name": "Bengali", "code": "bn" },
-        { "name": "Bhojpuri", "code": "bho" },
-        { "name": "Bikol", "code": "bik" },
-        { "name": "Bosnian", "code": "bs" },
-        { "name": "Breton", "code": "br" },
-        { "name": "Bulgarian", "code": "bg" },
-        { "name": "Buryat", "code": "bua" },
-        { "name": "Cantonese", "code": "yue" },
-        { "name": "Catalan", "code": "ca" },
-        { "name": "Cebuano", "code": "ceb" },
-        { "name": "Chamorro", "code": "ch" },
-        { "name": "Chechen", "code": "ce" },
-        { "name": "Chichewa", "code": "ny" },
-        { "name": "Chinese (Simplified)", "code": "zh-CN" },
-        { "name": "Chinese (Traditional)", "code": "zh-TW" },
-        { "name": "Chuvash", "code": "cv" },
-        { "name": "Corsican", "code": "co" },
-        { "name": "Crimean Tatar", "code": "crh" },
-        { "name": "Croatian", "code": "hr" },
-        { "name": "Czech", "code": "cs" },
-        { "name": "Danish", "code": "da" },
-        { "name": "Dhivehi", "code": "dv" },
-        { "name": "Dininkka", "code": "din" },
-        { "name": "Dogri", "code": "doi" },
-        { "name": "Dombe", "code": "dom" },
-        { "name": "Dutch", "code": "nl" },
-        { "name": "Dyula", "code": "dyu" },
-        { "name": "Dzongkha", "code": "dz" },
-        { "name": "English", "code": "en" },
-        { "name": "Esperanto", "code": "eo" },
-        { "name": "Estonian", "code": "et" },
-        { "name": "Ewe", "code": "ee" },
-        { "name": "Faroese", "code": "fo" },
-        { "name": "Fijian", "code": "fj" },
-        { "name": "Filipino", "code": "fil" },
-        { "name": "Finnish", "code": "fi" },
-        { "name": "French", "code": "fr" },
-        { "name": "French (Canada)", "code": "fr-CA" },
-        { "name": "Frisian", "code": "fy" },
-        { "name": "Friulian", "code": "fur" },
-        { "name": "Fulani", "code": "ff" },
-        { "name": "Ga", "code": "gaa" },
-        { "name": "Galician", "code": "gl" },
-        { "name": "Georgian", "code": "ka" },
-        { "name": "German", "code": "de" },
-        { "name": "Greek", "code": "el" },
-        { "name": "Guarani", "code": "gn" },
-        { "name": "Gujarati", "code": "gu" },
-        { "name": "Haitian Creole", "code": "ht" },
-        { "name": "Hakha Chin", "code": "cnh" },
-        { "name": "Hausa", "code": "ha" },
-        { "name": "Hawaiian", "code": "haw" },
-        { "name": "Hebrew", "code": "he" },
-        { "name": "Hindi", "code": "hi" },
-        { "name": "Hmong", "code": "hmn" },
-        { "name": "Hungarian", "code": "hu" },
-        { "name": "Hunsrik", "code": "hrx" },
-        { "name": "Iban", "code": "iba" },
-        { "name": "Icelandic", "code": "is" },
-        { "name": "Igbo", "code": "ig" },
-        { "name": "Ilocano", "code": "ilo" },
-        { "name": "Indonesian", "code": "id" },
-        { "name": "Irish", "code": "ga" },
-        { "name": "Italian", "code": "it" },
-        { "name": "Japanese", "code": "ja" },
-        { "name": "Javanese", "code": "jv" },
-        { "name": "Jingpo", "code": "kac" },
-        { "name": "Kalaallisut", "code": "kl" },
-        { "name": "Kannada", "code": "kn" },
-        { "name": "Kanuri", "code": "kr" },
-        { "name": "Kapampangan", "code": "pam" },
-        { "name": "Kazakh", "code": "kk" },
-        { "name": "Khasi", "code": "kha" },
-        { "name": "Khmer", "code": "km" },
-        { "name": "Kiga", "code": "cgg" },
-        { "name": "Kikongo", "code": "kg" },
-        { "name": "Kinyarwanda", "code": "rw" },
-        { "name": "Kituba", "code": "ktu" },
-        { "name": "Kokborok", "code": "trp" },
-        { "name": "Konkani", "code": "gom" },
-        { "name": "Korean", "code": "ko" },
-        { "name": "Krio", "code": "kri" },
-        { "name": "Kurdish (Kurmanji)", "code": "ku" },
-        { "name": "Kurdish (Sorani)", "code": "ckb" },
-        { "name": "Kyrgyz", "code": "ky" },
-        { "name": "Lao", "code": "lo" },
-        { "name": "Latavian", "code": "lv" },
-        { "name": "Ligurian", "code": "lij" },
-        { "name": "Limburgish", "code": "li" },
-        { "name": "Lingala", "code": "ln" },
-        { "name": "Lithuanian", "code": "lt" },
-        { "name": "Lombard", "code": "lmo" },
-        { "name": "Luganda", "code": "lg" },
-        { "name": "Luo", "code": "luo" },
-        { "name": "Luxembourgish", "code": "lb" },
-        { "name": "Macedonian", "code": "mk" },
-        { "name": "Madurese", "code": "mad" },
-        { "name": "Magahi", "code": "mag" },
-        { "name": "Maithili", "code": "mai" },
-        { "name": "Makassar", "code": "mak" },
-        { "name": "Malagasy", "code": "mg" },
-        { "name": "Malay", "code": "ms" },
-        { "name": "Malayalam", "code": "ml" },
-        { "name": "Maltese", "code": "mt" },
-        { "name": "Mam", "code": "mam" },
-        { "name": "Manx", "code": "gv" },
-        { "name": "Maori", "code": "mi" },
-        { "name": "Marathi", "code": "mr" },
-        { "name": "Marshallese", "code": "mh" },
-        { "name": "Marwadi", "code": "mwr" },
-        { "name": "Mauritian Creole", "code": "mfe" },
-        { "name": "Meiteilon (Manipuri)", "code": "mni-Mtei" },
-        { "name": "Minangkabau", "code": "min" },
-        { "name": "Mizo", "code": "lus" },
-        { "name": "Mongolian", "code": "mn" },
-        { "name": "Myanmar (Burmese)", "code": "my" },
-        { "name": "Nahuatl", "code": "nah" },
-        { "name": "Ndau", "code": "ndc" },
-        { "name": "Ndebele (South)", "code": "nr" },
-        { "name": "Nepalbhasha (Newari)", "code": "new" },
-        { "name": "Nepali", "code": "ne" },
-        { "name": "NKo", "code": "nko" },
-        { "name": "Norwegian", "code": "no" },
-        { "name": "Nuer", "code": "nus" },
-        { "name": "Occitan", "code": "oc" },
-        { "name": "Odia (Oriya)", "code": "or" },
-        { "name": "Oromo", "code": "om" },
-        { "name": "Ossetian", "code": "os" },
-        { "name": "Pangasinan", "code": "pag" },
-        { "name": "Papiamento", "code": "pap" },
-        { "name": "Pashto", "code": "ps" },
-        { "name": "Persian", "code": "fa" },
-        { "name": "Polish", "code": "pl" },
-        { "name": "Portuguese (Brazil)", "code": "pt-BR" },
-        { "name": "Portuguese (Portugal)", "code": "pt-PT" },
-        { "name": "Punjabi (Gurmukhi)", "code": "pa" },
-        { "name": "Punjabi (Shahmukhi)", "code": "pa-Arab" },
-        { "name": "Quechua", "code": "qu" },
-        { "name": "Qʼeqchiʼ", "code": "kek" },
-        { "name": "Romani", "code": "rom" },
-        { "name": "Romanian", "code": "ro" },
-        { "name": "Rundi", "code": "rn" },
-        { "name": "Russian", "code": "ru" },
-        { "name": "Samoan", "code": "sm" },
-        { "name": "Sango", "code": "sg" },
-        { "name": "Sanskrit", "code": "sa" },
-        { "name": "Santali", "code": "sat" },
-        { "name": "Scots Gaelic", "code": "gd" },
-        { "name": "Sepedi", "code": "nso" },
-        { "name": "Serbian", "code": "sr" },
-        { "name": "Sesotho", "code": "st" },
-        { "name": "Seychellois Creole", "code": "crs" },
-        { "name": "Shan", "code": "shn" },
-        { "name": "Shona", "code": "sn" },
-        { "name": "Sicilian", "code": "scn" },
-        { "name": "Silesian", "code": "szl" },
-        { "name": "Sindhi", "code": "sd" },
-        { "name": "Sinhala", "code": "si" },
-        { "name": "Slovak", "code": "sk" },
-        { "name": "Slovenian", "code": "sl" },
-        { "name": "Somali", "code": "so" },
-        { "name": "Spanish", "code": "es" },
-        { "name": "Sundanese", "code": "su" },
-        { "name": "Susu", "code": "sus" },
-        { "name": "Swahili", "code": "sw" },
-        { "name": "Swati", "code": "ss" },
-        { "name": "Swedish", "code": "sv" },
-        { "name": "Tahitian", "code": "ty" },
-        { "name": "Tajik", "code": "tg" },
-        { "name": "Tamazight", "code": "tzm" },
-        { "name": "Tamazight (Tifinagh)", "code": "ber-Tfng" },
-        { "name": "Tamil", "code": "ta" },
-        { "name": "Tatar", "code": "tt" },
-        { "name": "Telugu", "code": "te" },
-        { "name": "Tetum", "code": "tet" },
-        { "name": "Thai", "code": "th" },
-        { "name": "Tibetan", "code": "bo" },
-        { "name": "Tigrinya", "code": "ti" },
-        { "name": "Tiv", "code": "tiv" },
-        { "name": "Tok Pisin", "code": "tpi" },
-        { "name": "Tongan", "code": "to" },
-        { "name": "Tsonga", "code": "ts" },
-        { "name": "Tswana", "code": "tn" },
-        { "name": "Tulu", "code": "tcy" },
-        { "name": "Tumbuka", "code": "tum" },
-        { "name": "Turkish", "code": "tr" },
-        { "name": "Turkmen", "code": "tk" },
-        { "name": "Tuvan", "code": "tyv" },
-        { "name": "Twi", "code": "ak" },
-        { "name": "Udmurt", "code": "udm" },
-        { "name": "Ukrainian", "code": "uk" },
-        { "name": "Urdu", "code": "ur" },
-        { "name": "Uyghur", "code": "ug" },
-        { "name": "Uzbek", "code": "uz" },
-        { "name": "Venda", "code": "ve" },
-        { "name": "Venetian", "code": "vec" },
-        { "name": "Vietnamese", "code": "vi" },
-        { "name": "Waray", "code": "war" },
-        { "name": "Welsh", "code": "cy" },
-        { "name": "Wolof", "code": "wo" },
-        { "name": "Xhosa", "code": "xh" },
-        { "name": "Yakut", "code": "sah" },
-        { "name": "Yiddish", "code": "yi" },
-        { "name": "Yoruba", "code": "yo" },
-        { "name": "Yucatec Maya", "code": "yua" },
-        { "name": "Zapotec", "code": "zap" },
-        { "name": "Zulu", "code": "zu" }
-    ];
+const listcodes: { name: string, code: string }[] = [
+    { "name": "Abkhaz", "code": "ab" },
+    { "name": "Acehnese", "code": "ace" },
+    { "name": "Acholi", "code": "ach" },
+    { "name": "Afar", "code": "aa" },
+    { "name": "Afrikaans", "code": "af" },
+    { "name": "Albanian", "code": "sq" },
+    { "name": "Alur", "code": "alz" },
+    { "name": "Amharic", "code": "am" },
+    { "name": "Arabic", "code": "ar" },
+    { "name": "Armenian", "code": "hy" },
+    { "name": "Assamese", "code": "as" },
+    { "name": "Avar", "code": "av" },
+    { "name": "Awadhi", "code": "awa" },
+    { "name": "Aymara", "code": "ay" },
+    { "name": "Azerbaijani", "code": "az" },
+    { "name": "Balinese", "code": "ban" },
+    { "name": "Bambara", "code": "bm" },
+    { "name": "Bashkir", "code": "ba" },
+    { "name": "Basque", "code": "eu" },
+    { "name": "Batak Karo", "code": "btx" },
+    { "name": "Batak Simalungun", "code": "bts" },
+    { "name": "Batak Toba", "code": "bbc" },
+    { "name": "Belarusian", "code": "be" },
+    { "name": "Bengali", "code": "bn" },
+    { "name": "Bhojpuri", "code": "bho" },
+    { "name": "Bikol", "code": "bik" },
+    { "name": "Bosnian", "code": "bs" },
+    { "name": "Breton", "code": "br" },
+    { "name": "Bulgarian", "code": "bg" },
+    { "name": "Buryat", "code": "bua" },
+    { "name": "Cantonese", "code": "yue" },
+    { "name": "Catalan", "code": "ca" },
+    { "name": "Cebuano", "code": "ceb" },
+    { "name": "Chamorro", "code": "ch" },
+    { "name": "Chechen", "code": "ce" },
+    { "name": "Chichewa", "code": "ny" },
+    { "name": "Chinese (Simplified)", "code": "zh-CN" },
+    { "name": "Chinese (Traditional)", "code": "zh-TW" },
+    { "name": "Chuvash", "code": "cv" },
+    { "name": "Corsican", "code": "co" },
+    { "name": "Crimean Tatar", "code": "crh" },
+    { "name": "Croatian", "code": "hr" },
+    { "name": "Czech", "code": "cs" },
+    { "name": "Danish", "code": "da" },
+    { "name": "Dhivehi", "code": "dv" },
+    { "name": "Dininkka", "code": "din" },
+    { "name": "Dogri", "code": "doi" },
+    { "name": "Dombe", "code": "dom" },
+    { "name": "Dutch", "code": "nl" },
+    { "name": "Dyula", "code": "dyu" },
+    { "name": "Dzongkha", "code": "dz" },
+    { "name": "English", "code": "en" },
+    { "name": "Esperanto", "code": "eo" },
+    { "name": "Estonian", "code": "et" },
+    { "name": "Ewe", "code": "ee" },
+    { "name": "Faroese", "code": "fo" },
+    { "name": "Fijian", "code": "fj" },
+    { "name": "Filipino", "code": "fil" },
+    { "name": "Finnish", "code": "fi" },
+    { "name": "French", "code": "fr" },
+    { "name": "French (Canada)", "code": "fr-CA" },
+    { "name": "Frisian", "code": "fy" },
+    { "name": "Friulian", "code": "fur" },
+    { "name": "Fulani", "code": "ff" },
+    { "name": "Ga", "code": "gaa" },
+    { "name": "Galician", "code": "gl" },
+    { "name": "Georgian", "code": "ka" },
+    { "name": "German", "code": "de" },
+    { "name": "Greek", "code": "el" },
+    { "name": "Guarani", "code": "gn" },
+    { "name": "Gujarati", "code": "gu" },
+    { "name": "Haitian Creole", "code": "ht" },
+    { "name": "Hakha Chin", "code": "cnh" },
+    { "name": "Hausa", "code": "ha" },
+    { "name": "Hawaiian", "code": "haw" },
+    { "name": "Hebrew", "code": "he" },
+    { "name": "Hindi", "code": "hi" },
+    { "name": "Hmong", "code": "hmn" },
+    { "name": "Hungarian", "code": "hu" },
+    { "name": "Hunsrik", "code": "hrx" },
+    { "name": "Iban", "code": "iba" },
+    { "name": "Icelandic", "code": "is" },
+    { "name": "Igbo", "code": "ig" },
+    { "name": "Ilocano", "code": "ilo" },
+    { "name": "Indonesian", "code": "id" },
+    { "name": "Irish", "code": "ga" },
+    { "name": "Italian", "code": "it" },
+    { "name": "Japanese", "code": "ja" },
+    { "name": "Javanese", "code": "jv" },
+    { "name": "Jingpo", "code": "kac" },
+    { "name": "Kalaallisut", "code": "kl" },
+    { "name": "Kannada", "code": "kn" },
+    { "name": "Kanuri", "code": "kr" },
+    { "name": "Kapampangan", "code": "pam" },
+    { "name": "Kazakh", "code": "kk" },
+    { "name": "Khasi", "code": "kha" },
+    { "name": "Khmer", "code": "km" },
+    { "name": "Kiga", "code": "cgg" },
+    { "name": "Kikongo", "code": "kg" },
+    { "name": "Kinyarwanda", "code": "rw" },
+    { "name": "Kituba", "code": "ktu" },
+    { "name": "Kokborok", "code": "trp" },
+    { "name": "Konkani", "code": "gom" },
+    { "name": "Korean", "code": "ko" },
+    { "name": "Krio", "code": "kri" },
+    { "name": "Kurdish (Kurmanji)", "code": "ku" },
+    { "name": "Kurdish (Sorani)", "code": "ckb" },
+    { "name": "Kyrgyz", "code": "ky" },
+    { "name": "Lao", "code": "lo" },
+    { "name": "Latavian", "code": "lv" },
+    { "name": "Ligurian", "code": "lij" },
+    { "name": "Limburgish", "code": "li" },
+    { "name": "Lingala", "code": "ln" },
+    { "name": "Lithuanian", "code": "lt" },
+    { "name": "Lombard", "code": "lmo" },
+    { "name": "Luganda", "code": "lg" },
+    { "name": "Luo", "code": "luo" },
+    { "name": "Luxembourgish", "code": "lb" },
+    { "name": "Macedonian", "code": "mk" },
+    { "name": "Madurese", "code": "mad" },
+    { "name": "Magahi", "code": "mag" },
+    { "name": "Maithili", "code": "mai" },
+    { "name": "Makassar", "code": "mak" },
+    { "name": "Malagasy", "code": "mg" },
+    { "name": "Malay", "code": "ms" },
+    { "name": "Malayalam", "code": "ml" },
+    { "name": "Maltese", "code": "mt" },
+    { "name": "Mam", "code": "mam" },
+    { "name": "Manx", "code": "gv" },
+    { "name": "Maori", "code": "mi" },
+    { "name": "Marathi", "code": "mr" },
+    { "name": "Marshallese", "code": "mh" },
+    { "name": "Marwadi", "code": "mwr" },
+    { "name": "Mauritian Creole", "code": "mfe" },
+    { "name": "Meiteilon (Manipuri)", "code": "mni-Mtei" },
+    { "name": "Minangkabau", "code": "min" },
+    { "name": "Mizo", "code": "lus" },
+    { "name": "Mongolian", "code": "mn" },
+    { "name": "Myanmar (Burmese)", "code": "my" },
+    { "name": "Nahuatl", "code": "nah" },
+    { "name": "Ndau", "code": "ndc" },
+    { "name": "Ndebele (South)", "code": "nr" },
+    { "name": "Nepalbhasha (Newari)", "code": "new" },
+    { "name": "Nepali", "code": "ne" },
+    { "name": "NKo", "code": "nko" },
+    { "name": "Norwegian", "code": "no" },
+    { "name": "Nuer", "code": "nus" },
+    { "name": "Occitan", "code": "oc" },
+    { "name": "Odia (Oriya)", "code": "or" },
+    { "name": "Oromo", "code": "om" },
+    { "name": "Ossetian", "code": "os" },
+    { "name": "Pangasinan", "code": "pag" },
+    { "name": "Papiamento", "code": "pap" },
+    { "name": "Pashto", "code": "ps" },
+    { "name": "Persian", "code": "fa" },
+    { "name": "Polish", "code": "pl" },
+    { "name": "Portuguese (Brazil)", "code": "pt-BR" },
+    { "name": "Portuguese (Portugal)", "code": "pt-PT" },
+    { "name": "Punjabi (Gurmukhi)", "code": "pa" },
+    { "name": "Punjabi (Shahmukhi)", "code": "pa-Arab" },
+    { "name": "Quechua", "code": "qu" },
+    { "name": "Qʼeqchiʼ", "code": "kek" },
+    { "name": "Romani", "code": "rom" },
+    { "name": "Romanian", "code": "ro" },
+    { "name": "Rundi", "code": "rn" },
+    { "name": "Russian", "code": "ru" },
+    { "name": "Samoan", "code": "sm" },
+    { "name": "Sango", "code": "sg" },
+    { "name": "Sanskrit", "code": "sa" },
+    { "name": "Santali", "code": "sat" },
+    { "name": "Scots Gaelic", "code": "gd" },
+    { "name": "Sepedi", "code": "nso" },
+    { "name": "Serbian", "code": "sr" },
+    { "name": "Sesotho", "code": "st" },
+    { "name": "Seychellois Creole", "code": "crs" },
+    { "name": "Shan", "code": "shn" },
+    { "name": "Shona", "code": "sn" },
+    { "name": "Sicilian", "code": "scn" },
+    { "name": "Silesian", "code": "szl" },
+    { "name": "Sindhi", "code": "sd" },
+    { "name": "Sinhala", "code": "si" },
+    { "name": "Slovak", "code": "sk" },
+    { "name": "Slovenian", "code": "sl" },
+    { "name": "Somali", "code": "so" },
+    { "name": "Spanish", "code": "es" },
+    { "name": "Sundanese", "code": "su" },
+    { "name": "Susu", "code": "sus" },
+    { "name": "Swahili", "code": "sw" },
+    { "name": "Swati", "code": "ss" },
+    { "name": "Swedish", "code": "sv" },
+    { "name": "Tahitian", "code": "ty" },
+    { "name": "Tajik", "code": "tg" },
+    { "name": "Tamazight", "code": "tzm" },
+    { "name": "Tamazight (Tifinagh)", "code": "ber-Tfng" },
+    { "name": "Tamil", "code": "ta" },
+    { "name": "Tatar", "code": "tt" },
+    { "name": "Telugu", "code": "te" },
+    { "name": "Tetum", "code": "tet" },
+    { "name": "Thai", "code": "th" },
+    { "name": "Tibetan", "code": "bo" },
+    { "name": "Tigrinya", "code": "ti" },
+    { "name": "Tiv", "code": "tiv" },
+    { "name": "Tok Pisin", "code": "tpi" },
+    { "name": "Tongan", "code": "to" },
+    { "name": "Tsonga", "code": "ts" },
+    { "name": "Tswana", "code": "tn" },
+    { "name": "Tulu", "code": "tcy" },
+    { "name": "Tumbuka", "code": "tum" },
+    { "name": "Turkish", "code": "tr" },
+    { "name": "Turkmen", "code": "tk" },
+    { "name": "Tuvan", "code": "tyv" },
+    { "name": "Twi", "code": "ak" },
+    { "name": "Udmurt", "code": "udm" },
+    { "name": "Ukrainian", "code": "uk" },
+    { "name": "Urdu", "code": "ur" },
+    { "name": "Uyghur", "code": "ug" },
+    { "name": "Uzbek", "code": "uz" },
+    { "name": "Venda", "code": "ve" },
+    { "name": "Venetian", "code": "vec" },
+    { "name": "Vietnamese", "code": "vi" },
+    { "name": "Waray", "code": "war" },
+    { "name": "Welsh", "code": "cy" },
+    { "name": "Wolof", "code": "wo" },
+    { "name": "Xhosa", "code": "xh" },
+    { "name": "Yakut", "code": "sah" },
+    { "name": "Yiddish", "code": "yi" },
+    { "name": "Yoruba", "code": "yo" },
+    { "name": "Yucatec Maya", "code": "yua" },
+    { "name": "Zapotec", "code": "zap" },
+    { "name": "Zulu", "code": "zu" }
+];
 
 let keysc: string | undefined;
 let keysp: string | undefined;
@@ -324,22 +323,22 @@ export const spotifyKey = async function spotifyKey() {
 }
 
 export const spotifyKeyToken = async function spotifyKeyToken() {
-    const bodyhttp = {"client_data":{"client_version":"1.0","client_id":"d8a5ed958d274c2e8ee717e6a4b0971d","js_sdk_data":{}}};
+    const bodyhttp = { "client_data": { "client_version": "1.0", "client_id": "d8a5ed958d274c2e8ee717e6a4b0971d", "js_sdk_data": {} } };
 
     try {
-    const req = await request(`https://clienttoken.spotify.com/v1/clienttoken`, {
-        method: "POST",
-        body: JSON.stringify(bodyhttp),
-        headers: {
-            ...commonHeaders,
-            'Origin': 'https://clienttoken.spotify.com',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-        }
-    });
+        const req = await request(`https://clienttoken.spotify.com/v1/clienttoken`, {
+            method: "POST",
+            body: JSON.stringify(bodyhttp),
+            headers: {
+                ...commonHeaders,
+                'Origin': 'https://clienttoken.spotify.com',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+        });
 
-    const res: any = await req.body.json();
-    return res.granted_token.token;
+        const res: any = await req.body.json();
+        return res.granted_token.token;
     }
     catch {
         return undefined;
@@ -380,7 +379,7 @@ export const deezerKeys = async function deezerKeys() {
 
 export const twitterKey = async function twitterKey(typeName: string) {
     try {
-        const response = await request("https://x.com/", {headers:{...commonHeaders}});
+        const response = await request("https://x.com/", { headers: { ...commonHeaders } });
         const html = await response.body.text();
         const { document } = parseHTML(html);
         twitterDocument = document;
@@ -388,19 +387,19 @@ export const twitterKey = async function twitterKey(typeName: string) {
         twitterTransaction = new ClientTransaction(twitterDocument);
         await twitterTransaction.initialize();
 
-        const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], {headers:{...commonHeaders}});
+        const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
         const res1 = await pul1.body.text();
         twitterAuth = 'AAAAAAAAA' + res1.split('"AAAAAAAAA')[1].split('"')[0];
         const queryId_user = res1.split('e.exports={queryId:')
-        .find((e: any) => e.includes(`operationName:"${typeName}"`))
-        ?.split('"')[1];
+            .find((e: any) => e.includes(`operationName:"${typeName}"`))
+            ?.split('"')[1];
         const features_user = JSON.parse(res1.split('e.exports={queryId:')
-        .find((e: any) => e.includes(`operationName:"${typeName}"`))
-        ?.split('featureSwitches:')[1].split(',field')[0] || '{}').reduce((acc: any, key: any) => {
-            acc[key] = true;
-            return acc;
-        }, {});
+            .find((e: any) => e.includes(`operationName:"${typeName}"`))
+            ?.split('featureSwitches:')[1].split(',field')[0] || '{}').reduce((acc: any, key: any) => {
+                acc[key] = true;
+                return acc;
+            }, {});
 
         twitterObj[typeName] = [
             queryId_user,
@@ -411,7 +410,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
             )
         ];
     }
-    catch (e) { 
+    catch (e) {
         console.error(e);
     }
 }
@@ -432,20 +431,20 @@ export const YTVideo = async function YTVideo(que: string) {
             }
         });
         const [response, res2] = await Promise.all([
-        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
-            headers: {
-                ...commonHeaders,
-                'content-type': 'application/json'
-            },
-            body: bodyload,
-            method: "POST"
-        }),
-        request(`https://www.youtube.com/results?search_query=${que}`, {
-            method: "GET",
-            headers: {
-                ...commonHeaders,
-            }
-        })
+            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
+                headers: {
+                    ...commonHeaders,
+                    'content-type': 'application/json'
+                },
+                body: bodyload,
+                method: "POST"
+            }),
+            request(`https://www.youtube.com/results?search_query=${que}`, {
+                method: "GET",
+                headers: {
+                    ...commonHeaders,
+                }
+            })
         ]);
         const [res, per] = await Promise.all([
             response.body.json() as Promise<any>,
@@ -477,20 +476,20 @@ export const YTMusic = async function YTMusic(que: string) {
             }
         });
         const [response, res2] = await Promise.all([
-        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
-            headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/json'
-            },
-            body: bodyload,
-            method: "POST"
-        }),
-        request(`https://music.youtube.com/search?q=${que}`, {
-            method: "GET",
-            headers: {
-                ...commonHeaders,
-            }
-        })
+            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
+                headers: {
+                    ...commonHeaders,
+                    'Content-Type': 'application/json'
+                },
+                body: bodyload,
+                method: "POST"
+            }),
+            request(`https://music.youtube.com/search?q=${que}`, {
+                method: "GET",
+                headers: {
+                    ...commonHeaders,
+                }
+            })
         ]);
         const [res, per] = await Promise.all([
             response.body.json() as Promise<any>,
@@ -509,7 +508,7 @@ export const YTMusic = async function YTMusic(que: string) {
                 });
                 testper = JSON.parse(unescaped);
             }
-        } catch {}
+        } catch { }
 
         // 1. Safely extract InnerTube results
         const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
@@ -542,18 +541,18 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
     try {
 
         const [per, per2] = await Promise.all([
-        request(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
-            headers: {
-                ...commonHeaders,
-            }
-        }),
-        request(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
-            headers: {
-                ...commonHeaders,
-            }
-        })
+            request(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
+                headers: {
+                    ...commonHeaders,
+                }
+            }),
+            request(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
+                headers: {
+                    ...commonHeaders,
+                }
+            })
         ]);
-        if(per.statusCode === 401) {
+        if (per.statusCode === 401) {
             return await SCMusic(que, true);
         }
         const [pes, pes2] = await Promise.all([
@@ -564,7 +563,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
         try {
             testpes = JSON.parse(pes2.split('type="application/json">')[1].split('</script>')[0]);
         }
-        catch {}
+        catch { }
         return { data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null] };
     } catch (e) { console.error(e); return null; }
 }
@@ -582,27 +581,27 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
     }
 
     try {
-        const perbody = {"variables":{"searchTerm":que,"offset":0,"limit":20,"numberOfTopResults":20,"includeAudiobooks":true,"includeArtistHasConcertsField":true,"includePreReleases":true,"includeAuthors":true},"operationName":"searchDesktop","extensions":{"persistedQuery":{"version":1,"sha256Hash":"fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c"}}};
+        const perbody = { "variables": { "searchTerm": que, "offset": 0, "limit": 20, "numberOfTopResults": 20, "includeAudiobooks": true, "includeArtistHasConcertsField": true, "includePreReleases": true, "includeAuthors": true }, "operationName": "searchDesktop", "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c" } } };
         const [per, per2] = await Promise.all([
-        request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=20&market=US`, {
-            headers: {
-                'Authorization': 'Bearer ' + keysp,
-                'App-Platform': 'WebPlayer',
-                ...commonHeaders,
-            }
-        }),
-        request(`https://api-partner.spotify.com/pathfinder/v2/query`, {
-            method: "POST",
-            body: JSON.stringify(perbody),
-            headers: {
-                'Content-Type': 'application/json',
-                'Origin': 'https://open.spotify.com',
-                'Authorization': 'Bearer ' + keysp,
-                'App-Platform': 'WebPlayer',
-                'Client-Token': keysptoken,
-                ...commonHeaders,
-            }
-        })
+            request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=20&market=US`, {
+                headers: {
+                    'Authorization': 'Bearer ' + keysp,
+                    'App-Platform': 'WebPlayer',
+                    ...commonHeaders,
+                }
+            }),
+            request(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+                method: "POST",
+                body: JSON.stringify(perbody),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Origin': 'https://open.spotify.com',
+                    'Authorization': 'Bearer ' + keysp,
+                    'App-Platform': 'WebPlayer',
+                    'Client-Token': keysptoken,
+                    ...commonHeaders,
+                }
+            })
         ]);
 
         if (per.statusCode === 401 || per.statusCode === 400 || per2.statusCode === 401 || per2.statusCode === 400) {
@@ -793,7 +792,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
 export const Tidal = async function Tidal(que: string, refresh?: boolean): Promise<any> {
     if (!que) return null;
-    if(refresh) {
+    if (refresh) {
         keytidal = await tidalKeys();
     }
 
@@ -805,7 +804,7 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean): Promi
             }
         });
 
-        if(pull.statusCode === 400 || pull.statusCode === 401) {
+        if (pull.statusCode === 400 || pull.statusCode === 401) {
             return await Tidal(que, true);
         }
 
@@ -819,12 +818,12 @@ export const Genius = async function Genius(que: string) {
 
     try {
         const client = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
-        headers: {
-            ...commonHeaders
-        }
+            headers: {
+                ...commonHeaders
+            }
         });
 
-        if(client.statusCode === 403) {
+        if (client.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             }
@@ -892,7 +891,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
         body: reqPayload
     });
 
-    if(req.statusCode === 302) {
+    if (req.statusCode === 302) {
         return {
             "error": "Google asking to verify you're not a bot"
         }
@@ -918,7 +917,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
                             data.push(parsed);
                         }
                     }
-                } catch {}
+                } catch { }
             }
         }
 
@@ -934,7 +933,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             }
         });
 
-        if(!innerData) {
+        if (!innerData) {
             if (retry) return { error: "Rate-limited" };
             return await Gemini(que, convo, true);
         }
@@ -953,8 +952,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const responseBody = {
         response: response,
         data: {
-        conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
-        model: 'gemini-3-flash'
+            conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
+            model: 'gemini-3-flash'
         }
     }
 
@@ -1035,7 +1034,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
-                request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
+            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp),
                 headers: {
@@ -1043,11 +1042,11 @@ export const infoYoutube = async function infoYoutube(que: string) {
                     'User-Agent': 'Bot'
                 }
             }),
-                request(`https://www.youtube.com/watch?v=${videoId}`, {
+            request(`https://www.youtube.com/watch?v=${videoId}`, {
                 method: "GET",
                 headers: {
-                ...commonHeaders,
-                'User-Agent': 'Bot'
+                    ...commonHeaders,
+                    'User-Agent': 'Bot'
                 }
             }),
             request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
@@ -1070,22 +1069,22 @@ export const infoYoutube = async function infoYoutube(que: string) {
             testpar = JSON.parse(pull2.split('ytInitialData =')[1].split(';')[0]);
         }
         catch { }
-        
+
         return {
-            "data": { 
-            "innerTube": [
-                pull?.videoDetails || pull?.microformat ? { "videoDetails": pull } : {
-                    "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
-                },
-                {
-                    ...(pull3?.videoDetails || pull3?.microformat ? { "musicDetails": pull3 } : {
-                        "error": pull3?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull3.playabilityStatus) : "Google asking to verify you're not a bot"
-                    })
-                }
-            ],
-            "youtubeWeb": {
-                ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc: any, obj: any) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
-                "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null
+            "data": {
+                "innerTube": [
+                    pull?.videoDetails || pull?.microformat ? { "videoDetails": pull } : {
+                        "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
+                    },
+                    {
+                        ...(pull3?.videoDetails || pull3?.microformat ? { "musicDetails": pull3 } : {
+                            "error": pull3?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull3.playabilityStatus) : "Google asking to verify you're not a bot"
+                        })
+                    }
+                ],
+                "youtubeWeb": {
+                    ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc: any, obj: any) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
+                    "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null
                 }
             }
         };
@@ -1116,18 +1115,18 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         let data: any;
         try {
             data = JSON.parse(html.split('ytInitialData =')[1].split(';')[0]);
-        } catch {}
+        } catch { }
 
         const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer).filter(Boolean) || [];
-        
-        const results = await Promise.all(tabs.map(async (tab: any) => {
-             if (tab.content) return { title: tab.title, content: tab.content };
-             if (!tab.endpoint?.browseEndpoint) return null;
 
-             const { browseId, params } = tab.endpoint.browseEndpoint;
-             
-             try {
-                 const bodyload = JSON.stringify({
+        const results = await Promise.all(tabs.map(async (tab: any) => {
+            if (tab.content) return { title: tab.title, content: tab.content };
+            if (!tab.endpoint?.browseEndpoint) return null;
+
+            const { browseId, params } = tab.endpoint.browseEndpoint;
+
+            try {
+                const bodyload = JSON.stringify({
                     browseId: browseId,
                     params: params,
                     context: {
@@ -1139,28 +1138,28 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                         }
                     }
                 });
-                
+
                 const req = await request('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
-                     method: "POST",
-                     headers: {
-                         ...commonHeaders,
-                         'Content-Type': 'application/json'
-                     },
-                     body: bodyload
+                    method: "POST",
+                    headers: {
+                        ...commonHeaders,
+                        'Content-Type': 'application/json'
+                    },
+                    body: bodyload
                 });
-                
+
                 const res: any = await req.body.json();
-                return { 
-                    title: tab.title, 
-                    content: res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res 
+                return {
+                    title: tab.title,
+                    content: res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res
                 };
-             } catch {
-                 return { title: tab.title, error: "Failed to fetch" };
-             }
+            } catch {
+                return { title: tab.title, error: "Failed to fetch" };
+            }
         }));
 
         const finalres = results.filter(Boolean);
-        
+
         return {
             data: finalres?.[0] ? finalres : null
         };
@@ -1168,39 +1167,39 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 }
 
 export const infoSoundcloud = async function infoSoundcloud(que: string, refresh_auth: boolean = false): Promise<any> {
-    if(!que) return null;
-    if(refresh_auth || !keysc) {
+    if (!que) return null;
+    if (refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
     try {
         const test = new URL(que);
-        if(!test.host.endsWith('soundcloud.com')) return null;
+        if (!test.host.endsWith('soundcloud.com')) return null;
         const [res, res2] = await Promise.all([
             request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
-            method: 'GET',
-            headers: {
-                ...commonHeaders
-            }
-        }),
+                method: 'GET',
+                headers: {
+                    ...commonHeaders
+                }
+            }),
             request("https://mobi.soundcloud.com" + test.pathname, {
-            method: 'GET',
-            headers: {
-                ...commonHeaders
-            }
-        })    
+                method: 'GET',
+                headers: {
+                    ...commonHeaders
+                }
+            })
         ]);
-        if(res.statusCode === 401 || res.statusCode === 400) {
+        if (res.statusCode === 401 || res.statusCode === 400) {
             return await infoSoundcloud(que, true);
         }
         const [pull, pull2Text] = await Promise.all([
             res.body.json() as Promise<any>,
             res2.body.text()
         ]);
-        
+
         let pull2: any = null;
         try {
             pull2 = JSON.parse(pull2Text.split('type="application/json">')[1].split('</script>')[0]);
-        } catch {}
+        } catch { }
 
         return { data: [pull || null, pull2?.props?.pageProps?.initialStoreState?.entities || null] };
     }
@@ -1211,10 +1210,10 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
 }
 
 export const infoSpotify = async function infoSpotify(que: string) {
-    if(!que) return null;
+    if (!que) return null;
     try {
         const test = new URL(que);
-        if(test.host !== 'open.spotify.com') return null;
+        if (test.host !== 'open.spotify.com') return null;
 
         const res = await request(`https://open.spotify.com/oembed?url=${que}`, {
             method: 'GET',
@@ -1239,14 +1238,14 @@ export const infoSpotify = async function infoSpotify(que: string) {
     }
     catch {
         return null;
-    }   
+    }
 }
 
 export const infoITunes = async function infoITunes(que: string) {
-    if(!que) return null;
+    if (!que) return null;
     try {
         const test = new URL(que);
-        if(test.host !== 'music.apple.com') return null;
+        if (test.host !== 'music.apple.com') return null;
 
         const res = await request(que, {
             method: 'GET',
@@ -1267,10 +1266,10 @@ export const infoITunes = async function infoITunes(que: string) {
 }
 
 export const pinterest = async function pinterest(que: string) {
-    if(!que) return null;
+    if (!que) return null;
     try {
-        const feat = {"options":{"query":que,"scope":"pins"},"context":{}};
-        const req = await request(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`,{
+        const feat = { "options": { "query": que, "scope": "pins" }, "context": {} };
+        const req = await request(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
             method: 'GET',
             headers: {
                 ...commonHeaders,
@@ -1311,11 +1310,11 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
             // If we can't parse the body, it might be an empty or error response
         }
 
-        if(req.status !== 200) {
-            return { 
-                data: [null, null], 
+        if (req.status !== 200) {
+            return {
+                data: [null, null],
                 error: currentInfo || { status: req.status, statusText: req.statusText }
-            };   
+            };
         }
 
         if (Object.keys(payload).length === 0) {
@@ -1337,11 +1336,11 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
         let patchResponse: any = null;
         try {
             patchResponse = await response.json();
-        } catch (e) {}
+        } catch (e) { }
 
         if (response.status < 200 || response.status >= 300) {
-            return { 
-                data: [currentInfo.code === 0 ? null : currentInfo, null], 
+            return {
+                data: [currentInfo.code === 0 ? null : currentInfo, null],
                 error: patchResponse || { status: response.status }
             };
         }
@@ -1352,7 +1351,7 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
             return fields.every(field => a[field] === b[field]);
         };
 
-        return { 
+        return {
             data: [currentInfo, patchResponse, checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
@@ -1464,7 +1463,7 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
         if (response.status !== 204) {
             try {
                 result = await response.json();
-            } catch (e) {}
+            } catch (e) { }
         }
 
         // Fallback logic for info/delete if bot token fails but webhook token is available
@@ -1472,7 +1471,7 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
             const fallbackUrl = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
             const fallbackHeaders = { ...headers };
             delete fallbackHeaders['Authorization'];
-            
+
             response = await fetch(fallbackUrl, {
                 method: method,
                 headers: fallbackHeaders,
@@ -1517,7 +1516,7 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
 };
 
 export const GettyImage = async function GettyImage(que: string) {
-    if(!que) return null;
+    if (!que) return null;
     try {
         const req = await request(`https://www.istockphoto.com/en/search/2/image?phrase=${que}&page=1`, {
             headers: {
@@ -1538,38 +1537,39 @@ export const GettyImage = async function GettyImage(que: string) {
 };
 
 export const Unsplash = async function Unsplash(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
-    const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${que}`, {
-        headers: {
-            ...commonHeaders,
-            'client-geo-region': 'global'
-        }
-    });
+        const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${que}`, {
+            headers: {
+                ...commonHeaders,
+                'client-geo-region': 'global'
+            }
+        });
 
-    if(pull.statusCode === 403) {
+        if (pull.statusCode === 403) {
+            return {
+                "error": "IP Blocked"
+            }
+        }
+
+        const res: any = await pull.body.json();
         return {
-            "error": "IP Blocked"
-        }
-    }
-
-    const res: any = await pull.body.json();
-    return { data: res?.results?.[0] ? {
-        non_premium: res?.results.filter((a: any) => !a.premium),
-        premium: res?.results.filter((a: any) => a.premium)
-    } : null
-    };
+            data: res?.results?.[0] ? {
+                non_premium: res?.results.filter((a: any) => !a.premium),
+                premium: res?.results.filter((a: any) => a.premium)
+            } : null
+        };
     } catch { return null; }
 }
 
 export const Pixiv = async function Pixiv(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const per = await request(`https://www.pixiv.net/ajax/search/artworks/${que}?word=${que}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
@@ -1578,11 +1578,11 @@ export const Pixiv = async function Pixiv(que: string) {
         return {
             data: {
                 data: items?.map((item: any) => {
-                const { url, profileImageUrl, ...rest } = item;
-                return rest;
-            }) || null,
-            relatedTags: res?.body?.relatedTags || null,
-            tagTranslation: res?.body?.tagTranslation || null,
+                    const { url, profileImageUrl, ...rest } = item;
+                    return rest;
+                }) || null,
+                relatedTags: res?.body?.relatedTags || null,
+                tagTranslation: res?.body?.tagTranslation || null,
             }
         }
     }
@@ -1593,16 +1593,16 @@ export const Pixiv = async function Pixiv(que: string) {
 }
 
 export const DiscordServers = async function DiscordServers(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const per = await request(`https://discord.com/api/v10/discovery/search?query=${que}&limit=10`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
-        if(per.statusCode === 403) {
+        if (per.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             }
@@ -1618,16 +1618,16 @@ export const DiscordServers = async function DiscordServers(que: string) {
 }
 
 export const Bilibili = async function Bilibili(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const per = await request(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${que}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
-        if(per.statusCode === 403) {
+        if (per.statusCode === 403) {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
             }
@@ -1643,16 +1643,16 @@ export const Bilibili = async function Bilibili(que: string) {
 }
 
 export const DiscordApps = async function DiscordApps(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const per = await request(`https://discord.com/api/v10/application-directory/search?query=${que}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
-        if(per.statusCode === 403) {
+        if (per.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             }
@@ -1668,22 +1668,24 @@ export const DiscordApps = async function DiscordApps(que: string) {
 }
 
 export const Jiosaavn = async function Jiosaavn(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const per = await request(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${que}`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
         const res: any = await per.body.json();
         const items = res?.results || [];
 
-        return { data: items?.map((item: any) => {
+        return {
+            data: items?.map((item: any) => {
                 const { encrypted_media_url, encrypted_drm_media_url, encrypted_media_path, ...rest } = item;
                 return rest;
-            }) || null }
+            }) || null
+        }
     }
     catch (e) {
         console.error(e);
@@ -1692,17 +1694,17 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
 }
 
 export const Twitch = async function Twitch(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
-        const bodyhttp = {"operationName":"SearchResultsPage_SearchResults","variables":{"query":que,"includeIsDJ":true},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5"}}}
+        const bodyhttp = { "operationName": "SearchResultsPage_SearchResults", "variables": { "query": que, "includeIsDJ": true }, "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5" } } }
         const per = await request(`https://gql.twitch.tv/gql`, {
-        method: "POST",
-        body: JSON.stringify(bodyhttp),
-        headers: {
-            ...commonHeaders,
-            'Client-Id': 'kimne78kx3ncx6brgo4mv6wki5h1ko',
-            'Content-Type': 'application/json'
+            method: "POST",
+            body: JSON.stringify(bodyhttp),
+            headers: {
+                ...commonHeaders,
+                'Client-Id': 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+                'Content-Type': 'application/json'
             }
         });
 
@@ -1717,13 +1719,13 @@ export const Twitch = async function Twitch(que: string) {
 }
 
 export const InstagramUser = async function InstagramUser(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
-        const bodyhttp = {"data":{"include_reel":"true","query":que},"hasQuery":true};
+        const bodyhttp = { "data": { "include_reel": "true", "query": que }, "hasQuery": true };
         const per = await request(`https://i.instagram.com/graphql/query/?doc_id=24146980661639222&variables=${JSON.stringify(bodyhttp)}`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
@@ -1738,16 +1740,16 @@ export const InstagramUser = async function InstagramUser(que: string) {
 }
 
 export const ThreadUser = async function ThreadUser(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
-        const bodyhttp = {"query":que,"first":50,"should_fetch_ig_inactive_on_text_app":true,"should_fetch_friendship_status":false,"should_fetch_fediverse_profiles":true,"hide_unconnected_private":false,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaIsCrawlerrelayprovider":false,"__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider":false};
+        const bodyhttp = { "query": que, "first": 50, "should_fetch_ig_inactive_on_text_app": true, "should_fetch_friendship_status": false, "should_fetch_fediverse_profiles": true, "hide_unconnected_private": false, "__relay_internal__pv__BarcelonaIsLoggedInrelayprovider": false, "__relay_internal__pv__BarcelonaIsCrawlerrelayprovider": false, "__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider": false };
         const per = await request(`https://www.threads.com/graphql/query?doc_id=24871030029227550&variables=${JSON.stringify(bodyhttp)}`, {
-        headers: {
-            ...commonHeaders,
-            'Origin': 'https://www.threads.com',
-            'X-IG-App-ID': '1412234116260832',
-            'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
+            headers: {
+                ...commonHeaders,
+                'Origin': 'https://www.threads.com',
+                'X-IG-App-ID': '1412234116260832',
+                'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
             }
         });
 
@@ -1762,7 +1764,7 @@ export const ThreadUser = async function ThreadUser(que: string) {
 }
 
 export const Pexels = async function Pexels(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     let session: any;
 
@@ -1771,7 +1773,7 @@ export const Pexels = async function Pexels(que: string) {
         const response = await session.get(`https://www.pexels.com/search/${que}`, {
         });
 
-        if(response.statusCode === 403) {
+        if (response.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             };
@@ -1781,30 +1783,30 @@ export const Pexels = async function Pexels(que: string) {
         try {
             pull = JSON.parse(html.split('"application/json">')?.[1]?.split('</script>')?.[0]);
         }
-        catch {}
-        if(session) session.close();
+        catch { }
+        if (session) session.close();
         return { data: pull?.props?.pageProps?.initialData || null };
     }
     catch (e) {
         console.error(e);
-        if(session) session.close();
+        if (session) session.close();
         return null;
     }
 };
 
 export const TiktokVideo = async function TiktokVideo(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${que}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
-        headers: {
-            ...commonHeaders,
-            'X-Khronos': Math.floor(Date.now() / 1000).toString()
+            headers: {
+                ...commonHeaders,
+                'X-Khronos': Math.floor(Date.now() / 1000).toString()
             }
         });
 
         const res = await pul.body.text();
-        if(res === '') {
+        if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
             }
@@ -1813,7 +1815,7 @@ export const TiktokVideo = async function TiktokVideo(que: string) {
         try {
             testres = JSON.parse(res);
         }
-        catch {}
+        catch { }
         return { data: testres?.aweme_list || null };
     }
     catch {
@@ -1822,17 +1824,17 @@ export const TiktokVideo = async function TiktokVideo(que: string) {
 }
 
 export const TiktokMusic = async function TiktokMusic(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${que}`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
         const res = await pul.body.text();
-        if(res === '') {
+        if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
             }
@@ -1841,7 +1843,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
         try {
             testres = JSON.parse(res);
         }
-        catch {}
+        catch { }
         return { data: [testres?.music || null, testres?.music_info_list || null] };
     }
     catch {
@@ -1850,17 +1852,17 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
 }
 
 export const TiktokUser = async function TiktokUser(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${que}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
-        headers: {
-            ...commonHeaders
+            headers: {
+                ...commonHeaders
             }
         });
 
         const res = await pul.body.text();
-        if(res === '') {
+        if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
             }
@@ -1869,7 +1871,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
         try {
             testres = JSON.parse(res);
         }
-        catch {}
+        catch { }
         return { data: testres?.user_list?.map((a: any) => a.user_info) || null };
     }
     catch {
@@ -1878,7 +1880,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
 }
 
 export const infoTwitterUser = async function infoTwitterUser(que: string, refresh_auth?: boolean): Promise<any> {
-    if(!que) return null;
+    if (!que) return null;
     if (refresh_auth || !twitterAuth || !twitterObj?.UserByScreenName) {
         await twitterKey("UserByScreenName");
     }
@@ -1898,13 +1900,13 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
             }
         });
 
-        if(pul.statusCode === 403) {
+        if (pul.statusCode === 403) {
             return {
                 "error": "Bad auth"
             }
         }
 
-        if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
+        if (pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
 
         const responseText = await pul.body.text();
         let res;
@@ -1915,24 +1917,24 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
         }
         let pul2;
         let res2: any = {};
-        if(res?.data?.user?.result?.rest_id) {
+        if (res?.data?.user?.result?.rest_id) {
             pul2 = await request(`https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`, {
                 headers: {
                     ...commonHeaders
                 }
             });
             try {
-            const body2 = await pul2.body.text();
-            res2 = JSON.parse(body2.split('type="application/json">')[1].split('</script>')[0]);
+                const body2 = await pul2.body.text();
+                res2 = JSON.parse(body2.split('type="application/json">')[1].split('</script>')[0]);
             }
-            catch {}
+            catch { }
         }
 
         const finalres = {
             ...(res?.data?.user?.result || null),
             timeline: res2?.props?.pageProps?.timeline?.entries?.[0] ? res2?.props?.pageProps?.timeline?.entries : null
         }
-        
+
         return { data: finalres?.rest_id ? finalres : null };
     }
     catch (e) {
@@ -1942,7 +1944,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
 }
 
 export const infoTwitterTweet = async function infoTwitterTweet(que: string, refresh_auth?: boolean): Promise<any> {
-    if(!que) return null;
+    if (!que) return null;
     if (refresh_auth || !twitterAuth || !twitterObj?.TweetResultByRestId) {
         await twitterKey("TweetResultByRestId");
     }
@@ -1950,17 +1952,17 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
     try {
         const queryId = twitterObj?.TweetResultByRestId?.[0];
         const features = JSON.stringify(twitterObj?.TweetResultByRestId?.[1]);
-        const variables = JSON.stringify({tweetId: que,includePromotedContent:true,withBirdwatchNotes:true,withVoice:true,withCommunity:true});
+        const variables = JSON.stringify({ tweetId: que, includePromotedContent: true, withBirdwatchNotes: true, withVoice: true, withCommunity: true });
 
         const [pul, pul2] = await Promise.all([
             request(`https://api.x.com/graphql/${queryId}/TweetResultByRestId?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`, {
-            headers: {
-                ...commonHeaders,
-                'content-type': 'application/json',
-                'authorization': 'Bearer ' + twitterAuth,
-                // 'x-client-transaction-id': twitterObj?.TweetResultByRestId?.[2],
-            }
-        }),
+                headers: {
+                    ...commonHeaders,
+                    'content-type': 'application/json',
+                    'authorization': 'Bearer ' + twitterAuth,
+                    // 'x-client-transaction-id': twitterObj?.TweetResultByRestId?.[2],
+                }
+            }),
             request(`https://cdn.syndication.twimg.com/tweet-result?id=${que}&lang=en&token=abc`, {
                 headers: {
                     ...commonHeaders,
@@ -1968,7 +1970,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
             })
         ]);
 
-        if(pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterTweet(que, true);
+        if (pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterTweet(que, true);
 
         const tryParseJson = async (p: any) => {
             if (p.statusCode !== 200) return null;
@@ -1976,8 +1978,8 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
         };
 
         const [res, res2] = await Promise.all([
-             pul.statusCode === 403 ? Promise.resolve({ "error": "Bad auth" }) : tryParseJson(pul),
-             tryParseJson(pul2)
+            pul.statusCode === 403 ? Promise.resolve({ "error": "Bad auth" }) : tryParseJson(pul),
+            tryParseJson(pul2)
         ]);
 
         return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
@@ -1989,7 +1991,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
 }
 
 export const redditMedia = async function redditMedia(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media`, {
@@ -1999,13 +2001,13 @@ export const redditMedia = async function redditMedia(que: string) {
             }
         });
 
-        if(req.statusCode === 403) {
+        if (req.statusCode === 403) {
             return {
                 "error": "IP Blocked"
             }
         }
 
-        if(req.statusCode === 302) {
+        if (req.statusCode === 302) {
             return {
                 "error": "Google asking to verify you're not a bot"
             }
@@ -2020,7 +2022,7 @@ export const redditMedia = async function redditMedia(que: string) {
 }
 
 export const robloxGames = async function robloxGames(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const pul1 = await request(`https://apis.roblox.com/search-api/omni-search?searchQuery=${que}&sessionId=abc`, {
@@ -2033,7 +2035,7 @@ export const robloxGames = async function robloxGames(que: string) {
         const gamesList = res1.searchResults?.flatMap((group: any) => group.contents) || [];
         const restIds = gamesList.filter((b: any) => b?.universeId).map((b: any) => b.universeId).join(',');
 
-        if(!restIds) return { data: gamesList };
+        if (!restIds) return { data: gamesList };
 
         const pul2 = await request(`https://games.roblox.com/v1/games?universeIds=${restIds}`, {
             headers: {
@@ -2073,20 +2075,20 @@ export const YTChannel = async function YTChannel(que: string) {
             }
         });
         const [response, res2] = await Promise.all([
-        request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
-            headers: {
-                ...commonHeaders,
-                'content-type': 'application/json'
-            },
-            body: bodyload,
-            method: "POST"
-        }),
-        request(`https://www.youtube.com/results?search_query=${que}&sp=EgIQAg%3D%3D`, {
-            method: "GET",
-            headers: {
-                ...commonHeaders,
-            }
-        })
+            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
+                headers: {
+                    ...commonHeaders,
+                    'content-type': 'application/json'
+                },
+                body: bodyload,
+                method: "POST"
+            }),
+            request(`https://www.youtube.com/results?search_query=${que}&sp=EgIQAg%3D%3D`, {
+                method: "GET",
+                headers: {
+                    ...commonHeaders,
+                }
+            })
         ]);
         const [res, per] = await Promise.all([
             response.body.json() as Promise<any>,
@@ -2102,7 +2104,7 @@ export const YTChannel = async function YTChannel(que: string) {
 }
 
 export const robloxAudio = async function robloxAudio(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const pul1 = await request(`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`, {
@@ -2115,7 +2117,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
         const assetList = res1.data || [];
         const assetIds = assetList.map((b: any) => b.id).join(',');
 
-        if(!assetIds) return { data: null };
+        if (!assetIds) return { data: null };
 
         const [pul2, pul3] = await Promise.all([
             request(`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`, {
@@ -2157,7 +2159,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
 }
 
 export const Bandcamp = async function Bandcamp(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const body = {
@@ -2194,15 +2196,15 @@ export const Bandcamp = async function Bandcamp(que: string) {
 }
 
 export const Capcut = async function Capcut(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const time = Math.round(Date.now() / 1000);
         const linkhost = "https://edit-api-sg.capcut.com/lv/v1/cc_web/replicate/search_templates";
-        
+
         // $cropText[$get[linkhost];-7] implementation: taking last 7 characters
         const croppedHost = linkhost.slice(-7);
-        
+
         const signStr = `9e2c|${croppedHost}|7|5.8.0|${time}||11ac`;
         const sign = crypto.createHash('md5').update(signStr).digest('hex');
 
@@ -2255,7 +2257,7 @@ export const Capcut = async function Capcut(que: string) {
 }
 
 export const redditSubreddit = async function redditSubreddit(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
         const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/.json`, {
@@ -2265,13 +2267,13 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
             }
         });
 
-        if(req.statusCode === 403) {
+        if (req.statusCode === 403) {
             return {
                 "error": "IP Blocked"
             }
         }
 
-        if(req.statusCode === 302) {
+        if (req.statusCode === 302) {
             return {
                 "error": "Google asking to verify you're not a bot"
             }
@@ -2286,7 +2288,7 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
 }
 
 export const instagramUser = async function instagramUser(que: string) {
-    if(!que) return null;
+    if (!que) return null;
     let session: any;
 
     try {
@@ -2297,7 +2299,7 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         });
 
-        if(testreq.statusCode === 302) {
+        if (testreq.statusCode === 302) {
             return {
                 error: "Please sign in"
             }
@@ -2306,7 +2308,7 @@ export const instagramUser = async function instagramUser(que: string) {
         const resreq = await testreq.body.text();
         const profile_id = resreq.split('owner-id="')[1]?.split('"')?.[0];
 
-        if(!profile_id) {
+        if (!profile_id) {
             return {
                 data: null
             }
@@ -2314,7 +2316,7 @@ export const instagramUser = async function instagramUser(que: string) {
 
         session = new Session({ preset: 'chrome-143', httpVersion: 'h3' });
 
-        const bodyhttp = {"enable_integrity_filters":true,"id":profile_id,"render_surface":"PROFILE","__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider":true,"__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider":false,"__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider":false};
+        const bodyhttp = { "enable_integrity_filters": true, "id": profile_id, "render_surface": "PROFILE", "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": true, "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": false, "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": false };
 
         const [req, req2] = await Promise.all([
             session.get(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
@@ -2369,26 +2371,26 @@ export const instagramUser = async function instagramUser(que: string) {
             post_count: source.edge_owner_to_timeline_media?.count || source.media_count,
             verified: source.is_verified,
             private: source.is_private,
-            pronouns: source.pronouns?.[0] ? source.pronouns : null 
+            pronouns: source.pronouns?.[0] ? source.pronouns : null
         } : null;
 
-        if(session) session.close();
+        if (session) session.close();
 
         return { data: [formatted || null, a || null, b || null] };
     } catch (e) {
         console.error(e);
-        if(session) session.close();
+        if (session) session.close();
         return null;
     }
 }
 
 export const infoThreadUser = async function infoThreadUser(que: string) {
-    if(!que) return null;
+    if (!que) return null;
 
     try {
-        const bodyhttp = {"username":que,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false};
-        let bodyhttp2: any = {"allow_page_info_for_lox_user":true,"first":50,"skipGhostPosts":false,"userID":null,"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider":false,"__relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider":false,"__relay_internal__pv__BarcelonaHasInlineReplyComposerrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaIsReplyApprovalsConsumptionEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasDearAlgoConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasEventBadgerelayprovider":false,"__relay_internal__pv__BarcelonaIsSearchDiscoveryEnabledrelayprovider":false,"__relay_internal__pv__BarcelonaHasPodcastConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasCommunitiesrelayprovider":false,"__relay_internal__pv__BarcelonaHasSelfThreadCountrelayprovider":false,"__relay_internal__pv__IsTagIndicatorEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDeepDiverelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostConsumptionrelayprovider":true,"__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider":false,"__relay_internal__pv__BarcelonaHasGhostPostEmojiActivationrelayprovider":false,"__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasDearAlgoWebProductionrelayprovider":false,"__relay_internal__pv__BarcelonaQuotedPostUFIEnabledrelayprovider":true,"__relay_internal__pv__BarcelonaHasTopicTagsrelayprovider":true,"__relay_internal__pv__BarcelonaIsCrawlerrelayprovider":false,"__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider":false,"__relay_internal__pv__BarcelonaHasCommunityTopContributorsrelayprovider":false,"__relay_internal__pv__BarcelonaCanSeeSponsoredContentrelayprovider":false,"__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider":false,"__relay_internal__pv__BarcelonaImplicitTrendsGKrelayprovider":false,"__relay_internal__pv__BarcelonaIsInternalUserrelayprovider":false};
-        
+        const bodyhttp = { "username": que, "__relay_internal__pv__BarcelonaIsInternalUserrelayprovider": false, "__relay_internal__pv__BarcelonaIsLoggedInrelayprovider": false, "__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider": false, "__relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider": false, "__relay_internal__pv__BarcelonaHasEventBadgerelayprovider": false };
+        let bodyhttp2: any = { "allow_page_info_for_lox_user": true, "first": 50, "skipGhostPosts": false, "userID": null, "__relay_internal__pv__BarcelonaIsLoggedInrelayprovider": false, "__relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider": false, "__relay_internal__pv__BarcelonaHasInlineReplyComposerrelayprovider": false, "__relay_internal__pv__BarcelonaIsReplyApprovalEnabledrelayprovider": false, "__relay_internal__pv__BarcelonaIsReplyApprovalsConsumptionEnabledrelayprovider": false, "__relay_internal__pv__BarcelonaHasDearAlgoConsumptionrelayprovider": true, "__relay_internal__pv__BarcelonaHasEventBadgerelayprovider": false, "__relay_internal__pv__BarcelonaIsSearchDiscoveryEnabledrelayprovider": false, "__relay_internal__pv__BarcelonaHasPodcastConsumptionrelayprovider": true, "__relay_internal__pv__BarcelonaHasCommunitiesrelayprovider": false, "__relay_internal__pv__BarcelonaHasSelfThreadCountrelayprovider": false, "__relay_internal__pv__IsTagIndicatorEnabledrelayprovider": true, "__relay_internal__pv__BarcelonaHasDeepDiverelayprovider": false, "__relay_internal__pv__BarcelonaHasGhostPostConsumptionrelayprovider": true, "__relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider": false, "__relay_internal__pv__BarcelonaHasGhostPostEmojiActivationrelayprovider": false, "__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider": true, "__relay_internal__pv__BarcelonaHasDearAlgoWebProductionrelayprovider": false, "__relay_internal__pv__BarcelonaQuotedPostUFIEnabledrelayprovider": true, "__relay_internal__pv__BarcelonaHasTopicTagsrelayprovider": true, "__relay_internal__pv__BarcelonaIsCrawlerrelayprovider": false, "__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider": false, "__relay_internal__pv__BarcelonaHasCommunityTopContributorsrelayprovider": false, "__relay_internal__pv__BarcelonaCanSeeSponsoredContentrelayprovider": false, "__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider": false, "__relay_internal__pv__BarcelonaImplicitTrendsGKrelayprovider": false, "__relay_internal__pv__BarcelonaIsInternalUserrelayprovider": false };
+
         const [per, per2] = await Promise.all([
             request(`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`, {
                 headers: {
@@ -2414,13 +2416,13 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
             if (resText2) {
                 const sjsParts = resText2.split('data-sjs>');
                 sjsParts.shift(); // Remove first part before script tags
-                
+
                 for (const part of sjsParts) {
                     if (part.includes('RelayPrefetchedStreamCache')) {
                         try {
                             const jsonStr = part.split('</script>')[0];
                             const parsed = JSON.parse(jsonStr);
-                            
+
                             // Traverse the specific path: require►0►3►0►__bbox►require►0►3►1►__bbox►result►data
                             const reqs = parsed?.require || [];
                             for (const req of reqs) {
@@ -2437,16 +2439,16 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
                                     }
                                 }
                             }
-                        } catch {}
+                        } catch { }
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e) { }
 
         let finalres: any = res?.data?.user || null;
         let edges: any = null;
 
-        if (finalres) { 
+        if (finalres) {
             bodyhttp2.userID = finalres.id;
             const per3 = await request(`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`, {
                 headers: {

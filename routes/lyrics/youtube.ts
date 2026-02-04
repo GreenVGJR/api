@@ -24,9 +24,8 @@ return c.json({"error":"Nothing to do"}, 202);
         try {
             if (!isUrl) {
                 const tes = await YTMusic(q!);
-                const item = tes?.data?.innerTube?.[0];
-                const videoId = item?.navigationEndpoint?.watchEndpoint?.videoId || 
-                                item?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+                const item = tes?.data?.[0];
+                const videoId = item?.videoId;
                 
                 if (videoId) {
                     q = "https://youtu.be/" + videoId;

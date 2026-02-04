@@ -23,6 +23,23 @@ export const commonHeaders = {
     'User-Agent': userAgent
 }
 
+const parseAbbreviatedNumber = (str: string | null | undefined) => {
+    if (!str) return null;
+    const cleanStr = str.replace(/subscribers|videos|video|views|view|watching/gi, '').trim();
+    const match = cleanStr.match(/^(\d+\.?\d*)([KMB]?)$/i);
+    if (!match) return cleanStr.replace(/,/g, '');
+    
+    let num = parseFloat(match[1]);
+    const unit = match[2].toUpperCase();
+    
+    switch (unit) {
+        case 'K': num *= 1000; break;
+        case 'M': num *= 1000000; break;
+        case 'B': num *= 1000000000; break;
+    }
+    return Math.floor(num).toString();
+};
+
 const listcodes: { name: string, code: string }[] = [
     { "name": "Abkhaz", "code": "ab" },
     { "name": "Acehnese", "code": "ace" },
@@ -427,33 +444,52 @@ export const YTVideo = async function YTVideo(que: string) {
                 }
             }
         });
-        const [response, res2] = await Promise.all([
-            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
                 headers: {
                     ...commonHeaders,
                     'content-type': 'application/json'
                 },
                 body: bodyload,
                 method: "POST"
-            }),
-            request(`https://www.youtube.com/results?search_query=${que}`, {
-                method: "GET",
-                headers: {
-                    ...commonHeaders,
-                }
-            })
-        ]);
-        const [res, per] = await Promise.all([
-            response.body.json() as Promise<any>,
-            res2.body.text()
-        ]);
-        let testpar = null;
-        try {
-            testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
-        }
-        catch { }
-        return { data: { innerTube: res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer.contents?.filter((o: any) => Object.keys(o).length > 0)?.map((v: any) => v?.videoRenderer) || null, youtubeWeb: testpar?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.filter((o: any) => Object.keys(o).length > 0).map((v: any) => v?.videoRenderer)?.filter(Boolean) || null } };
-    } catch (e) { console.error(e); return null; }
+        });
+
+        const res: any = await response.body.json();
+        let alk: any[] = [];
+        const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+        
+        inrtubeContents.forEach((item: any) => {
+            const a = item.videoRenderer;
+            if (!a) return;
+
+            try {
+                const chnl = a.longBylineText?.runs?.[0];
+                const chnl2 = chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+                const fom = {
+                    videoId: a.videoId,
+                    url: "https://www.youtube.com/watch?v=" + a.videoId,
+                    thumbnails: [
+                        ...(a.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
+                        ...(a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url }))
+                    ],
+                    title: a.title?.runs?.[0]?.text,
+                    description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join('') || "",
+                    owner: {
+                        name: a.ownerText?.runs?.[0]?.text,
+                        url: chnl2 ? ["https://www.youtube.com" + chnl2] : chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => "https://www.youtube.com" + d.listItemViewModel.rendererContext.commandContext.onTap.innertubeCommand.commandMetadata.webCommandMetadata.url),
+                        thumbnails: a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]) || (a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails || [])
+                    },
+                    isLive: a?.viewCountText?.runs?.[1]?.text?.endsWith('watching') || false,
+                    viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(' ')?.[0] || a.viewCountText?.runs?.[0]?.text),
+                    duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null
+                };
+                alk.push(fom);
+            } catch (err) {
+                console.error("Error parsing YouTube Video item:", err);
+            }
+        });
+
+        return { data: alk };
+    } catch (e) { console.error("YTSearch Global Error:", e); return null; }
 }
 
 export const YTMusic = async function YTMusic(que: string) {
@@ -472,60 +508,62 @@ export const YTMusic = async function YTMusic(que: string) {
                 }
             }
         });
-        const [response, res2] = await Promise.all([
-            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
                 headers: {
                     ...commonHeaders,
                     'Content-Type': 'application/json'
                 },
                 body: bodyload,
                 method: "POST"
-            }),
-            request(`https://music.youtube.com/search?q=${que}`, {
-                method: "GET",
-                headers: {
-                    ...commonHeaders,
-                }
-            })
-        ]);
-        const [res, per] = await Promise.all([
-            response.body.json() as Promise<any>,
-            res2.body.text()
-        ]);
+        });
 
-        let testper: any = null;
-        try {
-            const dataStr = per.split("data: '")[2]?.split("'")[0];
-            if (dataStr) {
-                const unescaped = dataStr.replace(/\\(x[0-9a-fA-F]{2}|.)/g, (match: string, p1: string) => {
-                    if (p1.startsWith('x')) return String.fromCharCode(parseInt(p1.slice(1), 16));
-                    if (p1 === '\\') return '\\';
-                    if (p1 === "'") return "'";
-                    return match;
-                });
-                testper = JSON.parse(unescaped);
-            }
-        } catch { }
+        const res: any = await response.body.json();
 
-        // 1. Safely extract InnerTube results
         const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
 
-        // 2. Safely extract YouTube Music Web results
-        let youtubeMusicWebResults: any[] = [];
-        if (testper) {
-            const sections = testper?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-            // Find the section that actually contains the musicShelfRenderer
-            const musicShelf = sections.find((section: any) => section.musicShelfRenderer)?.musicShelfRenderer;
-            youtubeMusicWebResults = musicShelf?.contents || [];
-        }
+        let alk: any[] = [];
+        innerTubeResults.forEach((item: any) => {
+            const a = item.musicResponsiveListItemRenderer;
+            if (!a) return;
+
+            try {
+                const flexColumn1 = a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+                const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+                
+                // Find any run that looks like an artist/channel (has a browseId)
+                const artistRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r.navigationEndpoint.browseEndpoint.browseId.startsWith('MPRE'));
+                // Find any run that looks like an album (usually starts with MPRE)
+                const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('MPRE'));
+                // The duration is almost always the last run that contains ":" 
+                const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(':')).pop() || flexColumn1[flexColumn1.length - 1];
+
+                const kas = {
+                    browseId: artistRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
+                    albumBrowseId: albumRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
+                    playlistId: a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint?.playlistId,
+                    videoId: a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId,
+                    url: (a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId) ? "https://music.youtube.com/watch?v=" + (a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId) : null,
+                    thumbnails: (a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
+                    title: flexColumn0[0]?.text,
+                    owner: {
+                        name: artistRun?.text || flexColumn1[0]?.text || "Unknown",
+                        url: artistRun?.navigationEndpoint?.browseEndpoint?.browseId ? "https://music.youtube.com/channel/" + artistRun.navigationEndpoint.browseEndpoint.browseId : null
+                    },
+                    duration: durationRun?.text || null
+                };
+                alk.push(kas);
+            } catch (err) {
+                console.error("Error parsing YouTube Music item:", err);
+            }
+        });
 
         return {
-            data: {
-                innerTube: innerTubeResults.filter((o: any) => o.musicResponsiveListItemRenderer).map((v: any) => v.musicResponsiveListItemRenderer) || null,
-                youtubeMusicWeb: youtubeMusicWebResults.filter((o: any) => o.musicResponsiveListItemRenderer).map((v: any) => v.musicResponsiveListItemRenderer) || null
-            }
+            data: alk
         };
-    } catch { return null; }
+    } catch (e) { 
+        console.error("YTMusic Global Error:", e);
+        return null; 
+    }
 }
 
 export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean): Promise<any> {
@@ -849,6 +887,8 @@ export const Genius = async function Genius(que: string) {
         const songs = resSong?.error ? resSong : (resSong?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null);
         const multi = resMulti?.error ? resMulti : (resMulti?.response?.sections || null);
 
+        if (session) session.close();
+
         return {
             data: [
                 songs,
@@ -857,9 +897,8 @@ export const Genius = async function Genius(que: string) {
         };
     } catch (e) {
         console.error(e);
-        return null;
-    } finally {
         if (session) session.close();
+        return null;
     }
 }
 
@@ -1057,7 +1096,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
     if (!videoId) return null;
 
     try {
-        const bodyhttp = { videoId: videoId, context: { client: { clientName: 2, clientVersion: "2.20261231" } } }
+        const bodyhttp = { videoId: videoId, context: { client: { clientName: 5, clientVersion: "20.40.45" } } }
         const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
 
         const [res, res2, res3] = await Promise.all([
@@ -1076,7 +1115,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
                     'User-Agent': 'Bot'
                 }
             }),
-            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
+            request('https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs.tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents.playlistPanelVideoRenderer(videoId,title,longBylineText,thumbnail,shortBylineText,badges)', {
                 method: "POST",
                 body: JSON.stringify(bodyhttp2),
                 headers: {
@@ -1097,6 +1136,8 @@ export const infoYoutube = async function infoYoutube(que: string) {
         }
         catch { }
 
+        const finalpull3: any = pull3.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer;
+
         return {
             "data": {
                 "innerTube": [
@@ -1104,8 +1145,8 @@ export const infoYoutube = async function infoYoutube(que: string) {
                         "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
                     },
                     {
-                        ...(pull3?.videoDetails || pull3?.microformat ? { "musicDetails": pull3 } : {
-                            "error": pull3?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull3.playabilityStatus) : "Google asking to verify you're not a bot"
+                        ...(finalpull3 ? { "musicDetails": finalpull3 } : {
+                            "error": null
                         })
                     }
                 ],
@@ -2096,8 +2137,7 @@ export const YTChannel = async function YTChannel(que: string) {
             query: que,
             params: "EgIQAg%3D%3D",
             context: {
-                client:
-                {
+                client: {
                     clientName: "WEB",
                     clientVersion: "2.20251212",
                     hl: "en",
@@ -2105,33 +2145,58 @@ export const YTChannel = async function YTChannel(que: string) {
                 }
             }
         });
-        const [response, res2] = await Promise.all([
-            request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
-                headers: {
-                    ...commonHeaders,
-                    'content-type': 'application/json'
-                },
-                body: bodyload,
-                method: "POST"
-            }),
-            request(`https://www.youtube.com/results?search_query=${que}&sp=EgIQAg%3D%3D`, {
-                method: "GET",
-                headers: {
-                    ...commonHeaders,
-                }
-            })
-        ]);
-        const [res, per] = await Promise.all([
-            response.body.json() as Promise<any>,
-            res2.body.text()
-        ]);
-        let testpar: any = null;
-        try {
-            testpar = JSON.parse(per.split('ytInitialData =')[1].split(';')[0]);
-        }
-        catch { }
-        return { data: { innerTube: res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer.contents?.filter((o: any) => Object.keys(o).length > 0)?.map((v: any) => v?.channelRenderer) || null, youtubeWeb: testpar?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.filter((o: any) => Object.keys(o).length > 0).map((v: any) => v?.channelRenderer)?.filter(Boolean) || null } };
-    } catch { return null; }
+
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
+        });
+
+        const res: any = await response.body.json();
+        const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+
+        let alk: any[] = [];
+        contents.forEach((item: any) => {
+            const a = item.channelRenderer;
+            if (!a) return;
+
+            try {
+                const subRuns = a.subscriberCountText?.runs?.map((r: any) => r.text) || [];
+                const videoRuns = a.videoCountText?.runs?.map((r: any) => r.text) || [];
+                const allMetadata = [...subRuns, ...videoRuns, a.subscriberCountText?.simpleText, a.videoCountText?.simpleText].filter(Boolean);
+
+                const handle = allMetadata.find(t => t.startsWith('@'));
+                const subs = allMetadata.find(t => t.toLowerCase().includes('subscriber'));
+                const videos = allMetadata.find(t => t.toLowerCase().includes('video') || (t.match(/^\d+/) && !t.includes('subscriber') && !t.startsWith('@')));
+
+                const fom = {
+                    channelId: a.channelId,
+                    url: "https://www.youtube.com/channel/" + a.channelId,
+                    handle: handle || null,
+                    thumbnails: (a.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
+                    name: a.title?.simpleText || a.title?.runs?.[0]?.text,
+                    description: a.descriptionSnippet?.runs?.map((r: any) => r.text).join('') || "",
+                    subscriberCount: parseAbbreviatedNumber(subs),
+                    videoCount: parseAbbreviatedNumber(videos),
+                    verified: !!a.ownerBadges?.find((b: any) => 
+                        b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED" || 
+                        b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED_ARTIST"
+                    )
+                };
+                alk.push(fom);
+            } catch (err) {
+                console.error("Error parsing YouTube Channel item:", err);
+            }
+        });
+
+        return { data: alk };
+    } catch (e) { 
+        console.error("YTChannel Global Error:", e);
+        return null; 
+    }
 }
 
 export const robloxAudio = async function robloxAudio(que: string) {

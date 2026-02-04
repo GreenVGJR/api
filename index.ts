@@ -59,7 +59,6 @@ const connector = buildConnector({
     family: 4,
     rejectUnauthorized: false,
     minVersion: 'TLSv1.2',
-    maxVersion: 'TLSv1.3',
     ciphers: chromeCiphers,        // Controls JA3 cipher component
     ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
     maxCachedSessions: 0,          // Disable session caching for unique fingerprints
@@ -69,7 +68,6 @@ const connector = buildConnector({
 
 setGlobalDispatcher(new Agent({
     connections: 1,
-    pipelining: 1,
     allowH2: true,
     connect: connector,            // Pass connector function here
     headersTimeout: 60000,

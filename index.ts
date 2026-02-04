@@ -37,54 +37,67 @@ const shuffledCiphers = [
 
 // For specific TLS fingerprinting, you might want exact browser ciphers:
 const chromeCiphers = [
-  'TLS_AES_128_GCM_SHA256',
-  'TLS_AES_256_GCM_SHA384',
-  'TLS_CHACHA20_POLY1305_SHA256',
-  'ECDHE-ECDSA-AES128-GCM-SHA256',
-  'ECDHE-RSA-AES128-GCM-SHA256',
-  'ECDHE-ECDSA-AES256-GCM-SHA384',
-  'ECDHE-RSA-AES256-GCM-SHA384',
-  'ECDHE-ECDSA-CHACHA20-POLY1305',
-  'ECDHE-RSA-CHACHA20-POLY1305',
-  'ECDHE-RSA-AES128-SHA',
-  'ECDHE-RSA-AES256-SHA',
-  'AES128-GCM-SHA256',
-  'AES256-GCM-SHA384',
-  'AES128-SHA',
-  'AES256-SHA'
+    'TLS_AES_128_GCM_SHA256',
+    'TLS_AES_256_GCM_SHA384',
+    'TLS_CHACHA20_POLY1305_SHA256',
+    'ECDHE-ECDSA-AES128-GCM-SHA256',
+    'ECDHE-RSA-AES128-GCM-SHA256',
+    'ECDHE-ECDSA-AES256-GCM-SHA384',
+    'ECDHE-RSA-AES256-GCM-SHA384',
+    'ECDHE-ECDSA-CHACHA20-POLY1305',
+    'ECDHE-RSA-CHACHA20-POLY1305',
+    'ECDHE-RSA-AES128-SHA',
+    'ECDHE-RSA-AES256-SHA',
+    'AES128-GCM-SHA256',
+    'AES256-GCM-SHA384',
+    'AES128-SHA',
+    'AES256-SHA'
 ].join(':');
 
 // Create custom connector with TLS fingerprint control
 const connector = buildConnector({
-  family: 4,
-  rejectUnauthorized: false,
-  minVersion: 'TLSv1.2',
-  maxVersion: 'TLSv1.3',
-  ciphers: chromeCiphers,        // Controls JA3 cipher component
-  ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
-  maxCachedSessions: 0,          // Disable session caching for unique fingerprints
-  noDelay: true,
-  keepAlive: true
+    family: 4,
+    rejectUnauthorized: false,
+    minVersion: 'TLSv1.2',
+    maxVersion: 'TLSv1.3',
+    ciphers: chromeCiphers,        // Controls JA3 cipher component
+    ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
+    maxCachedSessions: 0,          // Disable session caching for unique fingerprints
+    noDelay: true,
+    keepAlive: true
 });
 
 setGlobalDispatcher(new Agent({
-  connections: 1,
-  pipelining: 1,
-  allowH2: true,
-  connect: connector,            // Pass connector function here
-  headersTimeout: 60000,
-  bodyTimeout: 60000,
-  connectTimeout: 60000,
-  keepAliveTimeout: 60000
+    connections: 1,
+    pipelining: 1,
+    allowH2: true,
+    connect: connector,            // Pass connector function here
+    headersTimeout: 60000,
+    bodyTimeout: 60000,
+    connectTimeout: 60000,
+    keepAliveTimeout: 60000
 }));
 
 
 const app = new Hono({ strict: false });
 
+app.use('*', async (c: Context, next: Next) => {
+    const host = c.req.header('host');
+    const isLocal = host?.includes('localhost') || host?.includes('127.0.0.1') || host?.includes('[::1]');
+    
+    if (host !== 'api.vgjr.top' && !isLocal) {
+        const url = new URL(c.req.url);
+        url.host = 'api.vgjr.top';
+        c.header('Refresh', `0; url=${url.toString()}`);
+        return c.text(`Redirecting...`);
+    }
+    await next();
+});
+
 const port = 3000;
 const starttime = Date.now();
 
-if(typeof Bun !== "object") {
+if (typeof Bun !== "object") {
     serve({
         fetch: app.fetch,
         port: port
@@ -104,7 +117,7 @@ const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const { generate_hash, buildId: buildIdConfig } = config;
 
-const BUILD_ID = buildIdConfig === true 
+const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
@@ -119,30 +132,30 @@ app.use('*', cors({
 if (BUILD_ID) {
     const apiPrefixes = ['search', 'lyrics', 'tools', 'info'];
     const excludedPaths = ['favicon.ico', 'robots.txt'];
-    
+
     app.use('*', async (c: Context, next: Next) => {
         const url = new URL(c.req.url);
         const pathname = url.pathname;
         const pathParts = pathname.split('/').filter(Boolean);
-        
+
         if (pathParts.length >= 1) {
             const firstSegment = pathParts[0];
-            
+
             if (excludedPaths.includes(firstSegment)) {
                 await next();
                 return;
             }
-            
+
             if (apiPrefixes.includes(firstSegment)) {
                 await next();
                 return;
             }
-            
+
             if (firstSegment !== BUILD_ID) {
-                return c.json({error: "Signature mismatch"}, 403);
+                return c.json({ error: "Signature mismatch" }, 403);
             }
         }
-        
+
         await next();
     });
 }
@@ -158,7 +171,7 @@ app.get('/robots.txt', (c: Context) => {
 
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla) return c.body(null, 204);
+    if (!isMozilla) return c.body(null, 204);
     const renderJson = c.req.query('json') !== undefined;
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
@@ -167,14 +180,14 @@ app.get('/', (c: Context) => {
     return stream(c, async (stream) => {
         await stream.write('');
         const listapi = [{
-                domRendering: typeRender,
-                uptime: new Date(Date.now() - starttime).toISOString().slice(11,19),
-                service: "Hono",
-                runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-                fluid: true
-            },
-            {
-                routes: {
+            domRendering: typeRender,
+            uptime: new Date(Date.now() - starttime).toISOString().slice(11, 19),
+            service: "Hono",
+            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
+            fluid: true
+        },
+        {
+            routes: {
                 search: [
                     "/search/youtube/video?q=",
                     "/search/youtube/music?q=",
@@ -218,31 +231,31 @@ app.get('/', (c: Context) => {
                     ],
                     discord: {
                         server: [
-                        "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+                            "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
                         ],
                         webhook: [{
                             create: [
                                 "/tools/discord/webhook/create?token=&channelId=&name=&avatar="
-                            ] 
+                            ]
                         },
                         {
                             info: [
-                            "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="
+                                "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="
                             ]
                         },
                         {
                             delete: [
-                            "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="
+                                "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="
                             ]
                         },
                         {
                             send: [
-                            "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="
+                                "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="
                             ]
                         },
                         {
                             list: [
-                            "/tools/discord/webhook/list?token=&channelId="
+                                "/tools/discord/webhook/list?token=&channelId="
                             ]
                         }
                         ]
@@ -299,29 +312,29 @@ if (BUILD_ID) {
     app.use('*', async (c: Context, next: Next) => {
         const url = new URL(c.req.url);
         const pathname = url.pathname;
-        
+
         if (apiPrefixesRoute.some(prefix => pathname.startsWith(prefix))) {
             const redirectUrl = new URL(c.req.url);
             redirectUrl.pathname = `/${BUILD_ID}${pathname}`;
             return c.redirect(redirectUrl.toString(), 302);
         }
-        
+
         await next();
     });
 }
 
 app.use('*', async (c: Context, next: Next) => {
-    if(BUILD_ID) {
-    const url = new URL(c.req.url);
-    const pathname = url.pathname;
-    const checkElement = pathname.split('/').slice(1);
-    if(checkElement[0] !== BUILD_ID) {
-        return c.json({error: "Signature mismatch"}, 403);
+    if (BUILD_ID) {
+        const url = new URL(c.req.url);
+        const pathname = url.pathname;
+        const checkElement = pathname.split('/').slice(1);
+        if (checkElement[0] !== BUILD_ID) {
+            return c.json({ error: "Signature mismatch" }, 403);
         }
     }
     const checkexists = c.notFound();
 
-    if(checkexists) {
+    if (checkexists) {
         return c.text('Not Found', 404);
     }
     await next();

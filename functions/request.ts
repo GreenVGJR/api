@@ -12,7 +12,7 @@ import { Buffer } from 'buffer';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0';
 
 export const commonHeaders = {
     'Accept': 'text/html, application/json, */*',
@@ -20,10 +20,7 @@ export const commonHeaders = {
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
-    'User-Agent': userAgent,
-    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="144", "Chromium";v="144"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"'
+    'User-Agent': userAgent
 }
 
 const listcodes: { name: string, code: string }[] = [
@@ -609,10 +606,10 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
         }
         else {
             const [pes, pes2] = await Promise.all([
-                per.body?.json() as Promise<any>,
-                per2.body?.json() as Promise<any>
+                (per.statusCode === 403 || per.statusCode === 429) ? Promise.resolve(null) : per.body?.json() as Promise<any>,
+                (per2.statusCode === 403 || per2.statusCode === 429) ? Promise.resolve(null) : per2.body?.json() as Promise<any>
             ]);
-            return { data: [pes?.tracks?.items || null, pes2?.data?.searchV2 || null] };
+            return { data: [pes === null ? { error: "Rate-limited" } : (pes?.tracks?.items || null), pes2 === null ? { error: "Rate-limited" } : (pes2?.data?.searchV2 || null)] };
         }
     } catch { return null; }
 }
@@ -815,9 +812,11 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean): Promi
 
 export const Genius = async function Genius(que: string) {
     if (!que) return null;
+    let session: any;
 
     try {
-        const client = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
+        session = new Session({ httpVersion: 'auto' });
+        const client = await session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
@@ -829,11 +828,16 @@ export const Genius = async function Genius(que: string) {
             }
         }
 
-        const checkres: any = await client.body.text();
+        const checkres: any = client.text;
 
         const res = JSON.parse(checkres);
         return { data: res?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null };
-    } catch (e) { console.error(e); return null; }
+    } catch (e) {
+        console.error(e);
+        return null;
+    } finally {
+        if (session) session.close();
+    }
 }
 
 export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {
@@ -1769,8 +1773,12 @@ export const Pexels = async function Pexels(que: string) {
     let session: any;
 
     try {
-        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
+        session = new Session({ httpVersion: 'h3' });
         const response = await session.get(`https://www.pexels.com/search/${que}`, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
+            }
         });
 
         if (response.statusCode === 403) {

@@ -84,8 +84,9 @@ const app = new Hono({ strict: false });
 app.use('*', async (c: Context, next: Next) => {
     const host = c.req.header('host');
     const isLocal = host?.includes('localhost') || host?.includes('127.0.0.1') || host?.includes('[::1]');
-    
-    if (host !== 'api.vgjr.top' && !isLocal) {
+    const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
+
+    if (!isAllowed && !isLocal) {
         const url = new URL(c.req.url);
         url.host = 'api.vgjr.top';
         c.header('Refresh', `0; url=${url.toString()}`);

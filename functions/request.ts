@@ -817,7 +817,7 @@ export const Genius = async function Genius(que: string) {
     try {
         session = new Session({ 
             preset: 'chrome-144',
-            httpVersion: 'h2' 
+            httpVersion: 'h1' 
         });
 
         const [reqSong, reqMulti] = await Promise.all([

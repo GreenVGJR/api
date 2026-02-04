@@ -821,18 +821,16 @@ export const Genius = async function Genius(que: string) {
                 headers: {
                     ...commonHeaders,
                     'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Referer': 'https://genius.com/',
-                    'Accept-Language': 'en-US,en;q=0.9'
+                    'Origin': 'https://genius.com/',
+                    'Referer': 'https://genius.com/'
                 }
             }),
             session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
                     'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)',
-                    'Accept': 'application/json, text/plain, */*',
+                    'Origin': 'https://genius.com/',
                     'Referer': 'https://genius.com/',
-                    'Accept-Language': 'en-US,en;q=0.9'
                 }
             })
         ]);

@@ -67,7 +67,8 @@ const connector = buildConnector({
 });
 
 setGlobalDispatcher(new Agent({
-    connections: 1,
+    connections: 100,
+    pipelining: 100,
     allowH2: true,
     connect: connector,            // Pass connector function here
     headersTimeout: 60000,

@@ -1,32 +1,8 @@
 import { request as undiciRequest, Agent, interceptors } from 'undici';
+import { Session } from 'httpcloak';
 
-const request = async (url: string | URL, options?: any) => {
-    let { maxRedirections = 5, ...rest } = options || {};
-    let currentUrl = url;
-    let redirectCount = 0;
+const request = undiciRequest;
 
-    while (true) {
-        // Ensure maxRedirections is NOT passed to undici
-        const res = await undiciRequest(currentUrl, { 
-            ...rest
-        });
-
-        const code = res.statusCode;
-        if (code >= 300 && code < 400 && res.headers.location && redirectCount < maxRedirections) {
-            // Consume the body of the redirect response to release resources
-            await res.body.text();
-
-            const location = Array.isArray(res.headers.location) ? res.headers.location[0] : res.headers.location;
-            currentUrl = new URL(location as string, currentUrl).toString();
-            redirectCount++;
-            continue;
-        }
-
-        return res;
-    }
-};
-// @ts-ignore
-import { CurlImpersonateHttpClient, CurlImpersonate } from 'apify-node-curl-impersonate';
 // @ts-ignore
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from 'linkedom';
@@ -37,7 +13,7 @@ import { Buffer } from 'buffer';
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 
-const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0';
+const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
 
 export const commonHeaders = {
     'Accept': 'text/html, application/json, */*',
@@ -45,7 +21,10 @@ export const commonHeaders = {
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
-    'User-Agent': userAgent
+    'User-Agent': userAgent,
+    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="132", "Chromium";v="132"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"'
 }
 
 const listcodes: {name: string, code: string}[] = [
@@ -316,28 +295,32 @@ function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] 
 }
 
 export const soundcloudKey = async function soundcloudKey() {
-    const rest = await request('https://m.soundcloud.com', {
-        method: 'GET',
-        headers: {
-            ...commonHeaders,
-        }
-    })
-        .then(a => a.body.text())
-        .then(b => b.split('"clientId":"')[1].split('"')[0])
-        .catch(() => undefined);
-    return rest;
+    try {
+        const res = await request('https://m.soundcloud.com', {
+            method: 'GET',
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        const text = await res.body.text();
+        return text.split('"clientId":"')[1].split('"')[0];
+    } catch {
+        return undefined;
+    }
 }
 
 export const spotifyKey = async function spotifyKey() {
-    const rest = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", "3BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
-        headers: {
-            ...commonHeaders,
-        }
-    })
-        .then(a => a.body.text())
-        .then(b => b.split('"accessToken":"')[1].split('"')[0])
-        .catch(() => undefined);
-    return rest;
+    try {
+        const res = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        const text = await res.body.text();
+        return text.split('"accessToken":"')[1].split('"')[0];
+    } catch {
+        return undefined;
+    }
 }
 
 export const spotifyKeyToken = async function spotifyKeyToken() {
@@ -410,10 +393,10 @@ export const twitterKey = async function twitterKey(typeName: string) {
         const res1 = await pul1.body.text();
         twitterAuth = 'AAAAAAAAA' + res1.split('"AAAAAAAAA')[1].split('"')[0];
         const queryId_user = res1.split('e.exports={queryId:')
-        .find(e => e.includes(`operationName:"${typeName}"`))
+        .find((e: any) => e.includes(`operationName:"${typeName}"`))
         ?.split('"')[1];
         const features_user = JSON.parse(res1.split('e.exports={queryId:')
-        .find(e => e.includes(`operationName:"${typeName}"`))
+        .find((e: any) => e.includes(`operationName:"${typeName}"`))
         ?.split('featureSwitches:')[1].split(',field')[0] || '{}').reduce((acc: any, key: any) => {
             acc[key] = true;
             return acc;
@@ -836,10 +819,8 @@ export const Genius = async function Genius(que: string) {
 
     try {
         const client = await request(`https://genius.com/api/search/song?&per_page=10&q=${que}`, {
-        method: 'GET',
         headers: {
-            ...commonHeaders,
-            'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)'
+            ...commonHeaders
         }
         });
 
@@ -1783,38 +1764,30 @@ export const ThreadUser = async function ThreadUser(que: string) {
 export const Pexels = async function Pexels(que: string) {
     if(!que) return null;
 
+    let session: any;
+
     try {
-        const response = await request(`https://www.pexels.com/search/${que}`, {
-            dispatch: new Agent({
-                allowH2: true,
-                connect: {
-                    family: 4,
-                    rejectUnauthorized: false,
-                    minVersion: 'TLSv1.3',
-                    noDelay: true,
-                    keepAlive: true
-                }
-            }),
-            headers: {
-                ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/2.0) Chrome/145.0.0.0'
-            }
+        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
+        const response = await session.get(`https://www.pexels.com/search/${que}`, {
         });
+
         if(response.statusCode === 403) {
             return {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             };
         }
-        const html = await response.body.text();
+        const html = response.text;
         let pull = null;
         try {
             pull = JSON.parse(html.split('"application/json">')?.[1]?.split('</script>')?.[0]);
         }
         catch {}
+        if(session) session.close();
         return { data: pull?.props?.pageProps?.initialData || null };
     }
     catch (e) {
         console.error(e);
+        if(session) session.close();
         return null;
     }
 };
@@ -2314,6 +2287,7 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
 
 export const instagramUser = async function instagramUser(que: string) {
     if(!que) return null;
+    let session: any;
 
     try {
         const testreq = await request(`https://www.instagram.com/${que}/embed`, {
@@ -2338,17 +2312,17 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         }
 
+        session = new Session({ preset: 'chrome-143', httpVersion: 'h3' });
+
         const bodyhttp = {"enable_integrity_filters":true,"id":profile_id,"render_surface":"PROFILE","__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider":true,"__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider":false,"__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider":false};
 
         const [req, req2] = await Promise.all([
-            request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+            session.get(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
                 headers: {
-                    ...commonHeaders,
-                    'User-Agent': `Instagram ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (36/16; 540dpi; 1080x2340; samsung; SM-S928U; e3q; qcom; en_US; ${getRandomInt(100000000, 999999999)})`,
-                    'Origin': 'https://www.instagram.com',
-                    'X-Ig-App-Id': "936619743392459",
-                    'X-Asbd-Id': "198387",
-                    'X-Ig-Www-Claim': "0"
+                    'X-IG-App-ID': "936619743392459",
+                    'X-ASBD-ID': "198387",
+                    'X-IG-WWW-Claim': "0",
+                    'Origin': 'https://www.instagram.com'
                 }
             }),
             request(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
@@ -2366,7 +2340,10 @@ export const instagramUser = async function instagramUser(que: string) {
         let b: any = null;
 
         const [res, res2]: any = await Promise.all([
-            req.body.json().catch(() => null),
+            Promise.resolve().then(() => {
+                if (!req.text || req.text.trim() === "") return null;
+                try { return req.json(); } catch { return null; }
+            }),
             req2.body.json().catch(() => null)
         ]);
 
@@ -2374,9 +2351,7 @@ export const instagramUser = async function instagramUser(que: string) {
         b = res2?.data?.user || res2?.data || res2;
 
         if (!a && req.statusCode !== 200 && req.statusCode !== 404) {
-            a = {
-                ...res
-            };
+            try { a = req.json(); } catch { a = { body: req.text }; }
         }
 
         const source = (a && a.id) ? a : (b?.user ? b.user : b);
@@ -2397,10 +2372,12 @@ export const instagramUser = async function instagramUser(que: string) {
             pronouns: source.pronouns?.[0] ? source.pronouns : null 
         } : null;
 
+        if(session) session.close();
+
         return { data: [formatted || null, a || null, b || null] };
-    }
-    catch (e) {
+    } catch (e) {
         console.error(e);
+        if(session) session.close();
         return null;
     }
 }

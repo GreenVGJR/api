@@ -1,4 +1,3 @@
-import { setGlobalDispatcher, Agent, interceptors } from 'undici';
 import { fileURLToPath } from 'url';
 import { Hono, Context, Next } from 'hono';
 import { serve } from '@hono/node-server';
@@ -24,22 +23,61 @@ const lyrics: any[] = lyrics_raw;
 const tools: any[] = tools_raw;
 const info: any[] = info_raw;
 
+import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
+import tls from 'tls';
+
+// Custom cipher list to mimic browser fingerprint (reorder ciphers)
+const defaultCiphers = tls.DEFAULT_CIPHERS.split(':');
+const shuffledCiphers = [
+    defaultCiphers[1],
+    defaultCiphers[2],
+    defaultCiphers[0],
+    ...defaultCiphers.slice(3)
+].join(':');
+
+// For specific TLS fingerprinting, you might want exact browser ciphers:
+const chromeCiphers = [
+  'TLS_AES_128_GCM_SHA256',
+  'TLS_AES_256_GCM_SHA384',
+  'TLS_CHACHA20_POLY1305_SHA256',
+  'ECDHE-ECDSA-AES128-GCM-SHA256',
+  'ECDHE-RSA-AES128-GCM-SHA256',
+  'ECDHE-ECDSA-AES256-GCM-SHA384',
+  'ECDHE-RSA-AES256-GCM-SHA384',
+  'ECDHE-ECDSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-AES128-SHA',
+  'ECDHE-RSA-AES256-SHA',
+  'AES128-GCM-SHA256',
+  'AES256-GCM-SHA384',
+  'AES128-SHA',
+  'AES256-SHA'
+].join(':');
+
+// Create custom connector with TLS fingerprint control
+const connector = buildConnector({
+  family: 4,
+  rejectUnauthorized: false,
+  minVersion: 'TLSv1.2',
+  maxVersion: 'TLSv1.3',
+  ciphers: chromeCiphers,        // Controls JA3 cipher component
+  ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
+  maxCachedSessions: 0,          // Disable session caching for unique fingerprints
+  noDelay: true,
+  keepAlive: true
+});
+
 setGlobalDispatcher(new Agent({
-    connections: 10,
-    pipelining: 1,
-    allowH2: true,
-    connect: {
-        family: 4,
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2',
-        noDelay: true,
-        keepAlive: true
-    },
-    headersTimeout: 30000,
-    bodyTimeout: 30000,
-    connectTimeout: 15000,
-    keepAliveTimeout: 10000
+  connections: 1,
+  pipelining: 1,
+  allowH2: true,
+  connect: connector,            // Pass connector function here
+  headersTimeout: 60000,
+  bodyTimeout: 60000,
+  connectTimeout: 60000,
+  keepAliveTimeout: 60000
 }));
+
 
 const app = new Hono({ strict: false });
 

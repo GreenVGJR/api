@@ -818,10 +818,22 @@ export const Genius = async function Genius(que: string) {
         session = new Session({ httpVersion: 'auto' });
         const [reqSong, reqMulti] = await Promise.all([
             session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
-                headers: { ...commonHeaders, 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)' }
+                headers: {
+                    ...commonHeaders,
+                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Referer': 'https://genius.com/',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                }
             }),
             session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
-                headers: { ...commonHeaders, 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)' }
+                headers: {
+                    ...commonHeaders,
+                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Referer': 'https://genius.com/',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                }
             })
         ]);
 

@@ -816,22 +816,27 @@ export const Genius = async function Genius(que: string) {
 
     try {
         session = new Session({ httpVersion: 'auto' });
-        const client = await session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
+        const [reqSong, reqMulti] = await Promise.all([
+            session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
+                headers: { ...commonHeaders, 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)' }
+            }),
+            session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
+                headers: { ...commonHeaders, 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0)' }
+            })
+        ]);
 
-        if (client.statusCode === 403) {
-            return {
-                "error": "Cloudflare Turnstile asking to verify you're not a bot"
-            }
-        }
+        const resSong = reqSong.statusCode === 200 ? reqSong.json() : (reqSong.statusCode === 403 ? { error: "Cloudflare Turnstile asking to verify you're not a bot" } : null);
+        const resMulti = reqMulti.statusCode === 200 ? reqMulti.json() : (reqMulti.statusCode === 403 ? { error: "Cloudflare Turnstile asking to verify you're not a bot" } : null);
 
-        const checkres: any = client.text;
+        const songs = resSong?.error ? resSong : (resSong?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null);
+        const multi = resMulti?.error ? resMulti : (resMulti?.response?.sections || null);
 
-        const res = JSON.parse(checkres);
-        return { data: res?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null };
+        return {
+            data: [
+                songs,
+                multi
+            ]
+        };
     } catch (e) {
         console.error(e);
         return null;

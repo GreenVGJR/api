@@ -3,7 +3,6 @@ import { Session } from 'httpcloak';
 
 const request = undiciRequest;
 
-// @ts-ignore
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from 'linkedom';
 import { decodeHTML, decodeXML } from 'entities';
@@ -533,11 +532,8 @@ export const YTMusic = async function YTMusic(que: string) {
                 const flexColumn1 = a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
                 const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
                 
-                // Find any run that looks like an artist/channel (has a browseId)
                 const artistRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r.navigationEndpoint.browseEndpoint.browseId.startsWith('MPRE'));
-                // Find any run that looks like an album (usually starts with MPRE)
                 const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('MPRE'));
-                // The duration is almost always the last run that contains ":" 
                 const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(':')).pop() || flexColumn1[flexColumn1.length - 1];
 
                 const kas = {
@@ -979,7 +975,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
                 try {
                     const parsed = JSON.parse(trimmed);
                     if (Array.isArray(parsed)) {
-                        // If it's an array of items (standard Gemini format)
                         if (Array.isArray(parsed[0])) {
                             data.push(...parsed);
                         } else {
@@ -1190,11 +1185,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
         const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer).filter(Boolean) || [];
         
-        // Extract links and description from page header (modern YouTube layout)
         const header = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
-        const channelDescription = header?.description?.descriptionPreviewViewModel?.description?.content || 
-                                data?.metadata?.channelMetadataRenderer?.description || 
-                                data?.microformat?.microformatDataRenderer?.description;
+        const channelDescription = data?.metadata?.channelMetadataRenderer?.description || data?.microformat?.microformatDataRenderer?.description;
         
         const channelLinks: any[] = [];
         const metadataRows = header?.metadata?.contentMetadataViewModel?.metadataRows || [];
@@ -1213,11 +1205,9 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
         const channelMetadata: any = {};
 
-        // Helper to recursively extract links and metadata from any part of the response
         const extractData = (obj: any) => {
             if (!obj || typeof obj !== 'object') return;
 
-            // Extract external links
             const link = obj.aboutChannelExternalLinkViewModel || obj.channelExternalLinkViewModel;
             if (link) {
                 const title = link.title?.content || link.text;
@@ -1227,7 +1217,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 }
             }
 
-            // Extract "More info" metadata
             const meta = obj.aboutChannelViewModel || obj.aboutChannelRenderer?.metadata?.aboutChannelViewModel;
             if (meta) {
                 if (meta.country) channelMetadata['location'] = meta.country;
@@ -1246,7 +1235,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 if (meta.canonicalChannelUrl) channelMetadata['canonicalUrl'] = meta.canonicalChannelUrl.replace(/^http:\/\//i, 'https://');
             }
 
-            // Fallback for older link structures
             if (obj.primaryLinks || obj.secondaryLinks) {
                 const links = [...(obj.primaryLinks || []), ...(obj.secondaryLinks || [])];
                 links.forEach((l: any) => {
@@ -1265,7 +1253,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             }
         };
 
-        // Initial standard metadata
         const c4Header = data?.header?.c4TabbedHeaderRenderer;
         if (c4Header) {
             if (c4Header.avatar?.thumbnails) channelMetadata['avatar'] = c4Header.avatar.thumbnails;
@@ -1274,7 +1261,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             channelMetadata['isVerified'] = c4Header.badges?.some((b: any) => b.metadataBadgeRenderer?.icon?.iconType === 'CHECK_CIRCLE_THICK') || false;
         }
 
-        // Modern header metadata
         const modernHeader = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
         if (modernHeader) {
             const avatar = modernHeader.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.thumbnail?.thumbnails;
@@ -1287,10 +1273,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (title) channelMetadata['title'] = title;
         }
 
-        // 1. Initial extraction from the main page data (captures banner links and metadata)
         extractData(data);
 
-        // 2. Handle hidden links in Continuation (Engagement Panel / About section)
         let continuationToken = null;
 
         function findAboutToken(obj: any): string | null {
@@ -1332,7 +1316,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             return null;
         }
 
-        // Prioritize search in header as it contains the specific "About" panel entry point
         continuationToken = findAboutToken(data.header) || findAboutToken(data);
         const visitorData = data.responseContext?.visitorData;
 
@@ -1356,7 +1339,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 });
                 const continuationRes: any = await continuationReq.body.json();
                 
-                // 3. Deep extraction from the continuation response
                 extractData(continuationRes);
             } catch { }
         }
@@ -1439,17 +1421,14 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             
             if (dataKeys.length === 0) return null;
 
-            // Prioritize container arrays (pull them up even if other keys like 'title' exist)
             if (Array.isArray(obj.contents)) return flatten(obj.contents);
             if (Array.isArray(obj.items)) return flatten(obj.items);
             if (Array.isArray(obj.content)) return flatten(obj.content);
 
-            // Prioritize the 'post' key as it's almost always the core content of a thread
             if (obj.post && typeof obj.post === 'object' && dataKeys.includes('post')) {
                 return flatten(obj.post);
             }
 
-            // If it's a wrapper (one data key), unwrap it
             if (dataKeys.length === 1) {
                 const key = dataKeys[0];
                 if (key.endsWith('Renderer') || key.endsWith('ViewModel') || 
@@ -1458,7 +1437,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 }
             }
 
-            // Reconstruct the object without metadata and with flattened values
             const res: any = {};
             for (const key of dataKeys) {
                 res[key] = flatten(obj[key]);
@@ -1473,7 +1451,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             }
         });
 
-        // Normalize URLs to ensure they have a protocol
         const normalizedLinks = channelLinks.map(link => ({
             title: link.title,
             url: link.url && !link.url.match(/^https?:\/\//i) ? `https://${link.url}` : link.url
@@ -1617,7 +1594,6 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
     const url = `https://discord.com/api/v10/guilds/${guildId}`;
 
     try {
-        // First try to fetch current info (GET) to verify access/token
         const req = await fetch(url, {
             method: 'GET',
             headers: {
@@ -1631,7 +1607,6 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
         try {
             currentInfo = await req.json();
         } catch {
-            // If we can't parse the body, it might be an empty or error response
         }
 
         if (req.status !== 200) {
@@ -1645,7 +1620,6 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
             return { data: [currentInfo, null] };
         }
 
-        // Use fetch for the PATCH request
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -1772,7 +1746,6 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
                     username: payload.username || null,
                     avatar_url: payload.avatar_url || null
                 };
-                // Clean null values
                 Object.keys(bodyPayload).forEach(key => bodyPayload[key] === null && delete bodyPayload[key]);
             }
         }
@@ -1790,7 +1763,6 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
             } catch (e) { }
         }
 
-        // Fallback logic for info/delete if bot token fails but webhook token is available
         if (token && webhookToken && (action === 'info' || action === 'delete') && (response.status === 403 || result?.code === 50013)) {
             const fallbackUrl = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
             const fallbackHeaders = { ...headers };
@@ -2288,7 +2260,6 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
                     ...commonHeaders,
                     'content-type': 'application/json',
                     'authorization': 'Bearer ' + twitterAuth,
-                    // 'x-client-transaction-id': twitterObj?.TweetResultByRestId?.[2],
                 }
             }),
             request(`https://cdn.syndication.twimg.com/tweet-result?id=${que}&lang=en&token=abc`, {
@@ -2554,7 +2525,6 @@ export const Capcut = async function Capcut(que: string) {
         const time = Math.round(Date.now() / 1000);
         const linkhost = "https://edit-api-sg.capcut.com/lv/v1/cc_web/replicate/search_templates";
 
-        // $cropText[$get[linkhost];-7] implementation: taking last 7 characters
         const croppedHost = linkhost.slice(-7);
 
         const signStr = `9e2c|${croppedHost}|7|5.8.0|${time}||11ac`;
@@ -2775,15 +2745,12 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
                             const jsonStr = part.split('</script>')[0];
                             const parsed = JSON.parse(jsonStr);
 
-                            // Traverse the specific path: require►0►3►0►__bbox►require►0►3►1►__bbox►result►data
                             const reqs = parsed?.require || [];
                             for (const req of reqs) {
-                                // req = ["ScheduledServerJS", "handle", null, [...]]
                                 const args = req?.[3] || [];
                                 for (const arg of args) {
                                     const innerReqs = arg?.__bbox?.require || [];
                                     for (const innerReq of innerReqs) {
-                                        // innerReq = ["RelayPrefetchedStreamCache", "next", [], [...]]
                                         if (innerReq?.[0] === 'RelayPrefetchedStreamCache') {
                                             const data = innerReq?.[3]?.[1]?.__bbox?.result?.data;
                                             if (data) webData.push(data);

@@ -1180,13 +1180,33 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         const html = await response.body.text();
         let data: any;
         try {
-            data = JSON.parse(html.split('ytInitialData =')[1].split(';')[0]);
-        } catch { }
+            // Robust parsing of ytInitialData
+            const dataParts = html.split(/ytInitialData\s*=\s*/);
+            if (dataParts.length < 2) return { data: null };
+            
+            let jsonStr = dataParts[1];
+            // Find the end of the script tag or the next variable assignment
+            const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') : 
+                           jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') : 
+                           jsonStr.length;
+            
+            jsonStr = jsonStr.substring(0, endIdx).trim();
+            if (jsonStr.endsWith(';')) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
+            
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            console.error("YouTube Parse Error:", e);
+            return null; 
+        }
 
-        const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer).filter(Boolean) || [];
+        if (!data) return { data: null };
+
+        const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer || t.expandableTabRenderer).filter(Boolean) || [];
         
         const header = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
-        const channelDescription = data?.metadata?.channelMetadataRenderer?.description || data?.microformat?.microformatDataRenderer?.description;
+        const channelMetadataRenderer = data?.metadata?.channelMetadataRenderer;
+        const microformatRenderer = data?.microformat?.microformatDataRenderer;
+        const channelDescription = channelMetadataRenderer?.description || microformatRenderer?.description;
         
         const channelLinks: any[] = [];
         const metadataRows = header?.metadata?.contentMetadataViewModel?.metadataRows || [];
@@ -1246,6 +1266,13 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 });
             }
 
+            const banner = obj.banner?.thumbnails || 
+                           obj.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
+                           obj.imageBannerViewModel?.image?.sources;
+            if (banner && !channelMetadata['banner']) {
+                channelMetadata['banner'] = banner;
+            }
+
             if (Array.isArray(obj)) {
                 obj.forEach(item => extractData(item));
             } else {
@@ -1266,11 +1293,80 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             const avatar = modernHeader.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.thumbnail?.thumbnails;
             if (avatar) channelMetadata['avatar'] = avatar;
             
-            const banner = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
+            const banner = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
+                           data?.header?.pageHeaderRenderer?.banner?.heroBannerViewModel?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
             if (banner) channelMetadata['banner'] = banner;
             
             const title = modernHeader.title?.dynamicTextViewModel?.text?.content;
-            if (title) channelMetadata['title'] = title;
+            if (title) channelMetadata['name'] = title;
+        }
+
+        // Additional banner check
+        if (!channelMetadata['banner']) {
+            const b1 = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails || 
+                       data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.sources;
+            const b2 = modernHeader?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
+                       modernHeader?.banner?.imageBannerViewModel?.image?.sources;
+            const b3 = data?.header?.c4TabbedHeaderRenderer?.banner?.thumbnails;
+            
+            if (b1) channelMetadata['banner'] = b1;
+            else if (b2) channelMetadata['banner'] = b2;
+            else if (b3) channelMetadata['banner'] = b3;
+        }
+
+        // Additional avatar check
+        if (!channelMetadata['avatar']) {
+            const a1 = channelMetadataRenderer?.avatar?.thumbnails;
+            const a2 = microformatRenderer?.thumbnail?.thumbnails;
+            if (a1) channelMetadata['avatar'] = a1;
+            else if (a2) channelMetadata['avatar'] = a2;
+        }
+
+        // Additional title check
+        if (!channelMetadata['name']) {
+            const t1 = channelMetadataRenderer?.title;
+            const t2 = microformatRenderer?.title;
+            if (t1) channelMetadata['name'] = t1;
+            else if (t2) channelMetadata['name'] = t2;
+        }
+
+        // Extract additional channel info from channelMetadataRenderer
+        if (channelMetadataRenderer) {
+            if (channelMetadataRenderer.externalId) channelMetadata['channelId'] = channelMetadataRenderer.externalId;
+            if (channelMetadataRenderer.vanityChannelUrl) channelMetadata['vanityChannelUrl'] = channelMetadataRenderer.vanityChannelUrl.replace(/^http:\/\//i, 'https://');
+            if (channelMetadataRenderer.channelUrl) channelMetadata['channelUrl'] = channelMetadataRenderer.channelUrl;
+            if (typeof channelMetadataRenderer.isFamilySafe === 'boolean') channelMetadata['familySafe'] = channelMetadataRenderer.isFamilySafe;
+            if (channelMetadataRenderer.availableCountryCodes) channelMetadata['availableCountries'] = channelMetadataRenderer.availableCountryCodes;
+            if (channelMetadataRenderer.keywords) {
+                // Parse the keywords string into an array
+                const keywordsStr = channelMetadataRenderer.keywords;
+                const keywordsArray = keywordsStr.match(/"[^"]+"|[^\s]+/g)?.map((k: string) => k.replace(/^"|"$/g, '')) || [];
+                if (keywordsArray.length > 0) channelMetadata['keywords'] = keywordsArray;
+            }
+            if (channelMetadataRenderer.avatar?.thumbnails && !channelMetadata['avatar']) {
+                channelMetadata['avatar'] = channelMetadataRenderer.avatar.thumbnails;
+            }
+        }
+
+        // Fallback to microformat for tags/keywords
+        if (microformatRenderer) {
+            if (microformatRenderer.tags && !channelMetadata['keywords']) {
+                channelMetadata['keywords'] = microformatRenderer.tags;
+            }
+            if (typeof microformatRenderer.familySafe === 'boolean' && channelMetadata['familySafe'] === undefined) {
+                channelMetadata['familySafe'] = microformatRenderer.familySafe;
+            }
+            if (microformatRenderer.availableCountries && !channelMetadata['availableCountries']) {
+                channelMetadata['availableCountries'] = microformatRenderer.availableCountries;
+            }
+        }
+
+        // Final fallback for channelId
+        if (!channelMetadata['channelId'] && identifier && prefix === 'channel/') {
+            channelMetadata['channelId'] = identifier;
+        } else if (!channelMetadata['channelId'] && microformatRenderer?.urlCanonical) {
+            const idMatch = microformatRenderer.urlCanonical.match(/\/channel\/([^\/?#]+)/);
+            if (idMatch) channelMetadata['channelId'] = idMatch[1];
         }
 
         extractData(data);
@@ -1316,8 +1412,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             return null;
         }
 
-        continuationToken = findAboutToken(data.header) || findAboutToken(data);
-        const visitorData = data.responseContext?.visitorData;
+        continuationToken = findAboutToken(data?.header) || findAboutToken(data);
+        const visitorData = data?.responseContext?.visitorData;
 
         if (continuationToken) {
             try {
@@ -1343,7 +1439,50 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             } catch { }
         }
 
-        const results = await Promise.all(tabs.map(async (tab: any) => {
+        // Search for dedicated Community button/link in header
+        const extraEndpoints: any[] = [];
+        
+        // Helper to recursively find all buttonViewModels/buttonRenderers in header actions
+        const findAllButtons = (obj: any): any[] => {
+            const buttons: any[] = [];
+            if (!obj || typeof obj !== 'object') return buttons;
+            
+            if (obj.buttonViewModel || obj.buttonRenderer) {
+                buttons.push(obj.buttonViewModel || obj.buttonRenderer);
+            }
+            
+            if (Array.isArray(obj)) {
+                obj.forEach(item => buttons.push(...findAllButtons(item)));
+            } else {
+                for (const key of Object.keys(obj)) {
+                    if (['trackingParams', 'loggingDirectives', 'rendererContext'].includes(key)) continue;
+                    buttons.push(...findAllButtons(obj[key]));
+                }
+            }
+            return buttons;
+        };
+
+        const vm = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+        const allButtons = findAllButtons(vm?.actions || data?.header?.c4TabbedHeaderRenderer?.buttons);
+
+        allButtons.forEach((btn: any) => {
+            const endpoint = btn?.command?.browseEndpoint || 
+                             btn?.onTap?.innertubeCommand?.browseEndpoint || 
+                             btn?.navigationEndpoint?.browseEndpoint;
+            
+            if (endpoint && endpoint.browseId === 'FEcommunity_page') {
+                if (!tabs.some((t: any) => t.endpoint?.browseEndpoint?.browseId === endpoint.browseId)) {
+                    extraEndpoints.push({
+                        title: 'Community',
+                        endpoint: { browseEndpoint: endpoint }
+                    });
+                }
+            }
+        });
+
+        const combinedTabs = [...tabs, ...extraEndpoints];
+
+        const results = await Promise.all(combinedTabs.map(async (tab: any) => {
             if (tab.content) return { title: tab.title, content: tab.content };
             if (!tab.endpoint?.browseEndpoint) return null;
 
@@ -1356,9 +1495,10 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                     context: {
                         client: {
                             clientName: "WEB",
-                            clientVersion: "2.20251212",
+                            clientVersion: "2.20260204.01.00",
                             hl: "en",
-                            gl: "US"
+                            gl: "US",
+                            visitorData: visitorData
                         }
                     }
                 });
@@ -1373,9 +1513,14 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 });
 
                 const res: any = await req.body.json();
+                const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || 
+                                   res?.contents?.sectionListRenderer || 
+                                   res?.contents || 
+                                   res;
+                
                 return {
                     title: tab.title,
-                    content: res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res
+                    content: tabContent
                 };
             } catch {
                 return { title: tab.title, error: "Failed to fetch" };
@@ -1445,9 +1590,16 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         };
 
         finalResults.forEach((r: any) => {
-            const title = r.title?.toLowerCase();
-            if (title) {
-                tabsObj[title] = flatten(r.content);
+            const title = typeof r.title === 'string' ? r.title.toLowerCase() : (r.title?.runs?.[0]?.text?.toLowerCase() || '');
+            if (title && title !== 'search') {
+                const flattened = flatten(r.content);
+                if (title === 'posts') {
+                    tabsObj['posts'] = flattened;
+                } else if (title === 'community') {
+                    tabsObj['community'] = flattened;
+                } else {
+                    tabsObj[title] = flattened;
+                }
             }
         });
 
@@ -1456,15 +1608,67 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             url: link.url && !link.url.match(/^https?:\/\//i) ? `https://${link.url}` : link.url
         }));
 
+        const processBanner = (images: any[]) => {
+            if (!Array.isArray(images) || images.length === 0) return null;
+            const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
+            const highestUrl = sorted[0]?.url || null;
+            
+            if (!highestUrl) return null;
+            
+            // Generate the three banner variants
+            const baseUrl = highestUrl.split('=')[0];
+            
+            return {
+                highest: `${baseUrl}=w2560-fcrop64=1,0000000ffffffff`,
+                highest_cropped: `${baseUrl}=w2560-fcrop64=1,00005a57ffffa5a8`,
+                original: `${baseUrl}=s0`
+            };
+        };
+
+        const processAvatar = (images: any[]) => {
+            if (!Array.isArray(images) || images.length === 0) return null;
+            const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
+            const highestUrl = sorted[0]?.url || null;
+            
+            if (!highestUrl) return null;
+            
+            // Extract base URL (before the parameters)
+            const baseUrl = highestUrl.split('=')[0];
+            
+            // Preserve the parameter format from the original URL
+            const urlParts = highestUrl.split('=');
+            let suffix = 'c-k-c0x00ffffff-no-rj';
+            
+            // Try to extract the suffix from original URL
+            if (urlParts.length > 1) {
+                const params = urlParts.slice(1).join('=');
+                const match = params.match(/[sc]\d+-(.+)/);
+                if (match) suffix = match[1];
+            }
+            
+            return {
+                normal: `${baseUrl}=s900-${suffix}`,
+                highest: `${baseUrl}=s2160-${suffix}`,
+                original: `${baseUrl}=s0`
+            };
+        };
+
+        const processedMetadata = { ...channelMetadata };
+        if (processedMetadata['banner']) processedMetadata['banner'] = processBanner(processedMetadata['banner']);
+        if (processedMetadata['avatar']) processedMetadata['avatar'] = processAvatar(processedMetadata['avatar']);
+
         return {
             data: {
-                description: channelDescription || null,
                 links: normalizedLinks.length > 0 ? normalizedLinks : null,
-                metadata: Object.keys(channelMetadata).length > 0 ? channelMetadata : null,
+                metadata: {
+                    description: channelDescription || null,
+                    ...processedMetadata,
+                    rssUrl: undefined
+                },
                 tabs: tabsObj
             }
         };
-    } catch { return null; }
+    } catch (e) { console.error(e); return null; }
 }
 
 export const infoSoundcloud = async function infoSoundcloud(que: string, refresh_auth: boolean = false): Promise<any> {

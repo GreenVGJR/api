@@ -219,7 +219,9 @@ app.get('/', (c: Context) => {
                     "/search/roblox/games?q=",
                     "/search/roblox/audio?q=",
                     "/search/bandcamp?q=",
-                    "/search/capcut/templates?q="
+                    "/search/capcut/templates?q=",
+                    "/search/tenor?q=&type=",
+                    "/search/giphy?q=&type="
                 ],
                 lyrics: [
                     "/lyrics/youtube?q=",
@@ -280,7 +282,9 @@ app.get('/', (c: Context) => {
                     "/info/twitter/tweet?url=",
                     "/info/reddit/subreddit?q=",
                     "/info/instagram/user?q=",
-                    "/info/threads/user?q="
+                    "/info/threads/user?q=",
+                    "/info/tenor?url=",
+                    "/info/giphy?url="
                 ]
             }
         }];

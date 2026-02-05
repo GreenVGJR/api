@@ -2803,4 +2803,219 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
     }
 }
 
+export const Tenor = async function Tenor(que: string, type?: string) {
+    if (!que) return null;
+
+    const getSearchFilter = (t?: string) => {
+        if (!t || t === 'all') return '&searchfilter=none';
+        if (t === 'sticker') return '&searchfilter=sticker';
+        if (t === 'meme') return '&searchfilter=static,-sticker';
+        return '&searchfilter=none';
+    };
+
+    const getFormatQuery = (t?: string) => {
+        if (t === 'gif') return '?format=gifs';
+        if (t === 'sticker') return '?format=stickers';
+        if (t === 'meme') return '?format=memes';
+        return '';
+    };
+
+    try {
+        const apiRes = await request(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+            headers: {
+                ...commonHeaders,
+                'Referer': 'https://tenor.com',
+                'Origin': 'https://tenor.com',
+                'X-Goog-Api-Key': 'AIzaSyC-P6_qz3FzCoXGLk6tgitZo4jEJ5mLzD8'
+            }
+        });
+
+        if (apiRes.statusCode === 200) {
+            const apiData: any = await apiRes.body.json();
+            return {
+                data: {
+                    suggestion: null,
+                    data: apiData?.results || []
+                }
+            };
+        }
+    } catch {}
+
+    try {
+        const formatQuery = getFormatQuery(type);
+        const webRes = await request(`https://tenor.com/search/${encodeURIComponent(que.toLowerCase())}-gifs${formatQuery}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        if (webRes.statusCode !== 200) {
+            return { error: `${webRes.statusCode} - Can't process this` };
+        }
+
+        const html = await webRes.body.text();
+
+        if (html.includes('form id="captcha-form"')) {
+            return { error: 'Blocked recaptcha' };
+        }
+
+        const storeMatch = html.match(/<script id="store-cache"[^>]*>([\s\S]*?)<\/script>/);
+        if (!storeMatch) {
+            return { error: 'Failed to parse webpage data' };
+        }
+
+        const storeData = JSON.parse(storeMatch[1]);
+        const searchKeys = Object.keys(storeData?.universal?.search || {});
+        const suggestionKeys = Object.keys(storeData?.searchSuggestions || {});
+
+        return {
+            data: {
+                suggestion: suggestionKeys.length > 0 ? storeData.searchSuggestions[suggestionKeys[0]]?.results : null,
+                data: searchKeys.length > 0 ? storeData.universal.search[searchKeys[0]]?.results : []
+            }
+        };
+    } catch (e) {
+        console.error(e);
+        return { error: 'Failed to fetch Tenor data' };
+    }
+}
+
+export const infoTenor = async function infoTenor(url: string) {
+    if (!url) return null;
+
+    try {
+        const urlObj = new URL(url);
+        if (!urlObj.hostname.endsWith('tenor.com')) {
+            return { error: 'Invalid Tenor URL' };
+        }
+
+        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+        const lastPart = pathParts[pathParts.length - 1] || '';
+        const postId = lastPart.split('-').pop();
+
+        if (!postId || !/^\d+$/.test(postId)) {
+            return { error: 'Invalid Tenor post ID' };
+        }
+
+        const res = await request(`https://tenor.com/embed/${postId}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        if (res.statusCode !== 200) {
+            return { error: `${res.statusCode} - Can't process this` };
+        }
+
+        const html = await res.body.text();
+        const gifMatch = html.match(/<script id="gif-json"[^>]*>([\s\S]*?)<\/script>/);
+
+        if (!gifMatch) {
+            return { error: 'Failed to parse GIF data' };
+        }
+
+        const gifData = JSON.parse(gifMatch[1]);
+        return { data: gifData };
+    } catch (e) {
+        console.error(e);
+        return { error: 'Failed to fetch Tenor info' };
+    }
+}
+
+export const infoGiphy = async function infoGiphy(url: string) {
+    if (!url) return null;
+
+    try {
+        const urlObj = new URL(url);
+        if (!urlObj.hostname.endsWith('giphy.com')) {
+            return { error: 'Invalid Giphy URL' };
+        }
+
+        const res = await request(url, {
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
+            }
+        });
+
+        if (res.statusCode !== 200) {
+            return { error: `${res.statusCode} - Can't process this` };
+        }
+
+        const html = await res.body.text();
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift();
+
+        const ldJsonChunk = chunks.find((chunk: string) => chunk.includes('application/ld+json'));
+        if (!ldJsonChunk) {
+            return { error: 'Failed to parse Giphy data' };
+        }
+
+        const scriptEnd = ldJsonChunk.indexOf(')</script>');
+        const jsonStr = ldJsonChunk.substring(0, scriptEnd);
+        const parsed = JSON.parse(jsonStr);
+        
+        const firstPart = parsed[1];
+        if (!firstPart) return { error: 'Invalid Giphy data structure' };
+        
+        const colonIndex = firstPart.indexOf(':');
+        const dataStr = firstPart.substring(colonIndex + 1);
+        const c = JSON.parse(dataStr);
+
+        return {
+            data: {
+                suggestion: c?.[1]?.[3]?.geoTargetedRequest?.keywords,
+                data: c?.[1]?.[3]?.children?.[1]?.[3]?.children?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.gif,
+                user: c?.[1]?.[3]?.children?.[1]?.[3]?.children?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.user
+            }
+        };
+    } catch (e) {
+        console.error(e);
+        return { error: 'Failed to fetch Giphy info' };
+    }
+}
+
+
+export const Giphy = async function Giphy(que: string, type?: string) {
+    if (!que) return null;
+
+    const getTypeQuery = (t?: string) => {
+        if (t === 'sticker') return '-stickers';
+        if (t === 'clip') return '-clips';
+        return '';
+    };
+
+    try {
+        const res = await request(`https://giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        if (res.statusCode !== 200) {
+            return { error: `${res.statusCode} - Can't process this` };
+        }
+
+        const html = await res.body.text();
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift();
+
+        const ldJsonChunk = chunks.find((chunk: string) => chunk.includes('application/ld+json'));
+        if (!ldJsonChunk) {
+            return { error: 'Failed to parse Giphy data' };
+        }
+
+        const scriptEnd = ldJsonChunk.indexOf(')</script>');
+        const jsonStr = ldJsonChunk.substring(0, scriptEnd);
+        const parsed = JSON.parse(jsonStr);
+        const innerData = JSON.parse(parsed[1].substring(parsed[1].indexOf(':') + 1));
+        const initialGifs = innerData?.[1]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.initialGifs;
+
+        return { data: initialGifs || [] };
+    } catch (e) {
+        console.error(e);
+        return { error: 'Failed to fetch Giphy data' };
+    }
+}
+
 export const setKeys = (sc: string, sp: string, tidal: string, deezer: string) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };

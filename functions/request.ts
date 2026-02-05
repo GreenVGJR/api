@@ -1280,14 +1280,26 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             }
         };
 
+        const getBadgeType = (badgeId: string): string | null => {
+            if (!badgeId) return null;
+            const validBadges = [
+                'CHECK_CIRCLE_THICK', 'CHECK_CIRCLE_FILLED', 'VERIFIED', 'VERIFIED_BADGE',
+                'OFFICIAL_ARTIST', 'AUDIO_BADGE', 'MUSIC_OFFICIAL_ARTIST', 'OFFICIAL_ARTIST_BADGE'
+            ];
+            return validBadges.includes(badgeId) ? badgeId : null;
+        };
+
         const c4Header = data?.header?.c4TabbedHeaderRenderer;
         if (c4Header) {
             if (c4Header.avatar?.thumbnails) channelMetadata['avatar'] = c4Header.avatar.thumbnails;
             if (c4Header.banner?.thumbnails) channelMetadata['banner'] = c4Header.banner.thumbnails;
             if (c4Header.channelHandleText?.runs?.[0]?.text) channelMetadata['handle'] = c4Header.channelHandleText.runs[0].text;
-            channelMetadata['verified'] = c4Header.badges?.some((b: any) => 
-                ['CHECK_CIRCLE_THICK', 'OFFICIAL_ARTIST', 'CHECK_CIRCLE_FILLED', 'VERIFIED'].includes(b.metadataBadgeRenderer?.icon?.iconType)
-            ) || false;
+            
+            const badge = c4Header.badges?.map((b: any) => b.metadataBadgeRenderer?.icon?.iconType).find((id: string) => getBadgeType(id));
+            if (badge) {
+                channelMetadata['verified'] = true;
+                channelMetadata['verified_type'] = getBadgeType(badge);
+            }
         }
 
         const modernHeader = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
@@ -1303,45 +1315,51 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (title) channelMetadata['name'] = title;
 
             // Check for verification in modern header
-            if (channelMetadata['verified'] === undefined || channelMetadata['verified'] === false) {
+            if (!channelMetadata['verified']) {
                 const headerRows = modernHeader.metadata?.contentMetadataViewModel?.metadataRows || [];
-                const hasVerBadge = (renderer: any) => {
-                    if (!renderer) return false;
-                    const iconType = renderer.icon?.iconType || renderer.badge?.metadataBadgeRenderer?.icon?.iconType;
-                    return ['CHECK_CIRCLE_THICK', 'OFFICIAL_ARTIST', 'CHECK_CIRCLE_FILLED', 'VERIFIED'].includes(iconType);
-                };
+                let detectedType: string | null = null;
 
-                const hasVer = headerRows.some((row: any) => 
+                headerRows.some((row: any) => 
                     row.metadataParts?.some((part: any) => {
                         const vm = part.text?.contentMetadataAndSelectedTextViewModel || part.text?.contentMetadataViewModel;
-                        const badge = vm?.selectedText?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer ||
-                                      vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer;
-                        return hasVerBadge(badge);
+                        const renderer = vm?.selectedText?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer ||
+                                         vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer;
+                        const type = getBadgeType(renderer?.icon?.iconType);
+                        if (type) {
+                            detectedType = type;
+                            return true;
+                        }
+                        return false;
                     })
                 );
-                
-                if (hasVer) {
-                    channelMetadata['verified'] = true;
-                } else {
-                    // Check title attachment runs for badges
-                    const titleText = modernHeader.title?.dynamicTextViewModel?.text;
-                    const hasAttachmentBadge = titleText?.attachmentRuns?.some((run: any) => {
-                        const imageName = run.element?.type?.imageType?.image?.sources?.[0]?.clientResource?.imageName;
-                        return ['CHECK_CIRCLE_FILLED', 'OFFICIAL_ARTIST'].includes(imageName);
-                    });
 
-                    if (hasAttachmentBadge) {
-                        channelMetadata['verified'] = true;
-                    } else {
-                        // Fallback to broader string check
-                        const headerStr = JSON.stringify(modernHeader);
-                        channelMetadata['verified'] = /CHECK_CIRCLE_THICK|OFFICIAL_ARTIST|CHECK_CIRCLE_FILLED|MUSIC_OFFICIAL_ARTIST|VERIFIED_BADGE/i.test(headerStr);
-                    }
+                if (!detectedType) {
+                    // Check title attachment runs
+                    const attachmentBadge = modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns?.map((run: any) => 
+                        run.element?.type?.imageType?.image?.sources?.[0]?.clientResource?.imageName
+                    ).find((name: string) => getBadgeType(name));
+                    
+                    if (attachmentBadge) detectedType = getBadgeType(attachmentBadge);
+                }
+
+                if (!detectedType) {
+                    // Fallback to broader string check
+                    const headerStr = JSON.stringify(modernHeader);
+                    const match = headerStr.match(/CHECK_CIRCLE_THICK|CHECK_CIRCLE_FILLED|VERIFIED_BADGE|VERIFIED|OFFICIAL_ARTIST|AUDIO_BADGE|MUSIC_OFFICIAL_ARTIST|OFFICIAL_ARTIST_BADGE/i);
+                    if (match) detectedType = match[0].toUpperCase();
+                }
+
+                if (detectedType) {
+                    channelMetadata['verified'] = true;
+                    channelMetadata['verified_type'] = detectedType;
                 }
             }
         }
 
-        if (channelMetadata['verified'] === undefined) channelMetadata['verified'] = false;
+        if (channelMetadata['verified'] === undefined) {
+            channelMetadata['verified'] = false;
+            channelMetadata['verified_type'] = null;
+        }
 
         // Additional banner check
         if (!channelMetadata['banner']) {

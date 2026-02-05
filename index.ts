@@ -172,11 +172,11 @@ app.get('/robots.txt', (c: Context) => {
 
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if (!isMozilla) return c.body(null, 204);
+    c.header('X-Net', isMozilla ? 'true' : 'false');
+    if (!isMozilla) return c.body(null, 403);
     const renderJson = c.req.query('json') !== undefined;
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('X-Net', isMozilla ? 'true' : 'false');
 
     return stream(c, async (stream) => {
         await stream.write('');

@@ -2924,6 +2924,7 @@ export const infoTenor = async function infoTenor(url: string) {
 
 export const infoGiphy = async function infoGiphy(url: string) {
     if (!url) return null;
+    let session: any;
 
     try {
         const urlObj = new URL(url);
@@ -2931,18 +2932,20 @@ export const infoGiphy = async function infoGiphy(url: string) {
             return { error: 'Invalid Giphy URL' };
         }
 
-        const res = await request(url, {
+        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
+        const res = await session.get(url, {
             headers: {
-                ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
+                ...commonHeaders
             }
         });
 
         if (res.statusCode !== 200) {
+            if (session) session.close();
             return { error: `${res.statusCode} - Can't process this` };
         }
 
-        const html = await res.body.text();
+        const html = res.text;
+        if (session) session.close();
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
@@ -2970,6 +2973,7 @@ export const infoGiphy = async function infoGiphy(url: string) {
             }
         };
     } catch (e) {
+        if (session) session.close();
         console.error(e);
         return { error: 'Failed to fetch Giphy info' };
     }
@@ -2978,6 +2982,7 @@ export const infoGiphy = async function infoGiphy(url: string) {
 
 export const Giphy = async function Giphy(que: string, type?: string) {
     if (!que) return null;
+    let session: any;
 
     const getTypeQuery = (t?: string) => {
         if (t === 'sticker') return '-stickers';
@@ -2986,17 +2991,20 @@ export const Giphy = async function Giphy(que: string, type?: string) {
     };
 
     try {
-        const res = await request(`https://giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
+        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
+        const res = await session.get(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
         if (res.statusCode !== 200) {
+            if (session) session.close();
             return { error: `${res.statusCode} - Can't process this` };
         }
 
-        const html = await res.body.text();
+        const html = res.text;
+        if (session) session.close();
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
@@ -3013,6 +3021,7 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 
         return { data: initialGifs || [] };
     } catch (e) {
+        if (session) session.close();
         console.error(e);
         return { error: 'Failed to fetch Giphy data' };
     }

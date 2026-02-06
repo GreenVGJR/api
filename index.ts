@@ -146,10 +146,10 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
     .trim();
 
 // Minify JS (Node.js/Vercel compatible - no Bun.build)
+// Note: We don't remove single-line comments with regex as it breaks URLs and regex patterns
 const rawJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 const mainJs = rawJs
-    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
-    .replace(/\/\/.*$/gm, '') // Remove single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments only (safe)
     .replace(/[\r\n]+/g, ' ') // Replace newlines with space
     .replace(/\s{2,}/g, ' ') // Collapse multiple spaces
     .trim();

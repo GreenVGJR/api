@@ -1,4 +1,3 @@
-// API Endpoints Data
 let endpoints = {
     search: [],
     lyrics: [],
@@ -6,17 +5,14 @@ let endpoints = {
     info: []
 };
 
-// State
 let currentCategory = 'search';
 let currentEndpoint = { path: '/loading...', query: '' };
 let isLoading = false;
 let lastRawResponse = '';
 let isCoolingDown = false;
 
-// apiBaseUrl is injected by the server via window.API_BASE_URL
 const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
 
-// DOM Elements
 const urlInput = document.getElementById('urlInput');
 const copyBtn = document.getElementById('copyBtn');
 const copyResponseBtn = document.getElementById('copyResponseBtn');
@@ -27,7 +23,6 @@ const statusText = document.getElementById('statusText');
 const endpointsList = document.getElementById('endpointsList');
 const tabBtns = document.querySelectorAll('.tab-btn');
 
-// Initialize URL input with root
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith('/') ? '' : '/');
 
 function adjustHeight() {
@@ -35,12 +30,10 @@ function adjustHeight() {
     urlInput.style.height = urlInput.scrollHeight + 'px';
 }
 
-// Adjust initial height
 adjustHeight();
 urlInput.addEventListener('input', adjustHeight);
 window.addEventListener('resize', adjustHeight);
 
-// Helper to recursively flatten the routes object
 function flattenRoutes(obj, parentPath = '') {
     let flatResults = [];
     if (Array.isArray(obj)) {
@@ -66,7 +59,6 @@ function flattenRoutes(obj, parentPath = '') {
     return flatResults;
 }
 
-// Core Request Function
 async function performRequest(targetUrl) {
     if (isLoading || isCoolingDown) return null;
     
@@ -122,7 +114,6 @@ async function performRequest(targetUrl) {
                 isJson = true;
                 resultData = data;
             } catch {
-                // Keep as plain text
             }
             
             lastRawResponse = text;
@@ -199,13 +190,10 @@ async function performRequest(targetUrl) {
     return resultData;
 }
 
-// Fetch Endpoints from Root
 async function fetchInitialEndpoints() {
     try {
-        // Use performRequest to fetch root URL and display it
         const data = await performRequest(urlInput.value);
         
-        // Parse routes from the response data
         const routesObj = data?.find(item => item.routes)?.routes;
         
         if (routesObj) {
@@ -221,7 +209,6 @@ async function fetchInitialEndpoints() {
     }
 }
 
-// Render endpoints list
 function renderEndpoints() {
     const categoryEndpoints = endpoints[currentCategory] || [];
     
@@ -244,7 +231,6 @@ function renderEndpoints() {
         </button>
     `).join('');
 
-    // Add click handlers
     endpointsList.querySelectorAll('.endpoint-item').forEach(btn => {
         btn.addEventListener('click', () => {
             const index = parseInt(btn.dataset.index);
@@ -256,7 +242,6 @@ function renderEndpoints() {
     });
 }
 
-// Tab switching
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         tabBtns.forEach(b => b.classList.remove('active'));
@@ -274,15 +259,13 @@ tabBtns.forEach(btn => {
     });
 });
 
-// Enter key to send request
 urlInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !isLoading) {
         e.preventDefault();
-        urlInput.blur(); // Dismiss mobile keyboard
+        urlInput.blur();
         sendBtn.click();
     }
     
-    // Prevent deleting the base URL
     if ((e.key === 'Backspace' || e.key === 'Delete') && 
         urlInput.selectionStart <= apiBaseUrl.length && 
         urlInput.selectionEnd === urlInput.selectionStart) {
@@ -290,7 +273,6 @@ urlInput.addEventListener('keydown', (e) => {
     }
 });
 
-// Ensure base URL always exists and prevents base URL duplication
 urlInput.addEventListener('input', () => {
     let val = urlInput.value;
     
@@ -362,15 +344,12 @@ urlInput.addEventListener('input', () => {
     }
 });
 
-// Fallback clipboard function for non-HTTPS contexts
 async function copyToClipboard(text) {
-    // Try modern API first
     if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
         return true;
     }
     
-    // Fallback for non-secure contexts (like local network IPs)
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
@@ -388,7 +367,6 @@ async function copyToClipboard(text) {
     }
 }
 
-// Copy URL
 copyBtn.addEventListener('click', async () => {
     const fullUrl = urlInput.value;
     try {
@@ -411,7 +389,6 @@ copyBtn.addEventListener('click', async () => {
     }
 });
 
-// Copy Response
 copyResponseBtn.addEventListener('click', async () => {
     if (!lastRawResponse) return;
     
@@ -430,10 +407,8 @@ copyResponseBtn.addEventListener('click', async () => {
     }
 });
 
-// Send request
 sendBtn.addEventListener('click', () => performRequest(urlInput.value));
 
-// Syntax highlighting for JSON
 function syntaxHighlight(json) {
     json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
@@ -454,12 +429,10 @@ function syntaxHighlight(json) {
     });
 }
 
-// Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         sendBtn.click();
     }
 });
 
-// Initialize
 fetchInitialEndpoints();

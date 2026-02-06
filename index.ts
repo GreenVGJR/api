@@ -8,6 +8,8 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import config from './config.json' with { type: 'json' };
+import os from 'os';
+
 
 // @ts-ignore
 import reqs_raw from './routes/search/index.js';
@@ -82,13 +84,15 @@ const app = new Hono({ strict: false });
 
 app.use('*', async (c: Context, next: Next) => {
     const host = c.req.header('host');
-    const isLocal = host?.includes('localhost') || host?.includes('127.0.0.1') || host?.includes('[::1]');
+    const h = host?.split(':')[0];
+    const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || 
+                    h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
     const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
 
     if (!isAllowed && !isLocal) {
         const url = new URL(c.req.url);
-        url.host = 'api.vgjr.top';
-        c.header('Refresh', `0; url=${url.toString()}`);
+        url.host = 'vgjr.top';
+        c.header('Refresh', `0; url=${url.toString()}/playground`);
         return c.text(`Redirecting...`);
     }
     await next();
@@ -100,14 +104,34 @@ const starttime = Date.now();
 if (typeof Bun !== "object") {
     serve({
         fetch: app.fetch,
-        port: port
-        // @ts-ignore
-    }, async (info) => {
-        console.log(`Listening on ${port}`);
+        port: port,
+        hostname: "0.0.0.0"
+    }, (info) => {
+        console.log(`\n🚀 Server is running!`);
+        console.log(`🏠 Local:    http://localhost:${port}/playground`);
+        
+        const nets = os.networkInterfaces();
+        for (const name of Object.keys(nets)) {
+            for (const net of nets[name]!) {
+                if (net.family === 'IPv4' && !net.internal) {
+                    console.log(`📱 Network:  http://${net.address}:${port}/playground`);
+                }
+            }
+        }
     });
+} else {
+    // Top-level log for Bun
+    console.log(`\n🚀 Bun Server is running!`);
+    console.log(`🏠 Local:    http://localhost:${port}/playground`);
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]!) {
+            if (net.family === 'IPv4' && !net.internal) {
+                console.log(`📱 Network:  http://${net.address}:${port}/playground`);
+            }
+        }
+    }
 }
-// For Bun, we rely on the `export default app` at the end of the file.
-// Bun automatically serves any object with a `fetch` method exported as default.
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -115,11 +139,42 @@ const __dirname = path.dirname(__filename);
 
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8');
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
+const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground.html'), 'utf-8')
+    .replace(/<!--[\s\S]*?-->/g, '') // Remove comments
+    .replace(/\s+/g, ' ') // Collapse whitespace
+    .replace(/>\s+</g, '><') // Remove space between tags
+    .trim();
+
+// Minify JS
+const jsBuild = await Bun.build({
+    entrypoints: [path.join(__dirname, 'html/main.js')],
+    minify: true,
+});
+const mainJs = (await jsBuild.outputs[0].text())
+    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+    .replace(/[\r\n]+/g, '') // Remove newlines
+    .replace(/\s{2,}/g, ' '); // Collapse multiple spaces
+
+// Minify CSS
+const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
+const mainCss = rawCss
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}:;,])\s*/g, '$1')
+    .trim();
 const { generate_hash, buildId: buildIdConfig } = config;
 
 const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
+
+// Helper function to check if request is from local network
+function isLocalRequest(host: string | undefined): boolean {
+    if (!host) return false;
+    const h = host.split(':')[0];
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
+           h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
+}
 
 app.use('*', compress());
 
@@ -131,7 +186,7 @@ app.use('*', cors({
 
 if (BUILD_ID) {
     const apiPrefixes = ['search', 'lyrics', 'tools', 'info'];
-    const excludedPaths = ['favicon.ico', 'robots.txt'];
+    const excludedPaths = ['favicon.ico', 'robots.txt', 'playground'];
 
     app.use('*', async (c: Context, next: Next) => {
         const url = new URL(c.req.url);
@@ -170,11 +225,34 @@ app.get('/robots.txt', (c: Context) => {
     return c.text(robots, 200);
 });
 
+app.get('/playground', (c: Context) => {
+    const host = c.req.header('host');
+    const isLocal = isLocalRequest(host);
+    const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
+    const html = playgroundTemplate.replace('{{API_BASE_URL}}', apiBaseUrl);
+    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    return c.html(html);
+});
+
+app.get('/playground/main.js', (c: Context) => {
+    const secFetchDest = c.req.header('Sec-Fetch-Dest');
+    if (secFetchDest && secFetchDest !== 'script') return c.body('', 200);
+    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
+});
+
+app.get('/playground/main.css', (c: Context) => {
+    const secFetchDest = c.req.header('Sec-Fetch-Dest');
+    if (secFetchDest && secFetchDest !== 'style') return c.body('', 200);
+    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
+});
+
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     c.header('X-Net', isMozilla ? 'true' : 'false');
     if (!isMozilla) return c.body(null, 403);
-    const renderJson = c.req.query('json') !== undefined;
+    const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
 
@@ -345,4 +423,9 @@ app.use('*', async (c: Context, next: Next) => {
     await next();
 });
 
-export default app;
+export default {
+    port: 3000,
+    hostname: "0.0.0.0",
+    fetch: app.fetch,
+    idleTimeout: 60
+};

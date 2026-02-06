@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VGJR API Playground</title>
+    <meta name="description" content="VGJR API Playground">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        mint: {
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a'
+                        },
+                        dark: {
+                            900: '#0a0a0a',
+                            800: '#141414',
+                            700: '#1f1f1f',
+                            600: '#2a2a2a',
+                            500: '#3a3a3a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/playground/main.css">
+</head>
+<body class="bg-black text-white font-sans antialiased">
+    <!-- Font Warmer -->
+    <div aria-hidden="true" style="position: absolute; width: 0; height: 0; overflow: hidden;" class="font-mono">
+        {}[]":, true false null 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz !@#$%^&*()_+-=./<>?;'\|`~
+    </div>
+    <div class="h-screen flex flex-col max-w-5xl mx-auto px-4 py-6">
+
+        <!-- URL Bar -->
+        <div class="relative mb-4 flex-shrink-0">
+            <div class="flex items-center bg-dark-700/50 rounded-xl border border-dark-500 overflow-hidden focus-within:border-mint-400/50 transition-colors">
+                <textarea 
+                    id="urlInput" 
+                    class="flex-1 bg-transparent py-3 px-4 font-mono text-sm text-white placeholder-gray-600 outline-none resize-none overflow-hidden whitespace-pre-wrap break-all h-[44px]"
+                    placeholder="https://api.vgjr.top/search/youtube/video?q="
+                    spellcheck="false"
+                    autocomplete="off"
+                    rows="1"
+                ></textarea>
+                <button 
+                    id="copyBtn"
+                    class="copy-btn p-3 text-gray-500 hover:text-mint-400 transition-colors"
+                    title="Copy URL"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="flex justify-center gap-2 mb-4 flex-shrink-0">
+            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500" data-category="search">
+                Search
+            </button>
+            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500" data-category="lyrics">
+                Lyrics
+            </button>
+            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500" data-category="tools">
+                Tools
+            </button>
+            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500" data-category="info">
+                Info
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex flex-col md:grid md:grid-cols-[240px_1fr] gap-2 md:gap-4 flex-1 min-h-0">
+            <!-- Endpoints Sidebar -->
+            <div class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-2 md:pb-0">
+                <div id="endpointsList" class="space-y-0.5"></div>
+            </div>
+
+            <!-- Response Panel -->
+            <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[7]">
+                <div class="bg-dark-700/50 rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
+                    <!-- Response Header with Copy Button -->
+                    <div class="flex items-center justify-between px-4 py-2 border-b border-dark-500 flex-shrink-0">
+                        <span class="text-xs text-gray-500 font-mono">Response</span>
+                        <button 
+                            id="copyResponseBtn"
+                            class="text-gray-500 hover:text-mint-400 transition-colors flex items-center gap-1 text-xs"
+                            title="Copy Response"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2-2v1"></path>
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
+                        <span class="text-gray-600">Nothing to do.</span>
+                    </div>
+                </div>
+                
+                <!-- Send Button & Status -->
+                <div class="mt-3 flex flex-col md:flex-row items-center gap-3 md:gap-4 flex-shrink-0">
+                    <button 
+                        id="sendBtn"
+                        class="w-full md:flex-1 bg-mint-400 hover:bg-mint-500 text-black font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>Send</span>
+                        <span>➜</span>
+                    </button>
+                    <div id="statusIndicator" class="flex items-center justify-center gap-2 text-sm font-mono w-full md:w-auto">
+                        <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                        <span id="statusText" class="text-gray-500">Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-4 text-center text-gray-600 text-xs flex-shrink-0 space-y-1">
+            <p>Built with <span class="text-mint-400">♥</span></p>
+            <p class="flex items-center justify-center gap-1.5">
+                <span>AI-Generated by</span>
+                <!-- Claude Logo (Favicon PNG) -->
+                <a href="https://claude.ai" target="_blank" class="inline-flex items-center gap-1 text-[#D97757] hover:underline">
+                    <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=64" alt="" width="16" height="16" class="inline-block object-contain" />
+                    <span>Claude</span>
+                </a>
+                <span>and</span>
+                <!-- Gemini Logo (Favicon PNG) -->
+                <a href="https://gemini.google.com" target="_blank" class="inline-flex items-center gap-1 hover:underline">
+                    <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" alt="" width="16" height="16" class="inline-block object-contain" />
+                    <span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Gemini</span>
+                </a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Server-injected API Base URL -->
+    <script>window.API_BASE_URL = "{{API_BASE_URL}}";</script>
+    <script src="/playground/main.js"></script>
+</body>
+</html>

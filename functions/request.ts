@@ -1600,7 +1600,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             releases: null,
             store: null,
             courses: null,
-            about: null
+            about: null,
+            playables: null
         };
 
         const flatten = (obj: any): any => {
@@ -1722,8 +1723,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 links: normalizedLinks.length > 0 ? normalizedLinks : null,
                 metadata: {
                     description: channelDescription || null,
-                    ...processedMetadata,
-                    rssUrl: undefined
+                    ...processedMetadata
                 },
                 tabs: tabsObj
             }
@@ -3292,3 +3292,373 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 }
 
 export const setKeys = (sc: string, sp: string, tidal: string, deezer: string) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };
+
+// Meta AI Token Cache
+let metaAICache: {
+    valid: boolean;
+    access_token: string;
+    lsd: string;
+    cookies: string;
+    docid: { tos: string; message: string };
+} | null = null;
+
+async function fetchWithRetry(url: string, options: any, retries = 5): Promise<Response> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url, { ...options, verbose: false } as any);
+            return res;
+        } catch (e: any) {
+            const isSocketError = e.message?.includes('socket') 
+                               || e.message?.includes('closed')
+                               || e.message?.includes('connection error')
+                               || e.code === 'ECONNRESET';
+            
+            console.log(`[MetaAI] Retry ${i+1}/${retries} for ${url} due to: ${e.message}`);
+
+            if (i < retries - 1 && isSocketError) {
+                await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Increased backoff
+                continue;
+            }
+            throw e;
+        }
+    }
+    throw new Error('Network error');
+}
+
+async function sendMessage(q: string, cache: any) {
+    const threadId = ((BigInt(Date.now()) << 22n) | (BigInt('0x' + crypto.randomBytes(8).toString('hex')) & ((1n << 22n) - 1n)) & ((1n << 64n) - 1n)).toString();
+    const conversationId = crypto.randomUUID();
+
+    const variables = {
+        "message": { "sensitive_string_value": q },
+        "externalConversationId": conversationId,
+        "offlineThreadingId": threadId,
+        "suggestedPromptIndex": null,
+        "flashVideoRecapInput": { "images": [] },
+        "flashPreviewInput": null,
+        "promptPrefix": null,
+        "entrypoint": "ABRA__CHAT__TEXT",
+        "icebreaker_type": "TEXT",
+        "__relay_internal__pv__WebPixelRatiorelayprovider": 1
+    };
+
+    const msgBody = new URLSearchParams({
+        'av': '0',
+        '__user': '0',
+        '__a': '1',
+        'dpr': '1',
+        'lsd': cache.lsd,
+        'access_token': cache.access_token,
+        'fb_api_caller_class': 'RelayModern',
+        'fb_api_req_friendly_name': 'useKadabraSendMessageMutation',
+        'variables': JSON.stringify(variables),
+        'server_timestamps': 'true',
+        'doc_id': cache.docid.message
+    }).toString();
+
+    const msgRes = await fetchWithRetry('https://graph.meta.ai/graphql?locale=user', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cache.cookies,
+            'Origin': 'https://www.meta.ai',
+            'Referer': 'https://www.meta.ai',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Site': 'same-site',
+            'User-Agent': userAgent,
+            'x-fb-friendly-name': 'useKadabraSendMessageMutation'
+        },
+        body: msgBody
+    });
+
+    const msgText = await msgRes.text();
+
+    const lines = msgText.split('\n').filter((l: string) => l.trim());
+    const lastLine = lines[lines.length - 1];
+    
+    try {
+        const data = JSON.parse(lastLine);
+        const botResponse = data?.data?.node?.bot_response_message;
+        const snippet = botResponse?.snippet;
+        const composedText = botResponse?.content?.agent_steps?.[0]?.composed_text?.content?.[0]?.text;
+        const response = snippet || composedText || null;
+        
+        if (!response) {
+            return { error: 'Empty response from Meta AI' };
+        }
+        
+        return { response: response, data: null };
+    } catch {
+        return { error: 'Failed to parse response' };
+    }
+}
+
+
+export async function MetaAI(query: string, forceRefresh: boolean = false): Promise<any> {
+    if (forceRefresh) {
+        metaAICache = null;
+    }
+
+    // Fast Path: Check if we have valid cache
+    if (metaAICache?.valid && metaAICache.access_token && metaAICache.lsd && metaAICache.docid.message && !forceRefresh) {
+        try {
+            const result = await sendMessage(query, metaAICache);
+            if (!result.error) return result;
+            // If fast path fails, clear cache and proceed to slow path
+            metaAICache = null;
+        } catch {
+            metaAICache = null;
+        }
+    }
+
+    try {
+        // Helper to extract value between patterns
+        const extractBetween = (text: string, start: string, end: string): string => {
+            const startIdx = text.indexOf(start);
+            if (startIdx === -1) return '';
+            const valueStart = startIdx + start.length;
+            const endIdx = text.indexOf(end, valueStart);
+            if (endIdx === -1) return '';
+            return text.substring(valueStart, endIdx);
+        };
+
+        // Extract cookies from response headers
+        const extractCookiesFromResponse = (res: Response, existing: string): string => {
+            const setCookieHeader = res.headers.get('set-cookie');
+            if (!setCookieHeader) return existing;
+            
+            // Parse multiple cookies (they may be comma-separated or in multiple headers)
+            const newCookies = setCookieHeader.split(/,(?=\s*\w+=)/)
+                .map(c => c.trim().split(';')[0])
+                .join('; ');
+            
+            if (!existing) return newCookies;
+            if (!newCookies) return existing;
+            
+            const cookieMap = new Map<string, string>();
+            existing.split('; ').forEach(c => {
+                const [k, ...v] = c.split('=');
+                if (k) cookieMap.set(k, v.join('='));
+            });
+            newCookies.split('; ').forEach(c => {
+                const [k, ...v] = c.split('=');
+                if (k) cookieMap.set(k, v.join('='));
+            });
+            return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+        };
+
+        // Fetch Meta.ai webpage using native fetch
+        let cookies = metaAICache?.cookies || '';
+        
+        let res = await fetchWithRetry('https://www.meta.ai', {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                ...(cookies ? { 'Cookie': cookies } : {}),
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': userAgent
+            }
+        });
+        
+        let html = await res.text();
+        cookies = extractCookiesFromResponse(res, cookies);
+
+        // Check for bot challenge
+        if (html && html.includes('/__rd_verify_')) {
+            const challengeMatch = html.match(/fetch\('(\/__rd_verify_[^']+)'/);
+            if (challengeMatch) {
+                const challengeUrl = 'https://www.meta.ai' + challengeMatch[1];
+                
+                // POST to challenge URL
+                const challengeRes = await fetchWithRetry(challengeUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': '*/*',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Cookie': cookies,
+                        'Origin': 'https://www.meta.ai',
+                        'Referer': 'https://www.meta.ai/',
+                        'Sec-Fetch-Dest': 'empty',
+                        'Sec-Fetch-Mode': 'cors',
+                        'Sec-Fetch-Site': 'same-origin',
+                        'User-Agent': userAgent
+                    }
+                });
+                
+                // Extract cookies from challenge response
+                cookies = extractCookiesFromResponse(challengeRes, cookies);
+                await challengeRes.text(); // Consume body
+                
+                // Retry main request with new cookies
+                res = await fetchWithRetry('https://www.meta.ai', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Cookie': cookies,
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none',
+                        'Sec-Fetch-User': '?1',
+                        'Upgrade-Insecure-Requests': '1',
+                        'User-Agent': userAgent
+                    }
+                });
+                html = await res.text();
+                cookies = extractCookiesFromResponse(res, cookies);
+            }
+        }
+
+        const geoBlocked = html.includes('KadabraGeoBlockedError');
+        if (geoBlocked) {
+            return { error: "Meta AI isn't available in your region" };
+        }
+
+        const lsd = extractBetween(html, '"LSD",[],{"token":"', '"');
+        let access_token = extractBetween(html, '"accessToken":"', '"');
+        const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
+
+        // Find doc_ids from scripts
+        let tosDocId = '';
+        let messageDocId = '';
+
+        const scriptRegex = /script src="([^"]+)"/g;
+        const scriptUrls: string[] = [];
+        let match;
+        while ((match = scriptRegex.exec(html)) !== null) {
+            const url = match[1];
+            if (url.startsWith('http') || url.startsWith('//')) {
+                scriptUrls.push(url.startsWith('//') ? 'https:' + url : url);
+            }
+        }
+
+        // Aggressively find ALL fbcdn script URLs in the HTML (handling escaped slashes)
+        // Matches: https:\/\/static.xx.fbcdn.net\/rsrc.php\/...
+        const allFbcdnMatches = html.matchAll(/https?:\\?\/\\?\/static\.xx\.fbcdn\.net\\?\/rsrc\.php\\?\/[a-zA-Z0-9_\-\/\\.]+\.js/g);
+        for (const m of allFbcdnMatches) {
+            const cleanUrl = m[0].replace(/\\\//g, '/');
+            if (!scriptUrls.includes(cleanUrl)) {
+                scriptUrls.push(cleanUrl);
+            }
+        }
+
+        // Fetch scripts to find doc_ids
+        // Fetch scripts in parallel with concurrency limit
+        const BATCH_SIZE = 10;
+        const targetUrls = scriptUrls.slice(0, 100);
+        
+        for (let i = 0; i < targetUrls.length; i += BATCH_SIZE) {
+            if (tosDocId && messageDocId) break;
+            
+            const batch = targetUrls.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (url) => {
+                if (tosDocId && messageDocId) return;
+                try {
+                    const scriptRes = await fetchWithRetry(url, {
+                        method: 'GET',
+                        headers: {
+                            'User-Agent': userAgent,
+                            'Cookie': cookies,
+                            'Sec-Fetch-Site': 'cross-site'
+                        }
+                    });
+                    const scriptText = await scriptRes.text();
+
+                    if (!tosDocId) {
+                        const tosMatch = scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports="(\d+)"/);
+                        if (tosMatch) tosDocId = tosMatch[1];
+                    }
+                    if (!messageDocId) {
+                        const msgMatch = scriptText.match(/useKadabraSendMessageMutation.*?exports="(\d+)"/);
+                        if (msgMatch) messageDocId = msgMatch[1];
+                    }
+                } catch {}
+            }));
+        }
+
+        // If no access token, accept TOS
+        if (!access_token && tosDocId) {
+            const finalCookies = cookies + (abra_csrf ? `; abra_csrf=${abra_csrf}` : '');
+            
+            const tosBody = new URLSearchParams({
+                'av': '0',
+                '__user': '0',
+                '__a': '1',
+                'dpr': '1',
+                'lsd': lsd,
+                'fb_api_caller_class': 'RelayModern',
+                'fb_api_req_friendly_name': 'useKadabraAcceptTOSForTempUserMutation',
+                'server_timestamps': 'true',
+                'doc_id': tosDocId,
+                'variables': JSON.stringify({
+                    "dob": "2000-01-01",
+                    "__relay_internal__pv__AbraQPDocUploadNuxTriggerNamerelayprovider": "meta_dot_ai_abra_web_doc_upload_nux_tour",
+                    "__relay_internal__pv__AbraSurfaceNuxIDrelayprovider": "0"
+                })
+            }).toString();
+
+            const tosRes = await fetchWithRetry('https://www.meta.ai/api/graphql/', {
+                method: 'POST',
+                headers: {
+                    'User-Agent': userAgent,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en',
+                    'Cookie': finalCookies,
+                    'Referer': 'https://www.meta.ai',
+                    'Origin': 'https://www.meta.ai',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'x-asbd-id': '359341',
+                    'x-fb-friendly-name': 'useKadabraAcceptTOSForTempUserMutation',
+                    'x-fb-lsd': lsd
+                },
+                body: tosBody
+            });
+
+            try {
+                const tosData = JSON.parse(await tosRes.text());
+                access_token = tosData?.data?.xab_abra_accept_terms_of_service?.new_temp_user_auth?.access_token || '';
+                cookies = finalCookies;
+            } catch {}
+        }
+
+        if (!access_token) {
+            return { 
+                error: 'Failed to get access token',
+                debug: {
+                    htmlLength: html?.length || 0,
+                    hasLsd: !!lsd,
+                    hasTosDocId: !!tosDocId,
+                    hasMessageDocId: !!messageDocId,
+                    scriptUrlsFound: scriptUrls.length,
+                    firstScripts: scriptUrls.slice(0, 5),
+                    hasChallenge: html?.includes?.('/__rd_verify_') || false,
+                    htmlPreview: html?.substring?.(0, 500) || 'empty'
+                }
+            };
+        }
+
+        if (!messageDocId) {
+            return { error: 'Could not find message doc_id' };
+        }
+
+        // Store cache
+        metaAICache = {
+            valid: true,
+            access_token,
+            lsd,
+            cookies,
+            docid: { tos: tosDocId, message: messageDocId }
+        };
+
+        // Send message
+        return await sendMessage(query, metaAICache);
+    } catch (e: any) {
+        return { error: e.message || 'Unknown error' };
+    }
+}

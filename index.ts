@@ -91,7 +91,7 @@ app.use('*', async (c: Context, next: Next) => {
 
     if (!isAllowed && !isLocal) {
         const url = new URL(c.req.url);
-        url.host = 'vgjr.top';
+        url.host = 'api.vgjr.top';
         c.header('Refresh', `0; url=${url.toString()}/playground`);
         return c.text(`Redirecting...`);
     }

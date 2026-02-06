@@ -145,14 +145,8 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
     .replace(/>\s+</g, '><') // Remove space between tags
     .trim();
 
-// Minify JS (Node.js/Vercel compatible - no Bun.build)
-// Note: We don't remove single-line comments with regex as it breaks URLs and regex patterns
-const rawJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
-const mainJs = rawJs
-    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments only (safe)
-    .replace(/[\r\n]+/g, ' ') // Replace newlines with space
-    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces
-    .trim();
+// Load JS (serve as-is, no minification to avoid syntax errors)
+const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 
 // Minify CSS
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
@@ -235,14 +229,12 @@ app.get('/playground', (c: Context) => {
 
 app.get('/playground/main.js', (c: Context) => {
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if (secFetchDest && secFetchDest !== 'script') return c.body('', 200);
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
 app.get('/playground/main.css', (c: Context) => {
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if (secFetchDest && secFetchDest !== 'style') return c.body('', 200);
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });

@@ -145,15 +145,14 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
     .replace(/>\s+</g, '><') // Remove space between tags
     .trim();
 
-// Minify JS
-const jsBuild = await Bun.build({
-    entrypoints: [path.join(__dirname, 'html/main.js')],
-    minify: true,
-});
-const mainJs = (await jsBuild.outputs[0].text())
+// Minify JS (Node.js/Vercel compatible - no Bun.build)
+const rawJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
+const mainJs = rawJs
     .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
-    .replace(/[\r\n]+/g, '') // Remove newlines
-    .replace(/\s{2,}/g, ' '); // Collapse multiple spaces
+    .replace(/\/\/.*$/gm, '') // Remove single-line comments
+    .replace(/[\r\n]+/g, ' ') // Replace newlines with space
+    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces
+    .trim();
 
 // Minify CSS
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');

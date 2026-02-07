@@ -154,11 +154,11 @@ async function performRequest(targetUrl) {
         
         if (response.ok) {
             statusDot.className = 'w-2 h-2 rounded-full bg-mint-400';
-            statusText.textContent = `${response.status} OK • ${duration}ms`;
+            statusText.textContent = `${response.status} • ${duration}ms`;
             statusText.className = 'text-mint-400';
         } else {
             statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
-            statusText.textContent = `${response.status} ${response.statusText}`;
+            statusText.textContent = `${response.status}`;
             statusText.className = 'text-red-400';
         }
     } catch (err) {

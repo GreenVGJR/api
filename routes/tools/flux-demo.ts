@@ -15,7 +15,6 @@ const app = new Hono();
 import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/ai-image/flux_demo', async (c) => {
-    return c.text('Forbidden', 403);
     const query = c.req.query('prompt');
     if(query === undefined) { 
 return c.json({"error":"Missing parameter required"}, 202);

@@ -232,7 +232,7 @@ app.get('/playground/main.js', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
-    if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 101);
+    if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
@@ -240,7 +240,7 @@ app.get('/playground/main.css', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
-    if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 101);
+    if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });
 

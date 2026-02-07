@@ -232,6 +232,7 @@ app.get('/playground/main.js', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 101);
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
@@ -239,6 +240,7 @@ app.get('/playground/main.css', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 101);
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });
 
@@ -249,6 +251,7 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
+    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');

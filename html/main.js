@@ -158,7 +158,7 @@ async function performRequest(targetUrl) {
             statusText.className = 'text-mint-400';
         } else {
             statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
-            statusText.textContent = `${response.status}`;
+            statusText.textContent = `${response.status} • ${duration}ms`;
             statusText.className = 'text-red-400';
         }
     } catch (err) {

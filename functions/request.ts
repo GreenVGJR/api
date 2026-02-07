@@ -1,7 +1,19 @@
 import { request as undiciRequest, Agent, interceptors } from 'undici';
 import { Session } from 'httpcloak';
 
-const request = undiciRequest;
+const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
+
+const request: typeof undiciRequest = (url, options = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    
+    return undiciRequest(url, {
+        ...options,
+        signal: controller.signal,
+    }).finally(() => {
+        clearTimeout(timeoutId);
+    });
+};
 
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from 'linkedom';

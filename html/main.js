@@ -223,7 +223,7 @@ function renderEndpoints() {
 
     endpointsList.innerHTML = categoryEndpoints.map((ep, index) => `
         <button 
-            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400' : ''} truncate transition-colors"
+            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} truncate transition-colors"
             data-index="${index}"
             title="${ep.description}"
         >
@@ -238,6 +238,11 @@ function renderEndpoints() {
             urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
             adjustHeight();
             renderEndpoints();
+            
+            // Activate the corresponding tab button
+            tabBtns.forEach(b => b.classList.remove('active'));
+            const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
+            if (activeTab) activeTab.classList.add('active');
         });
     });
 }

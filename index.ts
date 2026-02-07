@@ -219,6 +219,7 @@ app.get('/robots.txt', (c: Context) => {
 });
 
 app.get('/playground', (c: Context) => {
+    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const host = c.req.header('host');
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
@@ -228,12 +229,14 @@ app.get('/playground', (c: Context) => {
 });
 
 app.get('/playground/main.js', (c: Context) => {
+    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
 app.get('/playground/main.css', (c: Context) => {
+    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });

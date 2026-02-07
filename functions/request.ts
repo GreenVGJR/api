@@ -1824,7 +1824,7 @@ export const infoITunes = async function infoITunes(que: string) {
         const test = new URL(que);
         if (test.host !== 'music.apple.com') return null;
 
-        const res = await request(que, {
+        const res = await fetch(que, {
             method: 'GET',
             headers: {
                 ...commonHeaders,
@@ -1832,12 +1832,24 @@ export const infoITunes = async function infoITunes(que: string) {
             }
         });
 
-        const pull = await res.body.text();
-        const trypar = JSON.parse(pull.split('id="serialized-server-data">')[1].split('</script>')[0]);
+        const pull = await res.text();
+        const serverDataMatch = pull.match(/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/);
+        if (!serverDataMatch) {
+            return { data: null };
+        }
+        const trypar = JSON.parse(serverDataMatch[1]);
+        const sections = trypar[0]?.data?.sections;
+        if(!sections?.[0]) {
+            return { data: null }
+        }
 
-        return { data: trypar[0]?.data?.sections || null };
+        const target = sections[0]?.items?.[0] || null;
+        const other = sections.slice(1).map((s: any) => s?.items).filter(Boolean);
+
+        return { data: { target, other } };
     }
-    catch {
+    catch (e) {
+        console.error(e);
         return null;
     }
 }

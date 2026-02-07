@@ -290,6 +290,7 @@ app.get('/', (c: Context) => {
                     "/search/tiktok/video?q=",
                     "/search/tiktok/music?q=",
                     "/search/tiktok/users?q=",
+                    "/search/tiktok/feed",
                     "/search/reddit/media?q=",
                     "/search/roblox/games?q=",
                     "/search/roblox/audio?q=",

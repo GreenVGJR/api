@@ -54,6 +54,17 @@ const parseAbbreviatedNumber = (str: string | null | undefined): number | null =
     return Math.floor(num);
 };
 
+const formatAbbreviatedNumber = (num: number | string | null | undefined): string => {
+    if (num === null || num === undefined) return '0';
+    const n = typeof num === 'string' ? parseFloat(num) : num;
+    if (isNaN(n)) return '0';
+    
+    if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return n.toString();
+};
+
 const listcodes: { name: string, code: string }[] = [
     { "name": "Abkhaz", "code": "ab" },
     { "name": "Acehnese", "code": "ace" },
@@ -2648,7 +2659,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
     if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
 
     const item = feed.data;
-    const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + item.statistics.digg_count + " 👁️ " + item.statistics.play_count + " 💬 " + item.statistics.comment_count;
+    const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + formatAbbreviatedNumber(item.statistics.digg_count) + " 👁️ " + formatAbbreviatedNumber(item.statistics.play_count) + " 💬 " + formatAbbreviatedNumber(item.statistics.comment_count);
 
     const embed = {
         color: 0x000000,
@@ -2665,7 +2676,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         }
     };
 
-    const MAX_DISCORD_SIZE = 26214400; // 25MB
+    const MAX_DISCORD_SIZE = 8388608; // 8MB
     const urlsToTry = [item.highest_video_url, item.video_url].filter((u, i, a) => u && a.indexOf(u) === i);
     let videoBuffer: ArrayBuffer | null = null;
 
@@ -2708,6 +2719,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
     const form = new FormData();
     const payload: any = {
+        content: "",
         embeds: [embed]
     };
 

@@ -2468,134 +2468,124 @@ export const TiktokUser = async function TiktokUser(que: string) {
 }
 
 export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
-    try {
-        const url = 'https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=1&referer=&region=&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en';
+    const url = 'https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=1&referer=&region=&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en';
+    const client = new Session({
+        preset: 'chrome-144-linux',
+        httpVersion: 'h2'
+    });
+    const headers = {
+        ...commonHeaders,
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+        'Referer': 'https://www.tiktok.com/explore'
+    };
 
-        const client = new Session({
-            preset: 'chrome-144-linux',
-            httpVersion: 'h2'
-        });
-
-        // Use standard Headers object
-        const headers = {
-            ...commonHeaders,
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
-            'Referer': 'https://www.tiktok.com/explore'
-        };
-
-        const pul = await client.get(url, {
-            headers: headers
-        });
-
-        const res = pul.text;
-        if (res === '' || pul.statusCode !== 200) {
-            return {
-                "error": "Akamai Captcha asking to verify you're not a bot"
-            }
-        }
-
-        let testres: any;
+    for (let i = 0; i < 3; i++) {
         try {
-            testres = JSON.parse(res);
-        }
-        catch {
-            return { "data": null };
-        }
+            const pul = await client.get(url, { headers });
+            const res = pul.text;
 
-        const itemList = testres?.itemList || [];
-        if (itemList.length === 0) {
-            return {
-                data: null,
-                extra: { max_cursor: 0, has_more: false },
-                debug: testres
-            };
-        }
-
-        const data = itemList.map((item: any) => {
-            const videoInfo = item.video || {};
-            const bitrateInfo = videoInfo.bitrateInfo || [];
-
-            // Sort bitrates by quality (ascending for videoUrl, descending for highestVideoUrl)
-            const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
-            const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
-            
-            let videoUrl = null;
-            let highestVideoUrl = null;
-
-            // Find lowest quality video URL (min bitrate)
-            for (const br of sortedBitrateAsc) {
-                const urls = br.PlayAddr?.UrlList || [];
-                const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
-                if (awemeUrl) {
-                    videoUrl = awemeUrl.replace('1988', '1180');
-                    break;
-                }
+            if (res === '' || pul.statusCode !== 200) {
+                if (i === 2) return { "error": "Akamai Captcha asking to verify you're not a bot" };
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
             }
 
-            // Find highest quality video URL (max bitrate)
-            for (const br of sortedBitrateDesc) {
-                const urls = br.PlayAddr?.UrlList || [];
-                const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
-                if (awemeUrl) {
-                    highestVideoUrl = awemeUrl.replace('1988', '1180');
-                    break;
-                }
+            let testres: any;
+            try {
+                testres = JSON.parse(res);
+            } catch {
+                if (i === 2) return { "data": null };
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
             }
 
-            // Fallbacks to each other or PlayAddrStruct
-            const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1180');
-            
-            if (!videoUrl) videoUrl = defaultAweme || highestVideoUrl;
-            if (!highestVideoUrl) highestVideoUrl = defaultAweme || videoUrl;
+            const itemList = testres?.itemList || [];
+            if (itemList.length === 0) {
+                if (i === 2) return { data: null, extra: { max_cursor: 0, has_more: false }, debug: testres };
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
+            }
 
-            return {
-                aweme_id: item.id,
-                url: "https://www.tiktok.com/@" + item.author?.uniqueId + "/video/" + item.id,
-                desc: item.desc,
-                create_time: item.createTime.toString(),
-                author: {
-                    url: "https://www.tiktok.com/@" + item.author?.uniqueId,
-                    id: item.author?.id,
-                    nickname: item.author?.nickname,
-                    unique_id: item.author?.uniqueId,
-                    avatar: item.author?.avatarThumb
-                },
-                music: {
-                    url: "https://www.tiktok.com/music/-" + item.music?.id,
-                    id: item.music?.id,
-                    title: item.music?.title,
-                    author: item.music?.authorName,
-                    cover: item.music?.coverThumb,
-                    play_url: item.music?.playUrl
-                },
-                statistics: {
-                    comment_count: item.stats?.commentCount.toString(),
-                    digg_count: item.stats?.diggCount.toString(),
-                    play_count: item.stats?.playCount.toString(),
-                    share_count: item.stats?.shareCount.toString()
-                },
-                video_url: videoUrl,
-                highest_video_url: highestVideoUrl,
-                quality_summary: sortedBitrateDesc.map((br: any) => ({
-                    gear: br.GearName,
-                    bitrate: br.Bitrate,
-                    res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
-                    format: br.Format,
-                    codec: br.CodecType
-                })),
-                cover: item.video?.cover,
-                origin_cover: item.video?.originCover,
-                dynamic_cover: item.video?.dynamicCover
-            };
-        });
+            const data = itemList.map((item: any) => {
+                const videoInfo = item.video || {};
+                const bitrateInfo = videoInfo.bitrateInfo || [];
 
-        return { 
-            data: data?.[0] || null,
-        };
+                const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
+                const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
+
+                let videoUrl = null;
+                let highestVideoUrl = null;
+
+                for (const br of sortedBitrateAsc) {
+                    const urls = br.PlayAddr?.UrlList || [];
+                    const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
+                    if (awemeUrl) {
+                        videoUrl = awemeUrl.replace('1988', '1180');
+                        break;
+                    }
+                }
+
+                for (const br of sortedBitrateDesc) {
+                    const urls = br.PlayAddr?.UrlList || [];
+                    const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
+                    if (awemeUrl) {
+                        highestVideoUrl = awemeUrl.replace('1988', '1180');
+                        break;
+                    }
+                }
+
+                const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1180');
+                if (!videoUrl) videoUrl = defaultAweme || highestVideoUrl;
+                if (!highestVideoUrl) highestVideoUrl = defaultAweme || videoUrl;
+
+                return {
+                    aweme_id: item.id,
+                    url: "https://www.tiktok.com/@" + item.author?.uniqueId + "/video/" + item.id,
+                    desc: item.desc,
+                    create_time: item.createTime.toString(),
+                    author: {
+                        url: "https://www.tiktok.com/@" + item.author?.uniqueId,
+                        id: item.author?.id,
+                        nickname: item.author?.nickname,
+                        unique_id: item.author?.uniqueId,
+                        avatar: item.author?.avatarThumb
+                    },
+                    music: {
+                        url: "https://www.tiktok.com/music/-" + item.music?.id,
+                        id: item.music?.id,
+                        title: item.music?.title,
+                        author: item.music?.authorName,
+                        cover: item.music?.coverThumb,
+                        play_url: item.music?.playUrl
+                    },
+                    statistics: {
+                        comment_count: item.stats?.commentCount.toString(),
+                        digg_count: item.stats?.diggCount.toString(),
+                        play_count: item.stats?.playCount.toString(),
+                        share_count: item.stats?.shareCount.toString()
+                    },
+                    video_url: videoUrl,
+                    highest_video_url: highestVideoUrl,
+                    quality_summary: sortedBitrateDesc.map((br: any) => ({
+                        gear: br.GearName,
+                        bitrate: br.Bitrate,
+                        res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+                        format: br.Format,
+                        codec: br.CodecType
+                    })),
+                    cover: item.video?.cover,
+                    origin_cover: item.video?.originCover,
+                    dynamic_cover: item.video?.dynamicCover
+                };
+            });
+
+            return { data: data?.[0] || null };
+        } catch (err) {
+            if (i === 2) return null;
+            await new Promise(r => setTimeout(r, 1000));
+        }
     }
-    catch (err: any) {
-        return null;
-    }
+    return null;
 }
 
 

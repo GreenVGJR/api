@@ -2861,7 +2861,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
     const form = new FormData();
     const payload: any = {
-        content: null
+        content: ""
     };
 
     if (clone && messageId && messageData) {
@@ -2892,8 +2892,6 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         // @ts-ignore
         form.append('files[0]', new Blob([videoBuffer]), filename);
     }
-
-    if (payload.content === null) delete payload.content;
 
     form.append('payload_json', JSON.stringify(payload));
 

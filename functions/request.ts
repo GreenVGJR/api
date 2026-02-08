@@ -2880,7 +2880,8 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     }
 
     if (fileTooLarge) {
-        payload.content = url;
+        const separator = (payload.content && payload.content.length > 0) ? "\n" : "";
+        payload.content = (payload.content || "") + separator + url;
     }
 
     if (videoBuffer) {

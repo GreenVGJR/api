@@ -2860,16 +2860,11 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     }
 
     const form = new FormData();
-    const payload: any = {
-        content: ""
-    };
+    const payload: any = {};
 
     if (clone && messageId && messageData) {
-        payload.content = messageData.content;
-        payload.embeds = messageData.embeds;
-        payload.components = messageData.components;
-
-        if (onEmbed && payload.embeds?.[0]) {
+        if (onEmbed && messageData.embeds && messageData.embeds.length > 0) {
+            payload.embeds = messageData.embeds;
             payload.embeds[0].image = { url: `attachment://${filename}` };
         }
     } else if (messageId) {
@@ -2877,11 +2872,19 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         payload.embeds = [];
         payload.components = [];
         payload.attachments = [];
+    } else {
+        payload.content = "";
     }
 
     if (fileTooLarge) {
-        const separator = (payload.content && payload.content.length > 0) ? "\n" : "";
-        payload.content = (payload.content || "") + separator + url;
+        let currentContent = payload.content;
+        if (currentContent === undefined && clone && messageData) {
+            currentContent = messageData.content;
+        }
+        currentContent = currentContent || "";
+        
+        const separator = (currentContent.length > 0) ? "\n" : "";
+        payload.content = currentContent + separator + url;
     }
 
     if (videoBuffer) {

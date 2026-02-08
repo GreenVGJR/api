@@ -2872,10 +2872,9 @@ export const DiscordStream = async function DiscordStream(token: string, channel
             payload.embeds[0].image = { url: `attachment://${filename}` };
         }
     } else if (messageId && messageData) {
-        // If messageId exists but clone is false, we should keep track of existing attachments to not delete them if PATCH
-        // However, if we want to "send fresh", we might need to handle attachment logic carefully
-        // For now, if not cloning during a PATCH, Discord usually keeps existing attachments unless specified otherwise
-        // But to be safe, let's ensure attachments isn't accidentally inherited or wiped
+        payload.content = "";
+        payload.embeds = [];
+        payload.components = [];
         payload.attachments = [];
     }
 

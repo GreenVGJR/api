@@ -2805,6 +2805,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
             method: 'GET',
             headers: {
                 ...commonHeaders,
+                'Referer': new URL(url).origin
             }
         });
 
@@ -2860,7 +2861,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
     const form = new FormData();
     const payload: any = {
-        content: ""
+        content: null
     };
 
     if (clone && messageId && messageData) {
@@ -2871,7 +2872,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         if (onEmbed && payload.embeds?.[0]) {
             payload.embeds[0].image = { url: `attachment://${filename}` };
         }
-    } else if (messageId && messageData) {
+    } else if (messageId) {
         payload.content = "";
         payload.embeds = [];
         payload.components = [];
@@ -2879,8 +2880,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     }
 
     if (fileTooLarge) {
-        const fallback = `${url}`;
-        payload.content = (payload.content || "") + fallback;
+        payload.content = url;
     }
 
     if (videoBuffer) {
@@ -2889,8 +2889,10 @@ export const DiscordStream = async function DiscordStream(token: string, channel
             filename: filename
         }];
         // @ts-ignore
-        form.append('files[0]', new Blob([videoBuffer], { type: contentType }), filename);
+        form.append('files[0]', new Blob([videoBuffer]), filename);
     }
+
+    if (payload.content === null) delete payload.content;
 
     form.append('payload_json', JSON.stringify(payload));
 

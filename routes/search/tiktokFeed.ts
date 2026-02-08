@@ -5,8 +5,8 @@ import { TiktokFeed } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
 app.get('/tiktok/feed', async (c) => {
-    const cursor = c.req.query('cursor') || 0;
-    c.header('X-Route', 'api-boot.tiktokv.com');
+    const cursor = 0;
+    c.header('X-Route', 'www.tiktok.com');
     return await dispatch(c, () => TiktokFeed(cursor));
 });
 

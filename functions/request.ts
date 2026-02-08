@@ -2584,7 +2584,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                     },
                     video_url: finalVideoUrl,
                     highest_video_url: finalHighestVideoUrl,
-                    quality_summary: sortedBitrateDesc.map((br: any) => ({
+                    original_video_url: null,
+                    bit_rate: sortedBitrateDesc.map((br: any) => ({
                         gear: br.GearName,
                         bitrate: br.Bitrate,
                         res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,

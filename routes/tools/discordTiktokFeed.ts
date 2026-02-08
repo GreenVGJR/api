@@ -10,7 +10,7 @@ app.get('/discord/tiktokFeed', async (c) => {
     const messageId = c.req.query('messageId');
     const region_code = c.req.query('region_code') || '';
 
-    c.header('X-Route', 'discord.com');
+    c.header('X-Route', 'discord.com, www.tiktok.com');
     // @ts-ignore
     return await dispatch(c, () => DiscordTiktokFeed(token, channelId, messageId, region_code));
 });

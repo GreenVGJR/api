@@ -2609,10 +2609,43 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
 
 
 export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string, region_code: string = '') {
-    if (!token || !channelId) return { error: "Missing token or channelId" };
+    if (!token) return { error: "Missing token" };
+    if (!channelId) return { error: "Missing channelId" };
+
+    try {
+        const channelCheck = await request(`https://discord.com/api/v10/channels/${channelId}`, {
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const channelData: any = await channelCheck.body.json();
+
+        if (channelCheck.statusCode !== 200) {
+            return { error: channelData || "Channel verification failed" };
+        }
+
+        if (messageId) {
+            const messageCheck = await request(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+                headers: {
+                    'Authorization': `Bot ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const messageData: any = await messageCheck.body.json();
+
+            if (messageCheck.statusCode !== 200) {
+                return { error: messageData || "Message verification failed" };
+            }
+        }
+    } catch (e: any) {
+        return { error: e.message || "Failed to verify Discord resources" };
+    }
 
     const feed = await TiktokFeed(0, region_code);
-    if (!feed || !feed.data) return { error: "Failed to fetch TikTok feed" };
+    if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
 
     const item = feed.data;
     const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + item.statistics.digg_count + " 👁️ " + item.statistics.play_count + " 💬 " + item.statistics.comment_count;
@@ -2628,37 +2661,66 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         url: item.url,
         footer: {
             text: footerText,
-            icon_url: "https://sf16-scmcdn-sg.ibytedtos.com/goofy/tiktok/web/node/_next/static/images/logo-dark-e95da587b61837d72afbd0d4d4ead501.svg"
+            icon_url: "https://sf16-sg.tiktokcdn.com/obj/eden-sg/uvkuhyieh7lpqpbj/pwa/512x512.png"
         }
     };
 
-    const videoUrl = item.highest_video_url || item.video_url;
-    if (!videoUrl) return { error: "No video URL found" };
-
+    const MAX_DISCORD_SIZE = 26214400; // 25MB
+    const urlsToTry = [item.highest_video_url, item.video_url].filter((u, i, a) => u && a.indexOf(u) === i);
     let videoBuffer: ArrayBuffer | null = null;
-    try {
-        const vidReq = await request(videoUrl, {
-            headers: {
-                ...commonHeaders,
-                'Referer': 'https://www.tiktok.com/'
+
+    for (const url of urlsToTry) {
+        try {
+            const vidReq = await request(url as string, {
+                method: 'GET',
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://www.tiktok.com/'
+                }
+            });
+
+            const contentLength = parseInt(vidReq.headers['content-length'] as string || '0');
+            
+            // Check size from headers before consuming the body
+            if (contentLength > MAX_DISCORD_SIZE) {
+                await vidReq.body.dump(); // Properly discard the body
+                continue;
             }
-        });
-        videoBuffer = await vidReq.body.arrayBuffer();
-    } catch (e) {
-        return { error: "Failed to download video file" };
+
+            const buffer = await vidReq.body.arrayBuffer();
+            if (buffer.byteLength <= MAX_DISCORD_SIZE) {
+                videoBuffer = buffer;
+                break;
+            }
+        } catch (e) {
+            continue;
+        }
     }
 
+    let filename = item.desc
+        ?.replace(/[^a-z0-9 ]/gi, '_') // Replace non-alphanumeric chars with underscore
+        .replace(/_{2,}/g, '_')        // Collapse multiple underscores
+        .trim()
+        .substring(0, 50)              // Truncate to 50 chars for safety and readability
+        || "video-" + item.aweme_id;                     // Fallback
+
+    filename += ".mp4";
+
     const form = new FormData();
-    form.append('payload_json', JSON.stringify({
-        embeds: [embed],
-        attachments: [{
+    const payload: any = {
+        embeds: [embed]
+    };
+
+    if (videoBuffer) {
+        payload.attachments = [{
             id: 0,
-            filename: 'video.mp4'
-        }]
-    }));
-    
-    // @ts-ignore
-    form.append('files[0]', new Blob([videoBuffer]), 'video.mp4');
+            filename: filename
+        }];
+        // @ts-ignore
+        form.append('files[0]', new Blob([videoBuffer]), filename);
+    }
+
+    form.append('payload_json', JSON.stringify(payload));
 
     try {
         const url = messageId

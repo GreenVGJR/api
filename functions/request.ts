@@ -2520,7 +2520,7 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                     const urls = br.PlayAddr?.UrlList || [];
                     const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
                     if (awemeUrl) {
-                        videoUrl = awemeUrl.replace('1988', '1180');
+                        videoUrl = awemeUrl.replace('1988', '1233');
                         break;
                     }
                 }
@@ -2529,12 +2529,12 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                     const urls = br.PlayAddr?.UrlList || [];
                     const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
                     if (awemeUrl) {
-                        highestVideoUrl = awemeUrl.replace('1988', '1180');
+                        highestVideoUrl = awemeUrl.replace('1988', '1233');
                         break;
                     }
                 }
 
-                const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1180');
+                const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233');
                 if (!videoUrl) videoUrl = defaultAweme || highestVideoUrl;
                 if (!highestVideoUrl) highestVideoUrl = defaultAweme || videoUrl;
 

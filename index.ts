@@ -310,7 +310,7 @@ app.get('/', (c: Context) => {
                     ],
                     discord: {
                         stream: [
-                            "/tools/discord/stream?token=&channelId=&messageId=&url=&clone=&onEmbed=&awemeId="
+                            "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed="
                         ],
                         tiktok: [
                             "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="

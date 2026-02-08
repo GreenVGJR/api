@@ -309,6 +309,9 @@ app.get('/', (c: Context) => {
                         "/tools/chat/meta?prompt="
                     ],
                     discord: {
+                        stream: [
+                            "/tools/discord/stream?token=&channelId=&messageId=&url=&clone=&onEmbed=&awemeId="
+                        ],
                         tiktok: [
                             "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="
                         ],

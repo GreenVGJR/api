@@ -2719,6 +2719,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
     const form = new FormData();
     const payload: any = {
+        embeds: [embed],
         content: ""
     };
 
@@ -2753,6 +2754,148 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
     }
 }
 
+export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, awemeId?: string) {
+    if (!token) return { error: "Missing token" };
+    if (!channelId) return { error: "Missing channelId" };
+    if (!url) return { error: "Missing url" };
+
+    let messageData: any = null;
+
+    try {
+        const channelCheck = await request(`https://discord.com/api/v10/channels/${channelId}`, {
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const channelData: any = await channelCheck.body.json();
+
+        if (channelCheck.statusCode !== 200) {
+            return { error: channelData || "Channel verification failed" };
+        }
+
+        if (messageId) {
+            const messageCheck = await request(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+                headers: {
+                    'Authorization': `Bot ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            messageData = await messageCheck.body.json();
+
+            if (messageCheck.statusCode !== 200) {
+                return { error: messageData || "Message verification failed" };
+            }
+        }
+    } catch (e: any) {
+        return { error: e.message || "Failed to verify Discord resources" };
+    }
+
+    const MAX_DISCORD_SIZE = 8388608; // 8MB
+    
+    let videoBuffer: ArrayBuffer | null = null;
+    let filename = "file";
+    let contentType = "application/octet-stream";
+
+    try {
+        const vidReq = await request(url, {
+            method: 'GET',
+            headers: {
+                ...commonHeaders,
+            }
+        });
+
+        const contentLength = parseInt(vidReq.headers['content-length'] as string || '0');
+        contentType = vidReq.headers['content-type'] as string || contentType;
+        
+        const contentDisposition = vidReq.headers['content-disposition'] as string;
+        if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (fileNameMatch) {
+                filename = fileNameMatch[1];
+            }
+        } else {
+            try {
+                const urlObj = new URL(url);
+                const pathParts = urlObj.pathname.split('/');
+                const lastPart = pathParts[pathParts.length - 1];
+                if (lastPart && lastPart.includes('.')) {
+                    filename = lastPart;
+                }
+            } catch {}
+        }
+
+        if (contentLength > MAX_DISCORD_SIZE) {
+            await vidReq.body.dump();
+            return { error: "File too large for Discord (max 8MB)" };
+        }
+
+        videoBuffer = await vidReq.body.arrayBuffer();
+        if (videoBuffer.byteLength > MAX_DISCORD_SIZE) {
+            return { error: "File too large for Discord (max 8MB)" };
+        }
+    } catch (e: any) {
+        return { error: "Failed to download content: " + e.message };
+    }
+
+    if (!filename.includes('.') && contentType !== 'application/octet-stream') {
+        if (contentType.includes('video/mp4')) filename += '.mp4';
+        else if (contentType.includes('video/')) filename += '.' + contentType.split('/')[1].split(';')[0];
+        else if (contentType.includes('image/')) filename += '.' + contentType.split('/')[1].split(';')[0].replace('jpeg', 'jpg');
+    }
+
+    if (awemeId) {
+        const ext = filename.includes('.') ? filename.split('.').pop() : '';
+        filename = ext ? `${awemeId}.${ext}` : awemeId;
+    }
+
+    const form = new FormData();
+    const payload: any = {
+        content: ""
+    };
+
+    if (clone && messageId && messageData) {
+        payload.content = messageData.content;
+        payload.embeds = messageData.embeds;
+        payload.components = messageData.components;
+
+        if (onEmbed && payload.embeds?.[0]) {
+            payload.embeds[0].image = { url: `attachment://${filename}` };
+        }
+    }
+
+    if (videoBuffer) {
+        payload.attachments = [{
+            id: 0,
+            filename: filename
+        }];
+        // @ts-ignore
+        form.append('files[0]', new Blob([videoBuffer], { type: contentType }), filename);
+    }
+
+    form.append('payload_json', JSON.stringify(payload));
+
+    try {
+        const discordUrl = messageId
+            ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`
+            : `https://discord.com/api/v10/channels/${channelId}/messages`;
+
+        const response = await fetch(discordUrl, {
+            method: messageId ? 'PATCH' : 'POST',
+            headers: {
+                'Authorization': `Bot ${token}`
+            },
+            body: form
+        });
+
+        const resJson: any = await response.json();
+        return { data: resJson };
+    } catch (e: any) {
+        return { error: "Failed to upload to Discord: " + e.message };
+    }
+}
 
 export const infoTwitterUser = async function infoTwitterUser(que: string, refresh_auth?: boolean): Promise<any> {
     if (!que) return null;

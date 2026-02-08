@@ -2506,15 +2506,15 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                 continue;
             }
 
-            const data = itemList.map((item: any) => {
+            const data = await Promise.all(itemList.map(async (item: any) => {
                 const videoInfo = item.video || {};
                 const bitrateInfo = videoInfo.bitrateInfo || [];
 
                 const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
                 const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
 
-                let videoUrl = null;
-                let highestVideoUrl = null;
+                let videoUrl: any = null;
+                let highestVideoUrl: any = null;
 
                 for (const br of sortedBitrateAsc) {
                     const urls = br.PlayAddr?.UrlList || [];
@@ -2537,6 +2537,24 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                 const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233');
                 if (!videoUrl) videoUrl = defaultAweme || highestVideoUrl;
                 if (!highestVideoUrl) highestVideoUrl = defaultAweme || videoUrl;
+
+                const extractRedirect = async (url: string) => {
+                    try {
+                        const res = await request(url, { 
+                            method: 'GET', 
+                            headers: headers,
+                            maxRedirections: 0 
+                        } as any);
+                        return res.headers.location || url;
+                    } catch {
+                        return url;
+                    }
+                };
+
+                const [finalVideoUrl, finalHighestVideoUrl] = await Promise.all([
+                    videoUrl ? extractRedirect(videoUrl) : Promise.resolve(null),
+                    highestVideoUrl ? extractRedirect(highestVideoUrl) : Promise.resolve(null)
+                ]);
 
                 return {
                     aweme_id: item.id,
@@ -2564,8 +2582,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                         play_count: item.stats?.playCount.toString(),
                         share_count: item.stats?.shareCount.toString()
                     },
-                    video_url: videoUrl,
-                    highest_video_url: highestVideoUrl,
+                    video_url: finalVideoUrl,
+                    highest_video_url: finalHighestVideoUrl,
                     quality_summary: sortedBitrateDesc.map((br: any) => ({
                         gear: br.GearName,
                         bitrate: br.Bitrate,
@@ -2577,7 +2595,7 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
                     origin_cover: item.video?.originCover,
                     dynamic_cover: item.video?.dynamicCover
                 };
-            });
+            }));
 
             return { data: data?.[0] || null };
         } catch (err) {

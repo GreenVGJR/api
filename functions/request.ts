@@ -2719,8 +2719,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
     const form = new FormData();
     const payload: any = {
-        content: "",
-        embeds: [embed]
+        content: ""
     };
 
     if (videoBuffer) {

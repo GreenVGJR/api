@@ -2798,6 +2798,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     let videoBuffer: ArrayBuffer | null = null;
     let filename = "file";
     let contentType = "application/octet-stream";
+    let fileTooLarge = false;
 
     try {
         const vidReq = await request(url, {
@@ -2829,12 +2830,15 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
         if (contentLength > MAX_DISCORD_SIZE) {
             await vidReq.body.dump();
-            return { error: "File too large for Discord (max 8MB)" };
+            fileTooLarge = true;
         }
 
-        videoBuffer = await vidReq.body.arrayBuffer();
-        if (videoBuffer.byteLength > MAX_DISCORD_SIZE) {
-            return { error: "File too large for Discord (max 8MB)" };
+        if (!fileTooLarge) {
+            videoBuffer = await vidReq.body.arrayBuffer();
+            if (videoBuffer.byteLength > MAX_DISCORD_SIZE) {
+                fileTooLarge = true;
+                videoBuffer = null;
+            }
         }
     } catch (e: any) {
         return { error: "Failed to download content: " + e.message };
@@ -2873,6 +2877,11 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         // For now, if not cloning during a PATCH, Discord usually keeps existing attachments unless specified otherwise
         // But to be safe, let's ensure attachments isn't accidentally inherited or wiped
         payload.attachments = [];
+    }
+
+    if (fileTooLarge) {
+        const fallback = `${url}`;
+        payload.content = (payload.content || "") + fallback;
     }
 
     if (videoBuffer) {

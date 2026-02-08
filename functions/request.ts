@@ -2754,7 +2754,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
     }
 }
 
-export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, awemeId?: string) {
+export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, name?: string) {
     if (!token) return { error: "Missing token" };
     if (!channelId) return { error: "Missing channelId" };
     if (!url) return { error: "Missing url" };
@@ -2846,9 +2846,9 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         else if (contentType.includes('image/')) filename += '.' + contentType.split('/')[1].split(';')[0].replace('jpeg', 'jpg');
     }
 
-    if (awemeId) {
+    if (name) {
         const ext = filename.includes('.') ? filename.split('.').pop() : '';
-        filename = ext ? `${awemeId}.${ext}` : awemeId;
+        filename = ext ? `${name}.${ext}` : name;
     }
 
     const form = new FormData();

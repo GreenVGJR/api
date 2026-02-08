@@ -2467,8 +2467,8 @@ export const TiktokUser = async function TiktokUser(que: string) {
     }
 }
 
-export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
-    const url = 'https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=1&referer=&region=&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en';
+export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code: any = '') {
+    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=1&referer=&region=${region_code}&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en`;
     const client = new Session({
         preset: 'chrome-144-linux',
         httpVersion: 'h2'
@@ -2605,6 +2605,79 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0) {
         }
     }
     return null;
+}
+
+
+export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string, region_code: string = '') {
+    if (!token || !channelId) return { error: "Missing token or channelId" };
+
+    const feed = await TiktokFeed(0, region_code);
+    if (!feed || !feed.data) return { error: "Failed to fetch TikTok feed" };
+
+    const item = feed.data;
+    const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + item.statistics.digg_count + " 👁️ " + item.statistics.play_count + " 💬 " + item.statistics.comment_count;
+
+    const embed = {
+        color: 0x000000,
+        author: {
+            name: item.author.unique_id,
+            url: item.author.url,
+            icon_url: item.author.avatar
+        },
+        description: item.desc,
+        url: item.url,
+        footer: {
+            text: footerText,
+            icon_url: "https://sf16-scmcdn-sg.ibytedtos.com/goofy/tiktok/web/node/_next/static/images/logo-dark-e95da587b61837d72afbd0d4d4ead501.svg"
+        }
+    };
+
+    const videoUrl = item.highest_video_url || item.video_url;
+    if (!videoUrl) return { error: "No video URL found" };
+
+    let videoBuffer: ArrayBuffer | null = null;
+    try {
+        const vidReq = await request(videoUrl, {
+            headers: {
+                ...commonHeaders,
+                'Referer': 'https://www.tiktok.com/'
+            }
+        });
+        videoBuffer = await vidReq.body.arrayBuffer();
+    } catch (e) {
+        return { error: "Failed to download video file" };
+    }
+
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({
+        embeds: [embed],
+        attachments: [{
+            id: 0,
+            filename: 'video.mp4'
+        }]
+    }));
+    
+    // @ts-ignore
+    form.append('files[0]', new Blob([videoBuffer]), 'video.mp4');
+
+    try {
+        const url = messageId
+            ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`
+            : `https://discord.com/api/v10/channels/${channelId}/messages`;
+
+        const response = await fetch(url, {
+            method: messageId ? 'PATCH' : 'POST',
+            headers: {
+                'Authorization': `Bot ${token}`
+            },
+            body: form
+        });
+
+        const resJson: any = await response.json();
+        return { data: resJson };
+    } catch (e: any) {
+        return { error: e.message };
+    }
 }
 
 

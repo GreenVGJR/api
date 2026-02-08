@@ -309,6 +309,9 @@ app.get('/', (c: Context) => {
                         "/tools/chat/meta?prompt="
                     ],
                     discord: {
+                        tiktok: [
+                            "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="
+                        ],
                         server: [
                             "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
                         ],

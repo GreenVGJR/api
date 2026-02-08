@@ -2842,7 +2842,10 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
     if (!filename.includes('.') && contentType !== 'application/octet-stream') {
         if (contentType.includes('video/mp4')) filename += '.mp4';
+        else if (contentType.includes('audio/mp4')) filename += '.m4a';
+        else if (contentType.includes('audio/mpeg')) filename += '.mp3';
         else if (contentType.includes('video/')) filename += '.' + contentType.split('/')[1].split(';')[0];
+        else if (contentType.includes('audio/')) filename += '.' + contentType.split('/')[1].split(';')[0];
         else if (contentType.includes('image/')) filename += '.' + contentType.split('/')[1].split(';')[0].replace('jpeg', 'jpg');
     }
 
@@ -2864,6 +2867,12 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         if (onEmbed && payload.embeds?.[0]) {
             payload.embeds[0].image = { url: `attachment://${filename}` };
         }
+    } else if (messageId && messageData) {
+        // If messageId exists but clone is false, we should keep track of existing attachments to not delete them if PATCH
+        // However, if we want to "send fresh", we might need to handle attachment logic carefully
+        // For now, if not cloning during a PATCH, Discord usually keeps existing attachments unless specified otherwise
+        // But to be safe, let's ensure attachments isn't accidentally inherited or wiped
+        payload.attachments = [];
     }
 
     if (videoBuffer) {

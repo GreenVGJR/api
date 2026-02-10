@@ -351,6 +351,7 @@ app.get('/', (c: Context) => {
                         "/tools/ai-image/bing?prompt=",
                     ],
                     misc: [
+                        "/tools/health",
                         "/tools/translate?q=&from=&to="
                     ]
                 },

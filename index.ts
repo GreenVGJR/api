@@ -109,7 +109,8 @@ const API_ROUTES = {
         "/info/instagram/user?q=",
         "/info/threads/user?q=",
         "/info/tenor?url=",
-        "/info/giphy?url="
+        "/info/giphy?url=",
+        "/info/tiktok/video?q="
     ]
 };
 

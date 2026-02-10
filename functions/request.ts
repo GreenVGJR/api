@@ -1,4 +1,4 @@
-import { request as undiciRequest, Agent, interceptors } from 'undici';
+import { request as undiciRequest, Agent, interceptors, RequestRedirect } from 'undici';
 import { Session } from 'httpcloak';
 
 const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
@@ -770,6 +770,130 @@ export const Deezer = async function Deezer(que: string) {
         const res: any = await pull.body.json();
         return { data: res?.data || null };
     } catch { return null; }
+}
+
+export const TiktokVideo = async function TiktokVideo(url: string) {
+    if (!url) return null;
+
+    let videoId: string | null = null;
+    let finalUrl = url;
+
+    // Handle short links (mobile)
+    if (url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com')) {
+        try {
+            const redirectParams = {
+                method: 'HEAD',
+                redirect: 'manual' as RequestRedirect
+            };
+            const res = await request(url, redirectParams);
+            if (res.statusCode === 301 || res.statusCode === 302) {
+                const location = res.headers['location'];
+                if (typeof location === 'string') {
+                    finalUrl = location;
+                }
+            }
+        } catch (e) {
+            console.error("TikTok redirect error:", e);
+            return null;
+        }
+    }
+
+    // Extract video ID regex
+    const patterns = [
+        /video\/(\d+)/,
+        /v\/(\d+)/,
+        /^(\d+)$/
+    ];
+
+    for (const pattern of patterns) {
+        const match = finalUrl.match(pattern);
+        if (match) {
+            videoId = match[1];
+            break;
+        }
+    }
+
+    if (!videoId) return null;
+
+    try {
+        const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
+        const response = await request(targetUrl, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+        
+        const html = await response.body.text();
+        const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split('</script>')[0];
+
+        if (!scriptContent) return { error: "WAF Challenge" };
+
+        const json = JSON.parse(scriptContent);
+        const videoDetail = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
+
+        if (!videoDetail?.video) return { data: null };
+
+        return {
+            data: {
+                aweme_id: videoDetail.id?.toString(),
+                videoId: videoDetail.video?.videoID,
+                url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId + "/video/" + videoDetail.id,
+                desc: videoDetail?.desc || "",
+                descLanguage: videoDetail?.textLanguage,
+                createTime: videoDetail.createTime,
+                cover: videoDetail.video?.cover,
+                originCover: videoDetail.video?.originCover,
+                dynamicCover: videoDetail.video?.dynamicCover,
+                duration: videoDetail.video?.duration,
+                play_url: videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233'),
+                bit_rate: videoDetail.video?.bitrateInfo?.map((l: any) => ({
+                    gearName: l.GearName,
+                    codec: l.CodecType,
+                    play_url: l.PlayAddr?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233')
+                })),
+                likeCount: videoDetail.statsV2?.diggCount?.toString(),
+                shareCount: videoDetail.statsV2?.shareCount?.toString(),
+                commentCount: videoDetail.statsV2?.commentCount?.toString(),
+                playCount: videoDetail.statsV2?.playCount?.toString(),
+                favoriteCount: videoDetail.statsV2?.collectCount?.toString(),
+                suggested_words: videoDetail.suggestedWords,
+                search_suggest: videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word || null,
+                location: videoDetail?.locationCreated,
+                author: {
+                    url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId,
+                    aweme_id: videoDetail.author?.id?.toString(),
+                    secUid: videoDetail.author?.secUid,
+                    uniqueId: videoDetail.author?.uniqueId,
+                    nickname: videoDetail.author?.nickname,
+                    desc: videoDetail.author?.signature,
+                    createTime: videoDetail.author?.createTime?.toString(),
+                    verified: videoDetail.author?.verified,
+                    tiktokSeller: videoDetail.author?.ttSeller,
+                    avatar: videoDetail.author?.avatarLarger,
+                    followerCount: videoDetail.authorStatsV2?.followerCount.toString(),
+                    followingCount: videoDetail.authorStatsV2?.followingCount.toString(),
+                    totalLikesCount: videoDetail.authorStatsV2?.heartCount.toString(),
+                    likeCount: videoDetail.authorStatsV2?.diggCount.toString(),
+                    videoCount: videoDetail.authorStatsV2?.videoCount.toString(),
+                },
+                music: {
+                    url: "https://www.tiktok.com/music/-" + videoDetail.music?.id,
+                    aweme_id: videoDetail.music?.id?.toString(),
+                    title: videoDetail.music?.title,
+                    author: videoDetail.music?.authorName,
+                    cover: videoDetail.music?.coverLarge,
+                    playUrl: videoDetail.music?.playUrl,
+                    duration: videoDetail.music?.duration,
+                    original: videoDetail.music?.original,
+                    private: videoDetail.music?.private
+                }
+            }
+        };
+
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
 }
 
 export const deezerLyrics = async function deezerLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
@@ -2396,7 +2520,7 @@ export const Pexels = async function Pexels(que: string) {
     }
 };
 
-export const TiktokVideo = async function TiktokVideo(que: string) {
+export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
     if (!que) return null;
 
     try {
@@ -4140,3 +4264,4 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         return { error: e.message || 'Unknown error' };
     }
 }
+// End of file

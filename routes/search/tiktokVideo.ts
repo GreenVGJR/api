@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { TiktokVideo  } from '../../functions/request.js';
+import { TiktokSearchVideo  } from '../../functions/request.js';
 import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
 
 app.get('/tiktok/video', async (c) => {
@@ -13,7 +13,7 @@ else if(query === '') {
 return c.json({"error":"Nothing to do"}, 202);
 }
     c.header('X-Route', 'api-boot.tiktokv.com');
-    return await dispatch(c, () => TiktokVideo(query));
+    return await dispatch(c, () => TiktokSearchVideo(query));
 });
 
 export default app;

@@ -94,7 +94,6 @@ const API_ROUTES = {
             "/tools/ai-image/bing?prompt=",
         ],
         misc: [
-            "/tools/health",
             "/tools/translate?q=&from=&to="
         ]
     },
@@ -339,6 +338,10 @@ app.get('/favicon.ico', (c: Context) => {
 
 app.get('/robots.txt', (c: Context) => {
     return c.text(robots, 200);
+});
+
+app.get('/tools/health', (c: Context) => {
+    return c.text('OK', 200);
 });
 
 app.get('/playground', (c: Context) => {

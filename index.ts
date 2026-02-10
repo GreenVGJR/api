@@ -219,7 +219,8 @@ app.get('/robots.txt', (c: Context) => {
 });
 
 app.get('/playground', (c: Context) => {
-    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
+    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const host = c.req.header('host');
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
@@ -229,7 +230,8 @@ app.get('/playground', (c: Context) => {
 });
 
 app.get('/playground/main.js', (c: Context) => {
-    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
+    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
@@ -237,7 +239,8 @@ app.get('/playground/main.js', (c: Context) => {
 });
 
 app.get('/playground/main.css', (c: Context) => {
-    if(c.req.header('Accept') === 'application/json') return c.text('Forbidden', 403);
+    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.body(null, 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);

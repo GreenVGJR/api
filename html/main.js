@@ -13,6 +13,11 @@ let isCoolingDown = false;
 
 const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
 
+// Initialize with server-injected data if available
+if (window.SERVER_ENDPOINTS) {
+    endpoints = window.SERVER_ENDPOINTS;
+}
+
 const urlInput = document.getElementById('urlInput');
 const copyBtn = document.getElementById('copyBtn');
 const copyResponseBtn = document.getElementById('copyResponseBtn');
@@ -42,8 +47,7 @@ function flattenRoutes(obj, parentPath = '') {
                 const parts = item.split('?');
                 return {
                     path: parts[0],
-                    query: parts.length > 1 ? '?' + parts[1] : '',
-                    description: 'API Endpoint'
+                    query: parts.length > 1 ? '?' + parts[1] : ''
                 };
             } else if (typeof item === 'object') {
                 return flattenRoutes(item);
@@ -191,22 +195,17 @@ async function performRequest(targetUrl) {
 }
 
 async function fetchInitialEndpoints() {
-    try {
-        const data = await performRequest(urlInput.value);
-        
-        const routesObj = data?.find(item => item.routes)?.routes;
-        
-        if (routesObj) {
-            ['search', 'lyrics', 'tools', 'info'].forEach(cat => {
-                if (routesObj[cat]) {
-                    endpoints[cat] = flattenRoutes(routesObj[cat]);
-                }
-            });
-            renderEndpoints();
-        }
-    } catch (err) {
-        console.error("Failed to fetch dynamic endpoints:", err);
+    // Endpoints are provided by server in window.SERVER_ENDPOINTS
+    if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
+        currentEndpoint = endpoints[currentCategory][0];
+        urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
+        adjustHeight();
     }
+    renderEndpoints();
+    
+    // Ensure first tab is active
+    const firstTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
+    if (firstTab) firstTab.classList.add('active');
 }
 
 function renderEndpoints() {
@@ -225,12 +224,15 @@ function renderEndpoints() {
         <button 
             class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} truncate transition-colors"
             data-index="${index}"
-            title="${ep.description}"
         >
             ${ep.path}
         </button>
     `).join('');
 
+    attachEndpointListeners();
+}
+
+function attachEndpointListeners() {
     endpointsList.querySelectorAll('.endpoint-item').forEach(btn => {
         btn.addEventListener('click', () => {
             const index = parseInt(btn.dataset.index);
@@ -239,7 +241,6 @@ function renderEndpoints() {
             adjustHeight();
             renderEndpoints();
             
-            // Activate the corresponding tab button
             tabBtns.forEach(b => b.classList.remove('active'));
             const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
             if (activeTab) activeTab.classList.add('active');

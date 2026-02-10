@@ -304,6 +304,7 @@ let keysptoken: string | undefined;
 let keytidal: string | undefined;
 let keydeezer: string | undefined;
 
+
 let twitterDocument: any;
 let twitterTransaction: any;
 let twitterAuth: string | undefined;
@@ -453,6 +454,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
         console.error(e);
     }
 }
+
 
 export const YTVideo = async function YTVideo(que: string) {
     if (!que) return null;
@@ -846,6 +848,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
         return responseBody;
     } catch { return null; }
 }
+
 
 export const Tidal = async function Tidal(que: string, refresh?: boolean): Promise<any> {
     if (!que) return null;

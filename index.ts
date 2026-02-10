@@ -25,6 +25,128 @@ const lyrics: any[] = lyrics_raw;
 const tools: any[] = tools_raw;
 const info: any[] = info_raw;
 
+const API_ROUTES = {
+    search: [
+        "/search/youtube/video?q=",
+        "/search/youtube/music?q=",
+        "/search/youtube/channel?q=",
+        "/search/soundcloud?q=",
+        "/search/spotify?q=",
+        "/search/applemusic?q=",
+        "/search/shazam?q=",
+        "/search/deezer?q=",
+        "/search/tidal?q=",
+        "/search/genius?q=",
+        "/search/pinterest?q=",
+        "/search/istockphoto?q=",
+        "/search/unsplash?q=",
+        "/search/pixiv?q=",
+        "/search/discord/discovery/apps?q=",
+        "/search/discord/discovery/servers?q=",
+        "/search/bilibili?q=",
+        "/search/jiosaavn?q=",
+        "/search/twitch?q=",
+        "/search/instagram/users?q=",
+        "/search/threads/users?q=",
+        "/search/pexels?q=",
+        "/search/tiktok/video?q=",
+        "/search/tiktok/music?q=",
+        "/search/tiktok/users?q=",
+        "/search/tiktok/feed?region_code=",
+        "/search/reddit/media?q=",
+        "/search/roblox/games?q=",
+        "/search/roblox/audio?q=",
+        "/search/bandcamp?q=",
+        "/search/capcut/templates?q=",
+        "/search/tenor?q=&type=",
+        "/search/giphy?q=&type="
+    ],
+    lyrics: [
+        "/lyrics/youtube?q=",
+        "/lyrics/deezer?q="
+    ],
+    tools: {
+        ai: [
+            "/tools/chat/gemini?prompt=&conversation=",
+            "/tools/chat/meta?prompt="
+        ],
+        discord: {
+            stream: [
+                "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed="
+            ],
+            tiktok: [
+                "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="
+            ],
+            server: [
+                "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+            ],
+            webhook: [
+                { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
+                { info: ["/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="] },
+                { delete: ["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="] },
+                { send: ["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="] },
+                { list: ["/tools/discord/webhook/list?token=&channelId="] }
+            ]
+        },
+        image_generation: [
+            "/tools/ai-image/flux_demo?prompt=",
+            "/tools/ai-image/magicstudio?prompt=",
+            "/tools/ai-image/bing?prompt=",
+        ],
+        misc: [
+            "/tools/health",
+            "/tools/translate?q=&from=&to="
+        ]
+    },
+    info: [
+        "/info/youtube/video?url=",
+        "/info/youtube/channel?url=",
+        "/info/soundcloud?url=",
+        "/info/spotify?url=",
+        "/info/applemusic?url=",
+        "/info/twitter/user?q=",
+        "/info/twitter/tweet?url=",
+        "/info/reddit/subreddit?q=",
+        "/info/instagram/user?q=",
+        "/info/threads/user?q=",
+        "/info/tenor?url=",
+        "/info/giphy?url="
+    ]
+};
+
+function flattenRoutes(obj: any): any[] {
+    let flatResults: any[] = [];
+    if (Array.isArray(obj)) {
+        return obj.map(item => {
+            if (typeof item === 'string') {
+                const parts = item.split('?');
+                return {
+                    path: parts[0],
+                    query: parts.length > 1 ? '?' + parts[1] : ''
+                };
+            } else if (typeof item === 'object') {
+                return flattenRoutes(item);
+            }
+            return null;
+        }).flat().filter(Boolean);
+    } else if (typeof obj === 'object' && obj !== null) {
+        for (const key in obj) {
+             const childResults = flattenRoutes(obj[key]);
+             flatResults = flatResults.concat(childResults);
+        }
+    }
+    return flatResults;
+}
+
+const PLAYGROUND_ENDPOINTS = {
+    search: flattenRoutes(API_ROUTES.search),
+    lyrics: flattenRoutes(API_ROUTES.lyrics),
+    tools: flattenRoutes(API_ROUTES.tools),
+    info: flattenRoutes(API_ROUTES.info)
+};
+
+// End of route metadata
+
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
 import tls from 'tls';
 
@@ -92,6 +214,7 @@ app.use('*', async (c: Context, next: Next) => {
     if (!isAllowed && !isLocal) {
         const url = new URL(c.req.url);
         url.host = 'api.vgjr.top';
+        c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
         c.header('Refresh', `0; url=${url.toString()}playground`);
         return c.text('', 200);
     }
@@ -224,8 +347,14 @@ app.get('/playground', (c: Context) => {
     const host = c.req.header('host');
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
-    const html = playgroundTemplate.replace('{{API_BASE_URL}}', apiBaseUrl);
+
+    const secFetchDest = c.req.header('Sec-Fetch-Dest');
     c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
+    if(secFetchDest && secFetchDest !== 'document') return c.newResponse(null, 400);
+    
+    let html = playgroundTemplate
+        .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
+
     return c.html(html);
 });
 
@@ -266,113 +395,7 @@ app.get('/', (c: Context) => {
             fluid: true
         },
         {
-            routes: {
-                search: [
-                    "/search/youtube/video?q=",
-                    "/search/youtube/music?q=",
-                    "/search/youtube/channel?q=",
-                    "/search/soundcloud?q=",
-                    "/search/spotify?q=",
-                    "/search/applemusic?q=",
-                    "/search/shazam?q=",
-                    "/search/deezer?q=",
-                    "/search/tidal?q=",
-                    "/search/genius?q=",
-                    "/search/pinterest?q=",
-                    "/search/istockphoto?q=",
-                    "/search/unsplash?q=",
-                    "/search/pixiv?q=",
-                    "/search/discord/discovery/apps?q=",
-                    "/search/discord/discovery/servers?q=",
-                    "/search/bilibili?q=",
-                    "/search/jiosaavn?q=",
-                    "/search/twitch?q=",
-                    "/search/instagram/users?q=",
-                    "/search/threads/users?q=",
-                    "/search/pexels?q=",
-                    "/search/tiktok/video?q=",
-                    "/search/tiktok/music?q=",
-                    "/search/tiktok/users?q=",
-                    "/search/tiktok/feed?region_code=",
-                    "/search/reddit/media?q=",
-                    "/search/roblox/games?q=",
-                    "/search/roblox/audio?q=",
-                    "/search/bandcamp?q=",
-                    "/search/capcut/templates?q=",
-                    "/search/tenor?q=&type=",
-                    "/search/giphy?q=&type="
-                ],
-                lyrics: [
-                    "/lyrics/youtube?q=",
-                    "/lyrics/deezer?q="
-                ],
-                tools: {
-                    ai: [
-                        "/tools/chat/gemini?prompt=&conversation=",
-                        "/tools/chat/meta?prompt="
-                    ],
-                    discord: {
-                        stream: [
-                            "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed="
-                        ],
-                        tiktok: [
-                            "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="
-                        ],
-                        server: [
-                            "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
-                        ],
-                        webhook: [{
-                            create: [
-                                "/tools/discord/webhook/create?token=&channelId=&name=&avatar="
-                            ]
-                        },
-                        {
-                            info: [
-                                "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="
-                            ]
-                        },
-                        {
-                            delete: [
-                                "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="
-                            ]
-                        },
-                        {
-                            send: [
-                                "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="
-                            ]
-                        },
-                        {
-                            list: [
-                                "/tools/discord/webhook/list?token=&channelId="
-                            ]
-                        }
-                        ]
-                    },
-                    image_generation: [
-                        "/tools/ai-image/flux_demo?prompt=",
-                        "/tools/ai-image/magicstudio?prompt=",
-                        "/tools/ai-image/bing?prompt=",
-                    ],
-                    misc: [
-                        "/tools/health",
-                        "/tools/translate?q=&from=&to="
-                    ]
-                },
-                info: [
-                    "/info/youtube/video?url=",
-                    "/info/youtube/channel?url=",
-                    "/info/soundcloud?url=",
-                    "/info/spotify?url=",
-                    "/info/applemusic?url=",
-                    "/info/twitter/user?q=",
-                    "/info/twitter/tweet?url=",
-                    "/info/reddit/subreddit?q=",
-                    "/info/instagram/user?q=",
-                    "/info/threads/user?q=",
-                    "/info/tenor?url=",
-                    "/info/giphy?url="
-                ]
-            }
+            routes: API_ROUTES
         }];
 
         stream.onAbort(() => {

@@ -882,7 +882,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                     title: videoDetail.music?.title,
                     author: videoDetail.music?.authorName,
                     cover: videoDetail.music?.coverLarge,
-                    playUrl: videoDetail.music?.playUrl,
+                    play_url: videoDetail.music?.playUrl,
                     duration: videoDetail.music?.duration,
                     original: videoDetail.music?.original,
                     private: videoDetail.music?.private

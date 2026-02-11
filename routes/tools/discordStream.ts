@@ -12,10 +12,11 @@ app.get('/discord/stream', async (c) => {
     const clone = c.req.query('clone') === 'true';
     const onEmbed = c.req.query('onEmbed') === 'true';
     const name = c.req.query('name');
+    const fallbackEmbed = c.req.query('fallbackEmbed') === 'true';
 
     c.header('X-Route', 'discord.com');
     // @ts-ignore
-    return await dispatch(c, () => DiscordStream(token, channelId, messageId, url, clone, onEmbed, name));
+    return await dispatch(c, () => DiscordStream(token, channelId, messageId, url, clone, onEmbed, name, fallbackEmbed));
 });
 
 export default app;

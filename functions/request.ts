@@ -2803,7 +2803,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
             
             // Check size from headers before consuming the body
             if (contentLength > MAX_DISCORD_SIZE) {
-                await vidReq.body.dump(); // Properly discard the body
+                vidReq.body.destroy(); // Properly discard the body
                 continue;
             }
 
@@ -2863,7 +2863,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
     }
 }
 
-export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, name?: string) {
+export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, name?: string, fallbackEmbed?: boolean) {
     if (!token) return { error: "Missing token" };
     if (!channelId) return { error: "Missing channelId" };
     if (!url) return { error: "Missing url" };
@@ -2910,7 +2910,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     let fileTooLarge = false;
 
     try {
-        const vidReq = await request(url, {
+        const vidReq = await fetch(url, {
             method: 'GET',
             headers: {
                 ...commonHeaders,
@@ -2918,10 +2918,10 @@ export const DiscordStream = async function DiscordStream(token: string, channel
             }
         });
 
-        const contentLength = parseInt(vidReq.headers['content-length'] as string || '0');
-        contentType = vidReq.headers['content-type'] as string || contentType;
+        const contentLength = parseInt(vidReq.headers.get('content-length') || '0');
+        contentType = vidReq.headers.get('content-type') || contentType;
         
-        const contentDisposition = vidReq.headers['content-disposition'] as string;
+        const contentDisposition = vidReq.headers.get('content-disposition');
         if (contentDisposition) {
             const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
             if (fileNameMatch) {
@@ -2939,12 +2939,12 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         }
 
         if (contentLength > MAX_DISCORD_SIZE) {
-            await vidReq.body.dump();
+            await vidReq.body?.cancel();
             fileTooLarge = true;
         }
 
         if (!fileTooLarge) {
-            videoBuffer = await vidReq.body.arrayBuffer();
+            videoBuffer = await vidReq.arrayBuffer();
             if (videoBuffer.byteLength > MAX_DISCORD_SIZE) {
                 fileTooLarge = true;
                 videoBuffer = null;
@@ -2986,14 +2986,22 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     }
 
     if (fileTooLarge) {
-        let currentContent = payload.content;
-        if (currentContent === undefined && clone && messageData) {
-            currentContent = messageData.content;
+        if (fallbackEmbed && clone && messageData && messageData.embeds && messageData.embeds.length > 0) {
+            payload.embeds = messageData.embeds;
+            if (!payload.embeds[0].image) payload.embeds[0].image = {};
+            payload.embeds[0].image.url = url;
+            if (payload.content === undefined && messageData.content) payload.content = messageData.content;
+            if (payload.components === undefined && messageData.components) payload.components = messageData.components;
+        } else {
+            let currentContent = payload.content;
+            if (currentContent === undefined && clone && messageData) {
+                currentContent = messageData.content;
+            }
+            currentContent = currentContent || "";
+            
+            const separator = (currentContent.length > 0) ? "\n" : "";
+            payload.content = currentContent + separator + url;
         }
-        currentContent = currentContent || "";
-        
-        const separator = (currentContent.length > 0) ? "\n" : "";
-        payload.content = currentContent + separator + url;
     }
 
     if (videoBuffer) {

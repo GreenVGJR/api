@@ -72,7 +72,7 @@ const API_ROUTES = {
         ],
         discord: {
             stream: [
-                "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed="
+                "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed="
             ],
             tiktok: [
                 "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="

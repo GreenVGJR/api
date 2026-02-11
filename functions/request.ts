@@ -2606,14 +2606,14 @@ export const TiktokUser = async function TiktokUser(que: string) {
 }
 
 export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code: any = '') {
-    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=1&referer=&region=${region_code}&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en`;
+    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=2&referer=&region=${region_code}&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en`;
     const client = new Session({
         preset: 'chrome-144-linux',
         httpVersion: 'h2'
     });
     const headers = {
         ...commonHeaders,
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+        'Accept-Language': region_code || 'en',
         'Referer': 'https://www.tiktok.com/explore'
     };
 
@@ -2638,8 +2638,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
             }
 
             const itemList = testres?.itemList || [];
-            if (itemList.length === 0) {
-                if (i === 2) return { data: null, extra: { max_cursor: 0, has_more: false }, debug: testres };
+            if (itemList.length === 0 || !itemList?.[0]?.video?.playAddr) {
+                if (i === 2) return { data: null };
                 await new Promise(r => setTimeout(r, 1000));
                 continue;
             }
@@ -2651,30 +2651,9 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                 const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
                 const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
 
-                let videoUrl: any = null;
-                let highestVideoUrl: any = null;
-
-                for (const br of sortedBitrateAsc) {
-                    const urls = br.PlayAddr?.UrlList || [];
-                    const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
-                    if (awemeUrl) {
-                        videoUrl = awemeUrl.replace('1988', '1233');
-                        break;
-                    }
-                }
-
-                for (const br of sortedBitrateDesc) {
-                    const urls = br.PlayAddr?.UrlList || [];
-                    const awemeUrl = urls.find((u: string) => u.includes('aweme/v1/play'));
-                    if (awemeUrl) {
-                        highestVideoUrl = awemeUrl.replace('1988', '1233');
-                        break;
-                    }
-                }
-
-                const defaultAweme = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233');
-                if (!videoUrl) videoUrl = defaultAweme || highestVideoUrl;
-                if (!highestVideoUrl) highestVideoUrl = defaultAweme || videoUrl;
+                const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
+                const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
+                const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
 
                 const extractRedirect = async (url: string) => {
                     try {
@@ -2689,8 +2668,9 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                     }
                 };
 
-                const [finalVideoUrl, finalHighestVideoUrl] = await Promise.all([
+                const [finalVideoUrl, finalLowestVideoUrl, finalHighestVideoUrl] = await Promise.all([
                     videoUrl ? extractRedirect(videoUrl) : Promise.resolve(null),
+                    lowestVideoUrl ? extractRedirect(lowestVideoUrl) : Promise.resolve(null),
                     highestVideoUrl ? extractRedirect(highestVideoUrl) : Promise.resolve(null)
                 ]);
 
@@ -2721,14 +2701,16 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                         share_count: item.stats?.shareCount.toString()
                     },
                     video_url: finalVideoUrl,
-                    highest_video_url: finalHighestVideoUrl,
-                    original_video_url: null,
+                    lowest_video_url: finalLowestVideoUrl || finalVideoUrl,
+                    highest_video_url: finalHighestVideoUrl || finalVideoUrl,
+                    original_video_url: "",
                     bit_rate: sortedBitrateDesc.map((br: any) => ({
                         gear: br.GearName,
                         bitrate: br.Bitrate,
                         res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
                         format: br.Format,
-                        codec: br.CodecType
+                        codec: br.CodecType,
+                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
                     })),
                     cover: item.video?.cover,
                     origin_cover: item.video?.originCover,

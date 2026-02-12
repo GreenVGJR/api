@@ -5,6 +5,7 @@ import { DriftProfile } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
 app.get('/drift', async (c) => {
+    return c.text('Forbidden', 403);
     const query = c.req.query('query');
     if(query === undefined) { 
         return c.json({"error":"Missing parameter required"}, 202);

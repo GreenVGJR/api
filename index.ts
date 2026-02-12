@@ -64,7 +64,9 @@ const API_ROUTES = {
         "/search/tenor?q=&type=",
         "/search/giphy?q=&type="
     ],
-    profile: [],
+    profile: [
+        "/profile/drift?q="
+    ],
     lyrics: [
         "/lyrics/youtube?q=",
         "/lyrics/deezer?q="

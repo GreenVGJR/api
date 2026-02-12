@@ -61,6 +61,7 @@ const API_ROUTES = {
         "/search/tenor?q=&type=",
         "/search/giphy?q=&type="
     ],
+    profile: [],
     lyrics: [
         "/lyrics/youtube?q=",
         "/lyrics/deezer?q="
@@ -142,7 +143,8 @@ const PLAYGROUND_ENDPOINTS = {
     search: flattenRoutes(API_ROUTES.search),
     lyrics: flattenRoutes(API_ROUTES.lyrics),
     tools: flattenRoutes(API_ROUTES.tools),
-    info: flattenRoutes(API_ROUTES.info)
+    info: flattenRoutes(API_ROUTES.info),
+    profile: flattenRoutes(API_ROUTES.profile)
 };
 
 // End of route metadata
@@ -203,6 +205,7 @@ setGlobalDispatcher(new Agent({
 
 
 const app = new Hono({ strict: false });
+const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Please wait</body></html>`;
 
 app.use('*', async (c: Context, next: Next) => {
     const host = c.req.header('host');
@@ -212,11 +215,16 @@ app.use('*', async (c: Context, next: Next) => {
     const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
 
     if (!isAllowed && !isLocal) {
+        const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+        if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
         const url = new URL(c.req.url);
         url.host = 'api.vgjr.top';
+        url.protocol = 'https:';
+        if (url.pathname === '/') url.pathname = '/playground';
+
         c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
-        c.header('Refresh', `0; url=${url.toString()}playground`);
-        return c.text('', 200);
+        c.header('Refresh', `0; url=${url.toString()}`);
+        return c.html(testhtml, 200);
     }
     await next();
 });
@@ -383,7 +391,7 @@ app.get('/playground/main.css', (c: Context) => {
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     c.header('X-Net', isMozilla ? 'true' : 'false');
-    if (!isMozilla) return c.body(null, 403);
+    if(!isMozilla) return c.text('Forbidden', 403);
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
@@ -395,8 +403,7 @@ app.get('/', (c: Context) => {
             domRendering: typeRender,
             uptime: new Date(Date.now() - starttime).toISOString().slice(11, 19),
             service: "Hono",
-            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-            fluid: true
+            runtime: typeof Bun !== "object" ? "Node.js" : "Bun"
         },
         {
             routes: API_ROUTES

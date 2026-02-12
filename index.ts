@@ -19,11 +19,14 @@ import lyrics_raw from './routes/lyrics/index.js';
 import tools_raw from './routes/tools/index.js';
 // @ts-ignore
 import info_raw from './routes/info/index.js';
+// @ts-ignore
+import profile_raw from './routes/profile/index.js';
 
 const reqs: any[] = reqs_raw;
 const lyrics: any[] = lyrics_raw;
 const tools: any[] = tools_raw;
 const info: any[] = info_raw;
+const profile: any[] = profile_raw;
 
 const API_ROUTES = {
     search: [
@@ -418,7 +421,7 @@ app.get('/', (c: Context) => {
 });
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
-const apiPrefixesRoute = ['/search', '/lyrics', '/tools', '/info'];
+const apiPrefixesRoute = ['/search', '/lyrics', '/tools', '/info', '/profile'];
 
 reqs.forEach((val: any) => {
     app.route(`${routeBase}/search`, val);
@@ -431,6 +434,9 @@ tools.forEach((val: any) => {
 });
 info.forEach((val: any) => {
     app.route(`${routeBase}/info`, val);
+});
+profile.forEach((val: any) => {
+    app.route(`${routeBase}/profile`, val);
 });
 
 if (BUILD_ID) {

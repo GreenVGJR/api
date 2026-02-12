@@ -846,10 +846,13 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                 dynamicCover: videoDetail.video?.dynamicCover,
                 duration: videoDetail.video?.duration,
                 play_url: videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233'),
-                bit_rate: videoDetail.video?.bitrateInfo?.map((l: any) => ({
-                    gearName: l.GearName,
-                    codec: l.CodecType,
-                    play_url: l.PlayAddr?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233')
+                bit_rate: videoDetail.video?.bitrateInfo?.map((br: any) => ({
+                        gearName: br.GearName,
+                        bitrate: br.Bitrate,
+                        res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+                        format: br.Format,
+                        codec: br.CodecType,
+                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
                 })),
                 likeCount: videoDetail.statsV2?.diggCount?.toString(),
                 shareCount: videoDetail.statsV2?.shareCount?.toString(),
@@ -859,6 +862,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                 suggested_words: videoDetail.suggestedWords,
                 search_suggest: videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word || null,
                 location: videoDetail?.locationCreated,
+                duration: videoDetail.video?.duration,
                 author: {
                     url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId,
                     aweme_id: videoDetail.author?.id?.toString(),
@@ -2676,22 +2680,35 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
 
                 return {
                     aweme_id: item.id,
+                    videoId: item.video?.videoID,
                     url: "https://www.tiktok.com/@" + item.author?.uniqueId + "/video/" + item.id,
                     desc: item.desc,
                     create_time: item.createTime.toString(),
+                    duration: item.video?.duration,
                     author: {
                         url: "https://www.tiktok.com/@" + item.author?.uniqueId,
                         id: item.author?.id,
-                        nickname: item.author?.nickname,
+                        secUid: item.author?.secUid,
                         unique_id: item.author?.uniqueId,
-                        avatar: item.author?.avatarThumb
+                        nickname: item.author?.nickname,
+                        desc: item.author?.signature,
+                        createTime: item.author?.createTime?.toString(),
+                        verified: item.author?.verified,
+                        tiktokSeller: item.author?.ttSeller,
+                        followerCount: item.authorStatsV2?.followerCount.toString(),
+                        followingCount: item.authorStatsV2?.followingCount.toString(),
+                        totalLikesCount: item.authorStatsV2?.heartCount.toString(),
+                        likeCount: item.authorStatsV2?.diggCount.toString(),
+                        videoCount: item.authorStatsV2?.videoCount.toString(),
+                        avatar: item.author?.avatarLarger
                     },
                     music: {
                         url: "https://www.tiktok.com/music/-" + item.music?.id,
                         id: item.music?.id,
                         title: item.music?.title,
                         author: item.music?.authorName,
-                        cover: item.music?.coverThumb,
+                        cover: item.music?.coverLarge,
+                        duration: item.music?.duration,
                         play_url: item.music?.playUrl
                     },
                     statistics: {
@@ -4254,4 +4271,15 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         return { error: e.message || 'Unknown error' };
     }
 }
-// End of file
+
+export async function DriftProfile(query: string): Promise<any> {
+    if(!query) return null;
+
+    try {
+        
+    }
+    catch {
+        return null;
+    }
+
+}

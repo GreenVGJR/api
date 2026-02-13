@@ -4291,6 +4291,7 @@ export async function googleWeather(query: string): Promise<any> {
         const datageo: any = ls?.value?.[0];
 
         if(!datageo) return { data: null }
+        const coords = datageo.geo.latitude + "," + datageo.geo.longitude;
 
         const k = await request(`https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`, {
             headers: {
@@ -4305,7 +4306,14 @@ export async function googleWeather(query: string): Promise<any> {
         const finalk = await k.body.json();
         return {
             data: [
-                { ...datageo.address, ...datageo.geo },
+                { 
+                    ...datageo.address,
+                    ...datageo.geo,
+                    mapsView: {
+                        preview: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=800x300&markers=${encodeURI("color:red|" + coords)}&key=AIzaSyBoYjeRtfVI0Jd8Q_9mnflo9i4sOYpShB0`,
+                        highest: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=2048x768&markers=${encodeURI("color:red|" + coords)}&key=AIzaSyBoYjeRtfVI0Jd8Q_9mnflo9i4sOYpShB0`
+                    }
+                },
                 finalk
             ]
         }

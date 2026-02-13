@@ -861,8 +861,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                 favoriteCount: videoDetail.statsV2?.collectCount?.toString(),
                 suggested_words: videoDetail.suggestedWords,
                 search_suggest: videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word || null,
-                location: videoDetail?.locationCreated,
-                duration: videoDetail.video?.duration,
+                location: videoDetail.locationCreated,
                 author: {
                     url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId,
                     aweme_id: videoDetail.author?.id?.toString(),
@@ -4272,6 +4271,50 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
     }
 }
 
+export async function googleWeather(query: string): Promise<any> {
+    if(!query) return null;
+
+    try {
+        const l = await request(`https://www.bing.com/api/v6/Places/AutoSuggest?q=${query}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`, {
+            headers: { ...commonHeaders }
+        });
+
+        let ls: any = await l.body.text();
+
+        try {
+            ls = JSON.parse(ls);
+        }
+        catch {
+            return { data: null }
+        }
+
+        const datageo: any = ls?.value?.[0];
+
+        if(!datageo) return { data: null }
+
+        const k = await request(`https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`, {
+            headers: {
+            ...commonHeaders,
+            'Referer': 'https://storage.googleapis.com/',
+            'X-Goog-Api-Key': 'AIzaSyD5EfYCuwqofCvOpEj1DcuuvAdxKi4dKSI'
+            }
+        });
+
+        if(k.statusCode !== 200) return { data: null }
+
+        const finalk = await k.body.json();
+        return {
+            data: [
+                { ...datageo.address, ...datageo.geo },
+                finalk
+            ]
+        }
+    }
+    catch {
+        return null;
+    }
+}
+
 export async function DriftProfile(query: string): Promise<any> {
     if(!query) return null;
 
@@ -4281,5 +4324,4 @@ export async function DriftProfile(query: string): Promise<any> {
     catch {
         return null;
     }
-
 }

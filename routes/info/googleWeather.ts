@@ -12,7 +12,7 @@ app.get('/weather', async (c) => {
     else if(query === '') {
         return c.json({"error":"Nothing to do"}, 202);
     }
-    c.header('X-Route', 'weather.googleapis.com, storage.googleapis.com, www.bing.com, www.google.com');
+    c.header('X-Route', 'weather.googleapis.com, www.bing.com, www.google.com');
     return await dispatch(c, () => googleWeather(query));
 });
 

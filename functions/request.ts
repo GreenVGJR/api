@@ -20,6 +20,7 @@ import { parseHTML } from 'linkedom';
 import { decodeHTML, decodeXML } from 'entities';
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
+import { resolve6 } from 'dns';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -3995,7 +3996,7 @@ async function sendMessage(q: string, cache: any) {
             return { error: 'Empty response from Meta AI' };
         }
         
-        return { response: response, data: null };
+        return { response: response, data: { model: "llama-4-70b" } };
     } catch {
         return { error: 'Failed to parse response' };
     }
@@ -4321,6 +4322,109 @@ export async function googleWeather(query: string): Promise<any> {
     catch {
         return null;
     }
+}
+
+export async function GrokAI(query: string): Promise<any> {
+    if(!query) return null;
+    const bodyhttp = {"id":"x-preview","messages":[{"id":crypto.randomBytes(12).toString('base64url'),"createdAt":new Date().toISOString(),"role":"user","content":query,"parts":[{"type":"text","text":query}]}],"fp":"x-preview","filter":{"version":"English"}};
+
+    try {
+        const req = await request("https://leaves.mintlify.com/api/assistant/x-preview/message", {
+            method: "POST",
+            body: JSON.stringify(bodyhttp),
+            headers: { ...commonHeaders, 'Content-Type': 'application/json' }
+        });
+
+        if(req.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+        else if(req.statusCode === 403) {
+            return {
+                error: "Blocked"
+            }
+        }
+        else if(req.statusCode !== 200) {
+            return {
+                data: null
+            }
+        }
+
+        const res = await req.body.text();
+        const response = res.split('\n')
+            .filter((line: string) => line.startsWith('0:'))
+            .map((line: string) => {
+                try {
+                    return JSON.parse(line.substring(line.indexOf(':') + 1));
+                } catch {
+                    return '';
+                }
+            })
+            .join('');
+
+        return {
+            response: response || null,
+            data: {
+                model: "grok-4.1-fast-preview"
+            }
+        }
+    }
+    catch {
+        return null;
+    }
+}
+
+export async function PerplexityAI(query: string): Promise<any> {
+    if(!query) return null;
+    const bodyhttp = {"id":"perplexity","messages":[{"id":crypto.randomBytes(12).toString('base64url'),"createdAt":new Date().toISOString(),"role":"user","content":query,"parts":[{"type":"text","text":query}]}],"fp":"perplexity"};
+
+    try {
+        const req = await request("https://leaves.mintlify.com/api/assistant/perplexity/message", {
+            method: "POST",
+            body: JSON.stringify(bodyhttp),
+            headers: { ...commonHeaders, 'Content-Type': 'application/json' }
+        });
+
+        if(req.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+        else if(req.statusCode === 403) {
+            return {
+                error: "Blocked"
+            }
+        }
+        else if(req.statusCode !== 200) {
+            return {
+                data: null
+            }
+        }
+
+        const res = await req.body.text();
+        const response = res.split('\n')
+            .filter((line: string) => line.startsWith('0:'))
+            .map((line: string) => {
+                try {
+                    return JSON.parse(line.substring(line.indexOf(':') + 1));
+                } catch {
+                    return '';
+                }
+            })
+            .join('');
+
+        return {
+            response: response || null,
+            data: {
+                model: "sonar-fast-perplexity"
+            }
+        }
+    }
+    catch {
+        return null;
+    }
+
 }
 
 export async function DriftProfile(query: string): Promise<any> {

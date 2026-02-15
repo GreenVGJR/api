@@ -74,7 +74,9 @@ const API_ROUTES = {
     tools: {
         ai: [
             "/tools/chat/gemini?prompt=&conversation=",
-            "/tools/chat/meta?prompt="
+            "/tools/chat/meta?prompt=",
+            "/tools/chat/grok?prompt=",
+            "/tools/chat/sonar?prompt="
         ],
         discord: {
             stream: [
@@ -117,7 +119,7 @@ const API_ROUTES = {
         "/info/tenor?url=",
         "/info/giphy?url=",
         "/info/tiktok/video?q=",
-        "/info/weather/?q="
+        "/info/weather?q="
     ]
 };
 

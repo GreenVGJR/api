@@ -1087,18 +1087,13 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
 
     const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22%5C%22%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B1%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C2%5D%22%5D`;
 
-    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
-        dispatcher: new Agent({
-            keepAliveTimeout: 30000,
-            connectTimeout: 30000,
-            bodyTimeout: 60000,
-            headersTimeout: 60000
-        }),
-        method: 'POST',
+    const session = new Session({ httpVersion: 'h1' });
+    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(reqPayload).toString(),
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
             'x-goog-ext-73010989-jspb': '[0]',
             'Referer': 'https://gemini.google.com',
@@ -1110,14 +1105,28 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
         body: reqPayload
     });
 
-    if (req.statusCode === 302) {
+    if (req.url.includes('google.com/sorry')) {
+        session.close();
         return {
             "error": "Google asking to verify you're not a bot"
         }
     }
+    if (req.statusCode === 429) {
+        session.close();
+        return {
+            "error": "Rate-limited"
+        }
+    }
+    if (req.statusCode === 403) {
+        session.close();
+        return {
+            "error": "Blocked"
+        }
+    }
 
-    const cookiess: any = await req.headers?.['set-cookie'];
-    const resText = await req.body.text();
+    const cookiess: any = req.headers?.['set-cookie'];
+    const resText = req.text;
+    session.close();
     let response;
 
     let data: any[] = [];

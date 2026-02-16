@@ -13,7 +13,7 @@ else if(query === '') {
 return c.json({"error":"Nothing to do"}, 202);
 }
     const conversation = c.req.query('conversation');
-    c.header('X-Route', 'gemini.google.com');
+    c.header('X-Route', 'bard.google.com');
     return await dispatch(c, () => Gemini(query, conversation));
 });
 

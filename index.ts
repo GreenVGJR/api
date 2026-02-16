@@ -65,19 +65,27 @@ const API_ROUTES = {
         "/search/giphy?q=&type="
     ],
     profile: [
-        "/profile/drift?q="
+        "/profile/drift?q=",
+        "/profile/guns?q="
     ],
     lyrics: [
         "/lyrics/youtube?q=",
         "/lyrics/deezer?q="
     ],
     tools: {
-        ai: [
+        ai: {
+        chat: [
             "/tools/chat/gemini?prompt=&conversation=",
             "/tools/chat/meta?prompt=",
             "/tools/chat/grok?prompt=",
             "/tools/chat/sonar?prompt="
         ],
+        image_generation: [
+            "/tools/ai-image/flux_demo?prompt=",
+            "/tools/ai-image/magicstudio?prompt=",
+            "/tools/ai-image/bing?prompt=",
+            ],
+        },
         discord: {
             stream: [
                 "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed="
@@ -96,11 +104,6 @@ const API_ROUTES = {
                 { list: ["/tools/discord/webhook/list?token=&channelId="] }
             ]
         },
-        image_generation: [
-            "/tools/ai-image/flux_demo?prompt=",
-            "/tools/ai-image/magicstudio?prompt=",
-            "/tools/ai-image/bing?prompt=",
-        ],
         misc: [
             "/tools/translate?q=&from=&to="
         ]

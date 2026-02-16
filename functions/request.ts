@@ -1088,7 +1088,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22%5C%22%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B1%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C2%5D%22%5D`;
 
     const session = new Session({ httpVersion: 'h1' });
-    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
+    const req = await session.post(`https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
@@ -1096,8 +1096,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
             'x-goog-ext-73010989-jspb': '[0]',
-            'Referer': 'https://gemini.google.com',
-            'Origin': 'https://gemini.google.com',
+            'Referer': 'https://bard.google.com',
+            'Origin': 'https://bard.google.com',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin',
             'X-Same-Domain': '1'
@@ -4438,11 +4438,218 @@ export async function PerplexityAI(query: string): Promise<any> {
 
 export async function DriftProfile(query: string): Promise<any> {
     if(!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi'].includes(username)) return null;
+    const filterurl = new URL("https://drift.rip/" + username);
+    let session: any;
 
     try {
-        
+        session = new Session({ httpVersion: 'h3' });
+        const res = await session.get(filterurl.toString(), {
+            headers: {
+                ...commonHeaders
+            }
+        });
+        const test = res.text;
+        if (session) session.close();
+        if(res.url?.includes('/message')) {
+            return {
+                data: null
+            }
+        }
+        if(res.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            };
+        }
+        const { document } = parseHTML(test);
+        let schemaJson: any = document.querySelector('script[type="application/ld+json"]')?.textContent;
+
+        try {
+            schemaJson = JSON.parse(schemaJson || '{}');
+        }
+        catch {
+            schemaJson = null;
+        }
+
+        const styles = Array.from(document.querySelectorAll('style')).map((s: any) => s.textContent).join('');
+
+        return {
+            data: {
+                user: {
+                    account_id: test?.split('let userSql = ')?.[1]?.split(';')?.[0]?.trim() || null,
+                    profile_id: test?.split('let currentProfileId =')?.[1]?.split(';')?.[0]?.trim() || null,
+                    name: schemaJson?.name?.split('|')?.[1]?.trim() || schemaJson?.mainEntity?.name || "",
+                    display_name: {
+                        text: document.querySelector('#bio-username')?.textContent?.trim() || "",
+                        color: (styles.match(/#bio-username\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
+                    },
+                    description: {
+                        text: document.querySelector('#bio-description')?.textContent?.trim() || null,
+                        color: (styles.match(/#bio-description\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
+                    },
+                    label: {
+                        text: document.querySelector('#bio-label')?.textContent?.trim() || null,
+                        color: (styles.match(/#bio-label\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
+                    },
+                    about_me: { 
+                        text: document.querySelector('#bio-aboutMe')?.textContent?.trim() || null,
+                        color: (styles.match(/.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
+                    },
+                    startPage: {
+                        text: document.querySelector('#bio-startText')?.textContent?.trim() || "",
+                        color: (styles.match(/#bio-startText\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
+                    },
+                    views: document.querySelector('#profile-views-inner-container span.text-sm')?.textContent?.trim()?.replace(',', '') || null,
+                    badges: [
+                        ...Array.from(document.querySelectorAll('.bio-badge')).map((el: any) => {
+                            const parent = el.parentElement;
+                            const tippyContent = parent?.getAttribute('data-tippy-content');
+                             return tippyContent ? { name: tippyContent, icon: el.getAttribute('icon') } : null;
+                        }).filter(Boolean)
+                    ],
+                    assets: {
+                        avatar: schemaJson?.mainEntity?.image ? (schemaJson?.mainEntity?.image?.startsWith('http') ? schemaJson.mainEntity.image : "https://drift.rip/" + schemaJson?.mainEntity?.image) : null,
+                        banner: (styles.match(/.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null),
+                        background: (() => {
+                            const videoEl = document.querySelector('#video-background');
+                            const bg = test?.split('staticBackground.src = "')?.[1]?.split('"')[0] || 
+                                       videoEl?.getAttribute('src') || 
+                                       videoEl?.querySelector('source')?.getAttribute('src') ||
+                                       null;
+
+                            if(!bg) return null;
+                            return bg.startsWith('http') ? bg : "https://drift.rip" + (bg.startsWith('/') ? '' : '/') + bg;
+                        })(),
+                        audio: (() => {
+                            const aud = document.querySelector('#background-audio')?.getAttribute('src') || 
+                                       document.querySelector('#background-audio source')?.getAttribute('src') || 
+                                       (test?.includes('hasAudio = true') ? test?.split('audio.src = "')?.[1]?.split('"')[0] : null) || 
+                                       null;
+                            if(!aud) return null;
+                            return aud.startsWith('http') ? aud : "https://drift.rip" + (aud.startsWith('/') ? '' : '/') + aud;
+                        })(),
+                        cursor: styles.match(/cursor:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null
+                    },
+                    connections: [
+                        // Discord Users
+                        ...Array.from(document.querySelectorAll('#profile-cards-section a[data-discord-user-json]')).map((el: any) => {
+                            const href = el.getAttribute('href') || '';
+                            const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
+                            let richContent: any = null;
+                            const rawJson = el.getAttribute('data-discord-user-json') || '';
+                            try {
+                                richContent = JSON.parse(rawJson);
+                            } catch {
+                                try {
+                                    let fixed = rawJson;
+                                    const openBraces = (fixed.match(/\{/g) || []).length - (fixed.match(/\}/g) || []).length;
+                                    const openBrackets = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
+                                    if (!fixed.endsWith('"')) fixed += '"';
+                                    for (let i = 0; i < openBrackets; i++) fixed += ']';
+                                    for (let i = 0; i < openBraces; i++) fixed += '}';
+                                    richContent = JSON.parse(fixed);
+                                } catch {}
+                            }
+                            const discordUserId = el.getAttribute('data-discord-user-id') || richContent?.userId || null;
+                            const imgEl = el.querySelector('img');
+                            return {
+                                type: 'discordUser',
+                                text: richContent?.globalName || richContent?.username || el.querySelector('.module-titleText')?.textContent?.trim() || '',
+                                url: discordUserId ? `https://discord.com/users/${discordUserId}` : (directUrl || null),
+                                tracking_url: href || null,
+                                icon_type: imgEl ? 'image' : null,
+                                icon: imgEl?.getAttribute('src') || null,
+                                richContent
+                            };
+                        }),
+                        // Discord Servers
+                        ...Array.from(document.querySelectorAll('#profile-cards-section a[data-guild-json]')).map((el: any) => {
+                            const href = el.getAttribute('href') || '';
+                            const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
+                            let richContent: any = null;
+                            try { richContent = JSON.parse(el.getAttribute('data-guild-json')); } catch {}
+                            const imgEl = el.querySelector('img');
+                            return {
+                                type: 'discordServer',
+                                text: richContent?.serverName || el.querySelector('.module-titleText')?.textContent?.trim() || '',
+                                url: directUrl || null,
+                                tracking_url: href || null,
+                                icon_type: imgEl ? 'image' : null,
+                                icon: imgEl?.getAttribute('src') || null,
+                                richContent
+                            };
+                        }),
+                        // FiveM Servers
+                        ...Array.from(document.querySelectorAll('#profile-cards-section a[data-fivem-id]')).map((el: any) => {
+                            const href = el.getAttribute('href') || '';
+                            const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
+                            const imgEl = el.querySelector('img');
+                            return {
+                                type: 'fiveM',
+                                text: el.querySelector('.module-titleText')?.textContent?.trim() || '',
+                                url: directUrl || null,
+                                tracking_url: href || null,
+                                icon_type: imgEl ? 'image' : null,
+                                icon: imgEl?.getAttribute('src') || null,
+                                richContent: { serverId: el.getAttribute('data-fivem-id') }
+                            };
+                        }),
+                        // Roblox Users
+                        ...Array.from(document.querySelectorAll('#profile-cards-section a[data-roblox-user-json]')).map((el: any) => {
+                            const href = el.getAttribute('href') || '';
+                            const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
+                            let richContent: any = null;
+                            try { richContent = JSON.parse(el.getAttribute('data-roblox-user-json')); } catch {}
+                            const imgEl = el.querySelector('img');
+                            return {
+                                type: 'roblox',
+                                text: richContent?.username || el.querySelector('.module-titleText')?.textContent?.trim() || '',
+                                url: directUrl || null,
+                                tracking_url: href || null,
+                                icon_type: imgEl ? 'image' : null,
+                                icon: imgEl?.getAttribute('src') || null,
+                                richContent
+                            };
+                        }),
+                        // Social connections (Discord, YouTube, GitHub, etc.)
+                        ...Array.from(document.querySelectorAll('#section-profile-connections > a')).map((el: any) => {
+                            const href = el.getAttribute('href') || '';
+                            const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
+                            const iconEl = el.querySelector('iconify-icon');
+                            const imgEl = el.querySelector('img');
+                            const iconName = iconEl?.getAttribute('icon') || '';
+                            const platform = iconName.split(':')[1] || imgEl?.getAttribute('alt') || 'unknown';
+                            const colorSocialText = (iconEl || imgEl)?.getAttribute('style')?.match(/color:\s*(#[0-9a-fA-F]{3,8})/)?.[1] || null;
+
+                            return {
+                                type: 'social',
+                                text: el.getAttribute('data-tippy-content')?.replace(/<[^>]*>/g, '')?.trim() || platform,
+                                color: colorSocialText,
+                                url: directUrl || null,
+                                tracking_url: href || null,
+                                icon_type: iconEl ? 'iconify' : imgEl ? 'image' : null,
+                                icon: iconEl?.getAttribute('icon') || imgEl?.getAttribute('src') || null,
+                                richContent: null
+                            };
+                        })
+                    ],
+                },
+                web: {
+                    webTitle: document.querySelector('head > title')?.textContent,
+                    webDesc: document.querySelector('head > meta[name="description"]')?.getAttribute('content'),
+                    title: document.querySelector('head > meta[property="og:title"]')?.getAttribute('content'),
+                    desc: document.querySelector('head > meta[property="og:description"]')?.getAttribute('content'),
+                    bannerUrl: document.querySelector('head > meta[property="og:image"]')?.getAttribute('content'),
+                    canonicalTitle: document.querySelector('h1[class="hdn"]')?.textContent,
+                    canonicalUrl: document.querySelector('head > link[rel="canonical"]')?.getAttribute('href')
+                }
+            }
+        };
     }
-    catch {
+    catch (e) {
+        if (session) session.close();
+        console.error(e);
         return null;
     }
 }

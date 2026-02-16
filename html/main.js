@@ -1,5 +1,6 @@
 let endpoints = {
     search: [],
+    profile: [],
     lyrics: [],
     tools: [],
     info: []

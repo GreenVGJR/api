@@ -3,7 +3,7 @@ import { Session } from 'httpcloak';
 
 const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
 
-const request: typeof undiciRequest = (url, options = {}) => {
+export const request: typeof undiciRequest = (url, options = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
     
@@ -4433,13 +4433,12 @@ export async function PerplexityAI(query: string): Promise<any> {
     catch {
         return null;
     }
-
 }
 
 export async function DriftProfile(query: string): Promise<any> {
     if(!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi'].includes(username)) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
     let session: any;
 
@@ -4646,6 +4645,200 @@ export async function DriftProfile(query: string): Promise<any> {
                 }
             }
         };
+    }
+    catch (e) {
+        if (session) session.close();
+        console.error(e);
+        return null;
+    }
+}
+
+export async function GunsProfile(query: string): Promise<any> {
+    if(!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard'].includes(username.toLowerCase())) return null;
+
+    let session: any;
+
+    try {
+        session = new Session({ httpVersion: 'h3' });
+        const res = await session.get(`https://guns.lol/${username}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const html = res.text;
+        if (session) session.close();
+
+        if (res.statusCode === 403) {
+            return { error: "Guns.lol asking to verify you're not a bot" };
+        }
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        // Split on self.__next_f.push( to get all RSC chunks
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift(); // Remove the part before the first push
+
+        const dataResults: any[] = [];
+
+        for (const chunk of chunks) {
+            try {
+                // Each chunk looks like: [1,"ID:content\n"])</script>
+                // Find the closing )
+                const endIdx = chunk.lastIndexOf(')</script>');
+                if (endIdx === -1) continue;
+
+                const pushArg = chunk.substring(0, endIdx);
+                const parsed = JSON.parse(pushArg);
+
+                // parsed is [0] or [1, "string content"]
+                if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== 'string') continue;
+
+                const content = parsed[1];
+
+                // The content format is "ID:JSON_CONTENT\n" — may have multiple lines with different IDs
+                // Split by newlines and process each line
+                const lines = content.split('\n').filter((l: string) => l.trim());
+
+                for (const line of lines) {
+                    // Each line is like "5:[\"$\",\"$L18\",null,{\"data\":{...}}]"
+                    const colonIdx = line.indexOf(':');
+                    if (colonIdx === -1) continue;
+
+                    const jsonPart = line.substring(colonIdx + 1);
+                    if (!jsonPart.includes('"data"')) continue;
+
+                    try {
+                        const innerParsed = JSON.parse(jsonPart);
+
+                        // It could be an array like ["$","$L18",null,{"data":{...}}]
+                        if (Array.isArray(innerParsed)) {
+                            for (const item of innerParsed) {
+                                if (item && typeof item === 'object' && !Array.isArray(item) && 'data' in item) {
+                                    dataResults.push(item.data);
+                                }
+                            }
+                        }
+                        // Or a direct object with "data"
+                        else if (innerParsed && typeof innerParsed === 'object' && 'data' in innerParsed) {
+                            dataResults.push(innerParsed.data);
+                        }
+                    } catch {
+                        // Some lines may not be valid JSON, skip
+                    }
+                }
+            } catch {
+                // Skip malformed chunks
+            }
+        }
+
+        if (dataResults.length === 0) {
+            return { data: null };
+        }
+
+        const finalresult: any = dataResults[0];
+
+        // The main profile data is the first data object found
+        const { _gpp_ch, success, session: _session, ...rest } = finalresult;
+
+        // Return the cleaned-up profile data
+        return { data: rest };
+    }
+    catch (e) {
+        if (session) session.close();
+        console.error(e);
+        return null;
+    }
+}
+
+export async function RageProfile(query: string): Promise<any> {
+    if(!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard'].includes(username.toLowerCase())) return null;
+
+    let session: any;
+
+    try {
+        session = new Session({ httpVersion: 'h3' });
+        const res = await session.get(`https://rage.wtf/${username}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const html = res.text;
+        if (session) session.close();
+
+        if (res.statusCode === 403) {
+            return { error: "Rage.wtf asking to verify you're not a bot" };
+        }
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift();
+
+        const dataResults: any[] = [];
+
+        for (const chunk of chunks) {
+            try {
+                const endIdx = chunk.lastIndexOf(')</script>');
+                if (endIdx === -1) continue;
+
+                const pushArg = chunk.substring(0, endIdx);
+                const parsed = JSON.parse(pushArg);
+
+                if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== 'string') continue;
+
+                const content = parsed[1];
+                const lines = content.split('\n').filter((l: string) => l.trim());
+
+                for (const line of lines) {
+                    const colonIdx = line.indexOf(':');
+                    if (colonIdx === -1) continue;
+
+                    const jsonPart = line.substring(colonIdx + 1);
+                    if (!jsonPart.includes('"user"') || !jsonPart.includes('"customization"')) continue;
+
+                    try {
+                        const innerParsed = JSON.parse(jsonPart);
+
+                        const findProfile = (obj: any): any => {
+                            if (!obj || typeof obj !== 'object') return null;
+                            if (obj.user && obj.customization) return obj;
+                            
+                            if (Array.isArray(obj)) {
+                                for (const item of obj) {
+                                    const result = findProfile(item);
+                                    if (result) return result;
+                                }
+                            } else {
+                                for (const key in obj) {
+                                    const result = findProfile(obj[key]);
+                                    if (result) return result;
+                                }
+                            }
+                            return null;
+                        };
+
+                        const profile = findProfile(innerParsed);
+                        if (profile) {
+                            dataResults.push(profile);
+                        }
+                    } catch {}
+                }
+            } catch {}
+        }
+
+        if (dataResults.length === 0) {
+            return { data: null };
+        }
+
+        return { data: dataResults[0] };
     }
     catch (e) {
         if (session) session.close();

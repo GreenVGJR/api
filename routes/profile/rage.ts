@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { GunsProfile } from '../../functions/request.js';
+import { RageProfile } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-app.get('/guns', async (c) => {
+app.get('/rage', async (c) => {
     const query = c.req.query('q');
     if(query === undefined) { 
         return c.json({"error":"Missing parameter required"}, 202);
@@ -13,9 +13,9 @@ app.get('/guns', async (c) => {
         return c.json({"error":"Nothing to do"}, 202);
     }
 
-    c.header('X-Route', 'guns.lol');
+    c.header('X-Route', 'rage.wtf');
     // @ts-ignore
-    return await dispatch(c, () => GunsProfile(query));
+    return await dispatch(c, () => RageProfile(query));
 });
 
 export default app;

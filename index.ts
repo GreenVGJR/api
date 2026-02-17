@@ -66,7 +66,8 @@ const API_ROUTES = {
     ],
     profile: [
         "/profile/drift?q=",
-        "/profile/guns?q="
+        "/profile/guns?q=",
+        "/profile/rage?q="
     ],
     lyrics: [
         "/lyrics/youtube?q=",

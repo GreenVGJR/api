@@ -97,6 +97,9 @@ const API_ROUTES = {
             server: [
                 "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
             ],
+            member: [
+                "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason="
+            ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
                 { info: ["/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="] },

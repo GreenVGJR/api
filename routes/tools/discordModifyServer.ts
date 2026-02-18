@@ -1,41 +1,14 @@
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
-const commonHeaders = {
-    'Accept': 'video/*, image/*',
-    'Accept-Encoding': '',
-    'Accept-Language': 'en',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'User-Agent': userAgent
-}
+
 
 import { Hono } from 'hono';
 const app = new Hono();
 
 import { Discord  } from '../../functions/request.js';
-import { dispatch  } from '../../functions/httpRequest.js';
+import { dispatch, processImage } from '../../functions/httpRequest.js';
 
 import { Context } from 'hono';
 
-async function processImage(c: Context, url?: string) {
-    if (!url) return undefined;
-    if (!url.startsWith('http')) return undefined;
 
-    const checkurl = new URL(url);
-    if(checkurl.host === c.req.header('host')) return '';
-    
-    try {
-        const res = await fetch(url, { headers: { ...commonHeaders }});
-        if(!res.ok) return '';
-        const contentType = res.headers.get('content-type');
-        if(!contentType?.startsWith('image/') && !contentType?.startsWith('video/')) return '';
-        const arrayBuffer = await res.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        return `data:${contentType};base64,${buffer.toString('base64')}`;
-    } catch (e) {
-        return '';
-    }
-}
 
 app.get('/discord/modifyServer', async (c) => {
     let token: string | null = null;

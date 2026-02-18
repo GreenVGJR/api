@@ -2100,6 +2100,86 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
     }
 };
 
+export const DiscordMember = async (token: string, guildId: string, payload: any, payloadError: any, reasonAudit?: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    // Use numeric ID for GET (to fetch current member info)
+    let userId = '@me';
+    try {
+        const decoded = atob(token.split('.')[0]);
+        if (Number.isInteger(parseInt(decoded))) {
+            userId = decoded;
+        }
+    } catch {}
+
+    const getUrl = `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`;
+    // IMPORTANT: Use @me for PATCH — this hits the "Modify Current Member" endpoint
+    // which supports bio, banner, and avatar. The numeric ID endpoint is "Modify Guild Member"
+    // which does NOT support these fields (it's for moderation actions).
+    const patchUrl = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
+
+    try {
+        const req = await fetch(getUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+            }
+        });
+
+        let currentInfo: any = null;
+        try {
+            currentInfo = await req.json();
+        } catch {}
+
+        if (req.status !== 200) {
+            return {
+                data: [null, null],
+                error: currentInfo || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (Object.keys(payload).length === 0) {
+            return { data: [currentInfo, null] };
+        }
+
+        const response = await fetch(patchUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)',
+                ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
+            },
+            body: JSON.stringify(payload)
+        });
+
+        let patchResponse: any = null;
+        try {
+            patchResponse = await response.json();
+        } catch (e) { }
+
+        if (response.status < 200 || response.status >= 300) {
+            return {
+                data: [currentInfo.code === 0 ? null : currentInfo, null],
+                error: patchResponse || { status: response.status }
+            };
+        }
+
+        return {
+            data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
+            ...(payloadError?.[0] && {
+                error: payloadError,
+                errorMessage: 'Continuing anyways'
+            })
+        };
+    } catch {
+        return { error: 'Something just happened' };
+    }
+};
+
 export const DiscordWebhook = async (token: string, guildId: string, payload: any, payloadError?: any) => {
     const action = payload.action;
 

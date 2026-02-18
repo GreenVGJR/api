@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { Buffer } from 'buffer';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -168,3 +169,35 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
         }
     });
 };
+
+const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
+const commonHeaders = {
+    'Accept': 'video/*, image/*',
+    'Accept-Encoding': '',
+    'Accept-Language': 'en',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'User-Agent': userAgent
+}
+
+export const processImage = async (c: Context, url?: string) => {
+    if (!url) return undefined;
+    if (!url.startsWith('http')) return undefined;
+
+    const checkurl = new URL(url);
+    if(checkurl.host === c.req.header('host')) return '';
+    
+    try {
+        const res = await fetch(url, { headers: { ...commonHeaders }});
+        if(!res.ok) return '';
+        const contentType = res.headers.get('content-type');
+        if(!contentType?.startsWith('image/') && !contentType?.startsWith('video/')) return '';
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        return `data:${contentType};base64,${buffer.toString('base64')}`;
+    } catch (e) {
+        return '';
+    }
+}
+

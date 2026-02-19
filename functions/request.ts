@@ -2123,8 +2123,10 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
             method: 'PATCH',
             headers: {
                 'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
                 'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
-            }
+            },
+            body: JSON.stringify({})
         });
 
         let currentInfo: any = null;
@@ -2143,23 +2145,28 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
             return { data: [currentInfo, null] };
         }
 
+        // Normalize values for comparison (treat null, undefined, and empty string as the same "empty" state)
+        const normalize = (v: any) => (v === '' || v === undefined || v === null) ? null : v;
+
         // Check if payload values already match current info — skip PATCH if nothing changed
-        // We check both the top level and the inner 'user' object as Discord is inconsistent
         const allSame = Object.keys(payload).every(key => {
-            const currentVal = (currentInfo[key] !== undefined ? currentInfo[key] : currentInfo.user?.[key]) ?? null;
-            const payloadVal = payload[key] ?? null;
+            const currentVal = normalize(currentInfo[key] !== undefined ? currentInfo[key] : currentInfo.user?.[key]);
+            const payloadVal = normalize(payload[key]);
             return currentVal === payloadVal;
         });
 
-        // Helper to generate changes object: all requested keys are present, true if successful, false if dropped/failed
-        const getChanges = (requested: any, successful: any) => {
+        // Helper to generate changes object: all requested keys are present, true if successful AND actually changed state
+        const getChanges = (requested: any, successful: any, current: any) => {
             return Object.keys(requested).reduce((acc: any, key) => {
-                acc[key] = successful.hasOwnProperty(key);
+                const newVal = normalize(successful[key] !== undefined ? successful[key] : successful.user?.[key]);
+                const currentVal = normalize(current[key] !== undefined ? current[key] : current.user?.[key]);
+                // It's a "change" if the new state is actually different from the previous state
+                acc[key] = newVal !== currentVal;
                 return acc;
             }, {});
         };
 
-        const changes = (p?: any) => isReset ? getChanges(payload, p || payload) : null;
+        const changes = (p?: any) => isReset ? getChanges(payload, p || payload, currentInfo) : null;
 
         if (allSame) {
             return { data: [false, null, 204, changes()] };
@@ -2199,7 +2206,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
                     
                     if (retryResponse.status >= 200 && retryResponse.status < 300) {
                         return {
-                            data: [currentInfo, retryJson, retryResponse.status, changes(retryPayload), ...(reasonAudit ? [reasonAudit] : [])],
+                            data: [currentInfo, retryJson, retryResponse.status, changes(retryJson), ...(reasonAudit ? [reasonAudit] : [])],
                             ...(payloadError?.[0] && {
                                     error: payloadError,
                                     errorMessage: 'Continuing anyways (Retried without nickname)'
@@ -2223,7 +2230,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
         }
 
         return {
-            data: [currentInfo, patchResponse, response.status, changes(), ...(reasonAudit ? [reasonAudit] : [])],
+            data: [currentInfo, patchResponse, response.status, changes(patchResponse), ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'

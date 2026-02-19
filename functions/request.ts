@@ -4952,9 +4952,19 @@ export async function GunsProfile(query: string): Promise<any> {
 
         // The main profile data is the first data object found
         const { _gpp_ch, success, session: _session, ...rest } = finalresult;
+        let secfinal: any = rest;
+        if(secfinal?.config?.socials?.[0]) {
+            secfinal.config.valid_socials = secfinal.config.socials?.map((a: any) => {
+                try {
+                    const lk = new URL(a.value);
+                    return a;
+                }
+                catch {}
+            })?.filter(Boolean);
+        }
 
         // Return the cleaned-up profile data
-        return { data: rest };
+        return { data: secfinal };
     }
     catch (e) {
         if (session) session.close();

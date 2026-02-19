@@ -818,11 +818,14 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
     try {
         const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
-        const response = await request(targetUrl, {
-            headers: {
-                ...commonHeaders
-            }
-        });
+        const [response, savetikData] = await Promise.all([
+            request(targetUrl, {
+                headers: {
+                    ...commonHeaders
+                }
+            }),
+            SavetikVideo(targetUrl)
+        ]);
         
         const html = await response.body.text();
         const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split('</script>')[0];
@@ -847,6 +850,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                 dynamicCover: videoDetail.video?.dynamicCover,
                 duration: videoDetail.video?.duration,
                 play_url: videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233'),
+                original_play_url: savetikData?.video_url || null,
                 bit_rate: videoDetail.video?.bitrateInfo?.map((br: any) => ({
                         gearName: br.GearName,
                         bitrate: br.Bitrate,
@@ -896,6 +900,70 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
     } catch (e) {
         console.error(e);
+        return null;
+    }
+}
+async function SavetikVideo(url: string) {
+    if (!url) return null;
+    try {
+        const response = await request('https://savetik.io/api/ajaxSearch', {
+             method: 'POST',
+             headers: {
+                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                 ...commonHeaders
+             },
+             body: new URLSearchParams({
+                 q: url,
+                 cursor: '0',
+                 page: '0',
+                 lang: 'en'
+             }).toString()
+        });
+
+        const json: any = await response.body.json();
+        if (!json || !json.data) return null;
+
+        const { document } = parseHTML(json.data);
+        const hdLink = Array.from(document.querySelectorAll('a')).find((el: any) => el.textContent?.includes('Download MP4 HD'));
+        
+        if (!hdLink) return null;
+        
+        let finalUrl = (hdLink as any).getAttribute('href');
+        if (!finalUrl) return null;
+
+        if (finalUrl.includes('snapcdn.app') && finalUrl.includes('token=')) {
+             try { 
+                 const token = new URL(finalUrl).searchParams.get('token');
+                 if (token) {
+                     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                     if (payload.url) {
+                        finalUrl = payload.url;
+                     }
+                 }
+             } catch {}
+        }
+        
+        const musicLink = Array.from(document.querySelectorAll('a')).find((el: any) => el.textContent?.includes('Download MP3'));
+        let musicUrl: any = (musicLink as any)?.getAttribute('href') || null;
+
+        if (musicUrl && musicUrl.includes('snapcdn.app') && musicUrl.includes('token=')) {
+             try {
+                 const token = new URL(musicUrl).searchParams.get('token');
+                 if (token) {
+                     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                     if (payload.url) {
+                        musicUrl = payload.url;
+                     }
+                 }
+             } catch {}
+        }
+
+        return { 
+            video_url: finalUrl?.split('?')?.[0],
+            music_url: musicUrl
+        };
+    } catch (e) {
+        console.error("Savetik error:", e);
         return null;
     }
 }

@@ -14,7 +14,7 @@ app.get('/tiktok/video', async (c) => {
         return c.json({"error":"Nothing to do"}, 202);
     }
     
-    c.header('X-Route', 'www.tiktok.com');
+    c.header('X-Route', 'www.tiktok.com, savetik.io');
     return await dispatch(c, () => TiktokVideo(q));
 });
 

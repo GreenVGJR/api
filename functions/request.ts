@@ -2059,93 +2059,17 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
             return { data: [currentInfo, null] };
         }
 
+        const allSame = Object.keys(payload).every(key => {
+            const currentVal = currentInfo[key] ?? null;
+            const payloadVal = payload[key] ?? null;
+            return currentVal === payloadVal;
+        });
+
+        if (allSame) {
+            return { data: [false, null, 204] };
+        }
+
         const response = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)',
-                ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
-            },
-            body: JSON.stringify(payload)
-        });
-
-        let patchResponse: any = null;
-        try {
-            patchResponse = await response.json();
-        } catch (e) { }
-
-        if (response.status < 200 || response.status >= 300) {
-            return {
-                data: [currentInfo.code === 0 ? null : currentInfo, null],
-                error: patchResponse || { status: response.status }
-            };
-        }
-
-        const checkSpecificFields = (a: any, b: any) => {
-            if (!a || !b) return false;
-            const fields = ['name', 'icon', 'splash', 'banner', 'description', 'verification_level'];
-            return fields.every(field => a[field] === b[field]);
-        };
-
-        return {
-            data: [currentInfo, patchResponse, checkSpecificFields(currentInfo, patchResponse) ? 204 : response.status, ...(reasonAudit ? [reasonAudit] : [])],
-            ...(payloadError?.[0] && {
-                error: payloadError,
-                errorMessage: 'Continuing anyways'
-            })
-        };
-    } catch {
-        return { error: 'Something just happened' };
-    }
-};
-
-export const DiscordMember = async (token: string, guildId: string, payload: any, payloadError: any, reasonAudit?: string) => {
-    if (!token || token === 'null') return { error: 'Missing token' };
-    if (!guildId) return { error: 'Missing guildId' };
-
-    // Use numeric ID for GET (to fetch current member info)
-    let userId = '@me';
-    try {
-        const decoded = atob(token.split('.')[0]);
-        if (Number.isInteger(parseInt(decoded))) {
-            userId = decoded;
-        }
-    } catch {}
-
-    const getUrl = `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`;
-    // IMPORTANT: Use @me for PATCH — this hits the "Modify Current Member" endpoint
-    // which supports bio, banner, and avatar. The numeric ID endpoint is "Modify Guild Member"
-    // which does NOT support these fields (it's for moderation actions).
-    const patchUrl = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
-
-    try {
-        const req = await fetch(getUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
-            }
-        });
-
-        let currentInfo: any = null;
-        try {
-            currentInfo = await req.json();
-        } catch {}
-
-        if (req.status !== 200) {
-            return {
-                data: [null, null],
-                error: currentInfo || { status: req.status, statusText: req.statusText }
-            };
-        }
-
-        if (Object.keys(payload).length === 0) {
-            return { data: [currentInfo, null] };
-        }
-
-        const response = await fetch(patchUrl, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bot ${token}`,
@@ -2170,6 +2094,136 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 
         return {
             data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
+            ...(payloadError?.[0] && {
+                error: payloadError,
+                errorMessage: 'Continuing anyways'
+            })
+        };
+    } catch {
+        return { error: 'Something just happened' };
+    }
+};
+
+export const DiscordMember = async (token: string, guildId: string, payload: any, payloadError: any, reasonAudit?: string, isReset: boolean = false) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    let userId = '@me';
+    try {
+        const decoded = atob(token.split('.')[0]);
+        if (Number.isInteger(parseInt(decoded))) {
+            userId = decoded;
+        }
+    } catch {}
+
+    const url = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
+
+    try {
+        const req = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+            }
+        });
+
+        let currentInfo: any = null;
+        try {
+            currentInfo = await req.json();
+        } catch {}
+
+        if (req.status !== 200) {
+            return {
+                data: [null, null],
+                error: currentInfo || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (Object.keys(payload).length === 0) {
+            return { data: [currentInfo, null] };
+        }
+
+        // Check if payload values already match current info — skip PATCH if nothing changed
+        // We check both the top level and the inner 'user' object as Discord is inconsistent
+        const allSame = Object.keys(payload).every(key => {
+            const currentVal = (currentInfo[key] !== undefined ? currentInfo[key] : currentInfo.user?.[key]) ?? null;
+            const payloadVal = payload[key] ?? null;
+            return currentVal === payloadVal;
+        });
+
+        // Helper to generate changes object: all requested keys are present, true if successful, false if dropped/failed
+        const getChanges = (requested: any, successful: any) => {
+            return Object.keys(requested).reduce((acc: any, key) => {
+                acc[key] = successful.hasOwnProperty(key);
+                return acc;
+            }, {});
+        };
+
+        const changes = (p?: any) => isReset ? getChanges(payload, p || payload) : null;
+
+        if (allSame) {
+            return { data: [false, null, 204, changes()] };
+        }
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)',
+                ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
+            },
+            body: JSON.stringify(payload)
+        });
+
+        let patchResponse: any = null;
+        try {
+            patchResponse = await response.json();
+            
+            // Retry logic: If 50013 (Missing Permissions) and we tried to change nickname, 
+            // retry without 'nick' to allow bio/avatar/banner updates to proceed.
+            if (response.status === 403 && patchResponse?.code === 50013 && payload.nick !== undefined) {
+                const { nick, ...retryPayload } = payload;
+                if (Object.keys(retryPayload).length > 0) {
+                     const retryResponse = await fetch(url, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bot ${token}`,
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)',
+                            ...(reasonAudit && { 'X-Audit-Log-Reason': reasonAudit })
+                        },
+                        body: JSON.stringify(retryPayload)
+                    });
+                    const retryJson = await retryResponse.json();
+                    
+                    if (retryResponse.status >= 200 && retryResponse.status < 300) {
+                        return {
+                            data: [currentInfo, retryJson, retryResponse.status, changes(retryPayload), ...(reasonAudit ? [reasonAudit] : [])],
+                            ...(payloadError?.[0] && {
+                                    error: payloadError,
+                                    errorMessage: 'Continuing anyways (Retried without nickname)'
+                            })
+                        };
+                    } else {
+                        // If it still fails, update patchResponse to reflect this new error
+                         patchResponse = retryJson;
+                         // And let the logic below return the error as usual
+                    }
+                }
+            }
+
+        } catch (e) { }
+
+        if (response.status < 200 || response.status >= 300) {
+            return {
+                data: [currentInfo.code === 0 ? null : currentInfo, null, response.status, null],
+                error: patchResponse || { status: response.status }
+            };
+        }
+
+        return {
+            data: [currentInfo, patchResponse, response.status, changes(), ...(reasonAudit ? [reasonAudit] : [])],
             ...(payloadError?.[0] && {
                 error: payloadError,
                 errorMessage: 'Continuing anyways'
@@ -4919,6 +4973,105 @@ export async function RageProfile(query: string): Promise<any> {
         }
 
         return { data: dataResults[0] };
+    }
+    catch (e) {
+        if (session) session.close();
+        console.error(e);
+        return null;
+    }
+}
+
+export async function HauntProfile(query: string): Promise<any> {
+    if(!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'pricing', 'cdn-cgi', 'terms', 'privacy', 'dashboard', 'settings', 'api'].includes(username.toLowerCase())) return null;
+
+    let session: any;
+
+    try {
+        session = new Session({ httpVersion: 'h3' });
+        const res = await session.get(`https://haunt.gg/${username}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const html = res.text;
+        if (session) session.close();
+
+        if (res.statusCode === 403) {
+            return { error: "Haunt.gg asking to verify you're not a bot" };
+        }
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift();
+
+        const dataResults: any[] = [];
+
+        for (const chunk of chunks) {
+            try {
+                const endIdx = chunk.lastIndexOf(')</script>');
+                if (endIdx === -1) continue;
+
+                const pushArg = chunk.substring(0, endIdx);
+                const parsed = JSON.parse(pushArg);
+
+                if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== 'string') continue;
+
+                const content = parsed[1];
+                const lines = content.split('\n').filter((l: string) => l.trim());
+
+                for (const line of lines) {
+                    const colonIdx = line.indexOf(':');
+                    if (colonIdx === -1) continue;
+
+                    const jsonPart = line.substring(colonIdx + 1);
+                    if (!jsonPart.includes('"user"') || !jsonPart.includes('"links"')) continue;
+
+                    try {
+                        const innerParsed = JSON.parse(jsonPart);
+
+                        const findProfile = (obj: any): any => {
+                            if (!obj || typeof obj !== 'object') return null;
+                            if (obj.user && obj.links) return obj;
+                            
+                            if (Array.isArray(obj)) {
+                                for (const item of obj) {
+                                    const result = findProfile(item);
+                                    if (result) return result;
+                                }
+                            } else {
+                                for (const key in obj) {
+                                    const result = findProfile(obj[key]);
+                                    if (result) return result;
+                                }
+                            }
+                            return null;
+                        };
+
+                        const profile = findProfile(innerParsed);
+                        if (profile) {
+                            dataResults.push(profile);
+                        }
+                    } catch {}
+                }
+            } catch {}
+        }
+
+        if (dataResults.length === 0) {
+            return { data: null };
+        }
+
+        const finalresult: any = dataResults[0];
+
+        // The main profile data is the first data object found
+        const { links, ...rest } = finalresult;
+
+        // Return the cleaned-up profile data
+        return { data: rest?.user || null };
     }
     catch (e) {
         if (session) session.close();

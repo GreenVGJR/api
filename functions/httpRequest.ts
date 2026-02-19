@@ -185,7 +185,12 @@ export const processImage = async (c: Context, url?: string) => {
     if (!url) return undefined;
     if (!url.startsWith('http')) return undefined;
 
-    const checkurl = new URL(url);
+    let checkurl: URL;
+    try {
+        checkurl = new URL(url);
+    } catch {
+        return undefined;
+    }
     if(checkurl.host === c.req.header('host')) return '';
     
     try {

@@ -65,8 +65,9 @@ const API_ROUTES = {
         "/search/giphy?q=&type="
     ],
     profile: [
-        "/profile/drift?q=",
         "/profile/guns?q=",
+        "/profile/drift?q=",
+        "/profile/haunt?q=",
         "/profile/rage?q="
     ],
     lyrics: [

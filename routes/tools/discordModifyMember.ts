@@ -70,7 +70,7 @@ app.get('/discord/modifyMemberServer', async (c) => {
     }
 
     c.header('X-Route', 'discord.com');
-    return await dispatch(c, () => DiscordMember(token!, guildId!, payload, payloadError, reason || undefined));
+    return await dispatch(c, () => DiscordMember(token!, guildId!, payload, payloadError, reason || undefined, reset !== undefined));
 });
 
 export default app;

@@ -1075,16 +1075,17 @@ export const Genius = async function Genius(que: string) {
 
     try {
         session = new Session({ 
-            preset: 'chrome-144',
-            httpVersion: 'h1' 
+            httpVersion: 'h2',
+            echConfigDomain: "genius.com",
+            tlsOnly: false
         });
 
         const [reqSong, reqMulti] = await Promise.all([
             session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
-                    'Accept': 'application/json, text/plain, */*',
-                    'Referer': 'https://genius.com/',
+                    'Accept': '*/*',
+                    'Origin': 'https://genius.com/',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
                     'Sec-Fetch-Site': 'same-origin'
@@ -1093,8 +1094,8 @@ export const Genius = async function Genius(que: string) {
             session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
-                    'Accept': 'application/json, text/plain, */*',
-                    'Referer': 'https://genius.com/',
+                    'Accept': '*/*',
+                    'Origin': 'https://genius.com/',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
                     'Sec-Fetch-Site': 'same-origin'

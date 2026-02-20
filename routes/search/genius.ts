@@ -13,6 +13,7 @@ else if(query === '') {
 return c.json({"error":"Nothing to do"}, 202);
 }
     c.header('X-Route', 'genius.com');
+    c.header('X-Ech-Target', 'genius');
     return await dispatch(c, () => Genius(query));
 });
 

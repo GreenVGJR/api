@@ -5226,3 +5226,95 @@ export async function HauntProfile(query: string): Promise<any> {
         return null;
     }
 }
+
+const DISCORD_FLAGS: Record<number, string> = {
+    0: 'Discord Staff',
+    1: 'Partnered Server Owner',
+    2: 'HypeSquad Events',
+    3: 'Bug Hunter Level 1',
+    6: 'HypeSquad Bravery',
+    7: 'HypeSquad Brilliance',
+    8: 'HypeSquad Balance',
+    9: 'Early Nitro Supporter',
+    10: 'Team User',
+    12: 'System',
+    14: 'Bug Hunter Level 2',
+    16: 'Verified Bot',
+    17: 'Early Verified Bot Developer',
+    18: 'Moderator Programs Alumni',
+    19: 'Bot HTTP Interactions',
+    22: 'Active Developer',
+};
+
+function resolveFlags(flags: number | null | undefined): string[] {
+    if (!flags) return [];
+    const badges: string[] = [];
+    for (const [bit, name] of Object.entries(DISCORD_FLAGS)) {
+        if (flags & (1 << Number(bit))) {
+            badges.push(name);
+        }
+    }
+    return badges;
+}
+
+export const DiscordInfoMember = async (token: string, userId: string, guildId?: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!userId) return { error: 'Missing userId' };
+
+    const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': botUserAgent
+    };
+
+    try {
+        const url = guildId
+            ? `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`
+            : `https://discord.com/api/v10/users/${userId}`;
+
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch {}
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        // Guild member response has user info nested under .user
+        const userData = guildId ? data.user : data;
+
+        // Resolve flags into badge names
+        const flagsBadges = resolveFlags(userData?.flags);
+        const publicFlagsBadges = resolveFlags(userData?.public_flags);
+
+        // Build avatar & banner CDN URLs
+        const avatarUrl = userData?.avatar
+            ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+            : null;
+        const bannerUrl = userData?.banner
+            ? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+            : null;
+
+        // Guild-specific avatar
+        const guildAvatarUrl = (guildId && data.avatar)
+            ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${data.avatar}.${data.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+            : null;
+
+        const result: any = {
+            ...data,
+            avatar_url: guildAvatarUrl || avatarUrl,
+            banner_url: bannerUrl,
+            badges: publicFlagsBadges,
+            badges_raw: flagsBadges,
+        };
+
+        return { data: result };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};

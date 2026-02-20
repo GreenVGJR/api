@@ -4833,8 +4833,8 @@ export async function DriftProfile(query: string): Promise<any> {
                             return {
                                 type: 'roblox',
                                 text: richContent?.username || el.querySelector('.module-titleText')?.textContent?.trim() || '',
-                                url: directUrl || (richContent?.profileId ? "https://www.roblox.com/users/" + richContent?.profileId + "/profile" : null),
-                                tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=https://www.roblox.com/users/" + richContent?.profileId + "/profile" : null),
+                                url: directUrl || (richContent?.profileId ? encodeURI("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
+                                tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=" + encodeURIComponent("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
                                 icon_type: imgEl ? 'image' : null,
                                 icon: imgEl?.getAttribute('src') || null,
                                 richContent

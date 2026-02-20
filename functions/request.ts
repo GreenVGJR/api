@@ -2832,7 +2832,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
     const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=2&referer=&region=${region_code}&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en`;
     const client = new Session({
         preset: 'chrome-144-linux',
-        httpVersion: 'h2'
+        httpVersion: 'h2',
+        tlsOnly: false
     });
     const headers = {
         ...commonHeaders,
@@ -4655,7 +4656,7 @@ export async function DriftProfile(query: string): Promise<any> {
     
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
             res = await session.get(filterurl.toString(), {
                 headers: {
                     ...commonHeaders
@@ -4890,7 +4891,7 @@ export async function GunsProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true });
             res = await session.get(`https://guns.lol/${username}`, {
                 headers: {
                     ...commonHeaders
@@ -5015,7 +5016,7 @@ export async function RageProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
             res = await session.get(`https://rage.wtf/${username}`, {
                 headers: {
                     ...commonHeaders
@@ -5122,7 +5123,7 @@ export async function HauntProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
             res = await session.get(`https://haunt.gg/${username}`, {
                 headers: {
                     ...commonHeaders

@@ -81,38 +81,9 @@ async function performRequest(targetUrl) {
 
     try {
         const startTime = performance.now();
-        const xhr = new XMLHttpRequest();
-        const responsePromise = new Promise((resolve, reject) => {
-            xhr.open('GET', targetUrl, true);
-            xhr.setRequestHeader('Accept', 'application/json');
-            xhr.responseType = 'blob';
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState === 2) { // HEADERS_RECEIVED
-                    resolve({
-                        ok: xhr.status >= 200 && xhr.status < 300,
-                        status: xhr.status,
-                        headers: { get: (name) => xhr.getResponseHeader(name) },
-                        blob: () => new Promise((res, rej) => {
-                            if (xhr.readyState === 4) res(xhr.response);
-                            else {
-                                xhr.addEventListener('load', () => res(xhr.response));
-                                xhr.addEventListener('error', () => rej(new Error('Network error during body download')));
-                            }
-                        }),
-                        text: () => new Promise((res, rej) => {
-                            if (xhr.readyState === 4) xhr.response.text().then(res).catch(ej => rej(new Error('Text parsing failed')));
-                            else {
-                                xhr.addEventListener('load', () => xhr.response.text().then(res).catch(ej => rej(new Error('Text parsing failed'))));
-                                xhr.addEventListener('error', () => rej(new Error('Network error during body download')));
-                            }
-                        })
-                    });
-                }
-            };
-            xhr.onerror = () => reject(new Error('Network request failed'));
-            xhr.send();
+        const response = await fetch(targetUrl, {
+            headers: { 'Accept': 'application/json' }
         });
-        const response = await responsePromise;
         
         responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading">Waiting response...</span>';

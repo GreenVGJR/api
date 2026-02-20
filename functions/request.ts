@@ -4650,25 +4650,42 @@ export async function DriftProfile(query: string): Promise<any> {
     if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
     let session: any;
+    let res: any;
+    
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            res = await session.get(filterurl.toString(), {
+                headers: {
+                    ...commonHeaders
+                }
+            });
+            
+            if (res.statusCode !== 403) {
+                break; // Success or non-403 error, proceed
+            }
+            
+            // It's a 403, we need to try again with a new session
+            if (session) session.close();
+            
+            if (attempts === 2) { // Last attempt still gave 403
+                return {
+                    "error": "Cloudflare Turnstile asking to verify you're not a bot"
+                };
+            }
+        } catch (e) {
+            if (session) session.close();
+            if (attempts === 2) throw e;
+        }
+    }
 
     try {
-        session = new Session({ httpVersion: 'h3' });
-        const res = await session.get(filterurl.toString(), {
-            headers: {
-                ...commonHeaders
-            }
-        });
         const test = res.text;
         if (session) session.close();
         if(res.url?.includes('/message')) {
             return {
                 data: null
             }
-        }
-        if(res.statusCode === 403) {
-            return {
-                "error": "Cloudflare Turnstile asking to verify you're not a bot"
-            };
         }
         const { document } = parseHTML(test);
         let schemaJson: any = document.querySelector('script[type="application/ld+json"]')?.textContent;
@@ -4868,21 +4885,35 @@ export async function GunsProfile(query: string): Promise<any> {
     if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard'].includes(username.toLowerCase())) return null;
 
     let session: any;
+    let res: any;
+
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            res = await session.get(`https://guns.lol/${username}`, {
+                headers: {
+                    ...commonHeaders
+                }
+            });
+            
+            if (res.statusCode !== 403) {
+                break;
+            }
+            
+            if (session) session.close();
+            
+            if (attempts === 2) {
+                return { error: "Guns.lol asking to verify you're not a bot" };
+            }
+        } catch (e) {
+            if (session) session.close();
+            if (attempts === 2) throw e;
+        }
+    }
 
     try {
-        session = new Session({ httpVersion: 'h3' });
-        const res = await session.get(`https://guns.lol/${username}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
         const html = res.text;
         if (session) session.close();
-
-        if (res.statusCode === 403) {
-            return { error: "Guns.lol asking to verify you're not a bot" };
-        }
         if (res.statusCode !== 200) {
             return { data: null };
         }
@@ -4979,21 +5010,35 @@ export async function RageProfile(query: string): Promise<any> {
     if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard'].includes(username.toLowerCase())) return null;
 
     let session: any;
+    let res: any;
+
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            res = await session.get(`https://rage.wtf/${username}`, {
+                headers: {
+                    ...commonHeaders
+                }
+            });
+            
+            if (res.statusCode !== 403) {
+                break;
+            }
+            
+            if (session) session.close();
+            
+            if (attempts === 2) {
+                return { error: "Rage.wtf asking to verify you're not a bot" };
+            }
+        } catch (e) {
+            if (session) session.close();
+            if (attempts === 2) throw e;
+        }
+    }
 
     try {
-        session = new Session({ httpVersion: 'h3' });
-        const res = await session.get(`https://rage.wtf/${username}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
         const html = res.text;
         if (session) session.close();
-
-        if (res.statusCode === 403) {
-            return { error: "Rage.wtf asking to verify you're not a bot" };
-        }
         if (res.statusCode !== 200) {
             return { data: null };
         }
@@ -5072,21 +5117,35 @@ export async function HauntProfile(query: string): Promise<any> {
     if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'pricing', 'cdn-cgi', 'terms', 'privacy', 'dashboard', 'settings', 'api'].includes(username.toLowerCase())) return null;
 
     let session: any;
+    let res: any;
+
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com" });
+            res = await session.get(`https://haunt.gg/${username}`, {
+                headers: {
+                    ...commonHeaders
+                }
+            });
+            
+            if (res.statusCode !== 403) {
+                break;
+            }
+            
+            if (session) session.close();
+            
+            if (attempts === 2) {
+                return { error: "Haunt.gg asking to verify you're not a bot" };
+            }
+        } catch (e) {
+            if (session) session.close();
+            if (attempts === 2) throw e;
+        }
+    }
 
     try {
-        session = new Session({ httpVersion: 'h3' });
-        const res = await session.get(`https://haunt.gg/${username}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
         const html = res.text;
         if (session) session.close();
-
-        if (res.statusCode === 403) {
-            return { error: "Haunt.gg asking to verify you're not a bot" };
-        }
         if (res.statusCode !== 200) {
             return { data: null };
         }

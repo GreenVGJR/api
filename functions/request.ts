@@ -4700,12 +4700,13 @@ export async function DriftProfile(query: string): Promise<any> {
         }
 
         const styles = Array.from(document.querySelectorAll('style')).map((s: any) => s.textContent).join('');
+        const myProfileId = test?.split('let currentProfileId =')?.[1]?.split(';')?.[0]?.trim() || null;
 
         return {
             data: {
                 user: {
                     account_id: test?.split('let userSql = ')?.[1]?.split(';')?.[0]?.trim() || null,
-                    profile_id: test?.split('let currentProfileId =')?.[1]?.split(';')?.[0]?.trim() || null,
+                    profile_id: myProfileId,
                     name: schemaJson?.name?.split('|')?.[1]?.trim() || schemaJson?.mainEntity?.name || "",
                     display_name: {
                         text: document.querySelector('#bio-username')?.textContent?.trim() || "",
@@ -4832,8 +4833,8 @@ export async function DriftProfile(query: string): Promise<any> {
                             return {
                                 type: 'roblox',
                                 text: richContent?.username || el.querySelector('.module-titleText')?.textContent?.trim() || '',
-                                url: directUrl || null,
-                                tracking_url: href || null,
+                                url: directUrl || (richContent?.profileId ? "https://www.roblox.com/users/" + richContent?.profileId + "/profile" : null),
+                                tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=https://www.roblox.com/users/" + richContent?.profileId + "/profile" : null),
                                 icon_type: imgEl ? 'image' : null,
                                 icon: imgEl?.getAttribute('src') || null,
                                 richContent

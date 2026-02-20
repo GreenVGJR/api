@@ -14,6 +14,7 @@ app.get('/drift', async (c) => {
     }
 
     c.header('X-Route', 'drift.rip');
+    c.header('X-Ech-Target', 'cloudflare-ech');
     // @ts-ignore
     return await dispatch(c, () => DriftProfile(query));
 });

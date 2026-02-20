@@ -14,6 +14,7 @@ app.get('/rage', async (c) => {
     }
 
     c.header('X-Route', 'rage.wtf');
+    c.header('X-Ech-Target', 'cloudflare-ech');
     // @ts-ignore
     return await dispatch(c, () => RageProfile(query));
 });

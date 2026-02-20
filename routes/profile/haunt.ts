@@ -14,6 +14,7 @@ app.get('/haunt', async (c) => {
     }
 
     c.header('X-Route', 'haunt.gg');
+    c.header('X-Ech-Target', 'cloudflare-ech');
     // @ts-ignore
     return await dispatch(c, () => HauntProfile(query));
 });

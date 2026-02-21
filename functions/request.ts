@@ -5376,3 +5376,41 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
         return { error: e.message || 'Something just happened' };
     }
 };
+
+export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit?: number) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!channelId) return { error: 'Missing channelId' };
+
+    const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': botUserAgent
+    };
+
+    try {
+        let url = `https://discord.com/api/v10/channels/${channelId}/messages`;
+        const params: string[] = [];
+
+        if (sort === 'asc') params.push('after=0');
+        if (limit) params.push(`limit=${limit}`);
+
+        if (params.length > 0) url += '?' + params.join('&');
+
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch {}
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};

@@ -104,7 +104,8 @@ const API_ROUTES = {
             ],
             member: [
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
-                "/tools/discord/infoMember?token=&userId=&guildId="
+                "/tools/discord/infoMember?token=&userId=&guildId=",
+                "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },

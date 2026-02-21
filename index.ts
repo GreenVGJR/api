@@ -105,7 +105,6 @@ const API_ROUTES = {
             member: [
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
                 "/tools/discord/infoMember?token=&userId=&guildId=",
-                "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
@@ -113,6 +112,9 @@ const API_ROUTES = {
                 { delete: ["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="] },
                 { send: ["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="] },
                 { list: ["/tools/discord/webhook/list?token=&channelId="] }
+            ],
+            message: [
+                "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
             ]
         },
         misc: [

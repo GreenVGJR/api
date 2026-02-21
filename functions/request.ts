@@ -598,34 +598,35 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
         keysc = await soundcloudKey();
     }
 
+    let session: any;
     try {
+        session = new Session({ httpVersion: 'h1' });
 
         const [per, per2] = await Promise.all([
-            request(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
+            session.get(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
                 headers: {
                     ...commonHeaders,
                 }
             }),
-            request(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
+            session.get(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
                 headers: {
                     ...commonHeaders,
                 }
             })
         ]);
+        session.close();
+
         if (per.statusCode === 401) {
             return await SCMusic(que, true);
         }
-        const [pes, pes2] = await Promise.all([
-            per.body.json() as Promise<any>,
-            per2.body.text()
-        ]);
+        const pes = per.statusCode === 200 ? per.json() : null;
         let testpes: any = null;
         try {
-            testpes = JSON.parse(pes2.split('type="application/json">')[1].split('</script>')[0]);
+            testpes = JSON.parse(per2.text.split('type="application/json">')[1].split('</script>')[0]);
         }
         catch { }
         return { data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null] };
-    } catch (e) { console.error(e); return null; }
+    } catch (e) { if (session) session.close(); console.error(e); return null; }
 }
 
 export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false): Promise<any> {
@@ -1076,8 +1077,7 @@ export const Genius = async function Genius(que: string) {
     try {
         session = new Session({ 
             httpVersion: 'h2',
-            echConfigDomain: "genius.com",
-            tlsOnly: false
+            echConfigDomain: "genius.com"
         });
 
         const [reqSong, reqMulti] = await Promise.all([
@@ -1088,7 +1088,8 @@ export const Genius = async function Genius(que: string) {
                     'Origin': 'https://genius.com/',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin'
+                    'Sec-Fetch-Site': 'same-origin',
+                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
                 }
             }),
             session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
@@ -1098,7 +1099,8 @@ export const Genius = async function Genius(que: string) {
                     'Origin': 'https://genius.com/',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin'
+                    'Sec-Fetch-Site': 'same-origin',
+                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
                 }
             })
         ]);
@@ -1968,39 +1970,40 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
     if (refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
+    let session: any;
     try {
         const test = new URL(que);
         if (!test.host.endsWith('soundcloud.com')) return null;
+
+        session = new Session({ httpVersion: 'h1' });
         const [res, res2] = await Promise.all([
-            request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
-                method: 'GET',
+            session.get(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
                 headers: {
                     ...commonHeaders
                 }
             }),
-            request("https://mobi.soundcloud.com" + test.pathname, {
-                method: 'GET',
+            session.get("https://mobi.soundcloud.com" + test.pathname, {
                 headers: {
                     ...commonHeaders
                 }
             })
         ]);
+        session.close();
+
         if (res.statusCode === 401 || res.statusCode === 400) {
             return await infoSoundcloud(que, true);
         }
-        const [pull, pull2Text] = await Promise.all([
-            res.body.json() as Promise<any>,
-            res2.body.text()
-        ]);
+        const pull = res.statusCode === 200 ? res.json() : null;
 
         let pull2: any = null;
         try {
-            pull2 = JSON.parse(pull2Text.split('type="application/json">')[1].split('</script>')[0]);
+            pull2 = JSON.parse(res2.text.split('type="application/json">')[1].split('</script>')[0]);
         } catch { }
 
         return { data: [pull || null, pull2?.props?.pageProps?.initialStoreState?.entities || null] };
     }
     catch (e) {
+        if (session) session.close();
         console.error("infoSoundcloud error:", e);
         return null;
     }
@@ -2092,6 +2095,61 @@ export const pinterest = async function pinterest(que: string) {
         };
     }
     catch {
+        return null;
+    }
+}
+
+export const infoPinterest = async function infoPinterest(que: string) {
+    if (!que) return null;
+    let session: any;
+    try {
+        const test = new URL(que);
+        if (!test.host.includes('pinterest.') && !test.host.includes('pin.it')) return null;
+
+        session = new Session({ httpVersion: 'h2' });
+        const res = await session.get(que, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const html = res.text;
+        session.close();
+
+        const data: any[] = [];
+        const scriptRegex = /<script\s+data-relay-completed-request="true"[^>]*>([\s\S]*?)<\/script>/g;
+        let match;
+        
+        while ((match = scriptRegex.exec(html)) !== null) {
+            const scriptContent = match[1];
+            const funcMatch = scriptContent.match(/window\.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__\("([^"]+)",\s*(\{[\s\S]*?\})\);?/);
+            if (funcMatch) {
+                try {
+                    const api_query = JSON.parse(decodeURIComponent(funcMatch[1]));
+                    const content = JSON.parse(funcMatch[2]);
+                    let relayData = content;
+                    if (relayData.data) relayData = relayData.data;
+
+                    const entries = Object.entries(relayData);
+                    if (entries.length > 0) {
+                        const firstValue: any = entries[0][1];
+                        const finalData = (firstValue && typeof firstValue === 'object' && 'data' in firstValue) 
+                            ? firstValue.data 
+                            : firstValue;
+
+                        data.push({
+                            api_query,
+                            data: finalData
+                        });
+                    }
+                } catch (e) {
+                }
+            }
+        }
+        
+        return data.length > 0 ? { data } : null;
+    } catch {
+        if(session) session.close();
         return null;
     }
 }

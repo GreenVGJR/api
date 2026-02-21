@@ -21,12 +21,15 @@ import tools_raw from './routes/tools/index.js';
 import info_raw from './routes/info/index.js';
 // @ts-ignore
 import profile_raw from './routes/profile/index.js';
+// @ts-ignore
+import download_raw from './routes/download/index.js';
 
 const reqs: any[] = reqs_raw;
 const lyrics: any[] = lyrics_raw;
 const tools: any[] = tools_raw;
 const info: any[] = info_raw;
 const profile: any[] = profile_raw;
+const download: any[] = download_raw;
 
 const API_ROUTES = {
     search: [
@@ -128,8 +131,10 @@ const API_ROUTES = {
         "/info/tenor?url=",
         "/info/giphy?url=",
         "/info/tiktok/video?q=",
-        "/info/weather?q="
-    ]
+        "/info/weather?q=",
+        "/info/pinterest?url="
+    ],
+    download: []
 };
 
 function flattenRoutes(obj: any): any[] {
@@ -451,6 +456,9 @@ info.forEach((val: any) => {
 });
 profile.forEach((val: any) => {
     app.route(`${routeBase}/profile`, val);
+});
+download.forEach((val: any) => {
+    app.route(`${routeBase}/download`, val);
 });
 
 if (BUILD_ID) {

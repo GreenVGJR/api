@@ -3,7 +3,8 @@ let endpoints = {
     profile: [],
     lyrics: [],
     tools: [],
-    info: []
+    info: [],
+    download: []
 };
 
 let currentCategory = 'search';

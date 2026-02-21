@@ -75,7 +75,8 @@ const API_ROUTES = {
     ],
     lyrics: [
         "/lyrics/youtube?q=",
-        "/lyrics/deezer?q="
+        "/lyrics/deezer?q=",
+        "/lyrics/shazam?q="
     ],
     tools: {
         ai: {

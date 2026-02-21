@@ -2147,7 +2147,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
             }
         }
         
-        return data.length > 0 ? { data } : null;
+        return { data: data.length > 0 ? data.reverse() : null };
     } catch {
         if(session) session.close();
         return null;

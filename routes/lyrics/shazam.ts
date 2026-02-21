@@ -75,11 +75,23 @@ app.get('/shazam', async (c) => {
                         if (ldJsonMatch.length > 1) {
                             const ldJsonStr = ldJsonMatch[1].split('</script>')[0];
                             const ldJson = JSON.parse(ldJsonStr);
+                            
+                            let parsedDuration: number | null = null;
+                            if (ldJson.duration && ldJson.duration.startsWith('PT')) {
+                                const match = ldJson.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
+                                if (match) {
+                                    const h = parseInt(match[1] || '0', 10);
+                                    const m = parseInt(match[2] || '0', 10);
+                                    const s = parseFloat(match[3] || '0');
+                                    parsedDuration = Math.round((h * 3600 + m * 60 + s) * 1000);
+                                }
+                            }
+
                             shazamInfo = {
                                 trackName: ldJson.name || null,
                                 trackUrl: ldJson.url || null,
                                 thumbnailUrl: ldJson.thumbnailUrl?.replace(/\d+x\d+\w+/, '1x1ss').replace(/\.\w+$/, '.png') || null,
-                                durationTrack: ldJson.duration || null,
+                                durationTrack: parsedDuration,
                                 genreTrack: ldJson.genre || null,
                                 byArtist: ldJson.byArtist?.name || null,
                                 albumName: ldJson.inAlbum?.name || null,

@@ -11,7 +11,7 @@ app.get('/chat/meta', async (c) => {
     } else if (query === '') {
         return c.json({ "error": "Nothing to do" }, 202);
     }
-    c.header('X-Route', 'meta.ai');
+    c.header('X-Route', 'www.meta.ai');
     return await dispatch(c, () => MetaAI(query));
 });
 

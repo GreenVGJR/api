@@ -4189,21 +4189,45 @@ let metaAICache: {
     docid: { tos: string; message: string };
 } | null = null;
 
-async function fetchWithRetry(url: string, options: any, retries = 5): Promise<Response> {
+async function fetchWithRetry(url: string, options: any, retries = 5): Promise<any> {
     for (let i = 0; i < retries; i++) {
         try {
-            const res = await fetch(url, { ...options, verbose: false } as any);
-            return res;
+            const res = await request(url, {
+                method: options.method || 'GET',
+                headers: options.headers,
+                body: options.body,
+            });
+            const body = await res.body.text();
+            const setCookies = res.headers['set-cookie'];
+            return {
+                status: res.statusCode,
+                text: () => Promise.resolve(body),
+                headers: {
+                    get: (key: string) => {
+                        if (key.toLowerCase() === 'set-cookie') {
+                            if (Array.isArray(setCookies)) return setCookies.join(', ');
+                            return setCookies || null;
+                        }
+                        const val = res.headers[key.toLowerCase()];
+                        return Array.isArray(val) ? val.join(', ') : (val || null);
+                    },
+                    getSetCookie: () => {
+                        if (!setCookies) return [];
+                        return Array.isArray(setCookies) ? setCookies : [setCookies];
+                    }
+                }
+            };
         } catch (e: any) {
             const isSocketError = e.message?.includes('socket') 
                                || e.message?.includes('closed')
                                || e.message?.includes('connection error')
-                               || e.code === 'ECONNRESET';
+                               || e.code === 'ECONNRESET'
+                               || e.code === 'UND_ERR_SOCKET';
             
             console.log(`[MetaAI] Retry ${i+1}/${retries} for ${url} due to: ${e.message}`);
 
             if (i < retries - 1 && isSocketError) {
-                await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Increased backoff
+                await new Promise(r => setTimeout(r, 1000 * (i + 1)));
                 continue;
             }
             throw e;
@@ -4280,26 +4304,23 @@ async function sendMessage(q: string, cache: any) {
     }
 }
 
-
 export async function MetaAI(query: string, forceRefresh: boolean = false): Promise<any> {
     if (forceRefresh) {
         metaAICache = null;
     }
 
-    // Fast Path: Check if we have valid cache
     if (metaAICache?.valid && metaAICache.access_token && metaAICache.lsd && metaAICache.docid.message && !forceRefresh) {
         try {
             const result = await sendMessage(query, metaAICache);
             if (!result.error) return result;
-            // If fast path fails, clear cache and proceed to slow path
             metaAICache = null;
         } catch {
             metaAICache = null;
         }
     }
 
+    const session = new Session({ preset: 'chrome-145', httpVersion: 'h3' });
     try {
-        // Helper to extract value between patterns
         const extractBetween = (text: string, start: string, end: string): string => {
             const startIdx = text.indexOf(start);
             if (startIdx === -1) return '';
@@ -4309,100 +4330,34 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             return text.substring(valueStart, endIdx);
         };
 
-        // Extract cookies from response headers
-        const extractCookiesFromResponse = (res: Response, existing: string): string => {
-            const setCookieHeader = res.headers.get('set-cookie');
-            if (!setCookieHeader) return existing;
-            
-            // Parse multiple cookies (they may be comma-separated or in multiple headers)
-            const newCookies = setCookieHeader.split(/,(?=\s*\w+=)/)
-                .map(c => c.trim().split(';')[0])
-                .join('; ');
-            
-            if (!existing) return newCookies;
-            if (!newCookies) return existing;
-            
-            const cookieMap = new Map<string, string>();
-            existing.split('; ').forEach(c => {
-                const [k, ...v] = c.split('=');
-                if (k) cookieMap.set(k, v.join('='));
-            });
-            newCookies.split('; ').forEach(c => {
-                const [k, ...v] = c.split('=');
-                if (k) cookieMap.set(k, v.join('='));
-            });
-            return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
-        };
-
-        // Fetch Meta.ai webpage using native fetch
-        let cookies = metaAICache?.cookies || '';
+        // Step 1: GET meta.ai (session auto-manages cookies)
+        let res1 = await session.get('https://www.meta.ai');
         
-        let res = await fetchWithRetry('https://www.meta.ai', {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                ...(cookies ? { 'Cookie': cookies } : {}),
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'User-Agent': userAgent
-            }
-        });
-        
-        let html = await res.text();
-        cookies = extractCookiesFromResponse(res, cookies);
+        let html = res1.text;
 
-        // Check for bot challenge
+        // Step 2: Handle bot challenge if present
         if (html && html.includes('/__rd_verify_')) {
-            const challengeMatch = html.match(/fetch\('(\/__rd_verify_[^']+)'/);
+            const challengeMatch = html.match(/fetch\(["'](\/[^"']+)["']/);
             if (challengeMatch) {
                 const challengeUrl = 'https://www.meta.ai' + challengeMatch[1];
                 
-                // POST to challenge URL
-                const challengeRes = await fetchWithRetry(challengeUrl, {
-                    method: 'POST',
+                // POST to challenge (session carries cookies automatically)
+                await session.post(challengeUrl, {
                     headers: {
-                        'Accept': '*/*',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Cookie': cookies,
                         'Origin': 'https://www.meta.ai',
-                        'Referer': 'https://www.meta.ai/',
-                        'Sec-Fetch-Dest': 'empty',
-                        'Sec-Fetch-Mode': 'cors',
-                        'Sec-Fetch-Site': 'same-origin',
-                        'User-Agent': userAgent
+                        'Referer': 'https://www.meta.ai/'
                     }
                 });
                 
-                // Extract cookies from challenge response
-                cookies = extractCookiesFromResponse(challengeRes, cookies);
-                await challengeRes.text(); // Consume body
-                
-                // Retry main request with new cookies
-                res = await fetchWithRetry('https://www.meta.ai', {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Cookie': cookies,
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none',
-                        'Sec-Fetch-User': '?1',
-                        'Upgrade-Insecure-Requests': '1',
-                        'User-Agent': userAgent
-                    }
-                });
-                html = await res.text();
-                cookies = extractCookiesFromResponse(res, cookies);
+                // Retry GET (session now has rd_challenge cookie)
+                const res2 = await session.get('https://www.meta.ai');
+                html = res2.text;
             }
         }
 
         const geoBlocked = html.includes('KadabraGeoBlockedError');
         if (geoBlocked) {
+            session.close();
             return { error: "Meta AI isn't available in your region" };
         }
 
@@ -4410,7 +4365,6 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         let access_token = extractBetween(html, '"accessToken":"', '"');
         const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
 
-        // Find doc_ids from scripts
         let tosDocId = '';
         let messageDocId = '';
 
@@ -4424,8 +4378,6 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             }
         }
 
-        // Aggressively find ALL fbcdn script URLs in the HTML (handling escaped slashes)
-        // Matches: https:\/\/static.xx.fbcdn.net\/rsrc.php\/...
         const allFbcdnMatches = html.matchAll(/https?:\\?\/\\?\/static\.xx\.fbcdn\.net\\?\/rsrc\.php\\?\/[a-zA-Z0-9_\-\/\\.]+\.js/g);
         for (const m of allFbcdnMatches) {
             const cleanUrl = m[0].replace(/\\\//g, '/');
@@ -4434,11 +4386,13 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             }
         }
 
-        // Fetch scripts to find doc_ids
-        // Fetch scripts in parallel with concurrency limit
+        // Extract cookies from session immediately before looping to avoid QUIC idle timeout hangs
+        const cookies = Object.entries(session.cookies || {}).map(([k, v]) => `${k}=${v}`).join('; ');
+        session.close();
+
+        // Fetch scripts using fetchWithRetry
         const BATCH_SIZE = 10;
         const targetUrls = scriptUrls.slice(0, 100);
-        
         for (let i = 0; i < targetUrls.length; i += BATCH_SIZE) {
             if (tosDocId && messageDocId) break;
             
@@ -4446,14 +4400,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             await Promise.all(batch.map(async (url) => {
                 if (tosDocId && messageDocId) return;
                 try {
-                    const scriptRes = await fetchWithRetry(url, {
-                        method: 'GET',
-                        headers: {
-                            'User-Agent': userAgent,
-                            'Cookie': cookies,
-                            'Sec-Fetch-Site': 'cross-site'
-                        }
-                    });
+                    const scriptRes = await fetchWithRetry(url, { headers: { 'User-Agent': userAgent } });
                     const scriptText = await scriptRes.text();
 
                     if (!tosDocId) {
@@ -4468,10 +4415,8 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             }));
         }
 
-        // If no access token, accept TOS
+        // Accept TOS if needed
         if (!access_token && tosDocId) {
-            const finalCookies = cookies + (abra_csrf ? `; abra_csrf=${abra_csrf}` : '');
-            
             const tosBody = new URLSearchParams({
                 'av': '0',
                 '__user': '0',
@@ -4489,32 +4434,32 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
                 })
             }).toString();
 
-            const tosRes = await fetchWithRetry('https://www.meta.ai/api/graphql/', {
-                method: 'POST',
-                headers: {
-                    'User-Agent': userAgent,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en',
-                    'Cookie': finalCookies,
-                    'Referer': 'https://www.meta.ai',
-                    'Origin': 'https://www.meta.ai',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'x-asbd-id': '359341',
-                    'x-fb-friendly-name': 'useKadabraAcceptTOSForTempUserMutation',
-                    'x-fb-lsd': lsd
-                },
-                body: tosBody
-            });
-
             try {
+                const tosRes = await fetchWithRetry('https://www.meta.ai/api/graphql/', {
+                    method: 'POST',
+                    headers: {
+                        'User-Agent': userAgent,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': '*/*',
+                        'Accept-Language': 'en',
+                        'Referer': 'https://www.meta.ai',
+                        'Origin': 'https://www.meta.ai',
+                        'Sec-Fetch-Site': 'same-origin',
+                        'Cookie': cookies,
+                        'x-asbd-id': '359341',
+                        'x-fb-friendly-name': 'useKadabraAcceptTOSForTempUserMutation',
+                        'x-fb-lsd': lsd
+                    },
+                    body: tosBody
+                });
+
                 const tosData = JSON.parse(await tosRes.text());
                 access_token = tosData?.data?.xab_abra_accept_terms_of_service?.new_temp_user_auth?.access_token || '';
-                cookies = finalCookies;
             } catch {}
         }
 
         if (!access_token) {
+
             return { 
                 error: 'Failed to get access token',
                 debug: {
@@ -4531,8 +4476,11 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         }
 
         if (!messageDocId) {
+
             return { error: 'Could not find message doc_id' };
         }
+
+
 
         // Store cache
         metaAICache = {
@@ -4546,6 +4494,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         // Send message
         return await sendMessage(query, metaAICache);
     } catch (e: any) {
+        try { session.close(); } catch {}
         return { error: e.message || 'Unknown error' };
     }
 }
@@ -4714,7 +4663,7 @@ export async function DriftProfile(query: string): Promise<any> {
     
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
             res = await session.get(filterurl.toString(), {
                 headers: {
                     ...commonHeaders
@@ -4950,7 +4899,7 @@ export async function GunsProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
             res = await session.get(`https://guns.lol/${username}`, {
                 headers: {
                     ...commonHeaders
@@ -5075,7 +5024,7 @@ export async function RageProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
             res = await session.get(`https://rage.wtf/${username}`, {
                 headers: {
                     ...commonHeaders
@@ -5182,7 +5131,7 @@ export async function HauntProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: true  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
             res = await session.get(`https://haunt.gg/${username}`, {
                 headers: {
                     ...commonHeaders

@@ -1,22 +1,33 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import bingImagine from './bingImagine.js';
+import discordInfoMember from './discordInfoMember.js';
+import discordInfoMessages from './discordInfoMessages.js';
+import discordModifyMember from './discordModifyMember.js';
+import discordModifyServer from './discordModifyServer.js';
+import discordStream from './discordStream.js';
+import discordTiktokFeed from './discordTiktokFeed.js';
+import discordWebhook from './discordWebhook.js';
+import fluxDemo from './flux-demo.js';
+import geminiAmp from './geminiAmp.js';
+import grok from './grok.js';
+import magicstudio from './magicstudio.js';
+import meta from './meta.js';
+import perplexity from './perplexity.js';
+import translateAmp from './translateAmp.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const routes: any[] = [];
-
-const files = fs.readdirSync(__dirname).filter(file => 
-    (file.endsWith('.ts') || file.endsWith('.js')) && 
-    !file.startsWith('index.')
-);
-
-for (const file of files) {
-    const module = await import(`./${file}`);
-    if (module.default) {
-        routes.push(module.default);
-    }
-}
-
-export default routes;
+export default [
+    bingImagine,
+    discordInfoMember,
+    discordInfoMessages,
+    discordModifyMember,
+    discordModifyServer,
+    discordStream,
+    discordTiktokFeed,
+    discordWebhook,
+    fluxDemo,
+    geminiAmp,
+    grok,
+    magicstudio,
+    meta,
+    perplexity,
+    translateAmp,
+];

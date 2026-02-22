@@ -1,22 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import guns from './guns.js';
+import drift from './drift.js';
+import haunt from './haunt.js';
+import rage from './rage.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const routes: any[] = [];
-
-const files = fs.readdirSync(__dirname).filter(file => 
-    (file.endsWith('.ts') || file.endsWith('.js')) && 
-    !file.startsWith('index.')
-);
-
-for (const file of files) {
-    const module = await import(`./${file}`);
-    if (module.default) {
-        routes.push(module.default);
-    }
-}
-
-export default routes;
+export default [guns, drift, haunt, rage];

@@ -1,22 +1,31 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import googleWeather from './googleWeather.js';
+import infoGiphy from './infoGiphy.js';
+import infoITunes from './infoITunes.js';
+import infoInstagramUser from './infoInstagramUser.js';
+import infoPinterest from './infoPinterest.js';
+import infoSoundcloud from './infoSoundcloud.js';
+import infoSpotify from './infoSpotify.js';
+import infoTenor from './infoTenor.js';
+import infoThreadUser from './infoThreadUser.js';
+import infoTiktokVideo from './infoTiktokVideo.js';
+import infoTwitterTweet from './infoTwitterTweet.js';
+import infoTwitterUser from './infoTwitterUser.js';
+import infoYoutube from './infoYoutube.js';
+import redditSubreddit from './redditSubreddit.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const routes: any[] = [];
-
-const files = fs.readdirSync(__dirname).filter(file => 
-    (file.endsWith('.ts') || file.endsWith('.js')) && 
-    !file.startsWith('index.')
-);
-
-for (const file of files) {
-    const module = await import(`./${file}`);
-    if (module.default) {
-        routes.push(module.default);
-    }
-}
-
-export default routes;
+export default [
+    googleWeather,
+    infoGiphy,
+    infoITunes,
+    infoInstagramUser,
+    infoPinterest,
+    infoSoundcloud,
+    infoSpotify,
+    infoTenor,
+    infoThreadUser,
+    infoTiktokVideo,
+    infoTwitterTweet,
+    infoTwitterUser,
+    infoYoutube,
+    redditSubreddit,
+];

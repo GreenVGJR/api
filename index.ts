@@ -11,25 +11,12 @@ import config from './config.json' with { type: 'json' };
 import os from 'os';
 
 
-// @ts-ignore
-import reqs_raw from './routes/search/index.js';
-// @ts-ignore
-import lyrics_raw from './routes/lyrics/index.js';
-// @ts-ignore
-import tools_raw from './routes/tools/index.js';
-// @ts-ignore
-import info_raw from './routes/info/index.js';
-// @ts-ignore
-import profile_raw from './routes/profile/index.js';
-// @ts-ignore
-import download_raw from './routes/download/index.js';
-
-const reqs: any[] = reqs_raw;
-const lyrics: any[] = lyrics_raw;
-const tools: any[] = tools_raw;
-const info: any[] = info_raw;
-const profile: any[] = profile_raw;
-const download: any[] = download_raw;
+import reqs from './routes/search/index.js';
+import lyrics from './routes/lyrics/index.js';
+import tools from './routes/tools/index.js';
+import info from './routes/info/index.js';
+import profile from './routes/profile/index.js';
+import download from './routes/download/index.js';
 
 const API_ROUTES = {
     search: [

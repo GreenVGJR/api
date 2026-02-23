@@ -237,7 +237,7 @@ app.use('*', async (c: Context, next: Next) => {
 
         c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
         c.header('Refresh', `0; url=${url.toString()}`);
-        return c.html(testhtml, 200);
+        return c.body('', 200, { 'Content-Type': 'application/json' });
     }
     await next();
 });

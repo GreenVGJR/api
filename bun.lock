@@ -23,15 +23,15 @@
   "packages": {
     "@hono/node-server": ["@hono/node-server@1.19.9", "", { "peerDependencies": { "hono": "^4" } }, "sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw=="],
 
-    "@httpcloak/darwin-arm64": ["@httpcloak/darwin-arm64@1.5.10", "", { "os": "darwin", "cpu": "arm64" }, "sha512-tILqTb7cC4UxayHhygCKP+6vR70VoKaV6qP1WzNNy4eaoeSamduLo7C9H1H7AZeXyf+C3sYFb77SblXnzLYrHw=="],
+    "@httpcloak/darwin-arm64": ["@httpcloak/darwin-arm64@1.6.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-u7ge58Q3sHpj6r8G2fU1zWnswXry3NAgRtriWaHi4C11RC8/58qxgem+9IaHvs5oUEEmfSoDxzd8+Rj1+G6IFA=="],
 
-    "@httpcloak/darwin-x64": ["@httpcloak/darwin-x64@1.5.10", "", { "os": "darwin", "cpu": "x64" }, "sha512-B04y7ItHlOfnqtqZiIQSMIEg9ly3scI9xTHtoAGJHXo9y2VQo7jbSuyNJp69d5K51JpuJheVEHs2iDFpc+ts/g=="],
+    "@httpcloak/darwin-x64": ["@httpcloak/darwin-x64@1.6.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-KcyGAVwHNqWMXrNUVpcAhu6dvQ2SuTMbZC6x0L1abl6sE7zIRYItHaVHF+NSFRKdb1EMJ9ZzewabMKe1h/i6BQ=="],
 
-    "@httpcloak/linux-arm64": ["@httpcloak/linux-arm64@1.5.10", "", { "os": "linux", "cpu": "arm64" }, "sha512-for4VAF88j+67Ne11URxeGWDHVqagKJbWq39A1n6cF9Op7Ax0NQlhAxpstbvpYpUyg42MhVXDzyP6g7L5fSjqQ=="],
+    "@httpcloak/linux-arm64": ["@httpcloak/linux-arm64@1.6.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-8OcAj7CNxouop8kzdC3tJVLIrOv7Oot1rruER+fl9rENgcT3umRS+8DTORtCwBdA0NRs24TwfTpV/Ysu+8Sesw=="],
 
-    "@httpcloak/linux-x64": ["@httpcloak/linux-x64@1.5.10", "", { "os": "linux", "cpu": "x64" }, "sha512-tH8MXoS/VUhlq1tED/Ht5C3TZmwNAJfBolMCTtYUj09ODAMerO9LTEv9BYSEw5XP2aYdnxgz3OYiWZXBPLCVYA=="],
+    "@httpcloak/linux-x64": ["@httpcloak/linux-x64@1.6.0", "", { "os": "linux", "cpu": "x64" }, "sha512-/Pcox5IfJTRWzRp0UOZbJD1BljKs41tHdKnaLCFERgnn/b32PgzJH/am1JqSMwSAuaJCFfTZNcyqaWXdzounaw=="],
 
-    "@httpcloak/win32-x64": ["@httpcloak/win32-x64@1.5.10", "", { "os": "win32", "cpu": "x64" }, "sha512-ojSobgU2ix6tdMtST48IQb7n6k8cuOg2Q1W9D6lrv5Z0I+GbaboNJTDcScaKhIOXSRYl5RWkKHFv8jirtwmf3A=="],
+    "@httpcloak/win32-x64": ["@httpcloak/win32-x64@1.6.0", "", { "os": "win32", "cpu": "x64" }, "sha512-5+I/IG8El5BhilVlyf/0VKsbg38ppDFfcudUc8UAykVFKe4hwQHUwHKZwzwp+kWi5IdxIEJkP0Leuf7FIxwMOA=="],
 
     "@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
@@ -55,13 +55,13 @@
 
     "entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
 
-    "hono": ["hono@4.12.1", "", {}, "sha512-hi9afu8g0lfJVLolxElAZGANCTTl6bewIdsRNhaywfP9K8BPf++F2z6OLrYGIinUwpRKzbZHMhPwvc0ZEpAwGw=="],
+    "hono": ["hono@4.12.2", "", {}, "sha512-gJnaDHXKDayjt8ue0n8Gs0A007yKXj4Xzb8+cNjZeYsSzzwKc0Lr+OZgYwVfB0pHfUs17EPoLvrOsEaJ9mj+Tg=="],
 
     "html-escaper": ["html-escaper@3.0.3", "", {}, "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ=="],
 
     "htmlparser2": ["htmlparser2@10.1.0", "", { "dependencies": { "domelementtype": "^2.3.0", "domhandler": "^5.0.3", "domutils": "^3.2.2", "entities": "^7.0.1" } }, "sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ=="],
 
-    "httpcloak": ["httpcloak@1.5.10", "", { "dependencies": { "koffi": "^2.9.0" }, "optionalDependencies": { "@httpcloak/darwin-arm64": "1.5.10", "@httpcloak/darwin-x64": "1.5.10", "@httpcloak/linux-arm64": "1.5.10", "@httpcloak/linux-x64": "1.5.10", "@httpcloak/win32-arm64": "1.5.10", "@httpcloak/win32-x64": "1.5.10" } }, "sha512-4j3zEevywUUlDxQmhU0sGbYZZ47WBm8KrkCfKuk/YvRhpVJRJH1OePqUlX/OZ173SBU8KPLmiMt00W9l9XEtBA=="],
+    "httpcloak": ["httpcloak@1.6.0", "", { "dependencies": { "koffi": "^2.9.0" }, "optionalDependencies": { "@httpcloak/darwin-arm64": "1.6.0", "@httpcloak/darwin-x64": "1.6.0", "@httpcloak/linux-arm64": "1.6.0", "@httpcloak/linux-x64": "1.6.0", "@httpcloak/win32-arm64": "1.6.0", "@httpcloak/win32-x64": "1.6.0" } }, "sha512-g4wuUlk+IhEPq0Z150Y1EEp+RUWi8cItS6VJPlwhHQ7Y7kW/rRAkchZqkMNcqhdj7w8v9oltrsJdIMZxXhO7gg=="],
 
     "koffi": ["koffi@2.15.1", "", {}, "sha512-mnc0C0crx/xMSljb5s9QbnLrlFHprioFO1hkXyuSuO/QtbpLDa0l/uM21944UfQunMKmp3/r789DTDxVyyH6aA=="],
 

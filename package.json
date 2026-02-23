@@ -3,8 +3,8 @@
   "dependencies": {
     "@hono/node-server": "^1.19.9",
     "entities": "^7.0.1",
-    "hono": "^4.12.1",
-    "httpcloak": "^1.5.10",
+    "hono": "^4.12.2",
+    "httpcloak": "^1.6.0",
     "linkedom": "^0.18.12",
     "tslib": "^2.8.1",
     "undici": "^7.22.0",

@@ -353,7 +353,6 @@ if (BUILD_ID) {
 }
 
 app.get('/favicon.ico', (c: Context) => {
-    if(c.req.header('Cache-Control') !== 'no-cache') return c.body(null, 304);
     c.header('Content-Type', 'image/x-icon');
     return c.body(favicon);
 });

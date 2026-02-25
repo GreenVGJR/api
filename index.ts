@@ -32,6 +32,7 @@ const API_ROUTES = {
         "/search/genius?q=",
         "/search/pinterest?q=",
         "/search/istockphoto?q=",
+        "/search/imgur/posts?q=",
         "/search/unsplash?q=",
         "/search/pixiv?q=",
         "/search/discord/discovery/apps?q=",
@@ -52,7 +53,8 @@ const API_ROUTES = {
         "/search/bandcamp?q=",
         "/search/capcut/templates?q=",
         "/search/tenor?q=&type=",
-        "/search/giphy?q=&type="
+        "/search/giphy?q=&type=",
+        "/search/klipy?q=&type="
     ],
     profile: [
         "/profile/guns?q=",
@@ -123,7 +125,8 @@ const API_ROUTES = {
         "/info/giphy?url=",
         "/info/tiktok/video?q=",
         "/info/weather?q=",
-        "/info/pinterest?url="
+        "/info/pinterest?url=",
+        "/info/klipy?url="
     ],
     download: []
 };

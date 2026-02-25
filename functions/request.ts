@@ -304,6 +304,7 @@ let keysp: string | undefined;
 let keysptoken: string | undefined;
 let keytidal: string | undefined;
 let keydeezer: string | undefined;
+let keyimgur: string | undefined;
 
 
 let twitterDocument: any;
@@ -456,6 +457,19 @@ export const twitterKey = async function twitterKey(typeName: string) {
     }
 }
 
+export const imgurKey = async function imgurKey() {
+    try {
+        const req = await request('https://imgur.com', { headers: { ...commonHeaders } });
+        const res = await req.body.text();
+
+        const req2 = await request('https://s.imgur.com/desktop-assets/js/main' + res.split("desktop-assets/js/main")[1].split('>')[0], { headers: { ...commonHeaders } });
+        const res2 = await req2.body.text();
+        return res2.split('apiClientId:"')[1].split('"')[0];
+    }
+    catch (e) {
+        console.error(e);
+    }
+}
 
 export const YTVideo = async function YTVideo(que: string) {
     if (!que) return null;
@@ -1126,6 +1140,11 @@ export const Genius = async function Genius(que: string) {
     }
 }
 
+function Number_random(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
 export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {
     if (!que) return null;
 
@@ -1156,21 +1175,20 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const qRcid = objectbody.rcid ? objectbody.rcid : "";
     const qCookies = objectbody.cookies ?? (filterSpecificCookies(objectbody.cookies, ['NID', '__Secure-ENID']) || null);
 
-    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22%5C%22%2C%5C%22%5C%22%2Cnull%2C%5B1%5D%2C1%2Cnull%2Cnull%2C1%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B1%5D%5D%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C1%2Cnull%2Cnull%2C%5B4%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B2%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C2%5D%22%5D`;
+    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22-%5C%22%2C%5C%22%5C%22%2Cnull%5D%22%5D`;
 
-    const session = new Session({ httpVersion: 'h1' });
-    const req = await session.post(`https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en&rt=c`, {
+    const session = new Session({ httpVersion: 'h1', tlsOnly: true });
+    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=${Number_random(100000,9999999)}`, {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
-            'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'x-goog-ext-525001261-jspb': '[1,null,null,null,"1bc6b5d98741cd3d",null,null,0,[0],null,null,1]',
             'x-goog-ext-73010989-jspb': '[0]',
-            'Referer': 'https://bard.google.com',
-            'Origin': 'https://bard.google.com',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
+            'x-goog-ext-73010990-jspb': '[0]',
+            'Referer': 'https://gemini.google.com',
+            'Origin': 'https://gemini.google.com',
             'X-Same-Domain': '1'
         },
         body: reqPayload
@@ -4083,7 +4101,7 @@ export const infoGiphy = async function infoGiphy(url: string) {
             return { error: 'Invalid Giphy URL' };
         }
 
-        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
+        session = new Session({ httpVersion: 'h2' });
         const res = await session.get(url, {
             headers: {
                 ...commonHeaders
@@ -5363,3 +5381,90 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
         return { error: e.message || 'Something just happened' };
     }
 };
+
+export const ImgurPost = async(query: string, refresh_auth: boolean = false): Promise<any> => {
+    if(!query) return null;
+
+    if(refresh_auth || !keyimgur) {
+        keyimgur = await imgurKey();
+    }
+
+    try {
+        const req = await request(`https://api.imgur.com/post/v1/posts/t/${query}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
+        if(req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
+        const res: any = await req.body.json();
+        return { data: res?.posts || null };
+    }
+    catch {
+        return null;
+    }
+}
+
+export const Klipy = async function Klipy(que: string, type?: string) {
+    if (!que) return null;
+
+    const getQueryType = (t?: string) => {
+        if (t === 'sticker') return 'stickers';
+        if (t === 'clip') return 'clips';
+        if (t === 'emoji') return 'emojis';
+        if (t === 'ai_gif') return 'ai-gifs';
+        return 'gifs';
+    };
+
+    try {
+        const queryType = getQueryType(type);
+        const req = await request(`https://api.klipy.com/api/v1/web/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=50`, {
+            headers: {
+                ...commonHeaders,
+                'Referer': 'https://klipy.com',
+                'Origin': 'https://klipy.com'
+            }
+        });
+
+        if (req.statusCode === 200) {
+            const res: any = await req.body.json();
+            return { data: res?.data?.data || null };
+        }
+
+        return { error: `${req.statusCode} - Can't process this` };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const infoKlipy = async function infoKlipy(url: string) {
+    if (!url) return null;
+
+    try {
+        const urlObj = new URL(url);
+        if (!urlObj.hostname.endsWith('klipy.com')) {
+            return { error: 'Invalid Klipy URL' };
+        }
+
+        const klipyPath = url.split('klipy.com/')[1];
+        if (!klipyPath) {
+            return { error: 'Invalid Klipy URL path' };
+        }
+
+        const req = await request(`https://api.klipy.com/api/v1/web/${klipyPath}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        if (req.statusCode === 404) {
+            return { error: `${req.statusCode} - Not found` };
+        }
+
+        if (req.statusCode === 200) {
+            const res: any = await req.body.json();
+            return { data: res?.data || null };
+        }
+
+        return { error: `${req.statusCode} - Can't process this` };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}

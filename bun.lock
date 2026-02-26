@@ -6,7 +6,7 @@
       "dependencies": {
         "@hono/node-server": "^1.19.9",
         "entities": "^7.0.1",
-        "hono": "^4.12.2",
+        "hono": "^4.12.3",
         "httpcloak": "^1.6.0",
         "linkedom": "^0.18.12",
         "tslib": "^2.8.1",
@@ -14,8 +14,8 @@
         "x-client-transaction-id": "^0.1.9",
       },
       "devDependencies": {
-        "@types/node": "^25.3.1",
-        "bun-types": "^1.3.9",
+        "@types/node": "^25.3.2",
+        "bun-types": "^1.3.10",
         "typescript": "^5.9.3",
       },
     },
@@ -33,7 +33,7 @@
 
     "@httpcloak/win32-x64": ["@httpcloak/win32-x64@1.6.0", "", { "os": "win32", "cpu": "x64" }, "sha512-5+I/IG8El5BhilVlyf/0VKsbg38ppDFfcudUc8UAykVFKe4hwQHUwHKZwzwp+kWi5IdxIEJkP0Leuf7FIxwMOA=="],
 
-    "@types/node": ["@types/node@25.3.1", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-hj9YIJimBCipHVfHKRMnvmHg+wfhKc0o4mTtXh9pKBjC8TLJzz0nzGmLi5UJsYAUgSvXFHgb0V2oY10DUFtImw=="],
+    "@types/node": ["@types/node@25.3.2", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q=="],
 
     "boolbase": ["boolbase@1.0.0", "", {}, "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww=="],
 
@@ -55,7 +55,7 @@
 
     "entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
 
-    "hono": ["hono@4.12.2", "", {}, "sha512-gJnaDHXKDayjt8ue0n8Gs0A007yKXj4Xzb8+cNjZeYsSzzwKc0Lr+OZgYwVfB0pHfUs17EPoLvrOsEaJ9mj+Tg=="],
+    "hono": ["hono@4.12.3", "", {}, "sha512-SFsVSjp8sj5UumXOOFlkZOG6XS9SJDKw0TbwFeV+AJ8xlST8kxK5Z/5EYa111UY8732lK2S/xB653ceuaoGwpg=="],
 
     "html-escaper": ["html-escaper@3.0.3", "", {}, "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ=="],
 
@@ -80,6 +80,8 @@
     "undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "x-client-transaction-id": ["x-client-transaction-id@0.1.9", "", { "dependencies": { "linkedom": "^0.18.9" } }, "sha512-CES4zgkJ0wbfFWm0qgdKphthyb+L7lVHymgOY15v6ivcWSx5p9lp5kzAed+BuqJSP7bS0GbQyJ16ONkRthgsUw=="],
+
+    "bun-types/@types/node": ["@types/node@25.3.1", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-hj9YIJimBCipHVfHKRMnvmHg+wfhKc0o4mTtXh9pKBjC8TLJzz0nzGmLi5UJsYAUgSvXFHgb0V2oY10DUFtImw=="],
 
     "dom-serializer/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
   }

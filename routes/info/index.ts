@@ -15,4 +15,4 @@ import googleWeather from './googleWeather.js';
 import infoPinterest from './infoPinterest.js';
 import infoKlipy from './infoKlipy.js';
 
-export default [infoYoutube, infoSoundcloud, infoSpotify, infoITunes, infoTwitterUser, infoTwitterTweet, redditSubreddit, infoInstagramUser, infoThreadUser, infoGiphy, infoTenor, infoTiktokVideo, googleWeather, infoPinterest, infoKlipy];
+export default [infoYoutube, infoSoundcloud, infoSpotify, infoITunes, infoTwitterUser, infoTwitterTweet, redditSubreddit, infoInstagramUser, infoThreadUser, infoGiphy, infoTenor, infoTiktokVideo, googleWeather, infoPinterest, infoKlipy] as any[];

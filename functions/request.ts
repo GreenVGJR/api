@@ -4302,24 +4302,51 @@ async function sendMessage(q: string, cache: any) {
 
     const msgText = await msgRes.text();
 
-    const lines = msgText.split('\n').filter((l: string) => l.trim());
-    const lastLine = lines[lines.length - 1];
-    
-    try {
-        const data = JSON.parse(lastLine);
-        const botResponse = data?.data?.node?.bot_response_message;
-        const snippet = botResponse?.snippet;
-        const composedText = botResponse?.content?.agent_steps?.[0]?.composed_text?.content?.[0]?.text;
-        const response = snippet || composedText || null;
-        
-        if (!response) {
-            return { error: 'Empty response from Meta AI' };
-        }
-        
-        return { response: response, data: { model: "llama-4-70b" } };
-    } catch {
-        return { error: 'Failed to parse response' };
+    if (msgRes.status === 403 || msgRes.status === 401) {
+        return { error: `Meta AI blocked the request (Status ${msgRes.status})` };
     }
+
+    if (!msgText.trim()) {
+        return { error: 'Empty response text from Meta AI' };
+    }
+
+    const lines = msgText.split('\n').filter((l: string) => l.trim());
+    
+    // Attempt to parse any line that might contain the response
+    for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+            const data = JSON.parse(lines[i]);
+            
+            // Check for bot_response_message in different possible paths
+            const botResponse = data?.data?.node?.bot_response_message || 
+                                data?.data?.xab_abra_send_message?.message ||
+                                data?.data?.node?.message;
+
+            const snippet = botResponse?.snippet;
+            const composedText = botResponse?.content?.agent_steps?.[0]?.composed_text?.content?.[0]?.text;
+            const response = snippet || composedText || botResponse?.text?.content || null;
+            
+            if (response) {
+                return { response: response, data: { model: "llama-4-70b" } };
+            }
+
+            // Check for error messages in the JSON
+            if (data?.errors) {
+                return { error: data.errors[0]?.message || 'GraphQL Error' };
+            }
+        } catch {
+            // Not a valid JSON line, skip
+            continue;
+        }
+    }
+    
+    return { 
+        error: 'Failed to find a valid response in Meta AI output',
+        debug: { 
+            status: msgRes.status,
+            preview: msgText.substring(0, 200) 
+        } 
+    };
 }
 
 export async function MetaAI(query: string, forceRefresh: boolean = false): Promise<any> {
@@ -4379,20 +4406,66 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             return { error: "Meta AI isn't available in your region" };
         }
 
-        const lsd = extractBetween(html, '"LSD",[],{"token":"', '"');
-        let access_token = extractBetween(html, '"accessToken":"', '"');
-        const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
+        let lsd = extractBetween(html, '"LSD",[],{"token":"', '"') || 
+                    html.match(/["']lsd["']\s*:\s*["']([^"']+)["']/)?.[1] || 
+                    html.match(/["']LSD["'],\s*\[\s*\],\s*\{\s*["']token["']\s*:\s*["']([^"']+)["']\s*\}/)?.[1] || 
+                    '';
+        
+        let access_token = extractBetween(html, '"accessToken":"', '"') || 
+                           html.match(/["']accessToken["']\s*:\s*["']([^"']+)["']/)?.[1] || 
+                           '';
 
         let tosDocId = '';
         let messageDocId = '';
 
-        const scriptRegex = /script src="([^"]+)"/g;
+        // Check __NEXT_DATA__ for tokens
+        if (!lsd || !access_token) {
+            const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+            if (nextDataMatch) {
+                try {
+                    const nextData = JSON.parse(nextDataMatch[1]);
+                    const findInObj = (obj: any, key: string): any => {
+                        if (!obj || typeof obj !== 'object') return null;
+                        if (obj[key]) return obj[key];
+                        for (const k in obj) {
+                            const res = findInObj(obj[k], key);
+                            if (res) return res;
+                        }
+                        return null;
+                    };
+                    if (!lsd) lsd = findInObj(nextData, 'lsd') || '';
+                    if (!access_token) access_token = findInObj(nextData, 'accessToken') || '';
+                    
+                    // Also try to find doc_ids in nextData if they are there
+                    if (!tosDocId) tosDocId = findInObj(nextData, 'tosDocId') || '';
+                    if (!messageDocId) messageDocId = findInObj(nextData, 'messageDocId') || '';
+                } catch {}
+            }
+        }
+
+        // Fallback search in HTML for doc_ids
+        if (!tosDocId) {
+            const tosMatch = html.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) || 
+                             html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraAcceptTOSForTempUserMutation/);
+            if (tosMatch) tosDocId = tosMatch[1];
+        }
+        if (!messageDocId) {
+            const msgMatch = html.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
+                             html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraSendMessageMutation/);
+            if (msgMatch) messageDocId = msgMatch[1];
+        }
+
+        const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
+
         const scriptUrls: string[] = [];
+        const scriptRegex = /<script\b[^>]*?\bsrc=["']([^"']+)["']/g;
         let match;
         while ((match = scriptRegex.exec(html)) !== null) {
-            const url = match[1];
-            if (url.startsWith('http') || url.startsWith('//')) {
-                scriptUrls.push(url.startsWith('//') ? 'https:' + url : url);
+            let url = match[1].replace(/\\\/|\\\//g, '/');
+            if (url.startsWith('//')) url = 'https:' + url;
+            else if (url.startsWith('/')) url = 'https://www.meta.ai' + url;
+            if (url.startsWith('http') && !scriptUrls.includes(url)) {
+                scriptUrls.push(url);
             }
         }
 
@@ -4422,11 +4495,13 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
                     const scriptText = await scriptRes.text();
 
                     if (!tosDocId) {
-                        const tosMatch = scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports="(\d+)"/);
+                        const tosMatch = scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
+                                         scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports\s*=\s*["']?(\d+)["']?/);
                         if (tosMatch) tosDocId = tosMatch[1];
                     }
                     if (!messageDocId) {
-                        const msgMatch = scriptText.match(/useKadabraSendMessageMutation.*?exports="(\d+)"/);
+                        const msgMatch = scriptText.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
+                                         scriptText.match(/useKadabraSendMessageMutation.*?exports\s*=\s*["']?(\d+)["']?/);
                         if (msgMatch) messageDocId = msgMatch[1];
                     }
                 } catch {}
@@ -5465,6 +5540,143 @@ export const infoKlipy = async function infoKlipy(url: string) {
         return { error: `${req.statusCode} - Can't process this` };
     } catch (e) {
         console.error(e);
+        return null;
+    }
+}
+
+export const BingImagine = async function BingImagine(query: string) {
+    if (!query) return null;
+    const randomUuid = crypto.randomUUID();
+    const url = `https://www.bing.com/images/create?partner=bicserp&re=1&showselective=1&genimgsc=serp&isacf=1&genimgpos=pole&PIG=6DA09127DD5943368431D230A9012EC6&iframeid=${randomUuid}_serp&q=${encodeURIComponent(query)}&tkthm=copilotneutral`;
+    return await BingImageResult(url, query);
+}
+
+export const BingImageResult = async function BingImageResult(url: string, inputquery: string) {
+    if (!url) return null;
+    let session: any;
+    try {
+        session = new Session({ 
+            httpVersion: 'h2',
+            maxRedirects: 0,
+            allowRedirects: false
+        });
+        
+        let currentUrl = url;
+        let lastResponse: any;
+        let resultId: string | null = null;
+        let asyncPathFromPage: string | null = null;
+
+        // Step 1: Follow redirects and search for the generation state
+        for (let i = 0; i < 1; i++) {
+            lastResponse = await session.get(currentUrl, {
+                headers: {
+                    ...commonHeaders,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'Sec-Fetch-Dest': 'iframe',
+                    'Referer': i === 0 ? 'https://www.bing.com/search?q=' + encodeURIComponent(inputquery) : currentUrl,
+                    'Sec-Fetch-Site': 'same-origin',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+            });
+
+            const location = lastResponse.headers['location'] || lastResponse.headers['Location'];
+            
+            // Check HTML for data-c even if it's a 200 (final page)
+            if (lastResponse.statusCode === 200) {
+                const html = lastResponse.text;
+                const { document } = parseHTML(html);
+                const girDiv = document.getElementById('gir');
+                if (girDiv) {
+                    asyncPathFromPage = (girDiv.getAttribute('data-c') || "").replace(/&amp;/g, '&');
+                    if (asyncPathFromPage) break;
+                }
+            }
+
+            if (location) {
+                const locStr = Array.isArray(location) ? location[0] : String(location);
+                currentUrl = locStr.startsWith('http') ? locStr : `https://www.bing.com${locStr}`;
+                resultId = currentUrl.match(/id=([^&]+)/)?.[1] || resultId;
+                continue;
+            }
+            break;
+        }
+
+        if (!resultId && !asyncPathFromPage) {
+            // Fallback: check if ID is in the final URL
+            resultId = currentUrl.match(/id=([^&]+)/)?.[1] || null;
+        }
+
+        if (!resultId && !asyncPathFromPage) {
+            session.close();
+            return { error: "Failed to extract Result ID or Async Path from Bing.", lastUrl: currentUrl };
+        }
+
+        // Construct async URL: prefer the one from page, or build it
+        const asyncUrl = asyncPathFromPage 
+            ? `https://www.bing.com${asyncPathFromPage}` 
+            : `https://www.bing.com/images/create/async/results/${resultId}?q=${encodeURIComponent(inputquery)}&partner=bicserp&showselective=1&IID=images.as`;
+        
+        let asyncHtml = '';
+        console.log(`[Bing] Polling results for: ${inputquery} | ID: ${resultId || 'from path'}`);
+
+        for (let i = 0; i < 10; i++) {
+            const asyncResponse = await session.get(asyncUrl, {
+                headers: {
+                    ...commonHeaders,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'Referer': currentUrl,
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (asyncResponse.statusCode === 200) {
+                asyncHtml = asyncResponse.text;
+                if (asyncHtml && asyncHtml.includes('mimg')) break;
+                
+                // If we get a valid response but no images yet, it's still processing
+                if (asyncHtml.includes('ErrorMessage') || asyncHtml.includes('error_message')) {
+                   // Content policy or other error
+                   break;
+                }
+            }
+
+            if (i < 9) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+        }
+
+        session.close();
+
+        if (!asyncHtml || !asyncHtml.includes('mimg')) {
+            return { error: "Images are still generating or were blocked by content policy." };
+        }
+
+        const { document: asyncDoc } = parseHTML(asyncHtml);
+        const images: any[] = [];
+        const imgElements = asyncDoc.querySelectorAll('.mimg');
+        imgElements.forEach((img: any) => {
+            const src = img.getAttribute('src');
+            if (src) {
+                const fullSrc = src.startsWith('http') ? src : `https://www.bing.com${src}`;
+                const highResUrl = fullSrc.replace(/w=\d+&h=\d+/, 'w=1024&h=1024');
+                images.push({
+                    url: highResUrl,
+                    thumbnail: fullSrc,
+                    alt: img.getAttribute('alt') || ""
+                });
+            }
+        });
+
+        return { data: images };
+    } catch (e) {
+        if (session) session.close();
+        console.error("BingImageResult Error:", e);
         return null;
     }
 }

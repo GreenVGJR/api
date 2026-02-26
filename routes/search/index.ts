@@ -35,4 +35,4 @@ import appleMusic from './appleMusic.js';
 import imgur from './imgur.js';
 import klipy from './klipy.js';
 
-export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, tiktokFeed, appleMusic, imgur, klipy];
+export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, tiktokFeed, appleMusic, imgur, klipy] as any[];

@@ -1,36 +1,35 @@
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
-const commonHeaders = {
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-site',
-    'Sec-Fetch-User': '?1',
-    'User-Agent': userAgent
-}
-
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { dispatch, blobDispatch  } from '../../functions/httpRequest.js';
+import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { BingImageResult, BingImagine } from '../../functions/request.js';
 
 app.get('/ai-image/bing', async (c) => {
-    return c.text('Forbidden', 403);
+    return c.body(null, 503);
+    /*
     const query = c.req.query('prompt');
-    if(query === undefined) { 
-return c.json({"error":"Missing parameter required"}, 202);
-}
-else if(query === '') {
-return c.json({"error":"Nothing to do"}, 202);
-}
-    c.header('X-Route', 'fast-flux-demo.vercel.app');
+    if (!query) {
+        return c.json({ "error": "Missing parameter required" }, 202);
+    }
+    
+    const words = query.trim().split(/\s+/);
+    if (words.length > 3) {
+        return c.json({ "error": "Bad request" }, 202);
+    }
 
-    return await blobDispatch(c, async () => await fetch(`https://fast-flux-demo.vercel.app/api/generate-image?text=${query}`, {
-        method: "GET",
+    const result = await BingImagine(query);
+    const imageUrl = result?.data?.[0]?.url;
+
+    if (!imageUrl) {
+        return c.json({ "error": "No image generated" }, 202);
+    }
+
+    return await blobDispatch(c, async () => await fetch(imageUrl, {
         headers: {
-            ...commonHeaders
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
     }), { 'content-type': 'image/png' });
+    */
 });
 
 export default app;

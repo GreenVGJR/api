@@ -15,8 +15,8 @@
     "gen": "bun gen-routes.ts"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
-    "bun-types": "^1.3.9",
+    "@types/node": "^25.3.1",
+    "bun-types": "^1.3.10",
     "typescript": "^5.9.3"
   }
 }

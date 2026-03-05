@@ -4,7 +4,8 @@ let endpoints = {
     lyrics: [],
     tools: [],
     info: [],
-    download: []
+    download: [],
+    music: []
 };
 
 let currentCategory = 'search';
@@ -29,6 +30,15 @@ const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const endpointsList = document.getElementById('endpointsList');
 const tabBtns = document.querySelectorAll('.tab-btn');
+const paramsPanel = document.getElementById('paramsPanel');
+const paramsToggle = document.getElementById('paramsToggle');
+const paramsBody = document.getElementById('paramsBody');
+const paramsContainer = document.getElementById('paramsContainer');
+const paramsCount = document.getElementById('paramsCount');
+const paramsChevron = document.getElementById('paramsChevron');
+
+let paramsOpen = window.innerWidth >= 768;
+let currentParams = []; // [{key, value}]
 
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith('/') ? '' : '/');
 
@@ -72,7 +82,7 @@ async function performRequest(targetUrl) {
     sendBtn.innerHTML = '<span>Loading...</span>';
     sendBtn.classList.add('opacity-70');
     responseArea.classList.add('empty-state');
-    responseArea.innerHTML = '<span class="text-gray-500 loading">Fetching...</span>';
+    responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
     
     statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
     statusText.textContent = 'Fetching';
@@ -87,7 +97,7 @@ async function performRequest(targetUrl) {
         });
         
         responseArea.classList.add('empty-state');
-        responseArea.innerHTML = '<span class="text-gray-500 loading">Waiting response...</span>';
+        responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
         
         const contentType = response.headers.get('content-type') || '';
@@ -196,6 +206,161 @@ async function performRequest(targetUrl) {
     return resultData;
 }
 
+// ===== PARAMETER PANEL LOGIC =====
+
+function parseQueryParams(queryString) {
+    if (!queryString || !queryString.startsWith('?')) return [];
+    const raw = queryString.substring(1); // remove '?'
+    const params = [];
+    const parts = raw.split('&');
+    for (const part of parts) {
+        const eqIdx = part.indexOf('=');
+        if (eqIdx === -1) {
+            params.push({ key: part, value: '' });
+        } else {
+            params.push({
+                key: part.substring(0, eqIdx),
+                value: decodeURIComponent(part.substring(eqIdx + 1))
+            });
+        }
+    }
+    return params;
+}
+
+function buildQueryString(params) {
+    if (params.length === 0) return '';
+    return '?' + params.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
+}
+
+function renderParams() {
+    paramsPanel.classList.remove('hidden');
+
+    if (!currentEndpoint || !currentEndpoint.query) {
+        currentParams = [];
+    } else {
+        currentParams = parseQueryParams(currentEndpoint.query);
+    }
+
+    paramsCount.textContent = currentParams.length;
+
+    if (currentParams.length > 0) {
+        // Attempt to read current URL values (user may already have typed values)
+        try {
+            const currentUrl = urlInput.value;
+            const qIdx = currentUrl.indexOf('?');
+            if (qIdx !== -1) {
+                const currentUrlParams = parseQueryParams(currentUrl.substring(qIdx));
+                for (const cp of currentParams) {
+                    const match = currentUrlParams.find(up => up.key === cp.key);
+                    if (match && match.value) {
+                        cp.value = match.value;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        paramsContainer.innerHTML = currentParams.map((p, i) => `
+            <div class="param-row">
+                <label class="param-label" title="${p.key}">${p.key}</label>
+                <div class="param-input-wrap">
+                    <input 
+                        type="text" 
+                        class="param-input" 
+                        data-param-index="${i}"
+                        value="${p.value.replace(/"/g, '&quot;')}"
+                        spellcheck="false"
+                        autocomplete="off"
+                    />
+                </div>
+            </div>
+        `).join('');
+
+        // Attach input listeners
+        paramsContainer.querySelectorAll('.param-input').forEach(input => {
+            input.addEventListener('input', () => {
+                const idx = parseInt(input.dataset.paramIndex);
+                currentParams[idx].value = input.value;
+                syncParamsToUrl();
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendBtn.click();
+                }
+            });
+        });
+    } else {
+        paramsContainer.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">No parameters needed.</div>';
+    }
+
+    // Set transition rules
+    setTimeout(() => {
+        // Auto-open if params exist, but collapse by default on mobile
+        if (currentParams.length > 0) {
+            if (window.innerWidth >= 768) {
+                paramsChevron.classList.add('rotated');
+                paramsOpen = true;
+                paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+            } else {
+                paramsChevron.classList.remove('rotated');
+                paramsOpen = false;
+                paramsBody.style.height = null;
+            }
+        } else {
+            paramsChevron.classList.remove('rotated');
+            paramsOpen = false;
+            paramsBody.style.height = null;
+        }
+    }, 0);
+}
+
+function syncParamsToUrl() {
+    const queryString = buildQueryString(currentParams);
+    const base = apiBaseUrl + (currentEndpoint ? currentEndpoint.path : '/');
+    urlInput.value = base + queryString;
+    adjustHeight();
+}
+
+function syncUrlToParams() {
+    if (currentParams.length === 0) return;
+    try {
+        const currentUrl = urlInput.value;
+        const qIdx = currentUrl.indexOf('?');
+        if (qIdx === -1) return;
+        const currentUrlParams = parseQueryParams(currentUrl.substring(qIdx));
+        let changed = false;
+        for (const cp of currentParams) {
+            const match = currentUrlParams.find(up => up.key === cp.key);
+            if (match && match.value !== cp.value) {
+                cp.value = match.value;
+                changed = true;
+            }
+        }
+        if (changed) {
+            // Update input fields
+            paramsContainer.querySelectorAll('.param-input').forEach(input => {
+                const idx = parseInt(input.dataset.paramIndex);
+                if (currentParams[idx] && input.value !== currentParams[idx].value) {
+                    input.value = currentParams[idx].value;
+                }
+            });
+        }
+    } catch (e) {}
+}
+
+paramsToggle.addEventListener('click', () => {
+    paramsOpen = !paramsOpen;
+    paramsChevron.classList.toggle('rotated', paramsOpen);
+    
+    if (paramsOpen) {
+        paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+    } else {
+        paramsBody.style.height = null;
+    }
+});
+
+// ===== END PARAMETER PANEL LOGIC =====
+
 async function fetchInitialEndpoints() {
     // Endpoints are provided by server in window.SERVER_ENDPOINTS
     if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
@@ -204,6 +369,7 @@ async function fetchInitialEndpoints() {
         adjustHeight();
     }
     renderEndpoints();
+    renderParams();
     
     // Ensure first tab is active
     const firstTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
@@ -224,7 +390,7 @@ function renderEndpoints() {
 
     endpointsList.innerHTML = categoryEndpoints.map((ep, index) => `
         <button 
-            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} truncate transition-colors"
+            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
             data-index="${index}"
         >
             ${ep.path}
@@ -242,6 +408,7 @@ function attachEndpointListeners() {
             urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
             adjustHeight();
             renderEndpoints();
+            renderParams();
             
             tabBtns.forEach(b => b.classList.remove('active'));
             const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
@@ -252,18 +419,29 @@ function attachEndpointListeners() {
 
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentCategory = btn.dataset.category;
-        const categoryList = endpoints[currentCategory] || [];
-        if (categoryList.length > 0) {
-            currentEndpoint = categoryList[0];
-            urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
-            adjustHeight();
-        } else {
-            currentEndpoint = null;
+        // Only run animation if the panel is currently open
+        const wasOpen = paramsOpen;
+        
+        if (wasOpen) {
+            paramsBody.style.height = null;
+            paramsChevron.classList.remove('rotated');
         }
-        renderEndpoints();
+        
+        setTimeout(() => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCategory = btn.dataset.category;
+            const categoryList = endpoints[currentCategory] || [];
+            if (categoryList.length > 0) {
+                currentEndpoint = categoryList[0];
+                urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
+                adjustHeight();
+            } else {
+                currentEndpoint = null;
+            }
+            renderEndpoints();
+            renderParams();
+        }, wasOpen ? 125 : 0); // Wait for collapse animation (125ms) only if it was open
     });
 });
 
@@ -350,6 +528,9 @@ urlInput.addEventListener('input', () => {
              urlInput.setSelectionRange(cursorPos, cursorPos);
         }
     }
+
+    // Sync URL back to params when user types in the URL bar
+    syncUrlToParams();
 });
 
 async function copyToClipboard(text) {

@@ -24,10 +24,10 @@ import { resolve6 } from 'dns';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/148.0';
 
 export const commonHeaders = {
-    'Accept': 'text/html, application/json, */*',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
@@ -561,6 +561,12 @@ export const YTMusic = async function YTMusic(que: string) {
 
         const res: any = await response.body.json();
 
+        if(!res?.contents?.tabbedSearchResultsRenderer) {
+            return {
+                error: "YouTube Music is not available in your area"
+            }
+        }
+
         const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
 
         let alk: any[] = [];
@@ -605,7 +611,7 @@ export const YTMusic = async function YTMusic(que: string) {
     }
 }
 
-export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean): Promise<any> {
+export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
     if (!que) return null;
 
     if (refresh_auth || !keysc) {
@@ -617,7 +623,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
         session = new Session({ httpVersion: 'h1' });
 
         const [per, per2] = await Promise.all([
-            session.get(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=10&linked_partitioning=0`, {
+            session.get(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`, {
                 headers: {
                     ...commonHeaders,
                 }
@@ -643,7 +649,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
     } catch (e) { if (session) session.close(); console.error(e); return null; }
 }
 
-export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 20): Promise<any> {
     if (!que) return null;
 
     if (refresh_auth || !keysp || !keysptoken) {
@@ -656,7 +662,7 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
     }
 
     try {
-        const perbody = { "variables": { "searchTerm": que, "offset": 0, "limit": 20, "numberOfTopResults": 20, "includeAudiobooks": true, "includeArtistHasConcertsField": true, "includePreReleases": true, "includeAuthors": true }, "operationName": "searchDesktop", "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c" } } };
+        const perbody = { "variables": { "searchTerm": que, "offset": 0, "limit": limit_number, "numberOfTopResults": limit_number, "includeAudiobooks": true, "includeArtistHasConcertsField": true, "includePreReleases": true, "includeAuthors": true }, "operationName": "searchDesktop", "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c" } } };
         const [per, per2] = await Promise.all([
             request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=20&market=US`, {
                 headers: {
@@ -1175,20 +1181,21 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const qRcid = objectbody.rcid ? objectbody.rcid : "";
     const qCookies = objectbody.cookies ?? (filterSpecificCookies(objectbody.cookies, ['NID', '__Secure-ENID']) || null);
 
-    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%2C%5C%22-%5C%22%2C%5C%22%5C%22%2Cnull%5D%22%5D`;
+    const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%5D%22%5D%26`;
 
-    const session = new Session({ httpVersion: 'h1', tlsOnly: true });
-    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=${Number_random(100000,9999999)}`, {
+    const session = new Session({ httpVersion: 'h1' });
+    const req = await session.post(`https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=${Number_random(100000,9999999)}`, {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
-            'x-goog-ext-525001261-jspb': '[1,null,null,null,"1bc6b5d98741cd3d",null,null,0,[0],null,null,1]',
+            'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'x-goog-ext-525005358-jspb': `["${crypto.randomUUID().toUpperCase()}",1]`,
             'x-goog-ext-73010989-jspb': '[0]',
             'x-goog-ext-73010990-jspb': '[0]',
-            'Referer': 'https://gemini.google.com',
-            'Origin': 'https://gemini.google.com',
+            'Referer': 'https://bard.google.com',
+            'Origin': 'https://bard.google.com',
             'X-Same-Domain': '1'
         },
         body: reqPayload
@@ -1386,7 +1393,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
         }
         catch { }
 
-        const finalpull3: any = pull3.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer;
+        const finalpull3: any = pull3?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents?.[0]?.playlistPanelVideoRenderer;
 
         return {
             "data": {
@@ -1395,9 +1402,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
                         "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
                     },
                     {
-                        ...(finalpull3 ? { "musicDetails": finalpull3 } : {
-                            "error": null
-                        })
+                        ...(finalpull3 ? { "musicDetails": finalpull3 } : (!pull3?.contents?.singleColumnMusicWatchNextResultsRenderer ? { "error": "YouTube Music is not available in your area" } : { "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : null }))
                     }
                 ],
                 "youtubeWeb": {
@@ -1408,6 +1413,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
         };
     }
     catch (e) {
+        console.error(e);
         return null;
     }
 }

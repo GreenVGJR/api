@@ -69,3 +69,64 @@ body {
     width: 100vw;
     margin: 0;
 }
+
+/* Hide scrollbar for tabs row */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Parameters Panel */
+.params-body {
+    height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: height 0.125s ease;
+}
+.params-body .param-input {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #e5e5e5;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.params-body .param-input:focus {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+.params-body .param-input::placeholder {
+    color: #555;
+}
+#paramsChevron.rotated {
+    transform: rotate(180deg);
+}
+
+.param-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.param-label {
+    flex-shrink: 0;
+    min-width: 80px;
+    max-width: 140px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #4ade80;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.param-input-wrap {
+    flex: 1;
+    min-width: 0;
+}

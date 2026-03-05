@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
 import { compress } from 'hono/compress';
 import { stream } from 'hono/streaming';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -17,6 +18,7 @@ import tools from './routes/tools/index.js';
 import info from './routes/info/index.js';
 import profile from './routes/profile/index.js';
 import download from './routes/download/index.js';
+import music from './routes/music/index.js';
 
 const API_ROUTES = {
     search: [
@@ -107,7 +109,8 @@ const API_ROUTES = {
             ]
         },
         misc: [
-            "/tools/translate?q=&from=&to="
+            "/tools/translate?q=&from=&to=",
+            "/tools/timezone?q="
         ]
     },
     info: [
@@ -128,7 +131,21 @@ const API_ROUTES = {
         "/info/pinterest?url=",
         "/info/klipy?url="
     ],
-    download: []
+    download: [],
+    music: [
+        "/music/connect?token=&voiceId=&isDeaf=",
+        "/music/play?token=&q=&platform=&voiceId=",
+        "/music/pause?token=&guildId=",
+        "/music/resume?token=&guildId=",
+        "/music/skip?token=&guildId=",
+        "/music/stop?token=&guildId=&leave=",
+        "/music/seek?token=&guildId=&time=",
+        "/music/volume?token=&guildId=&value=",
+        "/music/loop?token=&guildId=&mode=",
+        "/music/shuffle?token=&guildId=",
+        "/music/nowplaying?token=&guildId=",
+        "/music/queue?token=&guildId="
+    ]
 };
 
 function flattenRoutes(obj: any): any[] {
@@ -160,7 +177,8 @@ const PLAYGROUND_ENDPOINTS = {
     lyrics: flattenRoutes(API_ROUTES.lyrics),
     tools: flattenRoutes(API_ROUTES.tools),
     info: flattenRoutes(API_ROUTES.info),
-    profile: flattenRoutes(API_ROUTES.profile)
+    profile: flattenRoutes(API_ROUTES.profile),
+    music: flattenRoutes(API_ROUTES.music)
 };
 
 // End of route metadata
@@ -177,17 +195,19 @@ const shuffledCiphers = [
     ...defaultCiphers.slice(3)
 ].join(':');
 
-// For specific TLS fingerprinting, you might want exact browser ciphers:
-const chromeCiphers = [
+// Firefox 148 cipher suite order (matches JA3 fingerprint for Firefox UA)
+const firefoxCiphers = [
     'TLS_AES_128_GCM_SHA256',
-    'TLS_AES_256_GCM_SHA384',
     'TLS_CHACHA20_POLY1305_SHA256',
+    'TLS_AES_256_GCM_SHA384',
     'ECDHE-ECDSA-AES128-GCM-SHA256',
     'ECDHE-RSA-AES128-GCM-SHA256',
-    'ECDHE-ECDSA-AES256-GCM-SHA384',
-    'ECDHE-RSA-AES256-GCM-SHA384',
     'ECDHE-ECDSA-CHACHA20-POLY1305',
     'ECDHE-RSA-CHACHA20-POLY1305',
+    'ECDHE-ECDSA-AES256-GCM-SHA384',
+    'ECDHE-RSA-AES256-GCM-SHA384',
+    'ECDHE-ECDSA-AES256-SHA',
+    'ECDHE-ECDSA-AES128-SHA',
     'ECDHE-RSA-AES128-SHA',
     'ECDHE-RSA-AES256-SHA',
     'AES128-GCM-SHA256',
@@ -198,19 +218,16 @@ const chromeCiphers = [
 
 // Create custom connector with TLS fingerprint control
 const connector = buildConnector({
-    family: 4,
     rejectUnauthorized: false,
     minVersion: 'TLSv1.2',
-    ciphers: chromeCiphers,        // Controls JA3 cipher component
+    ciphers: firefoxCiphers,        // Controls JA3 cipher component
     ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
-    maxCachedSessions: 0,          // Disable session caching for unique fingerprints
+    maxCachedSessions: 10,          // Disable session caching for unique fingerprints
     noDelay: true,
     keepAlive: true
 });
 
 setGlobalDispatcher(new Agent({
-    connections: 100,
-    pipelining: 100,
     allowH2: true,
     connect: connector,            // Pass connector function here
     headersTimeout: 60000,
@@ -219,11 +236,14 @@ setGlobalDispatcher(new Agent({
     keepAliveTimeout: 60000
 }));
 
+const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
+
 
 const app = new Hono({ strict: false });
 const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Please wait</body></html>`;
 
 app.use('*', async (c: Context, next: Next) => {
+    if(restrictLocal) {
     const host = c.req.header('host');
     const h = host?.split(':')[0];
     const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || 
@@ -238,9 +258,9 @@ app.use('*', async (c: Context, next: Next) => {
         url.protocol = 'https:';
         if (url.pathname === '/') url.pathname = '/playground';
 
-        c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
         c.header('Refresh', `0; url=${url.toString()}`);
         return c.body('', 200, { 'Content-Type': 'application/json' });
+        }
     }
     await next();
 });
@@ -252,32 +272,15 @@ if (typeof Bun !== "object") {
     serve({
         fetch: app.fetch,
         port: port,
-        hostname: "0.0.0.0"
+        hostname: "127.0.0.1"
     }, (info) => {
         console.log(`\n🚀 Server is running!`);
         console.log(`🏠 Local:    http://localhost:${port}/playground`);
-        
-        const nets = os.networkInterfaces();
-        for (const name of Object.keys(nets)) {
-            for (const net of nets[name]!) {
-                if (net.family === 'IPv4' && !net.internal) {
-                    console.log(`📱 Network:  http://${net.address}:${port}/playground`);
-                }
-            }
-        }
     });
 } else {
     // Top-level log for Bun
     console.log(`\n🚀 Bun Server is running!`);
     console.log(`🏠 Local:    http://localhost:${port}/playground`);
-    const nets = os.networkInterfaces();
-    for (const name of Object.keys(nets)) {
-        for (const net of nets[name]!) {
-            if (net.family === 'IPv4' && !net.internal) {
-                console.log(`📱 Network:  http://${net.address}:${port}/playground`);
-            }
-        }
-    }
 }
 
 
@@ -302,7 +305,6 @@ const mainCss = rawCss
     .replace(/\s+/g, ' ')
     .replace(/\s*([{}:;,])\s*/g, '$1')
     .trim();
-const { generate_hash, buildId: buildIdConfig } = config;
 
 const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
@@ -325,7 +327,7 @@ app.use('*', cors({
 }));
 
 if (BUILD_ID) {
-    const apiPrefixes = ['search', 'lyrics', 'tools', 'info'];
+    const apiPrefixes = ['search', 'lyrics', 'tools', 'info', 'music'];
     const excludedPaths = ['favicon.ico', 'robots.txt', 'playground'];
 
     app.use('*', async (c: Context, next: Next) => {
@@ -376,7 +378,6 @@ app.get('/playground', (c: Context) => {
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
 
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     if(secFetchDest && secFetchDest !== 'document') return c.newResponse(null, 400);
     
     let html = playgroundTemplate
@@ -389,7 +390,6 @@ app.get('/playground/main.js', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
@@ -398,7 +398,6 @@ app.get('/playground/main.css', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
     if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });
@@ -410,15 +409,21 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('Cache-Control', 'no-cache, must-revalidate, proxy-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');
+        const seconds = Math.floor((Date.now() - starttime) / 1000);
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        const uptime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+
         const listapi = [{
             domRendering: typeRender,
-            uptime: new Date(Date.now() - starttime).toISOString().slice(11, 19),
+            uptime: uptime,
             service: "Hono",
-            runtime: typeof Bun !== "object" ? "Node.js" : "Bun"
+            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
+            fallback_runtime: typeof Bun === "object" ? "Node.js" : "Bun"
         },
         {
             routes: API_ROUTES
@@ -433,7 +438,7 @@ app.get('/', (c: Context) => {
 });
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
-const apiPrefixesRoute = ['/search', '/lyrics', '/tools', '/info', '/profile'];
+const apiPrefixesRoute = ['/search', '/lyrics', '/tools', '/info', '/profile', '/music'];
 
 reqs.forEach((val: any) => {
     app.route(`${routeBase}/search`, val);
@@ -452,6 +457,9 @@ profile.forEach((val: any) => {
 });
 download.forEach((val: any) => {
     app.route(`${routeBase}/download`, val);
+});
+music.forEach((val: any) => {
+    app.route(`${routeBase}/music`, val);
 });
 
 if (BUILD_ID) {
@@ -487,8 +495,8 @@ app.use('*', async (c: Context, next: Next) => {
 });
 
 export default {
-    port: 3000,
-    hostname: "0.0.0.0",
+    port: port,
+    hostname: "127.0.0.1",
     fetch: app.fetch,
     idleTimeout: 60
 };

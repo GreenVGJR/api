@@ -1,4 +1,5 @@
 {
     "generate_hash": false,
-    "buildId": false
+    "buildId": false,
+    "restrictLocal": false
 }

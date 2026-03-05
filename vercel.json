@@ -1,6 +1,9 @@
 {
   "version": 2,
   "bunVersion": "1.x",
+  "git": {
+    "deploymentEnabled": false
+  },
   "builds": [
     {
       "src": "index.ts",

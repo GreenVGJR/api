@@ -19,16 +19,16 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   }
 
   if(getCookie(c, 'cf_clearance')) {
-    // A Partitioned cookie MUST be deleted with the Partitioned attribute
+
     const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
     c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-    // Try without domain too to be safe
+
     c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
   }
 
   c.header('X-Enc-Route', 'v2');
-  
-  const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
+
+    const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
   const filtype1 = type?.split('/')?.[0];
   const defaultExtensions: Record<string, string> = {
     'video': 'mp4',
@@ -40,11 +40,11 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   const subtype = type?.split('/')?.[1]?.split(';')?.[0];
   const filtype2 = subtype === '*' ? (defaultExtensions[filtype1] || null) : subtype;
   const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
-  
-  c.header('Content-Type', contentType);
+
+    c.header('Content-Type', contentType);
   c.header('Cache-Control', 'no-transform');
-  
-  return stream(c, async (s) => {
+
+    return stream(c, async (s) => {
     s.onAbort(() => {});
 
     await s.write(new Uint8Array());
@@ -95,8 +95,8 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
     const ua = c.req.header('user-agent') || '';
     const uaHash = crypto.createHash('md5').update(ua).digest('hex').slice(0, 8);
     const checkcookie = getCookie(c, '_sign');
-    
-    // Use URL searchParams for consistent query hashing
+
+
     const urlObj = new URL(c.req.url);
     const queryKeys = Array.from(urlObj.searchParams.keys()).filter(k => k !== 'sh').sort();
     const queryStr = queryKeys.map(k => `${k}=${urlObj.searchParams.get(k)}`).join('&');
@@ -205,8 +205,8 @@ export const processImage = async (c: Context, url?: string) => {
         return undefined;
     }
     if(checkurl.host === c.req.header('host')) return '';
-    
-    try {
+
+        try {
         const res = await fetch(url, { headers: { ...commonHeaders }});
         if(!res.ok) return '';
         const contentType = res.headers.get('content-type');

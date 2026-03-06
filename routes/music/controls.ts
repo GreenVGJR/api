@@ -4,12 +4,12 @@ const app = new Hono();
 import { getOrCreatePlayer, getQueue, destroyPlayer, hasActivePlayer, createMusicStream } from '../../functions/musicPlayer.js';
 import { QueueRepeatMode } from 'discord-player';
 
-// ─── Time parser for seek ───
+
 function parseTimeMS(timeStr: string): number {
     if (!timeStr) return 0;
     timeStr = timeStr.toLowerCase().trim();
-    
-    // Handle h/m/s suffix format: "1h", "2m", "30s", "1h30m", "2m15s", "1h30m15s"
+
+
     const hmsRegex = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?/;
     if (/[hm]/.test(timeStr)) {
         const match = timeStr.match(hmsRegex);
@@ -20,8 +20,8 @@ function parseTimeMS(timeStr: string): number {
             return (hours * 3600 + minutes * 60 + seconds) * 1000;
         }
     }
-    
-    // Handle colon-separated format: "1:30" (m:s) or "1:30:00" (h:m:s)
+
+
     if (timeStr.includes(':')) {
         const parts = timeStr.split(':').map(p => parseInt(p, 10));
         if (parts.length === 2) {
@@ -30,13 +30,13 @@ function parseTimeMS(timeStr: string): number {
             return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
         }
     }
-    
-    // Raw number = seconds
+
+
     const secs = parseInt(timeStr, 10);
     return isNaN(secs) ? 0 : secs * 1000;
 }
 
-// ─── /pause ───
+
 app.get('/pause', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -85,7 +85,7 @@ app.get('/pause', async (c) => {
     });
 });
 
-// ─── /resume ───
+
 app.get('/resume', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -134,7 +134,7 @@ app.get('/resume', async (c) => {
     });
 });
 
-// ─── /skip ───
+
 app.get('/skip', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -186,7 +186,7 @@ app.get('/skip', async (c) => {
     });
 });
 
-// ─── /stop ───
+
 app.get('/stop', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -218,7 +218,7 @@ app.get('/stop', async (c) => {
         queue.delete();
         await log('Queue deleted');
 
-        // Check remaining nodes
+
         let hasActiveNodes = false;
         for (const [id, node] of player.nodes.cache) {
             if (id === guildId) continue;
@@ -248,7 +248,7 @@ app.get('/stop', async (c) => {
     });
 });
 
-// ─── /seek ───
+
 app.get('/seek', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -276,7 +276,7 @@ app.get('/seek', async (c) => {
             return;
         }
 
-        // Prevent seeking on live streams (which usually have duration = '0:00' or live = true)
+
         const isLive = queue.currentTrack.raw?.live === true || queue.currentTrack.duration === '0:00';
         if (isLive) {
             await log('Cannot seek live track');
@@ -298,22 +298,22 @@ app.get('/seek', async (c) => {
         const seekTarget = Math.max(0, Math.min(ms, queue.node.estimatedDuration || currentTrack.durationMS || 0));
 
         try {
-            // Debug: log state before seek
+
             const seeker = (queue as any).filters?.seeker;
             const seekerPos = seeker ? seeker.getPosition() : 'no seeker';
             const playbackTime = queue.node.playbackTime;
             const estimatedPlaybackTime = queue.node.estimatedPlaybackTime;
             await log(`Pre-seek state: seekerPos=${seekerPos}, playbackTime=${playbackTime}, estimatedPlaybackTime=${estimatedPlaybackTime}, seekTarget=${seekTarget}`);
 
-            // Use the official discord-player API — exactly what ForgeMusic does
+
             const result = await queue.node.seek(seekTarget);
-            
-            // Debug: log state after seek
+
+
             const seekerPosAfter = seeker ? seeker.getPosition() : 'no seeker';
             const playbackTimeAfter = queue.node.playbackTime;
             await log(`Post-seek state: result=${result}, seekerPos=${seekerPosAfter}, playbackTime=${playbackTimeAfter}`);
-            
-            await log(`Seek completed to ${seekTarget}ms`);
+
+                        await log(`Seek completed to ${seekTarget}ms`);
         } catch (err: any) {
             queue.tasksQueue.clear(true);
             await log(`Seek failed: ${err?.message || err}. Cleared tasksQueue.`);
@@ -328,7 +328,7 @@ app.get('/seek', async (c) => {
     });
 });
 
-// ─── /volume ───
+
 app.get('/volume', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -374,7 +374,7 @@ app.get('/volume', async (c) => {
     });
 });
 
-// ─── /loop ───
+
 const LOOP_MODES: Record<string, number> = {
     off: QueueRepeatMode.OFF,
     track: QueueRepeatMode.TRACK,
@@ -420,7 +420,7 @@ app.get('/loop', async (c) => {
         let repeatMode: number;
 
         if (mode === '' || mode === 'toggle') {
-            // Cycle: off → track → queue → off
+
             const current = queue.repeatMode;
             if (current === QueueRepeatMode.OFF) repeatMode = QueueRepeatMode.TRACK;
             else if (current === QueueRepeatMode.TRACK) repeatMode = QueueRepeatMode.QUEUE;
@@ -449,7 +449,7 @@ app.get('/loop', async (c) => {
     });
 });
 
-// ─── /shuffle ───
+
 app.get('/shuffle', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');

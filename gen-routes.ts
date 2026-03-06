@@ -1,10 +1,10 @@
-/**
- * Auto-generates static index.ts files for each route directory.
- * Run this before deploying: `bun run gen-routes`
- * 
- * Scans each route folder, finds all .ts files (excluding index.ts),
- * and generates an index.ts with static imports + default export array.
- */
+
+
+
+
+
+
+
 
 import fs from 'fs';
 import path from 'path';
@@ -33,7 +33,7 @@ for (const dir of routeDirs) {
 
     for (const file of files) {
         const name = file.replace('.ts', '');
-        // Handle filenames that aren't valid JS identifiers (e.g. "flux-demo")
+
         const safeName = name.replace(/[^a-zA-Z0-9_$]/g, '_');
         imports.push(`import ${safeName} from './${name}.js';`);
         names.push(safeName);

@@ -23,7 +23,7 @@ app.get('/disconnect', async (c) => {
 
         const { client, player } = await getOrCreatePlayer(token);
 
-        // If guildId is provided, only disconnect from that guild's voice channel
+
         if (guildId) {
             await log(`Disconnecting from guild: ${guildId}`);
             const queue = player.nodes.get(guildId);
@@ -42,7 +42,7 @@ app.get('/disconnect', async (c) => {
                 await log('Bot was not in a voice channel in this guild');
             }
 
-            // Check if there are other active nodes; if not, destroy the whole client
+
             let hasActiveNodes = false;
             for (const [id, node] of player.nodes.cache) {
                 if (id === guildId) continue;
@@ -66,7 +66,7 @@ app.get('/disconnect', async (c) => {
                 data: { action: 'disconnected', guildId, context_destroyed: killed }
             })}}`);
         } else {
-            // No guildId: destroy the entire player/client
+
             await log('No guildId specified, destroying entire player...');
             await destroyPlayer(token);
             await log('Discord.js client and player destroyed');

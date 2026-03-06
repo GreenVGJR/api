@@ -18,7 +18,7 @@ app.get('/shazam', async (c) => {
 
     const task = async () => {
         try {
-            // Step 1: Search iTunes for the track
+
             const itunesRes = await request(
                 `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
                 { method: 'GET', headers: commonHeaders }
@@ -33,9 +33,9 @@ app.get('/shazam', async (c) => {
             const firstTrack = tracks[0];
             const trackViewUrl: string = firstTrack.trackViewUrl || '';
 
-            // Step 2: Build the Shazam URL from the Apple Music track URL
-            // trackViewUrl format: https://music.apple.com/us/album/song-name/123456?i=789012
-            // Shazam URL format:   https://www.shazam.com/song/{i_param}/{last_path_segment}
+
+
+
             let shazamUrl: string | null = null;
             try {
                 const parsedUrl = new URL(trackViewUrl);
@@ -48,10 +48,10 @@ app.get('/shazam', async (c) => {
                 }
             } catch { }
 
-            // Step 3: Track info from iTunes
+
             const trackInfo = { ...firstTrack };
 
-            // Step 4: Fetch the Shazam page using httpcloak
+
             let shazamInfo: any = null;
             let lyrics: string | null = null;
             let syncLyrics: string | null = null;
@@ -69,14 +69,14 @@ app.get('/shazam', async (c) => {
 
                     const html = shazamRes.text;
 
-                    // Step 5: Parse JSON-LD and HTML elements from the page
+
                     try {
                         const ldJsonMatch = html.split('script type="application/ld+json">');
                         if (ldJsonMatch.length > 1) {
                             const ldJsonStr = ldJsonMatch[1].split('</script>')[0];
                             const ldJson = JSON.parse(ldJsonStr);
-                            
-                            let parsedDuration: number | null = null;
+
+                                                        let parsedDuration: number | null = null;
                             if (ldJson.duration && ldJson.duration.startsWith('PT')) {
                                 const match = ldJson.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
                                 if (match) {
@@ -105,7 +105,7 @@ app.get('/shazam', async (c) => {
                             };
                         }
 
-                        // Extract info from HTML as fallback and for extra details
+
                         const artistMatch = html.match(/TrackPageArtistLink_artistNameText[^>]*>([^<]+)<\/span>/);
                         if (artistMatch) shazamInfo.byArtist = decodeHTML(artistMatch[1]);
 
@@ -135,7 +135,7 @@ app.get('/shazam', async (c) => {
 
                     } catch { }
 
-                    // Step 6: Parse synced lyrics
+
                     try {
                         const rx = /\\\\?"lyricLines\\\\?":(\[.*?\])\}/g;
                         const matches = [...html.matchAll(rx)];
@@ -175,7 +175,7 @@ app.get('/shazam', async (c) => {
                         }
                     } catch { }
 
-                    // Parse plain lyrics from HTML divs (LyricsContent_ classes)
+
                     if (!lyrics) {
                         try {
                             const lyricParts = html.split('LyricsContent_');
@@ -198,7 +198,7 @@ app.get('/shazam', async (c) => {
                         } catch { }
                     }
 
-                    // Fallback: lyrics from JSON-LD recordingOf
+
                     if (!lyrics) {
                         try {
                             const ldJsonMatch = html.split('script type="application/ld+json">');

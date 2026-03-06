@@ -26,8 +26,8 @@ return c.json({"error":"Nothing to do"}, 202);
                 const tes = await YTMusic(q!);
                 const item = tes?.data?.[0];
                 const videoId = item?.videoId;
-                
-                if (videoId) {
+
+                                if (videoId) {
                     q = "https://youtu.be/" + videoId;
                 }
             }

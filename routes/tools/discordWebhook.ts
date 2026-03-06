@@ -83,8 +83,8 @@ app.get('/discord/webhook/send', async (c) => {
     const content = getQuery(c, 'content');
     const username = getQuery(c, 'username');
     const avatar_url = getQuery(c, 'avatar');
- 
-    if (!webhookUrl && !webhookToken) return c.json(["Missing valid parameter: webhookToken or webhookUrl"], 202);
+
+     if (!webhookUrl && !webhookToken) return c.json(["Missing valid parameter: webhookToken or webhookUrl"], 202);
     if (!webhookUrl && !webhookId) return c.json(["Missing valid parameter: webhookId or webhookUrl"], 202);
 
     c.header('X-Route', 'discord.com');

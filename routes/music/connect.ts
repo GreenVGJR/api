@@ -6,7 +6,7 @@ import { getOrCreatePlayer, resolveVoiceChannel, hasActivePlayer, createMusicStr
 app.get('/connect', async (c) => {
     const token = c.req.query('token');
     const voiceId = c.req.query('voiceId');
-    const isDeaf = c.req.query('isDeaf') !== 'false'; // default true
+    const isDeaf = c.req.query('isDeaf') !== 'false'; 
 
     return createMusicStream(c, async (log, s) => {
         if (!token || !voiceId) {
@@ -32,7 +32,7 @@ app.get('/connect', async (c) => {
         });
         await log('Connected to voice channel');
 
-        // Create queue node early
+
         player.nodes.create(channel.guild.id, {
             defaultFFmpegFilters: ["compressor"],
             selfDeaf: isDeaf,
@@ -44,7 +44,7 @@ app.get('/connect', async (c) => {
             volume: 50
         });
 
-        // Force deafen
+
         const me = channel.guild.members.me;
         if (me) {
             me.voice.setDeaf(isDeaf).catch(() => {});

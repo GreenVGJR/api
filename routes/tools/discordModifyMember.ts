@@ -39,8 +39,8 @@ app.get('/discord/modifyMemberServer', async (c) => {
     const reason = getQuery('reason');
     const bio = getQuery('bio');
     const reset = getQuery('reset');
-    
-    const avatar = getQuery('avatar');
+
+        const avatar = getQuery('avatar');
     const banner = getQuery('banner');
 
     if (reset !== undefined) {
@@ -59,8 +59,8 @@ app.get('/discord/modifyMemberServer', async (c) => {
             if(pAvatar == '') payloadError.push('[avatar] Failed to download image');
             if (pAvatar) payload.avatar = pAvatar;
         }
-        
-        if (banner === null) {
+
+                if (banner === null) {
             payload.banner = null;
         } else if (banner) {
             const pBanner = await processImage(c, banner);

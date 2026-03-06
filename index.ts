@@ -181,12 +181,12 @@ const PLAYGROUND_ENDPOINTS = {
     music: flattenRoutes(API_ROUTES.music)
 };
 
-// End of route metadata
+
 
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
 import tls from 'tls';
 
-// Custom cipher list to mimic browser fingerprint (reorder ciphers)
+
 const defaultCiphers = tls.DEFAULT_CIPHERS.split(':');
 const shuffledCiphers = [
     defaultCiphers[1],
@@ -195,7 +195,7 @@ const shuffledCiphers = [
     ...defaultCiphers.slice(3)
 ].join(':');
 
-// Firefox 148 cipher suite order (matches JA3 fingerprint for Firefox UA)
+
 const firefoxCiphers = [
     'TLS_AES_128_GCM_SHA256',
     'TLS_CHACHA20_POLY1305_SHA256',
@@ -216,20 +216,20 @@ const firefoxCiphers = [
     'AES256-SHA'
 ].join(':');
 
-// Create custom connector with TLS fingerprint control
+
 const connector = buildConnector({
     rejectUnauthorized: false,
     minVersion: 'TLSv1.2',
-    ciphers: firefoxCiphers,        // Controls JA3 cipher component
-    ALPNProtocols: ['h2', 'http/1.1'],  // Controls JA3 ALPN extension
-    maxCachedSessions: 10,          // Disable session caching for unique fingerprints
+    ciphers: firefoxCiphers,        
+    ALPNProtocols: ['h2', 'http/1.1'],  
+    maxCachedSessions: 10,          
     noDelay: true,
     keepAlive: true
 });
 
 setGlobalDispatcher(new Agent({
     allowH2: true,
-    connect: connector,            // Pass connector function here
+    connect: connector,            
     headersTimeout: 60000,
     bodyTimeout: 60000,
     connectTimeout: 60000,
@@ -278,7 +278,7 @@ if (typeof Bun !== "object") {
         console.log(`🏠 Local:    http://localhost:${port}/playground`);
     });
 } else {
-    // Top-level log for Bun
+
     console.log(`\n🚀 Bun Server is running!`);
     console.log(`🏠 Local:    http://localhost:${port}/playground`);
 }
@@ -290,15 +290,15 @@ const __dirname = path.dirname(__filename);
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8');
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground.html'), 'utf-8')
-    .replace(/<!--[\s\S]*?-->/g, '') // Remove comments
-    .replace(/\s+/g, ' ') // Collapse whitespace
-    .replace(/>\s+</g, '><') // Remove space between tags
+    .replace(/<!--[\s\S]*?-->/g, '') 
+    .replace(/\s+/g, ' ') 
+    .replace(/>\s+</g, '><') 
     .trim();
 
-// Load JS (serve as-is, no minification to avoid syntax errors)
+
 const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 
-// Minify CSS
+
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
 const mainCss = rawCss
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -310,7 +310,7 @@ const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
-// Helper function to check if request is from local network
+
 function isLocalRequest(host: string | undefined): boolean {
     if (!host) return false;
     const h = host.split(':')[0];
@@ -379,8 +379,8 @@ app.get('/playground', (c: Context) => {
 
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'document') return c.newResponse(null, 400);
-    
-    let html = playgroundTemplate
+
+        let html = playgroundTemplate
         .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
 
     return c.html(html);

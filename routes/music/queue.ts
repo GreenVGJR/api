@@ -3,7 +3,7 @@ const app = new Hono();
 
 import { getOrCreatePlayer, getQueue, formatTrack, hasActivePlayer, createMusicStream } from '../../functions/musicPlayer.js';
 
-// ─── /nowplaying ───
+
 app.get('/nowplaying', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
@@ -46,7 +46,7 @@ app.get('/nowplaying', async (c) => {
     });
 });
 
-// ─── /queue ───
+
 app.get('/queue', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');

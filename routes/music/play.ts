@@ -12,24 +12,24 @@ app.get('/play', async (c) => {
         const platform = (c.req.query('platform') || 'soundcloud').toLowerCase();
         const voiceId = c.req.query('voiceId');
         const authorId = c.req.query('authorId');
-        const isDeaf = c.req.query('isDeaf') !== 'false'; // default true
+        const isDeaf = c.req.query('isDeaf') !== 'false'; 
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
             return;
         }
 
-        // Cast to string since we early return on undefined
+
         let queryStr = query as string;
 
         let forcedMetadata: any = null;
         const isUrl = queryStr.startsWith('http://') || queryStr.startsWith('https://');
 
-        // --- Custom platform searches ---
+
         if (platform === 'soundcloud' && !isUrl) {
             await log(`Searching SoundCloud using custom engine: "${queryStr}"`);
             const scRes = await SCMusic(queryStr, undefined, 1);
-            const tracks = scRes?.data?.[0]; // SCMusic returns { data: [collection, ...] }
+            const tracks = scRes?.data?.[0]; 
             if (tracks && tracks.length > 0) {
                 queryStr = tracks[0].permalink_url;
                 await log(`SoundCloud track found: ${queryStr}`);
@@ -123,7 +123,7 @@ app.get('/play', async (c) => {
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
         await log('discord-player active');
 
-        // Resolve voice channel
+
         let channel: any = null;
         if (voiceId) {
             await log(`Resolving voice channel: ${voiceId}`);
@@ -148,7 +148,7 @@ app.get('/play', async (c) => {
             }
         }
 
-        // Fetch requester
+
         let requestedBy: any = undefined;
         if (authorId) {
             await log(`Fetching user: ${authorId}`);
@@ -200,8 +200,8 @@ app.get('/play', async (c) => {
         } catch (err: any) {
             const queue = player.nodes.get(channel.guild.id);
             if (queue) queue.tasksQueue.clear(true);
-            
-            await log(`Play failed: ${err?.message || err}`);
+
+                        await log(`Play failed: ${err?.message || err}`);
             await s.write(`],"error":${JSON.stringify({ message: err?.message || 'Failed to play track' })}}`);
             return;
         }
@@ -211,7 +211,7 @@ app.get('/play', async (c) => {
         const track = result.track;
         const queue = player.nodes.get(channel.guild.id);
 
-        // Native discord.js deafening
+
         const me = channel.guild.members.me;
         if (me) {
             me.voice.setDeaf(isDeaf).catch(() => {});

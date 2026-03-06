@@ -16,7 +16,7 @@ let isCoolingDown = false;
 
 const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
 
-// Initialize with server-injected data if available
+
 if (window.SERVER_ENDPOINTS) {
     endpoints = window.SERVER_ENDPOINTS;
 }
@@ -38,7 +38,7 @@ const paramsCount = document.getElementById('paramsCount');
 const paramsChevron = document.getElementById('paramsChevron');
 
 let paramsOpen = window.innerWidth >= 768;
-let currentParams = []; // [{key, value}]
+let currentParams = []; 
 
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith('/') ? '' : '/');
 
@@ -77,14 +77,14 @@ function flattenRoutes(obj, parentPath = '') {
 
 async function performRequest(targetUrl) {
     if (isLoading || isCoolingDown) return null;
-    
-    isLoading = true;
+
+        isLoading = true;
     sendBtn.innerHTML = '<span>Loading...</span>';
     sendBtn.classList.add('opacity-70');
     responseArea.classList.add('empty-state');
     responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
-    
-    statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
+
+        statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
     statusText.textContent = 'Fetching';
     statusText.className = 'text-yellow-400';
 
@@ -95,22 +95,22 @@ async function performRequest(targetUrl) {
         const response = await fetch(targetUrl, {
             headers: { 'Accept': 'application/json' }
         });
-        
-        responseArea.classList.add('empty-state');
+
+                responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
-        
-        const contentType = response.headers.get('content-type') || '';
+
+                const contentType = response.headers.get('content-type') || '';
         let duration;
-        
-        if (contentType.startsWith('image/')) {
+
+                if (contentType.startsWith('image/')) {
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
             const imageUrl = URL.createObjectURL(blob);
-            
-            lastRawResponse = '';
-            
-            responseArea.classList.add('empty-state');
+
+                        lastRawResponse = '';
+
+                        responseArea.classList.add('empty-state');
             responseArea.innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4">
                     <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
@@ -118,21 +118,21 @@ async function performRequest(targetUrl) {
             `;
         } else {
             responseArea.classList.remove('empty-state');
-            
-            const text = await response.text();
+
+                        const text = await response.text();
             duration = Math.round(performance.now() - startTime);
             let formatted = text;
             let isJson = false;
-            
-            try {
+
+                        try {
                 const data = JSON.parse(text);
                 formatted = JSON.stringify(data, null, 2);
                 isJson = true;
                 resultData = data;
             } catch {
             }
-            
-            lastRawResponse = text;
+
+                        lastRawResponse = text;
 
             responseArea.innerHTML = '<pre style=\"white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;\"></pre>';
             const preElement = responseArea.querySelector('pre');
@@ -143,32 +143,32 @@ async function performRequest(targetUrl) {
                 const lines = formatted.split('\n');
                 const CHUNK_SIZE = 5000;
                 let chunkIndex = 0;
-                
-                const processChunk = () => {
+
+                                const processChunk = () => {
                     if (chunkIndex >= lines.length) return;
-                    
-                    const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
+
+                                        const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
                     const chunkLines = lines.slice(chunkIndex, end);
                     const chunkString = chunkLines.join('\n');
-                    
-                    const highlighted = syntaxHighlight(chunkString);
-                    
-                    preElement.insertAdjacentHTML('beforeend', highlighted + (end < lines.length ? '\n' : ''));
-                    
-                    chunkIndex = end;
-                    
-                    if (chunkIndex < lines.length) {
+
+                                        const highlighted = syntaxHighlight(chunkString);
+
+                                        preElement.insertAdjacentHTML('beforeend', highlighted + (end < lines.length ? '\n' : ''));
+
+                                        chunkIndex = end;
+
+                                        if (chunkIndex < lines.length) {
                         requestAnimationFrame(processChunk);
                     }
                 };
-                
-                processChunk();
+
+                                processChunk();
             }
         }
-        
-        const statusDot = statusIndicator.querySelector('span:first-child');
-        
-        if (response.ok) {
+
+                const statusDot = statusIndicator.querySelector('span:first-child');
+
+                if (response.ok) {
             statusDot.className = 'w-2 h-2 rounded-full bg-mint-400';
             statusText.textContent = `${response.status} • ${duration}ms`;
             statusText.className = 'text-mint-400';
@@ -186,12 +186,12 @@ async function performRequest(targetUrl) {
     } finally {
         isLoading = false;
         sendBtn.innerHTML = 'Send';
-        
-        isCoolingDown = true;
+
+                isCoolingDown = true;
         sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
         let timeLeft = 0.5;
-        
-        const cooldownInterval = setInterval(() => {
+
+                const cooldownInterval = setInterval(() => {
             timeLeft -= 0.1;
             if (timeLeft <= 0) {
                 clearInterval(cooldownInterval);
@@ -202,15 +202,15 @@ async function performRequest(targetUrl) {
             }
         }, 100);
     }
-    
-    return resultData;
+
+        return resultData;
 }
 
-// ===== PARAMETER PANEL LOGIC =====
+
 
 function parseQueryParams(queryString) {
     if (!queryString || !queryString.startsWith('?')) return [];
-    const raw = queryString.substring(1); // remove '?'
+    const raw = queryString.substring(1); 
     const params = [];
     const parts = raw.split('&');
     for (const part of parts) {
@@ -244,7 +244,7 @@ function renderParams() {
     paramsCount.textContent = currentParams.length;
 
     if (currentParams.length > 0) {
-        // Attempt to read current URL values (user may already have typed values)
+
         try {
             const currentUrl = urlInput.value;
             const qIdx = currentUrl.indexOf('?');
@@ -275,7 +275,7 @@ function renderParams() {
             </div>
         `).join('');
 
-        // Attach input listeners
+
         paramsContainer.querySelectorAll('.param-input').forEach(input => {
             input.addEventListener('input', () => {
                 const idx = parseInt(input.dataset.paramIndex);
@@ -293,9 +293,9 @@ function renderParams() {
         paramsContainer.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">No parameters needed.</div>';
     }
 
-    // Set transition rules
+
     setTimeout(() => {
-        // Auto-open if params exist, but collapse by default on mobile
+
         if (currentParams.length > 0) {
             if (window.innerWidth >= 768) {
                 paramsChevron.classList.add('rotated');
@@ -337,7 +337,7 @@ function syncUrlToParams() {
             }
         }
         if (changed) {
-            // Update input fields
+
             paramsContainer.querySelectorAll('.param-input').forEach(input => {
                 const idx = parseInt(input.dataset.paramIndex);
                 if (currentParams[idx] && input.value !== currentParams[idx].value) {
@@ -351,18 +351,18 @@ function syncUrlToParams() {
 paramsToggle.addEventListener('click', () => {
     paramsOpen = !paramsOpen;
     paramsChevron.classList.toggle('rotated', paramsOpen);
-    
-    if (paramsOpen) {
+
+        if (paramsOpen) {
         paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
     } else {
         paramsBody.style.height = null;
     }
 });
 
-// ===== END PARAMETER PANEL LOGIC =====
+
 
 async function fetchInitialEndpoints() {
-    // Endpoints are provided by server in window.SERVER_ENDPOINTS
+
     if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
         currentEndpoint = endpoints[currentCategory][0];
         urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
@@ -370,16 +370,16 @@ async function fetchInitialEndpoints() {
     }
     renderEndpoints();
     renderParams();
-    
-    // Ensure first tab is active
+
+
     const firstTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
     if (firstTab) firstTab.classList.add('active');
 }
 
 function renderEndpoints() {
     const categoryEndpoints = endpoints[currentCategory] || [];
-    
-    if (categoryEndpoints.length === 0) {
+
+        if (categoryEndpoints.length === 0) {
          endpointsList.innerHTML = `
             <div class="text-gray-600 text-xs p-4 text-center">
                 ${Object.keys(endpoints).length === 0 ? 'Loading...' : 'No endpoints found.'}
@@ -409,8 +409,8 @@ function attachEndpointListeners() {
             adjustHeight();
             renderEndpoints();
             renderParams();
-            
-            tabBtns.forEach(b => b.classList.remove('active'));
+
+                        tabBtns.forEach(b => b.classList.remove('active'));
             const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
             if (activeTab) activeTab.classList.add('active');
         });
@@ -419,15 +419,15 @@ function attachEndpointListeners() {
 
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        // Only run animation if the panel is currently open
+
         const wasOpen = paramsOpen;
-        
-        if (wasOpen) {
+
+                if (wasOpen) {
             paramsBody.style.height = null;
             paramsChevron.classList.remove('rotated');
         }
-        
-        setTimeout(() => {
+
+                setTimeout(() => {
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
@@ -441,7 +441,7 @@ tabBtns.forEach(btn => {
             }
             renderEndpoints();
             renderParams();
-        }, wasOpen ? 125 : 0); // Wait for collapse animation (125ms) only if it was open
+        }, wasOpen ? 125 : 0); 
     });
 });
 
@@ -451,8 +451,8 @@ urlInput.addEventListener('keydown', (e) => {
         urlInput.blur();
         sendBtn.click();
     }
-    
-    if ((e.key === 'Backspace' || e.key === 'Delete') && 
+
+        if ((e.key === 'Backspace' || e.key === 'Delete') && 
         urlInput.selectionStart <= apiBaseUrl.length && 
         urlInput.selectionEnd === urlInput.selectionStart) {
         e.preventDefault();
@@ -461,8 +461,8 @@ urlInput.addEventListener('keydown', (e) => {
 
 urlInput.addEventListener('input', () => {
     let val = urlInput.value;
-    
-    if (!val.startsWith(apiBaseUrl)) {
+
+        if (!val.startsWith(apiBaseUrl)) {
          const baseIdx = val.indexOf(apiBaseUrl);
          if (baseIdx > 0) {
              val = val.substring(baseIdx);
@@ -471,28 +471,28 @@ urlInput.addEventListener('input', () => {
              if (val.match(/^https?:\/\//)) {
                  pathIndex = val.indexOf('/', 8);
              }
-             
-             let path = '';
+
+                          let path = '';
              if (pathIndex !== -1) {
                  path = val.substring(pathIndex);
              }
              val = apiBaseUrl + path;
          }
     }
-    
-    const queryIdx = val.indexOf('?');
+
+        const queryIdx = val.indexOf('?');
     let pathPart = queryIdx === -1 ? val.substring(apiBaseUrl.length) : val.substring(apiBaseUrl.length, queryIdx);
     const queryPart = queryIdx === -1 ? '' : val.substring(queryIdx);
-    
-    const hostOnly = apiBaseUrl.replace(/^https?:\/\//, '');
-    
-    let dirty = true;
+
+        const hostOnly = apiBaseUrl.replace(/^https?:\/\//, '');
+
+        let dirty = true;
     let safety = 0;
     while (dirty && safety < 10) {
         dirty = false;
         safety++;
-        
-        if (pathPart.startsWith('/' + hostOnly)) {
+
+                if (pathPart.startsWith('/' + hostOnly)) {
             pathPart = pathPart.substring(1 + hostOnly.length);
             dirty = true;
         } else if (pathPart.startsWith('//' + hostOnly)) {
@@ -509,18 +509,18 @@ urlInput.addEventListener('input', () => {
             dirty = true;
         }
     }
-    
-    if (pathPart && !pathPart.startsWith('/')) {
+
+        if (pathPart && !pathPart.startsWith('/')) {
         pathPart = '/' + pathPart;
     }
 
     const newVal = apiBaseUrl + pathPart + queryPart;
-    
-    if (urlInput.value !== newVal) {
+
+        if (urlInput.value !== newVal) {
         const cursorPos = urlInput.selectionStart;
         urlInput.value = newVal;
-        
-        if (cursorPos > newVal.length) {
+
+                if (cursorPos > newVal.length) {
             urlInput.setSelectionRange(newVal.length, newVal.length);
         } else if (cursorPos < apiBaseUrl.length) {
             urlInput.setSelectionRange(apiBaseUrl.length, apiBaseUrl.length);
@@ -529,7 +529,7 @@ urlInput.addEventListener('input', () => {
         }
     }
 
-    // Sync URL back to params when user types in the URL bar
+
     syncUrlToParams();
 });
 
@@ -538,8 +538,8 @@ async function copyToClipboard(text) {
         await navigator.clipboard.writeText(text);
         return true;
     }
-    
-    const textArea = document.createElement('textarea');
+
+        const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
     textArea.style.left = '-9999px';
@@ -547,8 +547,8 @@ async function copyToClipboard(text) {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
-    try {
+
+        try {
         document.execCommand('copy');
         return true;
     } finally {
@@ -580,14 +580,14 @@ copyBtn.addEventListener('click', async () => {
 
 copyResponseBtn.addEventListener('click', async () => {
     if (!lastRawResponse) return;
-    
-    try {
+
+        try {
         await copyToClipboard(lastRawResponse);
         const originalText = copyResponseBtn.querySelector('span').textContent;
         copyResponseBtn.querySelector('span').textContent = 'Copied!';
         copyResponseBtn.classList.add('text-mint-400');
-        
-        setTimeout(() => {
+
+                setTimeout(() => {
             copyResponseBtn.querySelector('span').textContent = originalText;
             copyResponseBtn.classList.remove('text-mint-400');
         }, 1500);

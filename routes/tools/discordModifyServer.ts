@@ -41,8 +41,8 @@ app.get('/discord/modifyServer', async (c) => {
     const reason = getQuery('reason');
     const description = getQuery('guildDescription');
     const verificationLevel = getQuery('guildVerifyLevel');
-    
-    const icon = getQuery('guildIcon');
+
+        const icon = getQuery('guildIcon');
     const splash = getQuery('guildSplash');
     const banner = getQuery('guildBanner');
 
@@ -67,16 +67,16 @@ app.get('/discord/modifyServer', async (c) => {
         if(pIcon == '') payloadError.push('[guildIcon] Failed to download image');
         if (pIcon) payload.icon = pIcon;
     }
-    
-    if (splash === null) {
+
+        if (splash === null) {
         payload.splash = null;
     } else if (splash) {
         const pSplash = await processImage(c, splash);
         if(pSplash == '') payloadError.push('[guildSplash] Failed to download image');
         if (pSplash) payload.splash = pSplash;
     }
-    
-    if (banner === null) {
+
+        if (banner === null) {
         payload.banner = null;
     } else if (banner) {
         const pBanner = await processImage(c, banner);

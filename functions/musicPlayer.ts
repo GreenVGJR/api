@@ -16,13 +16,13 @@ export function createMusicStream(c: any, callback: (log: (msg: string) => Promi
 
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'no-cache, no-transform');
-    
-    c.header('X-PO-Client-Id', crypto.createHash("md5").update(oo).digest("hex"));
+
+        c.header('X-PO-Client-Id', crypto.createHash("md5").update(oo).digest("hex"));
     c.header('X-PO-Client', signature);
     c.header('X-Enc-Route', 'v1-beta');
     c.header('X-Route', 'LIVE');
-    
-    return stream(c, async (s: any) => {
+
+        return stream(c, async (s: any) => {
         const startTime = Date.now();
         let logIndex = 0;
 
@@ -45,12 +45,12 @@ export function createMusicStream(c: any, callback: (log: (msg: string) => Promi
     });
 }
 
-// Global BigInt JSON serialization fix
+
 (BigInt.prototype as any).toJSON = function () {
     return String(this);
 };
 
-// ─── YouTube Client Definitions (ported from youtubeClients.js) ───
+
 const ytClients: Record<string, any> = {
     VISIONOS: {
         targetDomain: "m.youtube.com",
@@ -111,7 +111,7 @@ const ytClients: Record<string, any> = {
     }
 };
 
-// ─── YouTube Custom Streaming ───
+
 const defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
 const targetClientName = (process.env.YT_CLIENT || 'ANDROID').toUpperCase();
 const ytcookies = process.env.YOUTUBE_COOKIES || '';
@@ -142,7 +142,7 @@ actuallk.gl = "US";
 let visitorData = "";
 const templist: Array<{ id: string; url: string; ref: number }> = [];
 
-// Initialize visitor data
+
 (async () => {
     try {
         if (ytcookies) {
@@ -275,13 +275,13 @@ export async function fallbackYTStream(trackUrl: string): Promise<string> {
     }
 
     templist.push({ id: trackUrl, url: finalurl, ref: Date.now() + 60000 });
-    // Keep cache small
+
     if (templist.length > 100) templist.splice(0, templist.length - 50);
 
     return finalurl;
 }
 
-// ─── Platform → QueryType mapping ───
+
 const PLATFORM_MAP: Record<string, string> = {
     youtube: QueryType.YOUTUBE_SEARCH,
     youtubemusic: QueryType.YOUTUBE,
@@ -292,8 +292,8 @@ const PLATFORM_MAP: Record<string, string> = {
     auto: QueryType.AUTO,
 };
 
-// ─── Client + Player Manager ───
-const AUTO_DESTROY_DELAY = 2 * 60 * 1000; // 2 minutes grace period
+
+const AUTO_DESTROY_DELAY = 2 * 60 * 1000; 
 
 interface ManagedPlayer {
     client: Client;
@@ -308,15 +308,15 @@ export function hasActivePlayer(token: string): boolean {
     return players.has(token);
 }
 
-/**
- * Schedules auto-destruction of the player/client if no guilds have active queues
- * or voice connections. Uses a grace period to allow quick re-plays.
- */
+
+
+
+
 function scheduleAutoDestroy(token: string) {
     const managed = players.get(token);
     if (!managed) return;
 
-    // Clear any existing timer
+
     if (managed.destroyTimer) {
         clearTimeout(managed.destroyTimer);
         managed.destroyTimer = null;
@@ -326,7 +326,7 @@ function scheduleAutoDestroy(token: string) {
         const current = players.get(token);
         if (!current) return;
 
-        // Check if any guild still has an active queue or bot is in a voice channel
+
         let hasActivity = false;
 
         for (const [, node] of current.player.nodes.cache) {
@@ -337,7 +337,7 @@ function scheduleAutoDestroy(token: string) {
         }
 
         if (!hasActivity) {
-            // Double-check: is the bot still in any voice channel?
+
             for (const [, guild] of current.client.guilds.cache) {
                 if (guild.members.me?.voice.channel) {
                     hasActivity = true;
@@ -355,7 +355,7 @@ function scheduleAutoDestroy(token: string) {
     }, AUTO_DESTROY_DELAY);
 }
 
-/** Cancels any pending auto-destroy timer (e.g. when a new track starts playing). */
+
 function cancelAutoDestroy(token: string) {
     const managed = players.get(token);
     if (!managed?.destroyTimer) return;
@@ -380,21 +380,21 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
 
     const player = new Player(client);
 
-    // Mandatory event listeners for discord-player v7
+
     player.events.on('error', (queue, error) => {
         console.error(`[Queue Error] ${error.message}`);
-        // Release stuck task queue entries to prevent deadlocks
+
         queue.tasksQueue.clear(true);
     });
     player.events.on('playerError', (queue, error) => {
         console.error(`[Player Error] ${error.message}`);
-        // Release stuck task queue entries to prevent deadlocks
+
         queue.tasksQueue.clear(true);
     });
-    // When stream extraction fails, the task queue can get stuck
+
     player.events.on('playerSkip', (queue, track, reason, description) => {
         console.warn(`[Player Skip] "${track.title}" skipped (${reason}): ${description}`);
-        // Clear task queue to unblock subsequent play requests
+
         queue.tasksQueue.clear(true);
     });
     player.on('error', (message) => console.error(`[Player Object Error] ${message}`));
@@ -404,53 +404,53 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
         }
     });
 
-    // ─── Auto-cleanup event listeners ───
 
-    // When a track starts playing, cancel any pending auto-destroy
+
+
     player.events.on('playerStart', () => {
         cancelAutoDestroy(token);
     });
 
-    // When the queue finishes (no more tracks), schedule auto-destroy
+
     player.events.on('emptyQueue', () => {
         console.log(`📭 Queue empty, scheduling auto-destroy (token: ...${token.slice(-6)})`);
         scheduleAutoDestroy(token);
     });
 
-    // When the player's channel becomes empty (everyone left)
+
     player.events.on('emptyChannel', () => {
         console.log(`👻 Voice channel empty, scheduling auto-destroy (token: ...${token.slice(-6)})`);
         scheduleAutoDestroy(token);
     });
 
-    // When the player disconnects from voice
+
     player.events.on('disconnect', () => {
         console.log(`🔌 Player disconnected from voice, scheduling auto-destroy (token: ...${token.slice(-6)})`);
         scheduleAutoDestroy(token);
     });
 
-    // When the bot is kicked/moved out of a voice channel via Discord
+
     client.on('voiceStateUpdate', (oldState, newState) => {
-        // Only care about the bot's own voice state
+
         if (oldState.member?.id !== client.user?.id) return;
 
-        // Bot was in a channel and is now not in any channel (kicked/disconnected)
+
         if (oldState.channel && !newState.channel) {
             console.log(`👢 Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`);
-            // Clean up the queue for that guild
+
             const queue = player.nodes.get(oldState.guild.id);
             if (queue) queue.delete();
             scheduleAutoDestroy(token);
         }
     });
 
-    // If the Discord client itself disconnects/errors out
+
     client.on('shardDisconnect', () => {
         console.log(`⚡ Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
         destroyPlayer(token);
     });
 
-    // Setup ready promise before login
+
     const readyPromise = new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Discord client login timeout')), 30000);
         client.once('clientReady', () => {
@@ -464,9 +464,9 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
         });
     });
 
-    // Store early so duplicate requests don't create multiple players
+
     const fullReady = (async () => {
-        // Run login concurrently with extractors
+
         await Promise.all([
             client.login(token),
             player.extractors.register(YoutubeiExtractor, {
@@ -490,7 +490,7 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
             player.extractors.register(SoundcloudExtractor, {}),
             player.extractors.register(AppleMusicExtractor, {}),
         ]);
-        // Wait for client to be fully ready
+
         await readyPromise;
     })();
 
@@ -512,7 +512,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     const managed = players.get(token);
     if (!managed) return false;
 
-    // Clear any pending auto-destroy timer
+
     if (managed.destroyTimer) {
         clearTimeout(managed.destroyTimer);
         managed.destroyTimer = null;
@@ -524,7 +524,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     return true;
 }
 
-// ─── Helper: resolve voice channel ───
+
 export async function resolveVoiceChannel(client: Client, voiceId: string) {
     const channel = await client.channels.fetch(voiceId).catch(() => null);
     if (!channel || channel.type !== ChannelType.GuildVoice) {
@@ -533,12 +533,12 @@ export async function resolveVoiceChannel(client: Client, voiceId: string) {
     return channel;
 }
 
-// ─── Helper: get queue for guild ───
+
 export function getQueue(player: Player, guildId: string): GuildQueue | null {
     return player.nodes.get(guildId) || null;
 }
 
-// ─── Helper: format track info ───
+
 export function formatTrack(track: any) {
     return {
         id: String(track.id),

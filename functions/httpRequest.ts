@@ -18,14 +18,6 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
     return c.text('Forbidden', 403);
   }
 
-  if(getCookie(c, 'cf_clearance')) {
-
-    const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
-    c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-
-    c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-  }
-
   c.header('X-Enc-Route', 'v2');
 
     const type = headers?.get ? headers.get('content-type') : headers?.['content-type'];
@@ -85,11 +77,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
   catch {
     return c.text('', 200);
   }
-  if(getCookie(c, 'cf_clearance')) {
-    const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
-    c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-    c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-  }
+
   if(generate_hash) {
     const sh = c.req.query('sh') || '';
     const ua = c.req.header('user-agent') || '';

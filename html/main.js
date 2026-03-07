@@ -51,6 +51,19 @@ adjustHeight();
 urlInput.addEventListener('input', adjustHeight);
 window.addEventListener('resize', adjustHeight);
 
+function updateStatusUI(ok, status, duration) {
+    const statusDot = statusIndicator.querySelector('span:first-child');
+    if (ok) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-mint-400';
+        statusText.textContent = `${status} • ${duration}ms`;
+        statusText.className = 'text-mint-400';
+    } else {
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        statusText.textContent = `${status} • ${duration}ms`;
+        statusText.className = 'text-red-400';
+    }
+}
+
 function flattenRoutes(obj, parentPath = '') {
     let flatResults = [];
     if (Array.isArray(obj)) {
@@ -106,6 +119,7 @@ async function performRequest(targetUrl) {
                 if (contentType.startsWith('image/')) {
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
+            updateStatusUI(response.ok, response.status, duration);
             const imageUrl = URL.createObjectURL(blob);
 
                         lastRawResponse = '';
@@ -121,6 +135,7 @@ async function performRequest(targetUrl) {
 
                         const text = await response.text();
             duration = Math.round(performance.now() - startTime);
+            updateStatusUI(response.ok, response.status, duration);
             let formatted = text;
             let isJson = false;
 
@@ -141,41 +156,35 @@ async function performRequest(targetUrl) {
                  preElement.textContent = formatted;
             } else {
                 const lines = formatted.split('\n');
-                const CHUNK_SIZE = 5000;
+                const CHUNK_SIZE = 1;
                 let chunkIndex = 0;
 
                                 const processChunk = () => {
                     if (chunkIndex >= lines.length) return;
 
-                                        const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
-                    const chunkLines = lines.slice(chunkIndex, end);
-                    const chunkString = chunkLines.join('\n');
+                    const deadline = performance.now() + 10;
+                    const fragments = [];
 
-                                        const highlighted = syntaxHighlight(chunkString);
+                    while (chunkIndex < lines.length && performance.now() < deadline) {
+                        const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
+                        const chunkLines = lines.slice(chunkIndex, end);
+                        const chunkString = chunkLines.join('\n');
+                        const highlighted = syntaxHighlight(chunkString);
+                        fragments.push(highlighted + (end < lines.length ? '\n' : ''));
+                        chunkIndex = end;
+                    }
 
-                                        preElement.insertAdjacentHTML('beforeend', highlighted + (end < lines.length ? '\n' : ''));
+                    if (fragments.length > 0) {
+                        preElement.insertAdjacentHTML('beforeend', fragments.join(''));
+                    }
 
-                                        chunkIndex = end;
-
-                                        if (chunkIndex < lines.length) {
+                    if (chunkIndex < lines.length) {
                         requestAnimationFrame(processChunk);
                     }
                 };
 
                                 processChunk();
             }
-        }
-
-                const statusDot = statusIndicator.querySelector('span:first-child');
-
-                if (response.ok) {
-            statusDot.className = 'w-2 h-2 rounded-full bg-mint-400';
-            statusText.textContent = `${response.status} • ${duration}ms`;
-            statusText.className = 'text-mint-400';
-        } else {
-            statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
-            statusText.textContent = `${response.status} • ${duration}ms`;
-            statusText.className = 'text-red-400';
         }
     } catch (err) {
         responseArea.classList.remove('empty-state');

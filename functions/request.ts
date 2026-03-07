@@ -1104,23 +1104,13 @@ export const Genius = async function Genius(que: string) {
             session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
-                    'Accept': '*/*',
-                    'Origin': 'https://genius.com/',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
+                    'Origin': 'https://genius.com/'
                 }
             }),
             session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
-                    'Accept': '*/*',
-                    'Origin': 'https://genius.com/',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
+                    'Origin': 'https://genius.com/'
                 }
             })
         ]);
@@ -1184,18 +1174,17 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%5D%22%5D%26`;
 
     const session = new Session({ httpVersion: 'h1' });
-    const req = await session.post(`https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=${Number_random(100000,9999999)}`, {
+    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`, {
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
-            'x-goog-ext-525005358-jspb': `["${crypto.randomUUID().toUpperCase()}",1]`,
             'x-goog-ext-73010989-jspb': '[0]',
             'x-goog-ext-73010990-jspb': '[0]',
-            'Referer': 'https://bard.google.com',
-            'Origin': 'https://bard.google.com',
+            'Referer': 'https://gemini.google.com',
+            'Origin': 'https://gemini.google.com',
             'X-Same-Domain': '1'
         },
         body: reqPayload
@@ -1205,6 +1194,12 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
         session.close();
         return {
             "error": "Google asking to verify you're not a bot"
+        }
+    }
+    if (req.statusCode === 400) {
+        session.close();
+        return {
+            "error": "Gemini is not available in your country"
         }
     }
     if (req.statusCode === 429) {
@@ -2911,15 +2906,15 @@ export const TiktokUser = async function TiktokUser(que: string) {
 }
 
 export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code: any = '') {
-    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=&pullType=2&referer=&region=${region_code}&tz_name=Asia%2FJakarta&user_is_login=false&video_encoding=mp4&webcast_language=en`;
+    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en`;
     const client = new Session({
-        preset: 'chrome-144-linux',
+        preset: 'firefox-148-linux',
         httpVersion: 'h2',
         tlsOnly: false
     });
     const headers = {
         ...commonHeaders,
-        'Accept-Language': region_code || 'en',
+        'Accept-Language': 'en-US',
         'Referer': 'https://www.tiktok.com/explore'
     };
 
@@ -2955,7 +2950,10 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                 const bitrateInfo = videoInfo.bitrateInfo || [];
 
                 const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
-                const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
+                const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => 
+                    ((b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0)) - 
+                    ((a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0))
+                );
 
                 const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
                 const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
@@ -3022,7 +3020,6 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                     video_url: finalVideoUrl,
                     lowest_video_url: finalLowestVideoUrl || finalVideoUrl,
                     highest_video_url: finalHighestVideoUrl || finalVideoUrl,
-                    original_video_url: "",
                     bit_rate: sortedBitrateDesc.map((br: any) => ({
                         gear: br.GearName,
                         bitrate: br.Bitrate,
@@ -5005,7 +5002,7 @@ export async function GunsProfile(query: string): Promise<any> {
                 }
             });
             
-            if (res.statusCode !== 403) {
+            if (res.statusCode !== 401 || res.statusCode !== 403) {
                 break;
             }
             

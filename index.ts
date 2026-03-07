@@ -262,6 +262,11 @@ app.use('*', async (c: Context, next: Next) => {
         return c.body('', 200, { 'Content-Type': 'application/json' });
         }
     }
+    if(getCookie(c, 'cf_clearance')) {
+        const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
+        c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
+    }
     await next();
 });
 

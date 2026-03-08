@@ -14,7 +14,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
     return c.text('', 200);
   }
 
-  if (Object.entries(c.req.queries()).length !== 1) {
+  if (Object.entries(c.req.queries()).length >= 3) {
     return c.text('Forbidden', 403);
   }
 

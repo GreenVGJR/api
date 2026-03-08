@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { Hono, Context, Next } from 'hono';
 import { serve } from '@hono/node-server';
@@ -10,7 +11,6 @@ import fs from 'fs';
 import crypto from 'crypto';
 import config from './config.json' with { type: 'json' };
 import os from 'os';
-
 
 import reqs from './routes/search/index.js';
 import lyrics from './routes/lyrics/index.js';
@@ -78,7 +78,7 @@ const API_ROUTES = {
             "/tools/chat/sonar?prompt="
         ],
         image_generation: [
-            "/tools/ai-image/flux_demo?prompt=",
+            "/tools/ai-image/flux_schnell?prompt=",
             "/tools/ai-image/magicstudio?prompt=",
             "/tools/ai-image/bing?prompt=",
             ],

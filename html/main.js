@@ -14,8 +14,7 @@ let isLoading = false;
 let lastRawResponse = '';
 let isCoolingDown = false;
 
-const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
-
+const apiBaseUrl = window.API_BASE_URL || 'https://vgjr.top';
 
 if (window.SERVER_ENDPOINTS) {
     endpoints = window.SERVER_ENDPOINTS;

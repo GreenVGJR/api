@@ -1,4 +1,4 @@
-Nothing special here. at least 70% are vibecoded.
+Nothing special here. at least 75% are vibecoded.
 
 Library: 
 - [@discord-player/extractor](https://www.npmjs.com/package/@discord-player/extractor)
@@ -10,6 +10,7 @@ Library:
 - [discord-player-spotify](https://www.npmjs.com/package/discord-player-spotify)
 - [discord-player-youtubei](https://www.npmjs.com/package/discord-player-youtubei)
 - [discord.js](https://www.npmjs.com/package/discord.js)
+- [dotenv](https://www.npmjs.com/package/dotenv)
 - [entities](https://www.npmjs.com/package/entities)
 - [hono](https://www.npmjs.com/package/hono)
 - [httpcloak](https://www.npmjs.com/package/httpcloak)

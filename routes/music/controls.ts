@@ -140,6 +140,8 @@ app.get('/skip', async (c) => {
         await log('Request accepted');
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const indexStr = c.req.query('index') || '';
+        const index = parseInt(indexStr, 10);
 
         if (!token || !guildId) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
@@ -159,6 +161,25 @@ app.get('/skip', async (c) => {
         if (!queue || !queue.isPlaying()) {
             await log('No active queue found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active queue found for this guild' })}}`);
+            return;
+        }
+
+        if (indexStr !== '' && !isNaN(index)) {
+            const tracks = queue.tracks.toArray();
+            if (index < 0 || index >= tracks.length) {
+                await log(`Index ${index} out of bounds (queue size: ${tracks.length})`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
+                return;
+            }
+
+            const targetTrack = tracks[index];
+            await log(`Skipping to index ${index}: "${targetTrack.title}"`);
+            queue.node.jump(targetTrack);
+            
+            await s.write(`],"data":${JSON.stringify({
+                status: true,
+                data: { action: 'skipped_to_index', targetTrack: { title: targetTrack.title, index } }
+            })}}`);
             return;
         }
 
@@ -500,6 +521,245 @@ app.get('/shuffle', async (c) => {
                 queueSize: queue.tracks.size,
                 tracks: shuffledTracks
             }
+        })}}`);
+    });
+});
+
+
+app.get('/remove', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+        const indexStr = c.req.query('index') || '';
+        const index = parseInt(indexStr, 10);
+
+        if (!token || !guildId || indexStr === '' || isNaN(index)) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, index' })}}`);
+            return;
+        }
+
+        if (!hasActivePlayer(token)) {
+            await log('No active player found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        await log('Retrieving player...');
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue) {
+            await log('No active queue found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const tracks = queue.tracks.toArray();
+        if (index < 0 || index >= tracks.length) {
+            await log(`Index ${index} out of bounds (queue size: ${tracks.length})`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
+            return;
+        }
+
+        const trackToRemove = tracks[index];
+        await log(`Removing track at index ${index}: "${trackToRemove.title}"`);
+        queue.node.remove(trackToRemove);
+        await log('Track removed');
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: 'removed', track: { title: trackToRemove.title, index } }
+        })}}`);
+    });
+});
+
+
+app.get('/clear', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+
+        if (!token || !guildId) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            return;
+        }
+
+        if (!hasActivePlayer(token)) {
+            await log('No active player found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        await log('Retrieving player...');
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue) {
+            await log('No active queue found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const sizeBefore = queue.tracks.size;
+        await log(`Clearing queue (${sizeBefore} tracks)...`);
+        queue.tracks.clear();
+        await log('Queue cleared');
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: 'cleared', tracksRemoved: sizeBefore }
+        })}}`);
+    });
+});
+
+
+app.get('/jump', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+        const indexStr = c.req.query('index') || '';
+        const index = parseInt(indexStr, 10);
+
+        if (!token || !guildId || indexStr === '' || isNaN(index)) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, index' })}}`);
+            return;
+        }
+
+        if (!hasActivePlayer(token)) {
+            await log('No active player found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue || !queue.isPlaying()) {
+            await log('No active queue found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active queue found for this guild' })}}`);
+            return;
+        }
+
+        const tracks = queue.tracks.toArray();
+        if (index < 0 || index >= tracks.length) {
+            await log(`Index ${index} out of bounds (queue size: ${tracks.length})`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
+            return;
+        }
+
+        const targetTrack = tracks[index];
+        await log(`Jumping to index ${index}: "${targetTrack.title}"`);
+        queue.node.jump(targetTrack);
+        await log('Jumped successfully');
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: 'jumped', targetTrack: { title: targetTrack.title, index } }
+        })}}`);
+    });
+});
+
+
+app.get('/move', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+        const fromStr = c.req.query('from') || '';
+        const toStr = c.req.query('to') || '';
+        const from = parseInt(fromStr, 10);
+        const to = parseInt(toStr, 10);
+
+        if (!token || !guildId || fromStr === '' || toStr === '' || isNaN(from) || isNaN(to)) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, from, to' })}}`);
+            return;
+        }
+
+        if (!hasActivePlayer(token)) {
+            await log('No active player found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue) {
+            await log('No active queue found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const tracks = queue.tracks.toArray();
+        if (from < 0 || from >= tracks.length || to < 0 || to >= tracks.length) {
+            await log(`Index out of bounds: from=${from}, to=${to} (queue size: ${tracks.length})`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Index out of bounds' })}}`);
+            return;
+        }
+
+        const trackToMove = tracks[from];
+        await log(`Moving track "${trackToMove.title}" from ${from} to ${to}`);
+        queue.node.move(from, to);
+        await log('Track moved');
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: 'moved', track: trackToMove.title, from, to }
+        })}}`);
+    });
+});
+
+
+app.get('/back', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+
+        if (!token || !guildId) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            return;
+        }
+
+        if (!hasActivePlayer(token)) {
+            await log('No active player found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue) {
+            await log('No active queue found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        if (queue.history.tracks.size === 0) {
+            await log('No previous tracks in history');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No history found' })}}`);
+            return;
+        }
+
+        const prevTrack = queue.history.tracks.toArray()[0];
+        await log(`Backing to previous track: "${prevTrack?.title || 'Unknown'}"`);
+        
+        try {
+            await queue.history.back();
+            await log('Back successful');
+        } catch (err: any) {
+            await log(`Back failed: ${err.message}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to go back: ${err.message}` })}}`);
+            return;
+        }
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: 'back', currentTrack: prevTrack ? prevTrack.title : null }
         })}}`);
     });
 });

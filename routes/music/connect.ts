@@ -26,12 +26,28 @@ app.get('/connect', async (c) => {
         const channel = await resolveVoiceChannel(client, voiceId);
         await log(`Voice channel resolved: ${channel.name}`);
 
+        const me = channel.guild.members.me;
+        if (me?.voice.channelId === voiceId) {
+            const existingQueue = player.nodes.get(channel.guild.id);
+            if (existingQueue) {
+                await log('Already connected to this voice channel with an active queue');
+                await s.write(`],"data":${JSON.stringify({
+                    status: true,
+                    message: "Already connected",
+                    data: { channelId: voiceId, guildId: channel.guild.id }
+                })}}`);
+                return;
+            }
+            await log('Already in voice channel, but no active queue found. Initializing queue...');
+        } else if (me?.voice.channelId) {
+            await log(`Bot is currently in another channel: ${me.voice.channelId}. Moving...`);
+        }
+
         await log('Joining voice channel...');
         const connection = await player.voiceUtils.join(channel, {
             deaf: isDeaf,
         });
         await log('Connected to voice channel');
-
 
         player.nodes.create(channel.guild.id, {
             defaultFFmpegFilters: ["compressor"],
@@ -44,8 +60,6 @@ app.get('/connect', async (c) => {
             volume: 50
         });
 
-
-        const me = channel.guild.members.me;
         if (me) {
             me.voice.setDeaf(isDeaf).catch(() => {});
             setTimeout(() => {

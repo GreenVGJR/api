@@ -15,9 +15,9 @@ export function createMusicStream(c: any, callback: (log: (msg: string) => Promi
     const signature = crypto.createHash("md5").update(JSON.stringify(c.req.header())).digest("hex");
 
     c.header('Content-Type', 'application/json');
-    c.header('Cache-Control', 'no-cache, no-transform');
+    c.header('Cache-Control', 'no-cache, no-transform, no-store, max-age=0');
 
-        c.header('X-PO-Client-Id', crypto.createHash("md5").update(oo).digest("hex"));
+    c.header('X-PO-Client-Id', crypto.createHash("md5").update(oo).digest("hex"));
     c.header('X-PO-Client', signature);
     c.header('X-Enc-Route', 'v1-beta');
     c.header('X-Route', 'LIVE');

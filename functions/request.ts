@@ -1181,8 +1181,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
             'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
-            'x-goog-ext-73010989-jspb': '[0]',
-            'x-goog-ext-73010990-jspb': '[0]',
             'Referer': 'https://gemini.google.com',
             'Origin': 'https://gemini.google.com',
             'X-Same-Domain': '1'

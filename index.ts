@@ -137,14 +137,20 @@ const API_ROUTES = {
         "/music/play?token=&q=&platform=&voiceId=",
         "/music/pause?token=&guildId=",
         "/music/resume?token=&guildId=",
-        "/music/skip?token=&guildId=",
+        "/music/skip?token=&guildId=&index=",
         "/music/stop?token=&guildId=&leave=",
         "/music/seek?token=&guildId=&time=",
         "/music/volume?token=&guildId=&value=",
         "/music/loop?token=&guildId=&mode=",
         "/music/shuffle?token=&guildId=",
+        "/music/remove?token=&guildId=&index=",
+        "/music/clear?token=&guildId=",
+        "/music/jump?token=&guildId=&index=",
+        "/music/move?token=&guildId=&from=&to=",
+        "/music/back?token=&guildId=",
         "/music/nowplaying?token=&guildId=",
-        "/music/queue?token=&guildId="
+        "/music/nowplaying/lyrics?token=&guildId=",
+        "/music/queue?token=&guildId=&limit=&offset="
     ]
 };
 
@@ -180,8 +186,6 @@ const PLAYGROUND_ENDPOINTS = {
     profile: flattenRoutes(API_ROUTES.profile),
     music: flattenRoutes(API_ROUTES.music)
 };
-
-
 
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
 import tls from 'tls';
@@ -323,7 +327,14 @@ function isLocalRequest(host: string | undefined): boolean {
            h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
 }
 
-app.use('*', compress());
+app.use('*', async (c: Context, next: Next) => {
+    const ua = c.req.header('user-agent') || '';
+    const sfd = c.req.header('sec-fetch-dest');
+    if (ua.startsWith('Mozilla/5.0') || (sfd && sfd !== 'document')) {
+        return compress({ encoding: 'deflate' })(c, next);
+    }
+    await next();
+});
 
 app.use('*', cors({
     credentials: true,
@@ -363,15 +374,18 @@ if (BUILD_ID) {
 }
 
 app.get('/favicon.ico', (c: Context) => {
+    c.header('Cache-Control', 'public, max-age=60');
     c.header('Content-Type', 'image/x-icon');
     return c.body(favicon);
 });
 
 app.get('/robots.txt', (c: Context) => {
+    c.header('Cache-Control', 'public, max-age=60');
     return c.text(robots, 200);
 });
 
 app.get('/tools/health', (c: Context) => {
+    c.header('Cache-Control', 'public, max-age=60, immutable');
     return c.text('OK', 200);
 });
 
@@ -388,6 +402,8 @@ app.get('/playground', (c: Context) => {
         let html = playgroundTemplate
         .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
 
+    c.header('Cache-Control', 'public, max-age=60, immutable');
+
     return c.html(html);
 });
 
@@ -396,6 +412,7 @@ app.get('/playground/main.js', (c: Context) => {
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
+    c.header('Cache-Control', 'public, max-age=60, immutable');
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
@@ -404,6 +421,7 @@ app.get('/playground/main.css', (c: Context) => {
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);
+    c.header('Cache-Control', 'public, max-age=60, immutable');
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });
 
@@ -414,6 +432,7 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
+    c.header('Cache-Control', 'public, max-age=0');
 
     return stream(c, async (stream) => {
         await stream.write('');

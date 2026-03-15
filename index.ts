@@ -258,7 +258,7 @@ const challengeHtml = (verifyUrl: string) => `
       function executeChallenge() {
         fetch('${verifyUrl}', { method: 'POST' })
         .then(res => {
-          if (res.ok) window.location.href = window.location.href;
+          if (res.ok) window.location.reload();
         });
       }
       if (document.readyState !== 'loading') { executeChallenge(); }
@@ -462,6 +462,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
 
 app.get('/playground', (c: Context) => stream(c, async (s) => {
     c.header('Content-Type', 'text/html');
+    c.header('Vary', 'Referer');
     await s.write('');
     const referer = c.req.header('referer') || '';
     const host = (c.req.header('host') || '').toLowerCase();
@@ -499,7 +500,7 @@ app.get('/playground', (c: Context) => stream(c, async (s) => {
     let html = playgroundTemplate
         .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
 
-    c.header('Cache-Control', 'private, max-age=60, immutable');
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     await s.write(html);
 }));
 

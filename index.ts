@@ -460,10 +460,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
     }
 });
 
-app.get('/playground', (c: Context) => stream(c, async (s) => {
-    c.header('Content-Type', 'text/html');
-    c.header('Vary', 'Referer');
-    await s.write('');
+app.get('/playground', (c: Context) => {
     const referer = c.req.header('referer') || '';
     const host = (c.req.header('host') || '').toLowerCase();
     
@@ -480,29 +477,36 @@ app.get('/playground', (c: Context) => stream(c, async (s) => {
         const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
         const verifyUrl = `/playground.verify/aaol/${encryptedHeaders}/2/${randomChars}`;
         
+        c.header('Content-Type', 'text/html');
+        c.header('Vary', 'Referer');
         c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        await s.write(challengeHtml(verifyUrl));
-        return;
-    }
-    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
-        await s.write('Forbidden');
-        return;
-    }
-    const isLocal = isLocalRequest(host);
-    const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
-
-    const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'document') {
-         return;
+        return c.html(challengeHtml(verifyUrl));
     }
 
-    let html = playgroundTemplate
-        .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
+    return stream(c, async (s) => {
+        c.header('Content-Type', 'text/html');
+        c.header('Vary', 'Referer');
+        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        
+        await s.write(''); // Initial flush
+        
+        const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+        if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
+            await s.write('Forbidden');
+            return;
+        }
+        
+        const isLocal = isLocalRequest(host);
+        const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
+        const secFetchDest = c.req.header('Sec-Fetch-Dest');
+        if(secFetchDest && secFetchDest !== 'document') return;
 
-    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    await s.write(html);
-}));
+        let html = playgroundTemplate
+            .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
+
+        await s.write(html);
+    });
+});
 
 app.get('/playground/main.js', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');

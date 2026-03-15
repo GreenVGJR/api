@@ -5420,6 +5420,44 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
     }
 };
 
+export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: 'user' | 'bot' | 'all' = 'all') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${limit}`;
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch {}
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (Array.isArray(data)) {
+            if (type === 'user') {
+                data = data.filter((member: any) => !member.user?.bot);
+            } else if (type === 'bot') {
+                data = data.filter((member: any) => member.user?.bot);
+            }
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
 export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit?: number) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!channelId) return { error: 'Missing channelId' };

@@ -21,9 +21,9 @@
     "youtube-dl-exec": "^3.1.3"
   },
   "scripts": {
-    "start": "NODE_OPTIONS='--dns-result-order=ipv4first' tsx index.ts",
+    "start": "pm2 describe api > /dev/null 2>&1 && pm2 restart api || pm2 start \"NODE_OPTIONS='--dns-result-order=ipv4first' tsx index.ts\" --name api",
     "gen": "bun gen-routes.ts",
-    "gen-update": "git fetch origin main && git reset --hard origin/main && pm2 restart api"
+    "gen-update": "curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && pm2 restart api"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

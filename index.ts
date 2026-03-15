@@ -243,6 +243,28 @@ const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 
 
 const app = new Hono({ strict: false });
+const challengeHtml = (verifyUrl: string) => `
+<!DOCTYPE html>
+<html style="background:#000">
+<head>
+    <title>Please wait</title>
+</head>
+<body style="background:#000;margin:0">
+    <script>
+    (function() {
+      function executeChallenge() {
+        fetch('${verifyUrl}', { method: 'POST' })
+        .then(res => {
+          if (res.ok) window.location.href = window.location.href;
+        });
+      }
+      if (document.readyState !== 'loading') { executeChallenge(); }
+      else { document.addEventListener('DOMContentLoaded', executeChallenge); }
+    })();
+    </script>
+</body>
+</html>
+`;
 const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Please wait</body></html>`;
 
 app.use('*', async (c: Context, next: Next) => {
@@ -388,10 +410,52 @@ app.get('/tools/health', (c: Context) => {
     return c.text('OK', 200);
 });
 
+app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
+    try {
+        const headersParam = c.req.param('headers');
+        if (!headersParam) return c.body(null, 403);
+        const decoded = JSON.parse(Buffer.from(headersParam, 'base64').toString());
+        
+        const currentUA = c.req.header('user-agent');
+        const currentHost = c.req.header('host');
+
+        // Verification logic
+        const matchesUA = decoded['user-agent'] === currentUA;
+        const matchesHost = decoded['origin'] === "http://" + currentHost;
+        const isNotExpired = Date.now() - (decoded.timeGenerate || 0) < 10000; // 10 seconds
+
+        if (!matchesUA || !matchesHost || !isNotExpired) {
+            return c.body(null, 403);
+        }
+
+        return c.body(null, 202);
+    } catch (e) {
+        return c.body(null, 403);
+    }
+});
+
 app.get('/playground', (c: Context) => {
+    const referer = c.req.header('referer') || '';
+    const host = c.req.header('host') || '';
+    
+    // Check if referer starts with the playground URL on this host
+    const isAllowedReferer = referer.includes(`${host}/playground`);
+
+    if (!isAllowedReferer) {
+        const reqUser = c.req.header();
+        const info = {
+            ...reqUser,
+            origin: `http://${host}`,
+            timeGenerate: Date.now()
+        };
+        const base64Headers = Buffer.from(JSON.stringify(info)).toString('base64url').replace(/=/g, '');
+        const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
+        const verifyUrl = `/playground.verify/aaol/${base64Headers}/2/${randomChars}`;
+        
+        return c.html(challengeHtml(verifyUrl));
+    }
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
-    const host = c.req.header('host');
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
 

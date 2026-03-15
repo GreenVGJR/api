@@ -18,5 +18,6 @@ Library:
 - [tslib](https://www.npmjs.com/package/tslib)
 - [undici](https://www.npmjs.com/package/undici)
 - [x-client-transaction-id](https://www.npmjs.com/package/x-client-transaction-id)
+- [youtube-dl-exec](https://www.npmjs.com/package/youtube-dl-exec)
 
 License: [Unlicense](LICENSE)

@@ -471,7 +471,7 @@ app.get('/playground', (c: Context) => {
     const isAllowedReferer = referer.includes('/playground');
 
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    c.header('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
 
     if (!isAllowedReferer) {
         const info = {
@@ -489,7 +489,7 @@ app.get('/playground', (c: Context) => {
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'public, max-age=60, immutable');
+    c.header('Cache-Control', 'public, max-age=60, no-transform, immutable');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush

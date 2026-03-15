@@ -258,7 +258,9 @@ const challengeHtml = (verifyUrl: string) => `
       function executeChallenge() {
         fetch('${verifyUrl}', { method: 'POST' })
         .then(res => {
-          if (res.ok) window.location.reload();
+          if (res.ok) {
+            window.location.href = window.location.pathname;
+          }
         });
       }
       if (document.readyState !== 'loading') { executeChallenge(); }
@@ -454,6 +456,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
             return c.body(null, 403);
         }
 
+        c.header('Refresh', '0; url=/playground');
         return c.body(null, 202);
     } catch (e) {
         return c.body(null, 403);
@@ -464,8 +467,11 @@ app.get('/playground', (c: Context) => {
     const referer = c.req.header('referer') || '';
     const host = (c.req.header('host') || '').toLowerCase();
     
-    // Check if referer starts with the playground URL on this host
-    const isAllowedReferer = referer.includes(`${host}/playground`);
+    // Simple but robust check: does the referer contain our path?
+    const isAllowedReferer = referer.includes('/playground');
+
+    c.header('Vary', 'Referer');
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     if (!isAllowedReferer) {
         const info = {
@@ -478,16 +484,14 @@ app.get('/playground', (c: Context) => {
         const verifyUrl = `/playground.verify/aaol/${encryptedHeaders}/2/${randomChars}`;
         
         c.header('Content-Type', 'text/html');
-        c.header('Vary', 'Referer');
-        c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         return c.html(challengeHtml(verifyUrl));
     }
 
+    c.header('Content-Type', 'text/html');
+    c.header('Vary', 'Referer');
+    c.header('Cache-Control', 'public, max-age=60, immutable');
+
     return stream(c, async (s) => {
-        c.header('Content-Type', 'text/html');
-        c.header('Vary', 'Referer');
-        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-        
         await s.write(''); // Initial flush
         
         const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
@@ -508,29 +512,57 @@ app.get('/playground', (c: Context) => {
     });
 });
 
-app.get('/playground/main.js', (c: Context) => {
-    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
-    const host = c.req.header('host') || '';
+app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
+    const host = (c.req.header('host') || '').toLowerCase();
     const referer = c.req.header('referer') || '';
-    if (!referer.includes(`${host}/playground`)) return c.body(null, 403);
-    const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
-    c.header('Cache-Control', 'public, max-age=0');
-    return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
-});
+    const refPath = referer.split('?')[0].replace(/\/$/, '');
+    
+    c.header('Content-Type', 'application/javascript');
+    await s.write('');
 
-app.get('/playground/main.css', (c: Context) => {
+    if (!refPath.endsWith(`${host}/playground`)) {
+        await s.write('Forbidden');
+        return;
+    }
+    
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
-    const host = c.req.header('host') || '';
-    const referer = c.req.header('referer') || '';
-    if (!referer.includes(`${host}/playground`)) return c.body(null, 403);
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
+        await s.write('Forbidden');
+        return;
+    }
+    
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);
+    if(secFetchDest && secFetchDest !== 'script') return;
+    
     c.header('Cache-Control', 'public, max-age=0');
-    return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
-});
+    await s.write(mainJs);
+}));
+
+app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
+    const host = (c.req.header('host') || '').toLowerCase();
+    const referer = c.req.header('referer') || '';
+    const refPath = referer.split('?')[0].replace(/\/$/, '');
+    
+    c.header('Content-Type', 'text/css');
+    await s.write('');
+
+    if (!refPath.endsWith(`${host}/playground`)) {
+        await s.write('Forbidden');
+        return;
+    }
+    
+    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
+        await s.write('Forbidden');
+        return;
+    }
+    
+    const secFetchDest = c.req.header('Sec-Fetch-Dest');
+    if(secFetchDest && secFetchDest !== 'style') return;
+    
+    c.header('Cache-Control', 'public, max-age=0');
+    await s.write(mainCss);
+}));
 
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');

@@ -243,6 +243,9 @@ const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 
 
 const app = new Hono({ strict: false });
+
+app.use('*', compress());
+
 const challengeHtml = (verifyUrl: string) => `
 <!DOCTYPE html>
 <html style="background:#000">
@@ -269,31 +272,34 @@ const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Plea
 
 app.use('*', async (c: Context, next: Next) => {
     if(restrictLocal) {
-    const host = c.req.header('host');
-    const h = host?.split(':')[0];
-    const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || 
-                    h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
-    const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
+        const host = c.req.header('host');
+        const h = host?.split(':')[0];
+        const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || 
+                        h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
+        const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
 
-    if (!isAllowed && !isLocal) {
-        const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-        if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
-        const url = new URL(c.req.url);
-        url.host = 'api.vgjr.top';
-        url.protocol = 'https:';
-        if (url.pathname === '/') url.pathname = '/playground';
+        if (!isAllowed && !isLocal) {
+            const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
+            if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
+            const url = new URL(c.req.url);
+            url.host = 'api.vgjr.top';
+            url.protocol = 'https:';
+            if (url.pathname === '/') url.pathname = '/playground';
 
-        c.header('Refresh', `0; url=${url.toString()}`);
-        return c.body('', 200, { 'Content-Type': 'application/json' });
+            c.header('Refresh', `0; url=${url.toString()}`);
+            return c.body('', 200, { 'Content-Type': 'application/json' });
         }
     }
     if(getCookie(c, 'cf_clearance')) {
         const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
-        c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
+        const domain = '.vgjr.top';
+        c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
         c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
     }
     await next();
 });
+
+
 
 const port = 3000;
 const starttime = Date.now();
@@ -374,15 +380,6 @@ function isLocalRequest(host: string | undefined): boolean {
            h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
 }
 
-app.use('*', async (c: Context, next: Next) => {
-    const ua = c.req.header('user-agent') || '';
-    const sfd = c.req.header('sec-fetch-dest');
-    if (ua.startsWith('Mozilla/5.0') || (sfd && sfd !== 'document')) {
-        return compress({ encoding: 'deflate' })(c, next);
-    }
-    await next();
-});
-
 app.use('*', cors({
     credentials: true,
     origin: '*',
@@ -441,7 +438,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
         const headersParam = c.req.param('headers');
         if (!headersParam) return c.body(null, 403);
         
-        const currentHost = c.req.header('host') || '';
+        const currentHost = (c.req.header('host') || '').toLowerCase();
         const decryptedStr = decryptPayload(headersParam, currentHost);
         if (!decryptedStr) return c.body(null, 403);
         
@@ -450,7 +447,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
 
         // Verification logic
         const matchesUA = decoded['user-agent'] === currentUA;
-        const matchesHost = decoded['origin'] === currentHost;
+        const matchesHost = decoded['host'] === currentHost;
         const isNotExpired = Date.now() - (decoded.timeGenerate || 0) < 10000; // 10 seconds
 
         if (!matchesUA || !matchesHost || !isNotExpired) {
@@ -463,41 +460,48 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
     }
 });
 
-app.get('/playground', (c: Context) => {
+app.get('/playground', (c: Context) => stream(c, async (s) => {
+    c.header('Content-Type', 'text/html');
+    await s.write('');
     const referer = c.req.header('referer') || '';
-    const host = c.req.header('host') || '';
+    const host = (c.req.header('host') || '').toLowerCase();
     
     // Check if referer starts with the playground URL on this host
     const isAllowedReferer = referer.includes(`${host}/playground`);
 
     if (!isAllowedReferer) {
-        const reqUser = c.req.header();
         const info = {
-            ...reqUser,
-            origin: `${host}`,
+            'user-agent': c.req.header('user-agent'),
+            'host': host,
             timeGenerate: Date.now()
         };
         const encryptedHeaders = encryptPayload(JSON.stringify(info), host);
         const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
         const verifyUrl = `/playground.verify/aaol/${encryptedHeaders}/2/${randomChars}`;
         
-        return c.html(challengeHtml(verifyUrl));
+        c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        await s.write(challengeHtml(verifyUrl));
+        return;
     }
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
+    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
+        await s.write('Forbidden');
+        return;
+    }
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
 
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'document') return c.newResponse(null, 400);
+    if(secFetchDest && secFetchDest !== 'document') {
+         return;
+    }
 
-        let html = playgroundTemplate
+    let html = playgroundTemplate
         .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
 
     c.header('Cache-Control', 'private, max-age=60, immutable');
-
-    return c.html(html);
-});
+    await s.write(html);
+}));
 
 app.get('/playground/main.js', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');

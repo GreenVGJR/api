@@ -341,6 +341,32 @@ const BUILD_ID = buildIdConfig === true
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
 
+function encryptPayload(data: string, secret: string): string {
+    try {
+        const key = crypto.createHash('sha256').update(secret).digest();
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+        const tag = cipher.getAuthTag();
+        return Buffer.concat([iv, encrypted, tag]).toString('base64url');
+    } catch { return ""; }
+}
+
+function decryptPayload(payload: string, secret: string): string {
+    try {
+        const data = Buffer.from(payload, 'base64url');
+        if (data.length < 28) return ""; 
+        const key = crypto.createHash('sha256').update(secret).digest();
+        const iv = data.subarray(0, 12);
+        const tag = data.subarray(data.length - 16);
+        const encrypted = data.subarray(12, data.length - 16);
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(tag);
+        return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    } catch { return ""; }
+}
+
+
 function isLocalRequest(host: string | undefined): boolean {
     if (!host) return false;
     const h = host.split(':')[0];
@@ -414,14 +440,17 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
     try {
         const headersParam = c.req.param('headers');
         if (!headersParam) return c.body(null, 403);
-        const decoded = JSON.parse(Buffer.from(headersParam, 'base64').toString());
         
+        const currentHost = c.req.header('host') || '';
+        const decryptedStr = decryptPayload(headersParam, currentHost);
+        if (!decryptedStr) return c.body(null, 403);
+        
+        const decoded = JSON.parse(decryptedStr);
         const currentUA = c.req.header('user-agent');
-        const currentHost = c.req.header('host');
 
         // Verification logic
         const matchesUA = decoded['user-agent'] === currentUA;
-        const matchesHost = decoded['origin'] === "http://" + currentHost;
+        const matchesHost = decoded['origin'] === currentHost;
         const isNotExpired = Date.now() - (decoded.timeGenerate || 0) < 10000; // 10 seconds
 
         if (!matchesUA || !matchesHost || !isNotExpired) {
@@ -445,12 +474,12 @@ app.get('/playground', (c: Context) => {
         const reqUser = c.req.header();
         const info = {
             ...reqUser,
-            origin: `http://${host}`,
+            origin: `${host}`,
             timeGenerate: Date.now()
         };
-        const base64Headers = Buffer.from(JSON.stringify(info)).toString('base64url').replace(/=/g, '');
+        const encryptedHeaders = encryptPayload(JSON.stringify(info), host);
         const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
-        const verifyUrl = `/playground.verify/aaol/${base64Headers}/2/${randomChars}`;
+        const verifyUrl = `/playground.verify/aaol/${encryptedHeaders}/2/${randomChars}`;
         
         return c.html(challengeHtml(verifyUrl));
     }
@@ -465,7 +494,7 @@ app.get('/playground', (c: Context) => {
         let html = playgroundTemplate
         .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
 
-    c.header('Cache-Control', 'public, max-age=60, immutable');
+    c.header('Cache-Control', 'private, max-age=60, immutable');
 
     return c.html(html);
 });
@@ -473,18 +502,24 @@ app.get('/playground', (c: Context) => {
 app.get('/playground/main.js', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
+    const host = c.req.header('host') || '';
+    const referer = c.req.header('referer') || '';
+    if (!referer.includes(`${host}/playground`)) return c.body(null, 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'script') return c.newResponse(null, 400);
-    c.header('Cache-Control', 'public, max-age=60, immutable');
+    c.header('Cache-Control', 'public, max-age=0');
     return c.body(mainJs, 200, { 'Content-Type': 'application/javascript' });
 });
 
 app.get('/playground/main.css', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
+    const host = c.req.header('host') || '';
+    const referer = c.req.header('referer') || '';
+    if (!referer.includes(`${host}/playground`)) return c.body(null, 403);
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'style') return c.newResponse(null, 400);
-    c.header('Cache-Control', 'public, max-age=60, immutable');
+    c.header('Cache-Control', 'public, max-age=0');
     return c.body(mainCss, 200, { 'Content-Type': 'text/css' });
 });
 

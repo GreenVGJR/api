@@ -80,7 +80,6 @@ const API_ROUTES = {
         image_generation: [
             "/tools/ai-image/flux_schnell?prompt=",
             "/tools/ai-image/magicstudio?prompt=",
-            "/tools/ai-image/bing?prompt=",
             ],
         },
         discord: {

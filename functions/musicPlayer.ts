@@ -376,6 +376,9 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildVoiceStates,
         ],
+        presence: {
+            status: 'invisible'
+        }
     });
 
     const player = new Player(client);

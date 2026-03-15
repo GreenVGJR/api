@@ -64,6 +64,10 @@
     width: 0;
     min-width: 100%;
 }
+#urlInput {
+    max-height: 100px;
+    transition: none;
+}
 pre {
     max-width: 100%;
     overflow-x: auto;

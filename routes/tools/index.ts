@@ -7,7 +7,6 @@ import perplexity from './perplexity.js';
 import discordInfoMember from './discordInfoMember.js';
 import discordInfoMessages from './discordInfoMessages.js';
 import timezone from './timezone.js';
-import bingImagine from './bingImagine.js';
 import discordModifyMember from './discordModifyMember.js';
 import discordModifyServer from './discordModifyServer.js';
 import discordStream from './discordStream.js';
@@ -16,4 +15,4 @@ import discordWebhook from './discordWebhook.js';
 import magicstudio from './magicstudio.js';
 import flux from './flux.js';
 
-export default [geminiAmp, translateAmp, meta, grok, perplexity, discordInfoMember, discordInfoMessages, timezone, bingImagine, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux] as any[];
+export default [geminiAmp, translateAmp, meta, grok, perplexity, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux] as any[];

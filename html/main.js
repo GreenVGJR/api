@@ -43,7 +43,9 @@ urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith('/') ? '' : '/');
 
 function adjustHeight() {
     urlInput.style.height = 'auto';
-    urlInput.style.height = urlInput.scrollHeight + 'px';
+    const newHeight = Math.min(urlInput.scrollHeight, 100);
+    urlInput.style.height = newHeight + 'px';
+    urlInput.style.overflowY = urlInput.scrollHeight > 100 ? 'auto' : 'hidden';
 }
 
 adjustHeight();

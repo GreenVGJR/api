@@ -34,17 +34,18 @@ app.get('/shazam', async (c) => {
             const trackViewUrl: string = firstTrack.trackViewUrl || '';
 
 
-
-
             let shazamUrl: string | null = null;
             try {
                 const parsedUrl = new URL(trackViewUrl);
                 const iParam = parsedUrl.searchParams.get('i');
                 const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-                const lastSegment = pathSegments[pathSegments.length - 1];
 
-                if (iParam && lastSegment) {
-                    shazamUrl = `https://www.shazam.com/song/${iParam}/${lastSegment}`;
+                // Path format: /us/album/track-name-slug/albumId?i=trackId
+                // We need the slug (index 2) and the track ID (i param)
+                const slugSegment = pathSegments.length >= 3 ? pathSegments[2] : null;
+
+                if (iParam && slugSegment) {
+                    shazamUrl = `https://www.shazam.com/song/${iParam}/${slugSegment}`;
                 }
             } catch { }
 
@@ -76,7 +77,7 @@ app.get('/shazam', async (c) => {
                             const ldJsonStr = ldJsonMatch[1].split('</script>')[0];
                             const ldJson = JSON.parse(ldJsonStr);
 
-                                                        let parsedDuration: number | null = null;
+                            let parsedDuration: number | null = null;
                             if (ldJson.duration && ldJson.duration.startsWith('PT')) {
                                 const match = ldJson.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
                                 if (match) {
@@ -87,13 +88,18 @@ app.get('/shazam', async (c) => {
                                 }
                             }
 
+                            // Handle byArtist as either string or object
+                            const byArtist = typeof ldJson.byArtist === 'string'
+                                ? ldJson.byArtist
+                                : (ldJson.byArtist?.name || ldJson.creator?.name || null);
+
                             shazamInfo = {
                                 trackName: ldJson.name || null,
                                 trackUrl: ldJson.url || null,
                                 thumbnailUrl: ldJson.thumbnailUrl?.replace(/\d+x\d+\w+/, '1x1ss').replace(/\.\w+$/, '.png') || null,
                                 durationTrack: parsedDuration,
                                 genreTrack: ldJson.genre || null,
-                                byArtist: ldJson.byArtist?.name || null,
+                                byArtist: byArtist,
                                 albumName: ldJson.inAlbum?.name || null,
                                 albumPublished: ldJson.datePublished || null,
                             };
@@ -117,6 +123,9 @@ app.get('/shazam', async (c) => {
 
                         const labelMatch = html.match(/>Label<\/span><span[^>]*>([^<]+)<\/span>/);
                         shazamInfo.label = labelMatch ? decodeHTML(labelMatch[1]) : null;
+
+                        const languageMatch = html.match(/>Language<\/span><span[^>]*>([^<]+)<\/span>/);
+                        shazamInfo.language = languageMatch ? decodeHTML(languageMatch[1]) : null;
 
                         const bpmMatch = html.match(/>BPM<\/span><span[^>]*>(\d+)<\/span>/);
                         shazamInfo.bpm = bpmMatch ? parseInt(bpmMatch[1], 10) : null;
@@ -184,7 +193,7 @@ app.get('/shazam', async (c) => {
                                 for (let i = 1; i < lyricParts.length; i++) {
                                     const part = lyricParts[i];
                                     if (part.startsWith('sectionTitle') || part.startsWith('lyricLine')) {
-                                        const text = part.split('">')[1]?.split('</div>')[0];
+                                        const text = part.split('">')[1]?.split('</div>')[0]?.replace(/<[^>]*>/g, '');
                                         if (text) {
                                             lyricLines.push(text);
                                         }

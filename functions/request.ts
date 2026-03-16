@@ -6,7 +6,7 @@ const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
 export const request: typeof undiciRequest = (url, options = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-    
+
     return undiciRequest(url, {
         ...options,
         signal: controller.signal,
@@ -35,6 +35,21 @@ export const commonHeaders = {
     'User-Agent': userAgent
 }
 
+let keyYoutubeVisitor: string | null = null;
+
+export async function youtubeVisitorKey(): Promise<string | null> {
+    try {
+        const res = await request('https://www.youtube.com/', {
+            headers: commonHeaders
+        });
+        const text = await res.body.text();
+        return text.split('"visitorData":"')[1]?.split('"')[0] || null;
+    } catch (e) {
+        console.error("Error fetching visitorData:", e);
+        return null;
+    }
+}
+
 const parseAbbreviatedNumber = (str: string | null | undefined): number | null => {
     if (!str) return null;
     const cleanStr = str.replace(/,/g, '').replace(/subscribers|videos|video|views|view|watching/gi, '').trim();
@@ -43,10 +58,10 @@ const parseAbbreviatedNumber = (str: string | null | undefined): number | null =
         const n = parseFloat(cleanStr);
         return isNaN(n) ? null : Math.floor(n);
     }
-    
+
     let num = parseFloat(match[1]);
     const unit = match[2].toUpperCase();
-    
+
     switch (unit) {
         case 'K': num *= 1000; break;
         case 'M': num *= 1000000; break;
@@ -59,7 +74,7 @@ const formatAbbreviatedNumber = (num: number | string | null | undefined): strin
     if (num === null || num === undefined) return '0';
     const n = typeof num === 'string' ? parseFloat(num) : num;
     if (isNaN(n)) return '0';
-    
+
     if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
     if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
     if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -305,6 +320,8 @@ let keysptoken: string | undefined;
 let keytidal: string | undefined;
 let keydeezer: string | undefined;
 let keyimgur: string | undefined;
+let saweriaBuildId: string | undefined;
+
 
 
 let twitterDocument: any;
@@ -487,18 +504,18 @@ export const YTVideo = async function YTVideo(que: string) {
             }
         });
         const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
-                headers: {
-                    ...commonHeaders,
-                    'content-type': 'application/json'
-                },
-                body: bodyload,
-                method: "POST"
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
         });
 
         const res: any = await response.body.json();
         let alk: any[] = [];
         const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-        
+
         inrtubeContents.forEach((item: any) => {
             const a = item.videoRenderer;
             if (!a) return;
@@ -551,17 +568,17 @@ export const YTMusic = async function YTMusic(que: string) {
             }
         });
         const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
-                headers: {
-                    ...commonHeaders,
-                    'Content-Type': 'application/json'
-                },
-                body: bodyload,
-                method: "POST"
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
         });
 
         const res: any = await response.body.json();
 
-        if(!res?.contents?.tabbedSearchResultsRenderer) {
+        if (!res?.contents?.tabbedSearchResultsRenderer) {
             return {
                 error: "YouTube Music is not available in your area"
             }
@@ -577,7 +594,7 @@ export const YTMusic = async function YTMusic(que: string) {
             try {
                 const flexColumn1 = a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
                 const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
-                
+
                 const artistRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r.navigationEndpoint.browseEndpoint.browseId.startsWith('MPRE'));
                 const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('MPRE'));
                 const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(':')).pop() || flexColumn1[flexColumn1.length - 1];
@@ -605,9 +622,9 @@ export const YTMusic = async function YTMusic(que: string) {
         return {
             data: alk
         };
-    } catch (e) { 
+    } catch (e) {
         console.error("YTMusic Global Error:", e);
-        return null; 
+        return null;
     }
 }
 
@@ -847,7 +864,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
             }),
             SavetikVideo(targetUrl)
         ]);
-        
+
         const html = await response.body.text();
         const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split('</script>')[0];
 
@@ -873,12 +890,12 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
                 play_url: videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233'),
                 original_play_url: savetikData?.video_url || null,
                 bit_rate: videoDetail.video?.bitrateInfo?.map((br: any) => ({
-                        gearName: br.GearName,
-                        bitrate: br.Bitrate,
-                        res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
-                        format: br.Format,
-                        codec: br.CodecType,
-                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
+                    gearName: br.GearName,
+                    bitrate: br.Bitrate,
+                    res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+                    format: br.Format,
+                    codec: br.CodecType,
+                    play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
                 })),
                 likeCount: videoDetail.statsV2?.diggCount?.toString(),
                 shareCount: videoDetail.statsV2?.shareCount?.toString(),
@@ -928,17 +945,17 @@ async function SavetikVideo(url: string) {
     if (!url) return null;
     try {
         const response = await request('https://savetik.io/api/ajaxSearch', {
-             method: 'POST',
-             headers: {
-                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                 ...commonHeaders
-             },
-             body: new URLSearchParams({
-                 q: url,
-                 cursor: '0',
-                 page: '0',
-                 lang: 'en'
-             }).toString()
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                ...commonHeaders
+            },
+            body: new URLSearchParams({
+                q: url,
+                cursor: '0',
+                page: '0',
+                lang: 'en'
+            }).toString()
         });
 
         const json: any = await response.body.json();
@@ -946,40 +963,40 @@ async function SavetikVideo(url: string) {
 
         const { document } = parseHTML(json.data);
         const hdLink = Array.from(document.querySelectorAll('a')).find((el: any) => el.textContent?.includes('Download MP4 HD'));
-        
+
         if (!hdLink) return null;
-        
+
         let finalUrl = (hdLink as any).getAttribute('href');
         if (!finalUrl) return null;
 
         if (finalUrl.includes('snapcdn.app') && finalUrl.includes('token=')) {
-             try { 
-                 const token = new URL(finalUrl).searchParams.get('token');
-                 if (token) {
-                     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-                     if (payload.url) {
+            try {
+                const token = new URL(finalUrl).searchParams.get('token');
+                if (token) {
+                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                    if (payload.url) {
                         finalUrl = payload.url;
-                     }
-                 }
-             } catch {}
+                    }
+                }
+            } catch { }
         }
-        
+
         const musicLink = Array.from(document.querySelectorAll('a')).find((el: any) => el.textContent?.includes('Download MP3'));
         let musicUrl: any = (musicLink as any)?.getAttribute('href') || null;
 
         if (musicUrl && musicUrl.includes('snapcdn.app') && musicUrl.includes('token=')) {
-             try {
-                 const token = new URL(musicUrl).searchParams.get('token');
-                 if (token) {
-                     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-                     if (payload.url) {
+            try {
+                const token = new URL(musicUrl).searchParams.get('token');
+                if (token) {
+                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                    if (payload.url) {
                         musicUrl = payload.url;
-                     }
-                 }
-             } catch {}
+                    }
+                }
+            } catch { }
         }
 
-        return { 
+        return {
             video_url: finalUrl?.split('?')?.[0],
             music_url: musicUrl
         };
@@ -1095,7 +1112,7 @@ export const Genius = async function Genius(que: string) {
     let session: any;
 
     try {
-        session = new Session({ 
+        session = new Session({
             httpVersion: 'h2',
             echConfigDomain: "genius.com"
         });
@@ -1346,62 +1363,148 @@ export const infoYoutube = async function infoYoutube(que: string) {
     if (!videoId) return null;
 
     try {
-        const bodyhttp = { videoId: videoId, context: { client: { clientName: 5, clientVersion: "20.40.45" } } }
-        const bodyhttp2 = { videoId: videoId, context: { client: { clientName: 67, clientVersion: "1.20261231" } } }
+        if (!keyYoutubeVisitor) {
+            keyYoutubeVisitor = await youtubeVisitorKey();
+        }
 
-        const [res, res2, res3] = await Promise.all([
-            request('https://m.youtube.com/youtubei/v1/player?prettyPrint=false&fields=videoDetails,microformat,playabilityStatus', {
-                method: "POST",
-                body: JSON.stringify(bodyhttp),
-                headers: {
-                    ...commonHeaders,
-                    'User-Agent': 'Bot'
-                }
-            }),
-            request(`https://www.youtube.com/watch?v=${videoId}`, {
-                method: "GET",
-                headers: {
-                    ...commonHeaders,
-                    'User-Agent': 'Bot'
-                }
-            }),
-            request('https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs.tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents.playlistPanelVideoRenderer(videoId,title,longBylineText,thumbnail,shortBylineText,badges)', {
-                method: "POST",
-                body: JSON.stringify(bodyhttp2),
-                headers: {
-                    ...commonHeaders,
-                    'User-Agent': 'Bot'
-                }
-            }),
-        ]);
+        const res2 = await request(`https://www.youtube.com/watch?v=${videoId}`, {
+            method: "GET",
+            headers: {
+                ...commonHeaders,
+                'User-Agent': 'Bot'
+            }
+        });
 
-        const [pull, pull2, pull3] = await Promise.all([
-            res.body.json() as Promise<any>,
-            res2.body.text(),
-            res3.body.json() as Promise<any>
-        ]);
+        const pull2 = await res2.body.text();
+
         let testpar: any = null;
         try {
             testpar = JSON.parse(pull2.split('ytInitialData =')[1].split(';')[0]);
         }
         catch { }
 
-        const finalpull3: any = pull3?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents?.[0]?.playlistPanelVideoRenderer;
+        let commentToken: string | null = null;
+        let isLiveChat = false;
+        const findToken = (obj: any) => {
+            if (!obj || (commentToken && isLiveChat)) return;
+            if (typeof obj === "object") {
+                if (obj.liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation) {
+                    commentToken = obj.liveChatRenderer.continuations[0].reloadContinuationData.continuation;
+                    isLiveChat = true;
+                    return;
+                }
+                if (obj.liveChatRenderer?.continuations?.[0]?.liveChatReplayContinuationData?.continuation) {
+                    commentToken = obj.liveChatRenderer.continuations[0].liveChatReplayContinuationData.continuation;
+                    isLiveChat = true;
+                    return;
+                }
+                if (!commentToken && obj.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token) {
+                    commentToken = obj.continuationItemRenderer.continuationEndpoint.continuationCommand.token;
+                }
+                for (const k in obj) findToken(obj[k]);
+            }
+        };
+        findToken(testpar);
+
+        let comments: any[] = [];
+        if (commentToken) {
+            try {
+                const endpoint = isLiveChat
+                    ? 'https://m.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false'
+                    : 'https://m.youtube.com/youtubei/v1/next?prettyPrint=false';
+
+                const commentRes = await request(endpoint, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        context: { client: { clientName: 1, clientVersion: "2.20261231" } },
+                        continuation: commentToken
+                    }),
+                    headers: {
+                        ...commonHeaders,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const commentData: any = await commentRes.body.json();
+
+                if (isLiveChat) {
+                    const actions = commentData?.continuationContents?.liveChatContinuation?.actions || [];
+                    comments = actions.map((a: any) => {
+                        const item = a.addChatItemAction?.item?.liveChatTextMessageRenderer;
+                        if (!item) return null;
+                        return {
+                            author: item.authorName?.simpleText,
+                            authorThumbnail: item.authorPhoto?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                            text: item.message?.runs?.map((r: any) => r.text).join(""),
+                            publishedTimeText: item.timestampUsec ? new Date(parseInt(item.timestampUsec) / 1000).toLocaleTimeString() : null,
+                            commentId: item.id,
+                            authorEndpoint: item.authorExternalChannelId,
+                            channelUrl: "https://www.youtube.com/channel/" + item.authorExternalChannelId
+                        };
+                    }).filter((c: any) => c !== null);
+                } else {
+                    const endpoints = commentData.onResponseReceivedEndpoints || [];
+                    const items = endpoints.flatMap((e: any) => {
+                        const action = e.appendContinuationItemsAction || e.reloadContinuationItemsCommand;
+                        return action?.continuationItems || [];
+                    });
+
+                    const mutations = commentData?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
+                    const entityMap: any = {};
+                    mutations.forEach((m: any) => {
+                        if (m.payload) {
+                            entityMap[m.entityKey] = m.payload;
+                        }
+                    });
+
+                    comments = items.map((i: any) => {
+                        const ctr = i?.commentThreadRenderer;
+                        if (!ctr) return null;
+
+                        if (ctr.comment?.commentRenderer) {
+                            const c = ctr.comment.commentRenderer;
+                            return {
+                                author: c.authorText?.simpleText || c.authorText?.runs?.[0]?.text,
+                                authorThumbnail: c.authorThumbnail?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                                text: c.contentText?.runs?.map((r: any) => r.text).join(""),
+                                publishedTimeText: c.publishedTimeText?.runs?.[0]?.text,
+                                likeCount: c.voteCount?.simpleText || "0",
+                                commentId: c.commentId,
+                                authorEndpoint: c.authorEndpoint?.browseEndpoint?.browseId,
+                                channelUrl: c.authorEndpoint?.browseEndpoint?.browseId ? "https://www.youtube.com/channel/" + c.authorEndpoint.browseEndpoint.browseId : null
+                            };
+                        }
+
+                        const cvm = ctr.commentViewModel?.commentViewModel;
+                        if (cvm) {
+                            const key = cvm.commentKey;
+                            const entity = entityMap[key]?.commentEntityPayload;
+                            if (entity) {
+                                return {
+                                    author: entity.author?.displayName,
+                                    authorThumbnail: entity.author?.avatarThumbnailUrl?.replace(/=s\d+.*/, "=s0"),
+                                    text: entity.properties?.content?.content,
+                                    publishedTimeText: entity.properties?.publishedTime,
+                                    likeCount: entity.toolbar?.likeCountNotliked || "0",
+                                    commentId: entity.properties?.commentId,
+                                    authorEndpoint: entity.author?.channelId,
+                                    channelUrl: entity.author?.channelId ? "https://www.youtube.com/channel/" + entity.author.channelId : null
+                                };
+                            }
+                        }
+
+                        return null;
+                    }).filter((c: any) => c !== null);
+                }
+            } catch (e) {
+                console.error("Error fetching comments:", e);
+            }
+        }
 
         return {
             "data": {
-                "innerTube": [
-                    pull?.videoDetails || pull?.microformat ? { "videoDetails": pull } : {
-                        "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : "Google asking to verify you're not a bot"
-                    },
-                    {
-                        ...(finalpull3 ? { "musicDetails": finalpull3 } : (!pull3?.contents?.singleColumnMusicWatchNextResultsRenderer ? { "error": "YouTube Music is not available in your area" } : { "error": pull?.playabilityStatus ? (({ errorScreen, contextParams, ...rest }: any) => rest)(pull.playabilityStatus) : null }))
-                    }
-                ],
-                "youtubeWeb": {
-                    ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc: any, obj: any) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
-                    "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null
-                }
+                ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc: any, obj: any) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
+                "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null,
+                "comments": comments
             }
         };
     }
@@ -1434,37 +1537,37 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             // Robust parsing of ytInitialData
             const dataParts = html.split(/ytInitialData\s*=\s*/);
             if (dataParts.length < 2) return { data: null };
-            
+
             let jsonStr = dataParts[1];
             // Find the end of the script tag or the next variable assignment
-            const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') : 
-                           jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') : 
-                           jsonStr.length;
-            
+            const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') :
+                jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') :
+                    jsonStr.length;
+
             jsonStr = jsonStr.substring(0, endIdx).trim();
             if (jsonStr.endsWith(';')) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
-            
+
             data = JSON.parse(jsonStr);
         } catch (e) {
             console.error("YouTube Parse Error:", e);
-            return null; 
+            return null;
         }
 
         if (!data) return { data: null };
 
         const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer || t.expandableTabRenderer).filter(Boolean) || [];
-        
+
         const header = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
         const channelMetadataRenderer = data?.metadata?.channelMetadataRenderer;
         const microformatRenderer = data?.microformat?.microformatDataRenderer;
         const channelDescription = channelMetadataRenderer?.description || microformatRenderer?.description;
-        
+
         const channelLinks: any[] = [];
         const metadataRows = header?.metadata?.contentMetadataViewModel?.metadataRows || [];
         metadataRows.forEach((row: any) => {
             row?.metadataParts?.forEach((part: any) => {
                 const linkModel = part?.text?.contentMetadataAndSelectedTextViewModel?.selectedText?.contentMetadataSelectedTextModel?.linkViewModel ||
-                                part?.text?.contentMetadataAndSelectedTextViewModel?.text?.contentMetadataSelectedTextModel?.linkViewModel;
+                    part?.text?.contentMetadataAndSelectedTextViewModel?.text?.contentMetadataSelectedTextModel?.linkViewModel;
                 if (linkModel) {
                     channelLinks.push({
                         title: linkModel.text || part?.text?.contentMetadataAndSelectedTextViewModel?.text?.content,
@@ -1517,9 +1620,9 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 });
             }
 
-            const banner = obj.banner?.thumbnails || 
-                           obj.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
-                           obj.imageBannerViewModel?.image?.sources;
+            const banner = obj.banner?.thumbnails ||
+                obj.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
+                obj.imageBannerViewModel?.image?.sources;
             if (banner && !channelMetadata['banner']) {
                 channelMetadata['banner'] = banner;
             }
@@ -1545,7 +1648,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (c4Header.avatar?.thumbnails) channelMetadata['avatar'] = c4Header.avatar.thumbnails;
             if (c4Header.banner?.thumbnails) channelMetadata['banner'] = c4Header.banner.thumbnails;
             if (c4Header.channelHandleText?.runs?.[0]?.text) channelMetadata['handle'] = c4Header.channelHandleText.runs[0].text;
-            
+
             const badge = c4Header.badges?.map((b: any) => b.metadataBadgeRenderer?.icon?.iconType).find((id: string) => getBadgeType(id));
             if (badge) {
                 channelMetadata['verified'] = true;
@@ -1557,11 +1660,11 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         if (modernHeader) {
             const avatar = modernHeader.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.thumbnail?.thumbnails;
             if (avatar) channelMetadata['avatar'] = avatar;
-            
+
             const banner = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
-                           data?.header?.pageHeaderRenderer?.banner?.heroBannerViewModel?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
+                data?.header?.pageHeaderRenderer?.banner?.heroBannerViewModel?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
             if (banner) channelMetadata['banner'] = banner;
-            
+
             const title = modernHeader.title?.dynamicTextViewModel?.text?.content;
             if (title) channelMetadata['name'] = title;
 
@@ -1570,11 +1673,11 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 const headerRows = modernHeader.metadata?.contentMetadataViewModel?.metadataRows || [];
                 let detectedType: string | null = null;
 
-                headerRows.some((row: any) => 
+                headerRows.some((row: any) =>
                     row.metadataParts?.some((part: any) => {
                         const vm = part.text?.contentMetadataAndSelectedTextViewModel || part.text?.contentMetadataViewModel;
                         const renderer = vm?.selectedText?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer ||
-                                         vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer;
+                            vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer;
                         const type = getBadgeType(renderer?.icon?.iconType);
                         if (type) {
                             detectedType = type;
@@ -1586,10 +1689,10 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
                 if (!detectedType) {
                     // Check title attachment runs
-                    const attachmentBadge = modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns?.map((run: any) => 
+                    const attachmentBadge = modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns?.map((run: any) =>
                         run.element?.type?.imageType?.image?.sources?.[0]?.clientResource?.imageName
                     ).find((name: string) => getBadgeType(name));
-                    
+
                     if (attachmentBadge) detectedType = getBadgeType(attachmentBadge);
                 }
 
@@ -1614,12 +1717,12 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
         // Additional banner check
         if (!channelMetadata['banner']) {
-            const b1 = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails || 
-                       data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.sources;
+            const b1 = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
+                data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.sources;
             const b2 = modernHeader?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
-                       modernHeader?.banner?.imageBannerViewModel?.image?.sources;
+                modernHeader?.banner?.imageBannerViewModel?.image?.sources;
             const b3 = data?.header?.c4TabbedHeaderRenderer?.banner?.thumbnails;
-            
+
             if (b1) channelMetadata['banner'] = b1;
             else if (b2) channelMetadata['banner'] = b2;
             else if (b3) channelMetadata['banner'] = b3;
@@ -1733,35 +1836,35 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                     headers: { ...commonHeaders, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         continuation: continuationToken,
-                        context: { 
-                            client: { 
-                                clientName: "WEB", 
-                                clientVersion: "2.20260204.01.00", 
-                                hl: "en", 
+                        context: {
+                            client: {
+                                clientName: "WEB",
+                                clientVersion: "2.20260204.01.00",
+                                hl: "en",
                                 gl: "US",
                                 visitorData: visitorData
-                            } 
+                            }
                         }
                     })
                 });
                 const continuationRes: any = await continuationReq.body.json();
-                
+
                 extractData(continuationRes);
             } catch { }
         }
 
         // Search for dedicated Community button/link in header
         const extraEndpoints: any[] = [];
-        
+
         // Helper to recursively find all buttonViewModels/buttonRenderers in header actions
         const findAllButtons = (obj: any): any[] => {
             const buttons: any[] = [];
             if (!obj || typeof obj !== 'object') return buttons;
-            
+
             if (obj.buttonViewModel || obj.buttonRenderer) {
                 buttons.push(obj.buttonViewModel || obj.buttonRenderer);
             }
-            
+
             if (Array.isArray(obj)) {
                 obj.forEach(item => buttons.push(...findAllButtons(item)));
             } else {
@@ -1777,10 +1880,10 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         const allButtons = findAllButtons(vm?.actions || data?.header?.c4TabbedHeaderRenderer?.buttons);
 
         allButtons.forEach((btn: any) => {
-            const endpoint = btn?.command?.browseEndpoint || 
-                             btn?.onTap?.innertubeCommand?.browseEndpoint || 
-                             btn?.navigationEndpoint?.browseEndpoint;
-            
+            const endpoint = btn?.command?.browseEndpoint ||
+                btn?.onTap?.innertubeCommand?.browseEndpoint ||
+                btn?.navigationEndpoint?.browseEndpoint;
+
             if (endpoint && endpoint.browseId === 'FEcommunity_page') {
                 if (!tabs.some((t: any) => t.endpoint?.browseEndpoint?.browseId === endpoint.browseId)) {
                     extraEndpoints.push({
@@ -1824,11 +1927,11 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 });
 
                 const res: any = await req.body.json();
-                const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || 
-                                   res?.contents?.sectionListRenderer || 
-                                   res?.contents || 
-                                   res;
-                
+                const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content ||
+                    res?.contents?.sectionListRenderer ||
+                    res?.contents ||
+                    res;
+
                 return {
                     title: tab.title,
                     content: tabContent
@@ -1868,14 +1971,14 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
             const keys = Object.keys(obj);
             const metadata = [
-                'trackingParams', 'accessibility', 'accessibilityData', 
-                'clickTrackingParams', 'commandMetadata', 'loggingContext', 
-                'loggingDirectives', 'type', 'style', 'targetId', 'identifier', 
+                'trackingParams', 'accessibility', 'accessibilityData',
+                'clickTrackingParams', 'commandMetadata', 'loggingContext',
+                'loggingDirectives', 'type', 'style', 'targetId', 'identifier',
                 'entityId', 'onTap', 'command', 'navigationEndpoint', 'params',
                 'menu', 'title'
             ];
             const dataKeys = keys.filter(k => !metadata.includes(k));
-            
+
             if (dataKeys.length === 0) return null;
 
             if (Array.isArray(obj.contents)) return flatten(obj.contents);
@@ -1888,7 +1991,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
             if (dataKeys.length === 1) {
                 const key = dataKeys[0];
-                if (key.endsWith('Renderer') || key.endsWith('ViewModel') || 
+                if (key.endsWith('Renderer') || key.endsWith('ViewModel') ||
                     ['content', 'item', 'contents', 'items', 'post', 'posts'].includes(key)) {
                     return flatten(obj[key]);
                 }
@@ -1924,12 +2027,12 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (!Array.isArray(images) || images.length === 0) return null;
             const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
             const highestUrl = sorted[0]?.url || null;
-            
+
             if (!highestUrl) return null;
-            
+
             // Generate the three banner variants
             const baseUrl = highestUrl.split('=')[0];
-            
+
             return {
                 highest: `${baseUrl}=w2560-fcrop64=1,0000000ffffffff`,
                 highest_cropped: `${baseUrl}=w2560-fcrop64=1,00005a57ffffa5a8`,
@@ -1941,23 +2044,23 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (!Array.isArray(images) || images.length === 0) return null;
             const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
             const highestUrl = sorted[0]?.url || null;
-            
+
             if (!highestUrl) return null;
-            
+
             // Extract base URL (before the parameters)
             const baseUrl = highestUrl.split('=')[0];
-            
+
             // Preserve the parameter format from the original URL
             const urlParts = highestUrl.split('=');
             let suffix = 'c-k-c0x00ffffff-no-rj';
-            
+
             // Try to extract the suffix from original URL
             if (urlParts.length > 1) {
                 const params = urlParts.slice(1).join('=');
                 const match = params.match(/[sc]\d+-(.+)/);
                 if (match) suffix = match[1];
             }
-            
+
             return {
                 normal: `${baseUrl}=s900-${suffix}`,
                 highest: `${baseUrl}=s2160-${suffix}`,
@@ -2079,7 +2182,7 @@ export const infoITunes = async function infoITunes(que: string) {
         }
         const trypar = JSON.parse(serverDataMatch[1]);
         const sections = trypar[0]?.data?.sections;
-        if(!sections?.[0]) {
+        if (!sections?.[0]) {
             return { data: null }
         }
 
@@ -2136,7 +2239,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
         const data: any[] = [];
         const scriptRegex = /<script\s+data-relay-completed-request="true"[^>]*>([\s\S]*?)<\/script>/g;
         let match;
-        
+
         while ((match = scriptRegex.exec(html)) !== null) {
             const scriptContent = match[1];
             const funcMatch = scriptContent.match(/window\.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__\("([^"]+)",\s*(\{[\s\S]*?\})\);?/);
@@ -2150,8 +2253,8 @@ export const infoPinterest = async function infoPinterest(que: string) {
                     const entries = Object.entries(relayData);
                     if (entries.length > 0) {
                         const firstValue: any = entries[0][1];
-                        const finalData = (firstValue && typeof firstValue === 'object' && 'data' in firstValue) 
-                            ? firstValue.data 
+                        const finalData = (firstValue && typeof firstValue === 'object' && 'data' in firstValue)
+                            ? firstValue.data
                             : firstValue;
 
                         data.push({
@@ -2163,10 +2266,10 @@ export const infoPinterest = async function infoPinterest(que: string) {
                 }
             }
         }
-        
+
         return { data: data.length > 0 ? data.reverse() : null };
     } catch {
-        if(session) session.close();
+        if (session) session.close();
         return null;
     }
 }
@@ -2258,7 +2361,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
         if (Number.isInteger(parseInt(decoded))) {
             userId = decoded;
         }
-    } catch {}
+    } catch { }
 
     const url = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
@@ -2276,7 +2379,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
         let currentInfo: any = null;
         try {
             currentInfo = await req.json();
-        } catch {}
+        } catch { }
 
         if (req.status !== 200) {
             return {
@@ -2330,13 +2433,13 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
         let patchResponse: any = null;
         try {
             patchResponse = await response.json();
-            
+
             // Retry logic: If 50013 (Missing Permissions) and we tried to change nickname, 
             // retry without 'nick' to allow bio/avatar/banner updates to proceed.
             if (response.status === 403 && patchResponse?.code === 50013 && payload.nick !== undefined) {
                 const { nick, ...retryPayload } = payload;
                 if (Object.keys(retryPayload).length > 0) {
-                     const retryResponse = await fetch(url, {
+                    const retryResponse = await fetch(url, {
                         method: 'PATCH',
                         headers: {
                             'Authorization': `Bot ${token}`,
@@ -2347,19 +2450,19 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
                         body: JSON.stringify(retryPayload)
                     });
                     const retryJson = await retryResponse.json();
-                    
+
                     if (retryResponse.status >= 200 && retryResponse.status < 300) {
                         return {
                             data: [currentInfo, retryJson, retryResponse.status, changes(retryJson), ...(reasonAudit ? [reasonAudit] : [])],
                             ...(payloadError?.[0] && {
-                                    error: payloadError,
-                                    errorMessage: 'Continuing anyways (Retried without nickname)'
+                                error: payloadError,
+                                errorMessage: 'Continuing anyways (Retried without nickname)'
                             })
                         };
                     } else {
                         // If it still fails, update patchResponse to reflect this new error
-                         patchResponse = retryJson;
-                         // And let the logic below return the error as usual
+                        patchResponse = retryJson;
+                        // And let the logic below return the error as usual
                     }
                 }
             }
@@ -2948,8 +3051,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                 const bitrateInfo = videoInfo.bitrateInfo || [];
 
                 const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
-                const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => 
-                    ((b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0)) - 
+                const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) =>
+                    ((b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0)) -
                     ((a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0))
                 );
 
@@ -2959,10 +3062,10 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
 
                 const extractRedirect = async (url: string) => {
                     try {
-                        const res = await request(url, { 
-                            method: 'GET', 
+                        const res = await request(url, {
+                            method: 'GET',
                             headers: headers,
-                            maxRedirections: 0 
+                            maxRedirections: 0
                         } as any);
                         return res.headers.location || url;
                     } catch {
@@ -3067,7 +3170,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             const messageData: any = await messageCheck.body.json();
 
             if (messageCheck.statusCode !== 200) {
@@ -3114,7 +3217,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
             });
 
             const contentLength = parseInt(vidReq.headers['content-length'] as string || '0');
-            
+
             // Check size from headers before consuming the body
             if (contentLength > MAX_DISCORD_SIZE) {
                 vidReq.body.destroy(); // Properly discard the body
@@ -3205,7 +3308,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             messageData = await messageCheck.body.json();
 
             if (messageCheck.statusCode !== 200) {
@@ -3217,7 +3320,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
     }
 
     const MAX_DISCORD_SIZE = 8388608; // 8MB
-    
+
     let videoBuffer: ArrayBuffer | null = null;
     let filename = "file";
     let contentType = "application/octet-stream";
@@ -3234,7 +3337,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
         const contentLength = parseInt(vidReq.headers.get('content-length') || '0');
         contentType = vidReq.headers.get('content-type') || contentType;
-        
+
         const contentDisposition = vidReq.headers.get('content-disposition');
         if (contentDisposition) {
             const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
@@ -3249,7 +3352,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
                 if (lastPart && lastPart.includes('.')) {
                     filename = lastPart;
                 }
-            } catch {}
+            } catch { }
         }
 
         if (contentLength > MAX_DISCORD_SIZE) {
@@ -3312,7 +3415,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
                 currentContent = messageData.content;
             }
             currentContent = currentContent || "";
-            
+
             const separator = (currentContent.length > 0) ? "\n" : "";
             payload.content = currentContent + separator + url;
         }
@@ -3578,8 +3681,8 @@ export const YTChannel = async function YTChannel(que: string) {
                     description: a.descriptionSnippet?.runs?.map((r: any) => r.text).join('') || "",
                     subscriberCount: parseAbbreviatedNumber(subs),
                     videoCount: parseAbbreviatedNumber(videos),
-                    verified: !!a.ownerBadges?.find((b: any) => 
-                        b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED" || 
+                    verified: !!a.ownerBadges?.find((b: any) =>
+                        b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED" ||
                         b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED_ARTIST"
                     )
                 };
@@ -3590,9 +3693,9 @@ export const YTChannel = async function YTChannel(que: string) {
         });
 
         return { data: alk };
-    } catch (e) { 
+    } catch (e) {
         console.error("YTChannel Global Error:", e);
-        return null; 
+        return null;
     }
 }
 
@@ -4009,7 +4112,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
                 }
             };
         }
-    } catch {}
+    } catch { }
 
     try {
         const formatQuery = getFormatQuery(type);
@@ -4127,10 +4230,10 @@ export const infoGiphy = async function infoGiphy(url: string) {
         const scriptEnd = ldJsonChunk.indexOf(')</script>');
         const jsonStr = ldJsonChunk.substring(0, scriptEnd);
         const parsed = JSON.parse(jsonStr);
-        
+
         const firstPart = parsed[1];
         if (!firstPart) return { error: 'Invalid Giphy data structure' };
-        
+
         const colonIndex = firstPart.indexOf(':');
         const dataStr = firstPart.substring(colonIndex + 1);
         const c = JSON.parse(dataStr);
@@ -4237,13 +4340,13 @@ async function fetchWithRetry(url: string, options: any, retries = 5): Promise<a
                 }
             };
         } catch (e: any) {
-            const isSocketError = e.message?.includes('socket') 
-                               || e.message?.includes('closed')
-                               || e.message?.includes('connection error')
-                               || e.code === 'ECONNRESET'
-                               || e.code === 'UND_ERR_SOCKET';
-            
-            console.log(`[MetaAI] Retry ${i+1}/${retries} for ${url} due to: ${e.message}`);
+            const isSocketError = e.message?.includes('socket')
+                || e.message?.includes('closed')
+                || e.message?.includes('connection error')
+                || e.code === 'ECONNRESET'
+                || e.code === 'UND_ERR_SOCKET';
+
+            console.log(`[MetaAI] Retry ${i + 1}/${retries} for ${url} due to: ${e.message}`);
 
             if (i < retries - 1 && isSocketError) {
                 await new Promise(r => setTimeout(r, 1000 * (i + 1)));
@@ -4312,21 +4415,21 @@ async function sendMessage(q: string, cache: any) {
     }
 
     const lines = msgText.split('\n').filter((l: string) => l.trim());
-    
+
     // Attempt to parse any line that might contain the response
     for (let i = lines.length - 1; i >= 0; i--) {
         try {
             const data = JSON.parse(lines[i]);
-            
+
             // Check for bot_response_message in different possible paths
-            const botResponse = data?.data?.node?.bot_response_message || 
-                                data?.data?.xab_abra_send_message?.message ||
-                                data?.data?.node?.message;
+            const botResponse = data?.data?.node?.bot_response_message ||
+                data?.data?.xab_abra_send_message?.message ||
+                data?.data?.node?.message;
 
             const snippet = botResponse?.snippet;
             const composedText = botResponse?.content?.agent_steps?.[0]?.composed_text?.content?.[0]?.text;
             const response = snippet || composedText || botResponse?.text?.content || null;
-            
+
             if (response) {
                 return { response: response, data: { model: "llama-4-70b" } };
             }
@@ -4340,13 +4443,13 @@ async function sendMessage(q: string, cache: any) {
             continue;
         }
     }
-    
-    return { 
+
+    return {
         error: 'Failed to find a valid response in Meta AI output',
-        debug: { 
+        debug: {
             status: msgRes.status,
-            preview: msgText.substring(0, 200) 
-        } 
+            preview: msgText.substring(0, 200)
+        }
     };
 }
 
@@ -4378,7 +4481,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
 
         // Step 1: GET meta.ai (session auto-manages cookies)
         let res1 = await session.get('https://www.meta.ai');
-        
+
         let html = res1.text;
 
         // Step 2: Handle bot challenge if present
@@ -4386,7 +4489,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             const challengeMatch = html.match(/fetch\(["'](\/[^"']+)["']/);
             if (challengeMatch) {
                 const challengeUrl = 'https://www.meta.ai' + challengeMatch[1];
-                
+
                 // POST to challenge (session carries cookies automatically)
                 await session.post(challengeUrl, {
                     headers: {
@@ -4394,7 +4497,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
                         'Referer': 'https://www.meta.ai/'
                     }
                 });
-                
+
                 // Retry GET (session now has rd_challenge cookie)
                 const res2 = await session.get('https://www.meta.ai');
                 html = res2.text;
@@ -4407,14 +4510,14 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             return { error: "Meta AI isn't available in your region" };
         }
 
-        let lsd = extractBetween(html, '"LSD",[],{"token":"', '"') || 
-                    html.match(/["']lsd["']\s*:\s*["']([^"']+)["']/)?.[1] || 
-                    html.match(/["']LSD["'],\s*\[\s*\],\s*\{\s*["']token["']\s*:\s*["']([^"']+)["']\s*\}/)?.[1] || 
-                    '';
-        
-        let access_token = extractBetween(html, '"accessToken":"', '"') || 
-                           html.match(/["']accessToken["']\s*:\s*["']([^"']+)["']/)?.[1] || 
-                           '';
+        let lsd = extractBetween(html, '"LSD",[],{"token":"', '"') ||
+            html.match(/["']lsd["']\s*:\s*["']([^"']+)["']/)?.[1] ||
+            html.match(/["']LSD["'],\s*\[\s*\],\s*\{\s*["']token["']\s*:\s*["']([^"']+)["']\s*\}/)?.[1] ||
+            '';
+
+        let access_token = extractBetween(html, '"accessToken":"', '"') ||
+            html.match(/["']accessToken["']\s*:\s*["']([^"']+)["']/)?.[1] ||
+            '';
 
         let tosDocId = '';
         let messageDocId = '';
@@ -4436,23 +4539,23 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
                     };
                     if (!lsd) lsd = findInObj(nextData, 'lsd') || '';
                     if (!access_token) access_token = findInObj(nextData, 'accessToken') || '';
-                    
+
                     // Also try to find doc_ids in nextData if they are there
                     if (!tosDocId) tosDocId = findInObj(nextData, 'tosDocId') || '';
                     if (!messageDocId) messageDocId = findInObj(nextData, 'messageDocId') || '';
-                } catch {}
+                } catch { }
             }
         }
 
         // Fallback search in HTML for doc_ids
         if (!tosDocId) {
-            const tosMatch = html.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) || 
-                             html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraAcceptTOSForTempUserMutation/);
+            const tosMatch = html.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
+                html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraAcceptTOSForTempUserMutation/);
             if (tosMatch) tosDocId = tosMatch[1];
         }
         if (!messageDocId) {
             const msgMatch = html.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                             html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraSendMessageMutation/);
+                html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraSendMessageMutation/);
             if (msgMatch) messageDocId = msgMatch[1];
         }
 
@@ -4487,7 +4590,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         const targetUrls = scriptUrls.slice(0, 100);
         for (let i = 0; i < targetUrls.length; i += BATCH_SIZE) {
             if (tosDocId && messageDocId) break;
-            
+
             const batch = targetUrls.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(async (url) => {
                 if (tosDocId && messageDocId) return;
@@ -4497,15 +4600,15 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
 
                     if (!tosDocId) {
                         const tosMatch = scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                                         scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports\s*=\s*["']?(\d+)["']?/);
+                            scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports\s*=\s*["']?(\d+)["']?/);
                         if (tosMatch) tosDocId = tosMatch[1];
                     }
                     if (!messageDocId) {
                         const msgMatch = scriptText.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                                         scriptText.match(/useKadabraSendMessageMutation.*?exports\s*=\s*["']?(\d+)["']?/);
+                            scriptText.match(/useKadabraSendMessageMutation.*?exports\s*=\s*["']?(\d+)["']?/);
                         if (msgMatch) messageDocId = msgMatch[1];
                     }
-                } catch {}
+                } catch { }
             }));
         }
 
@@ -4549,12 +4652,12 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
 
                 const tosData = JSON.parse(await tosRes.text());
                 access_token = tosData?.data?.xab_abra_accept_terms_of_service?.new_temp_user_auth?.access_token || '';
-            } catch {}
+            } catch { }
         }
 
         if (!access_token) {
 
-            return { 
+            return {
                 error: 'Failed to get access token',
                 debug: {
                     htmlLength: html?.length || 0,
@@ -4588,13 +4691,13 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         // Send message
         return await sendMessage(query, metaAICache);
     } catch (e: any) {
-        try { session.close(); } catch {}
+        try { session.close(); } catch { }
         return { error: e.message || 'Unknown error' };
     }
 }
 
 export async function googleWeather(query: string): Promise<any> {
-    if(!query) return null;
+    if (!query) return null;
 
     try {
         const l = await request(`https://www.bing.com/api/v6/Places/AutoSuggest?q=${query}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`, {
@@ -4612,23 +4715,23 @@ export async function googleWeather(query: string): Promise<any> {
 
         const datageo: any = ls?.value?.[0];
 
-        if(!datageo) return { data: null }
+        if (!datageo) return { data: null }
         const coords = datageo.geo.latitude + "," + datageo.geo.longitude;
 
         const k = await request(`https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`, {
             headers: {
-            ...commonHeaders,
-            'Referer': 'https://storage.googleapis.com/',
-            'X-Goog-Api-Key': 'AIzaSyD5EfYCuwqofCvOpEj1DcuuvAdxKi4dKSI'
+                ...commonHeaders,
+                'Referer': 'https://storage.googleapis.com/',
+                'X-Goog-Api-Key': 'AIzaSyD5EfYCuwqofCvOpEj1DcuuvAdxKi4dKSI'
             }
         });
 
-        if(k.statusCode !== 200) return { data: null }
+        if (k.statusCode !== 200) return { data: null }
 
         const finalk = await k.body.json();
         return {
             data: [
-                { 
+                {
                     ...datageo.address,
                     ...datageo.geo,
                     mapsView: {
@@ -4646,8 +4749,8 @@ export async function googleWeather(query: string): Promise<any> {
 }
 
 export async function GrokAI(query: string): Promise<any> {
-    if(!query) return null;
-    const bodyhttp = {"id":"x-preview","messages":[{"id":crypto.randomBytes(12).toString('base64url'),"createdAt":new Date().toISOString(),"role":"user","content":query,"parts":[{"type":"text","text":query}]}],"fp":"x-preview","filter":{"version":"English"}};
+    if (!query) return null;
+    const bodyhttp = { "id": "x-preview", "messages": [{ "id": crypto.randomBytes(12).toString('base64url'), "createdAt": new Date().toISOString(), "role": "user", "content": query, "parts": [{ "type": "text", "text": query }] }], "fp": "x-preview", "filter": { "version": "English" } };
 
     try {
         const req = await request("https://leaves.mintlify.com/api/assistant/x-preview/message", {
@@ -4656,17 +4759,17 @@ export async function GrokAI(query: string): Promise<any> {
             headers: { ...commonHeaders, 'Content-Type': 'application/json' }
         });
 
-        if(req.statusCode === 429) {
+        if (req.statusCode === 429) {
             return {
                 error: "Rate-limited"
             }
         }
-        else if(req.statusCode === 403) {
+        else if (req.statusCode === 403) {
             return {
                 error: "Blocked"
             }
         }
-        else if(req.statusCode !== 200) {
+        else if (req.statusCode !== 200) {
             return {
                 data: null
             }
@@ -4697,8 +4800,8 @@ export async function GrokAI(query: string): Promise<any> {
 }
 
 export async function PerplexityAI(query: string): Promise<any> {
-    if(!query) return null;
-    const bodyhttp = {"id":"perplexity","messages":[{"id":crypto.randomBytes(12).toString('base64url'),"createdAt":new Date().toISOString(),"role":"user","content":query,"parts":[{"type":"text","text":query}]}],"fp":"perplexity"};
+    if (!query) return null;
+    const bodyhttp = { "id": "perplexity", "messages": [{ "id": crypto.randomBytes(12).toString('base64url'), "createdAt": new Date().toISOString(), "role": "user", "content": query, "parts": [{ "type": "text", "text": query }] }], "fp": "perplexity" };
 
     try {
         const req = await request("https://leaves.mintlify.com/api/assistant/perplexity/message", {
@@ -4707,17 +4810,17 @@ export async function PerplexityAI(query: string): Promise<any> {
             headers: { ...commonHeaders, 'Content-Type': 'application/json' }
         });
 
-        if(req.statusCode === 429) {
+        if (req.statusCode === 429) {
             return {
                 error: "Rate-limited"
             }
         }
-        else if(req.statusCode === 403) {
+        else if (req.statusCode === 403) {
             return {
                 error: "Blocked"
             }
         }
-        else if(req.statusCode !== 200) {
+        else if (req.statusCode !== 200) {
             return {
                 data: null
             }
@@ -4748,29 +4851,29 @@ export async function PerplexityAI(query: string): Promise<any> {
 }
 
 export async function DriftProfile(query: string): Promise<any> {
-    if(!query) return null;
+    if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
     let session: any;
     let res: any;
-    
+
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
             res = await session.get(filterurl.toString(), {
                 headers: {
                     ...commonHeaders
                 }
             });
-            
+
             if (res.statusCode !== 403) {
                 break; // Success or non-403 error, proceed
             }
-            
+
             // It's a 403, we need to try again with a new session
             if (session) session.close();
-            
+
             if (attempts === 2) { // Last attempt still gave 403
                 return {
                     "error": "Cloudflare Turnstile asking to verify you're not a bot"
@@ -4785,7 +4888,7 @@ export async function DriftProfile(query: string): Promise<any> {
     try {
         const test = res.text;
         if (session) session.close();
-        if(res.url?.includes('/message')) {
+        if (res.url?.includes('/message')) {
             return {
                 data: null
             }
@@ -4821,7 +4924,7 @@ export async function DriftProfile(query: string): Promise<any> {
                         text: document.querySelector('#bio-label')?.textContent?.trim() || null,
                         color: (styles.match(/#bio-label\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
                     },
-                    about_me: { 
+                    about_me: {
                         text: document.querySelector('#bio-aboutMe')?.textContent?.trim() || null,
                         color: (styles.match(/.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null)
                     },
@@ -4834,7 +4937,7 @@ export async function DriftProfile(query: string): Promise<any> {
                         ...Array.from(document.querySelectorAll('.bio-badge')).map((el: any) => {
                             const parent = el.parentElement;
                             const tippyContent = parent?.getAttribute('data-tippy-content');
-                             return tippyContent ? { name: tippyContent, icon: el.getAttribute('icon') } : null;
+                            return tippyContent ? { name: tippyContent, icon: el.getAttribute('icon') } : null;
                         }).filter(Boolean)
                     ],
                     assets: {
@@ -4842,20 +4945,20 @@ export async function DriftProfile(query: string): Promise<any> {
                         banner: (styles.match(/.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null),
                         background: (() => {
                             const videoEl = document.querySelector('#video-background');
-                            const bg = test?.split('staticBackground.src = "')?.[1]?.split('"')[0] || 
-                                       videoEl?.getAttribute('src') || 
-                                       videoEl?.querySelector('source')?.getAttribute('src') ||
-                                       null;
+                            const bg = test?.split('staticBackground.src = "')?.[1]?.split('"')[0] ||
+                                videoEl?.getAttribute('src') ||
+                                videoEl?.querySelector('source')?.getAttribute('src') ||
+                                null;
 
-                            if(!bg) return null;
+                            if (!bg) return null;
                             return bg.startsWith('http') ? bg : "https://drift.rip" + (bg.startsWith('/') ? '' : '/') + bg;
                         })(),
                         audio: (() => {
-                            const aud = document.querySelector('#background-audio')?.getAttribute('src') || 
-                                       document.querySelector('#background-audio source')?.getAttribute('src') || 
-                                       (test?.includes('hasAudio = true') ? test?.split('audio.src = "')?.[1]?.split('"')[0] : null) || 
-                                       null;
-                            if(!aud) return null;
+                            const aud = document.querySelector('#background-audio')?.getAttribute('src') ||
+                                document.querySelector('#background-audio source')?.getAttribute('src') ||
+                                (test?.includes('hasAudio = true') ? test?.split('audio.src = "')?.[1]?.split('"')[0] : null) ||
+                                null;
+                            if (!aud) return null;
                             return aud.startsWith('http') ? aud : "https://drift.rip" + (aud.startsWith('/') ? '' : '/') + aud;
                         })(),
                         cursor: styles.match(/cursor:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null
@@ -4878,7 +4981,7 @@ export async function DriftProfile(query: string): Promise<any> {
                                     for (let i = 0; i < openBrackets; i++) fixed += ']';
                                     for (let i = 0; i < openBraces; i++) fixed += '}';
                                     richContent = JSON.parse(fixed);
-                                } catch {}
+                                } catch { }
                             }
                             const discordUserId = el.getAttribute('data-discord-user-id') || richContent?.userId || null;
                             const imgEl = el.querySelector('img');
@@ -4897,7 +5000,7 @@ export async function DriftProfile(query: string): Promise<any> {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
                             let richContent: any = null;
-                            try { richContent = JSON.parse(el.getAttribute('data-guild-json')); } catch {}
+                            try { richContent = JSON.parse(el.getAttribute('data-guild-json')); } catch { }
                             const imgEl = el.querySelector('img');
                             return {
                                 type: 'discordServer',
@@ -4929,7 +5032,7 @@ export async function DriftProfile(query: string): Promise<any> {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
                             let richContent: any = null;
-                            try { richContent = JSON.parse(el.getAttribute('data-roblox-user-json')); } catch {}
+                            try { richContent = JSON.parse(el.getAttribute('data-roblox-user-json')); } catch { }
                             const imgEl = el.querySelector('img');
                             return {
                                 type: 'roblox',
@@ -4983,8 +5086,263 @@ export async function DriftProfile(query: string): Promise<any> {
     }
 }
 
+
+export async function PatreonProfile(query: string): Promise<any> {
+    if (!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username) return null;
+
+    let session: any;
+    try {
+        session = new Session({ httpVersion: 'h2' });
+
+        const res = await session.get(`https://www.patreon.com/cw/${username}`, {
+            headers: { ...commonHeaders }
+        });
+
+        if (session) session.close();
+
+        if (res.statusCode === 404) {
+            return { error: "User not found" };
+        }
+
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const html = res.text;
+        const chunks = html.split('self.__next_f.push(');
+        chunks.shift();
+
+        let campaignData: any = null;
+        let userData: any = null;
+        let mediaData: any[] = [];
+
+        for (const chunk of chunks) {
+            try {
+                const endIdx = chunk.lastIndexOf(')</script>');
+                if (endIdx === -1) continue;
+
+                const pushArg = chunk.substring(0, endIdx);
+                const parsed = JSON.parse(pushArg);
+
+                if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== 'string') continue;
+
+                const content = parsed[1];
+                const lines = content.split('\n').filter((l: string) => l.trim());
+
+                for (const line of lines) {
+                    const colonIdx = line.indexOf(':');
+                    if (colonIdx === -1) continue;
+
+                    const jsonPart = line.substring(colonIdx + 1);
+
+                    try {
+                        const innerParsed = JSON.parse(jsonPart);
+
+                        const traverse = (obj: any) => {
+                            if (!obj || typeof obj !== 'object') return;
+
+                            if (obj.campaign && obj.campaign.data) {
+                                campaignData = obj.campaign.data;
+                            }
+                            if (obj.included && Array.isArray(obj.included)) {
+                                obj.included.forEach((inc: any) => {
+                                    if (inc.type === 'user') userData = inc;
+                                    if (inc.type === 'media') mediaData.push(inc);
+                                });
+                            }
+
+                            if (Array.isArray(obj)) {
+                                obj.forEach(traverse);
+                            } else {
+                                Object.values(obj).forEach(traverse);
+                            }
+                        };
+
+                        traverse(innerParsed);
+                    } catch { }
+                }
+            } catch { }
+        }
+
+        return {
+            data: {
+                campaigns: campaignData,
+                media: mediaData,
+                user: userData
+            }
+        };
+    } catch (e) {
+        if (session) session.close();
+        console.error("PatreonProfile Error:", e);
+        return null;
+    }
+}
+
+export async function SaweriaProfile(query: string): Promise<any> {
+    if (!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username) return null;
+
+    let session: any;
+    try {
+        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
+
+        let dataRes: any;
+        if (saweriaBuildId) {
+            dataRes = await session.get(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+                headers: { ...commonHeaders }
+            });
+
+            if (dataRes.statusCode === 403) {
+                return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+            }
+
+            if (dataRes.statusCode === 404) {
+                saweriaBuildId = undefined;
+            }
+        }
+
+        if (!saweriaBuildId) {
+            const mainRes = await session.get('https://saweria.co', {
+                headers: { ...commonHeaders }
+            });
+
+            if (mainRes.statusCode === 403) {
+                if (session) session.close();
+                return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+            }
+
+            const mainText = mainRes.text;
+            saweriaBuildId = mainText.split('"buildId":"')[1].split('"')[0];
+
+            dataRes = await session.get(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+                headers: { ...commonHeaders }
+            });
+
+            if (dataRes.statusCode === 403) {
+                return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+            }
+        }
+
+        if (session) session.close();
+
+        if (dataRes.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const dataJson: any = dataRes.json();
+        if (dataJson?.pageProps?.error) {
+            return {
+                error: dataJson.pageProps.error?.json?.message || null
+            }
+        }
+
+        return { data: dataJson?.pageProps?.data || null };
+    } catch (e) {
+        if (session) session.close();
+        console.error("SaweriaProfile Error:", e);
+        return null;
+    }
+}
+
+export async function TrakteerProfile(query: string): Promise<any> {
+    if (!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username) return null;
+
+    let session: any;
+    try {
+        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
+        const res = await session.get(`https://trakteer.id/${username}`, {
+            headers: {
+                ...commonHeaders,
+            }
+        });
+
+        if (session) session.close();
+
+        if (res.statusCode === 403) {
+            return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+        }
+
+        if (res.statusCode === 404) {
+            return { error: "User not found" };
+        }
+
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const html = res.text;
+        const { document } = parseHTML(html);
+        const appDiv = document.querySelector('#app');
+        const dataPage = appDiv?.getAttribute('data-page');
+
+        if (!dataPage) return { data: null };
+
+        const decodedData = decodeHTML(dataPage);
+        const dataJson = JSON.parse(decodedData);
+
+        const creator = dataJson?.props?.creator;
+        const extraCreator = dataJson?.props;
+        return { data: creator ? { ...creator.data, ...creator.meta, ...extraCreator.extraCreatorData, ...extraCreator.payload } : null };
+    } catch (e) {
+        if (session) session.close();
+        console.error("TrakteerProfile Error:", e);
+        return null;
+    }
+}
+
+export async function SociaBuzzProfile(query: string): Promise<any> {
+    if (!query) return null;
+    const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    if (!username) return null;
+
+    let session: any;
+    try {
+        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false, allowRedirects: false });
+        const res = await session.get(`https://sociabuzz.com/${username}/tribe`, {
+            headers: {
+                ...commonHeaders,
+            }
+        });
+
+        if (session) session.close();
+
+        if (res.statusCode === 403) {
+            return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+        }
+
+        if (res.statusCode === 307) {
+            return { error: "User not found" };
+        }
+
+        if (res.statusCode !== 200) {
+            return { data: null };
+        }
+
+        const html = res.text;
+        const match = html.match(/const userdata = (\{[\s\S]*?\});/);
+        const userDataStr = match ? match[1] : null;
+        if (!userDataStr) return { data: null };
+
+        const dataJson = JSON.parse(userDataStr);
+        return { data: dataJson || null };
+    } catch (e) {
+        if (session) session.close();
+        console.error("SociaBuzzProfile Error:", e);
+        return null;
+    }
+}
+
+
+
+
+
 export async function GunsProfile(query: string): Promise<any> {
-    if(!query) return null;
+    if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard'].includes(username.toLowerCase())) return null;
 
@@ -4999,13 +5357,13 @@ export async function GunsProfile(query: string): Promise<any> {
                     ...commonHeaders
                 }
             });
-            
+
             if (res.statusCode !== 401 || res.statusCode !== 403) {
                 break;
             }
-            
+
             if (session) session.close();
-            
+
             if (attempts === 2) {
                 return { error: "Guns.lol asking to verify you're not a bot" };
             }
@@ -5088,13 +5446,13 @@ export async function GunsProfile(query: string): Promise<any> {
         // The main profile data is the first data object found
         const { _gpp_ch, success, session: _session, ...rest } = finalresult;
         let secfinal: any = rest;
-        if(secfinal?.config?.socials?.[0]) {
+        if (secfinal?.config?.socials?.[0]) {
             secfinal.config.valid_socials = secfinal.config.socials?.map((a: any) => {
                 try {
                     const lk = new URL(a.value);
                     return a;
                 }
-                catch {}
+                catch { }
             })?.filter(Boolean);
         }
 
@@ -5109,7 +5467,7 @@ export async function GunsProfile(query: string): Promise<any> {
 }
 
 export async function RageProfile(query: string): Promise<any> {
-    if(!query) return null;
+    if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard'].includes(username.toLowerCase())) return null;
 
@@ -5118,19 +5476,19 @@ export async function RageProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
             res = await session.get(`https://rage.wtf/${username}`, {
                 headers: {
                     ...commonHeaders
                 }
             });
-            
+
             if (res.statusCode !== 403) {
                 break;
             }
-            
+
             if (session) session.close();
-            
+
             if (attempts === 2) {
                 return { error: "Rage.wtf asking to verify you're not a bot" };
             }
@@ -5178,7 +5536,7 @@ export async function RageProfile(query: string): Promise<any> {
                         const findProfile = (obj: any): any => {
                             if (!obj || typeof obj !== 'object') return null;
                             if (obj.user && obj.customization) return obj;
-                            
+
                             if (Array.isArray(obj)) {
                                 for (const item of obj) {
                                     const result = findProfile(item);
@@ -5197,9 +5555,9 @@ export async function RageProfile(query: string): Promise<any> {
                         if (profile) {
                             dataResults.push(profile);
                         }
-                    } catch {}
+                    } catch { }
                 }
-            } catch {}
+            } catch { }
         }
 
         if (dataResults.length === 0) {
@@ -5216,7 +5574,7 @@ export async function RageProfile(query: string): Promise<any> {
 }
 
 export async function HauntProfile(query: string): Promise<any> {
-    if(!query) return null;
+    if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'pricing', 'cdn-cgi', 'terms', 'privacy', 'dashboard', 'settings', 'api'].includes(username.toLowerCase())) return null;
 
@@ -5225,19 +5583,19 @@ export async function HauntProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false  });
+            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
             res = await session.get(`https://haunt.gg/${username}`, {
                 headers: {
                     ...commonHeaders
                 }
             });
-            
+
             if (res.statusCode !== 403) {
                 break;
             }
-            
+
             if (session) session.close();
-            
+
             if (attempts === 2) {
                 return { error: "Haunt.gg asking to verify you're not a bot" };
             }
@@ -5285,7 +5643,7 @@ export async function HauntProfile(query: string): Promise<any> {
                         const findProfile = (obj: any): any => {
                             if (!obj || typeof obj !== 'object') return null;
                             if (obj.user && obj.links) return obj;
-                            
+
                             if (Array.isArray(obj)) {
                                 for (const item of obj) {
                                     const result = findProfile(item);
@@ -5304,9 +5662,9 @@ export async function HauntProfile(query: string): Promise<any> {
                         if (profile) {
                             dataResults.push(profile);
                         }
-                    } catch {}
+                    } catch { }
                 }
-            } catch {}
+            } catch { }
         }
 
         if (dataResults.length === 0) {
@@ -5377,7 +5735,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
         const req = await fetch(url, { method: 'GET', headers });
 
         let data: any = null;
-        try { data = await req.json(); } catch {}
+        try { data = await req.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -5435,7 +5793,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         const req = await fetch(url, { method: 'GET', headers });
 
         let data: any = null;
-        try { data = await req.json(); } catch {}
+        try { data = await req.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -5481,7 +5839,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
         const req = await fetch(url, { method: 'GET', headers });
 
         let data: any = null;
-        try { data = await req.json(); } catch {}
+        try { data = await req.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -5496,16 +5854,16 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
     }
 };
 
-export const ImgurPost = async(query: string, refresh_auth: boolean = false): Promise<any> => {
-    if(!query) return null;
+export const ImgurPost = async (query: string, refresh_auth: boolean = false): Promise<any> => {
+    if (!query) return null;
 
-    if(refresh_auth || !keyimgur) {
+    if (refresh_auth || !keyimgur) {
         keyimgur = await imgurKey();
     }
 
     try {
         const req = await request(`https://api.imgur.com/post/v1/posts/t/${query}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
-        if(req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
+        if (req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
         const res: any = await req.body.json();
         return { data: res?.posts || null };
     }
@@ -5592,9 +5950,9 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
     let exactMatches: string[] = [];
     let softMatches: string[] = [];
     const d = new Date();
-    
+
     const gmtUtcMatch = query.match(/^(?:gmt|utc)\s*([+-]?)\s*(\d{1,2})(?::?(\d{2}))?$/);
-    
+
     if (gmtUtcMatch) {
         const sign = gmtUtcMatch[1] === '-' ? -1 : 1;
         const hrs = parseInt(gmtUtcMatch[2], 10);
@@ -5608,10 +5966,10 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
             });
             const parts = formatter.formatToParts(d);
             const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT';
-            
+
             let gmtStr = offsetPart.replace('GMT', '');
             if (gmtStr === '') gmtStr = '+00:00';
-            
+
             const s = gmtStr.startsWith('-') ? -1 : 1;
             const m = gmtStr.match(/([+-])?(\d{2}):?(\d{2})/);
             let tzOffsetMinutes = 0;
@@ -5620,7 +5978,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
             }
             return tzOffsetMinutes === targetOffsetMinutes;
         });
-        
+
         if (softMatches.length > 0) {
             softMatches.sort((a, b) => {
                 const aPri = (a.startsWith('Antarctica/') || a.startsWith('Etc/')) ? 1 : 0;
@@ -5636,7 +5994,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
     }
 
     const matches = exactMatches.length > 0 ? exactMatches.concat(softMatches.filter(tz => !exactMatches.includes(tz))) : softMatches;
-    
+
     if (matches.length === 0) {
         return { error: "Timezone not found" };
     }
@@ -5648,25 +6006,25 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
         timeZone: name,
         timeZoneName: 'longOffset',
     });
-    
+
     const dJan = new Date(d.getFullYear(), 0, 1);
     const dJul = new Date(d.getFullYear(), 6, 1);
-    
+
     function getOffsetMinutes(date: Date) {
         const parts = formatter.formatToParts(date);
         const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT';
         let str = offsetPart.replace('GMT', '');
         if (str === '') str = '+00:00';
-        
+
         const sign = str.startsWith('-') ? -1 : 1;
         const match = str.match(/([+-])?(\d{2}):?(\d{2})/);
-        if(!match) return 0;
+        if (!match) return 0;
         return sign * (parseInt(match[2], 10) * 60 + parseInt(match[3], 10));
     }
-    
+
     const dNow = new Date();
     const currentOffsetMinutes = getOffsetMinutes(dNow);
-    
+
     const LocaleDate = dNow.toLocaleDateString('en-US', { timeZone: name });
     const LocaleTime = dNow.toLocaleTimeString('en-US', { timeZone: name });
     const Locale = dNow.toLocaleString('en-US', { timeZone: name });
@@ -5681,14 +6039,14 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
     const partsRaw = formatterRaw.formatToParts(dNow);
     const p: any = {};
     partsRaw.forEach(part => { p[part.type] = part.value; });
-    
-    const isoOffsetStr = (currentOffsetMinutes >= 0 ? '+' : '-') + 
-                         String(Math.abs(Math.floor(currentOffsetMinutes / 60))).padStart(2, '0') + ':' + 
-                         String(Math.abs(currentOffsetMinutes % 60)).padStart(2, '0');
+
+    const isoOffsetStr = (currentOffsetMinutes >= 0 ? '+' : '-') +
+        String(Math.abs(Math.floor(currentOffsetMinutes / 60))).padStart(2, '0') + ':' +
+        String(Math.abs(currentOffsetMinutes % 60)).padStart(2, '0');
 
     const isoLocal = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${isoOffsetStr}`;
-    const utcLocal = dNow.toLocaleDateString('en-US', { timeZone: name, weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) + 
-                     ', ' + p.hour + ':' + p.minute + ':' + p.second + ' GMT' + isoOffsetStr;
+    const utcLocal = dNow.toLocaleDateString('en-US', { timeZone: name, weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) +
+        ', ' + p.hour + ':' + p.minute + ':' + p.second + ' GMT' + isoOffsetStr;
 
     return {
         data: {
@@ -5708,4 +6066,58 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
             similarName
         }
     };
+}
+
+export const PatreonSearch = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
+        const res = await session.get(`https://www.patreon.com/api/search?q=${query}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const response = res.json();
+        session.close();
+
+        if (!response?.data?.[0]) {
+            return { data: null }
+        }
+
+        return {
+            data: response.data
+        }
+    }
+    catch {
+        return null;
+    }
+}
+
+export const Trakteer = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
+        const res = await session.get(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const response = res.json();
+        session.close();
+
+        if (!response?.result?.data?.[0]) {
+            return { data: null }
+        }
+
+        return {
+            data: response.result.data
+        }
+    }
+    catch {
+        return null;
+    }
 }

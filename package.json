@@ -13,10 +13,10 @@
     "dotenv": "^17.3.1",
     "entities": "^7.0.1",
     "hono": "^4.12.8",
-    "httpcloak": "^1.6.0",
+    "httpcloak": "^1.6.1",
     "linkedom": "^0.18.12",
     "tslib": "^2.8.1",
-    "undici": "^7.24.3",
+    "undici": "^7.24.4",
     "x-client-transaction-id": "^0.1.9",
     "youtube-dl-exec": "^3.1.3"
   },

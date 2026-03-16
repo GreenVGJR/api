@@ -34,7 +34,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   const contentType = filtype2 ? `${filtype1}/${filtype2}` : (type || 'application/octet-stream');
 
     c.header('Content-Type', contentType);
-    c.header('Cache-Control', 'public, max-age=60, no-transform');
+    c.header('Cache-Control', 'public, max-age=30, must-revalidate');
 
     return stream(c, async (s) => {
     s.onAbort(() => {});
@@ -144,7 +144,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
   c.header('X-Enc-Route', 'v4');
   c.header('Content-Type', 'application/json');
-  c.header('Cache-Control', 'public, max-age=10, must-revalidate, proxy-revalidate');
+  c.header('Cache-Control', 'public, max-age=5, must-revalidate');
 
     return stream(c, async (stream) => {
         stream.onAbort(() => {

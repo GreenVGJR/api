@@ -56,13 +56,19 @@ const API_ROUTES = {
         "/search/capcut/templates?q=",
         "/search/tenor?q=&type=",
         "/search/giphy?q=&type=",
-        "/search/klipy?q=&type="
+        "/search/klipy?q=&type=",
+        "/search/patreon?q=",
+        "/search/trakteer?q="
     ],
     profile: [
         "/profile/guns?q=",
         "/profile/drift?q=",
         "/profile/haunt?q=",
-        "/profile/rage?q="
+        "/profile/rage?q=",
+        "/profile/saweria?q=",
+        "/profile/trakteer?q=",
+        "/profile/sociabuzz?q=",
+        "/profile/patreon?q="
     ],
     lyrics: [
         "/lyrics/youtube?q=",
@@ -457,6 +463,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
             return c.body(null, 403);
         }
 
+        c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
         c.header('Refresh', '0; url=/playground');
         return c.body(null, 202);
     } catch (e) {
@@ -465,6 +472,9 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
 });
 
 app.get('/playground', (c: Context) => {
+    if(c.req.header('Accept') === 'application/json') {
+        return c.text('Forbidden', 403);
+    }
     const referer = c.req.header('referer') || '';
     const host = (c.req.header('host') || '').toLowerCase();
     
@@ -472,7 +482,7 @@ app.get('/playground', (c: Context) => {
     const isAllowedReferer = referer.includes('/playground');
 
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
+    c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
 
     if (!isAllowedReferer) {
         const info = {
@@ -490,7 +500,7 @@ app.get('/playground', (c: Context) => {
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'public, max-age=60, no-transform, immutable');
+    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
@@ -572,7 +582,7 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('Cache-Control', 'public, max-age=0');
+    c.header('Cache-Control', 'public, max-age=1, no-transform, must-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');

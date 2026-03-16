@@ -34,5 +34,7 @@ import appleMusic from './appleMusic.js';
 import imgur from './imgur.js';
 import klipy from './klipy.js';
 import tiktokFeed from './tiktokFeed.js';
+import patreon from './patreon.js';
+import trakteer from './trakteer.js';
 
-export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed] as any[];
+export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer] as any[];

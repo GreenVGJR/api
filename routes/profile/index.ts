@@ -3,5 +3,9 @@ import drift from './drift.js';
 import guns from './guns.js';
 import haunt from './haunt.js';
 import rage from './rage.js';
+import saweria from './saweria.js';
+import trakteer from './trakteer.js';
+import sociabuzz from './sociabuzz.js';
+import patreon from './patreon.js';
 
-export default [drift, guns, haunt, rage] as any[];
+export default [drift, guns, haunt, rage, saweria, trakteer, sociabuzz, patreon] as any[];

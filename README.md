@@ -21,3 +21,10 @@ Library:
 - [youtube-dl-exec](https://www.npmjs.com/package/youtube-dl-exec)
 
 License: [Unlicense](LICENSE)
+
+Reference:
+- [AMC](https://github.com/GreenVGJR/amc-discord-bot)
+- [Yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [Downr](https://downr.org)
+- [Chocomilk API](https://chocomilk.amira.us.kg)
+- [Popcat API](https://popcat.xyz/api)

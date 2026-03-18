@@ -1,23 +1,27 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { getOrCreatePlayer, getQueue, formatTrack, hasActivePlayer, createMusicStream } from '../../functions/musicPlayer.js';
+import {
+    getOrCreatePlayer,
+    getQueue,
+    formatTrack,
+    hasActivePlayer,
+    createMusicStream,
+} from '../../functions/musicPlayer.js';
 import { YTMusic, YTLyrics } from '../../functions/request.js';
 
 
 app.get('/nowplaying', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
-        const token = c.req.query('token');
+        const token   = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
             return;
         }
-
         if (!hasActivePlayer(token)) {
-            await log('No active player found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
@@ -26,23 +30,27 @@ app.get('/nowplaying', async (c) => {
         const { player } = await getOrCreatePlayer(token);
         const queue = getQueue(player, guildId);
 
-        if (!queue || !queue.currentTrack) {
-            await log('No active queue found');
+        if (!queue || !queue.queue.current) {
+            await log('No active queue or current track found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
 
-        await log(`Now playing: "${queue.currentTrack.title}"`);
+        const current = queue.queue.current;
+        await log(`Now playing: "${current.info.title}"`);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
             data: {
-                current: formatTrack(queue.currentTrack),
-                playing: queue.node.isPlaying(),
-                paused: queue.node.isPaused(),
-                volume: queue.node.volume,
-                progress: queue.node.getTimestamp(),
-            }
+                current: formatTrack(current),
+                playing: queue.playing,
+                paused: queue.paused,
+                volume: queue.volume,
+                progress: {
+                    current: { label: formatMs(queue.position), value: queue.position },
+                    total: { label: formatMs(current.info.duration), value: current.info.duration },
+                },
+            },
         })}}`);
     });
 });
@@ -51,16 +59,14 @@ app.get('/nowplaying', async (c) => {
 app.get('/nowplaying/lyrics', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
-        const token = c.req.query('token');
+        const token   = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
             return;
         }
-
         if (!hasActivePlayer(token)) {
-            await log('No active player found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
@@ -69,22 +75,22 @@ app.get('/nowplaying/lyrics', async (c) => {
         const { player } = await getOrCreatePlayer(token);
         const queue = getQueue(player, guildId);
 
-        if (!queue || !queue.currentTrack) {
+        if (!queue || !queue.queue.current) {
             await log('No active queue found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
 
-        const track = queue.currentTrack;
-        await log(`Current track: "${track.title}" by ${track.author}`);
+        const track = queue.queue.current;
+        await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
         try {
-            let trackUrl = track.url;
+            let trackUrl = track.info.uri;
             const isYouTube = trackUrl.includes('youtube.com') || trackUrl.includes('youtu.be');
 
             if (!isYouTube) {
                 await log('Track is not from YouTube, searching for YouTube version...');
-                const searchRes = await YTMusic(`${track.title} ${track.author}`);
+                const searchRes = await YTMusic(`${track.info.title} ${track.info.author}`);
                 const firstResult = searchRes?.data?.[0];
                 if (firstResult?.url) {
                     trackUrl = firstResult.url;
@@ -109,8 +115,8 @@ app.get('/nowplaying/lyrics', async (c) => {
                 data: {
                     track: formatTrack(track),
                     lyrics: lyricsData.lyrics,
-                    footer: lyricsData.footer
-                }
+                    footer: lyricsData.footer,
+                },
             })}}`);
         } catch (err: any) {
             await log(`Lyrics fetch failed: ${err.message}`);
@@ -123,18 +129,16 @@ app.get('/nowplaying/lyrics', async (c) => {
 app.get('/queue', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
-        const token = c.req.query('token');
+        const token   = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const limit = Math.max(1, parseInt(c.req.query('limit') || '20', 10));
-        const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
+        const limit   = Math.max(1, parseInt(c.req.query('limit')  || '20', 10));
+        const offset  = Math.max(0, parseInt(c.req.query('offset') || '0',  10));
 
         if (!token || !guildId) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
             return;
         }
-
         if (!hasActivePlayer(token)) {
-            await log('No active player found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
@@ -149,21 +153,34 @@ app.get('/queue', async (c) => {
             return;
         }
 
-        const allTracks = queue.tracks.toArray();
+        const allTracks = queue.queue.tracks;
         await log(`Queue has ${allTracks.length} tracks (showing offset=${offset}, limit=${limit})`);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
             data: {
-                current: queue.currentTrack ? formatTrack(queue.currentTrack) : null,
-                tracks: allTracks.slice(offset, offset + limit).map(formatTrack),
+                current: queue.queue.current ? formatTrack(queue.queue.current) : null,
+                tracks: allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)),
                 total: allTracks.length,
                 limit,
                 offset,
-                playing: queue.node.isPlaying(),
-            }
+                playing: queue.playing,
+            },
         })}}`);
     });
 });
+
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatMs(ms: number): string {
+    if (!ms || ms <= 0) return '0:00';
+    const s   = Math.floor(ms / 1000);
+    const h   = Math.floor(s / 3600);
+    const m   = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+}
 
 export default app;

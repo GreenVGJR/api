@@ -1,10 +1,15 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { getOrCreatePlayer, destroyPlayer, hasActivePlayer, createMusicStream } from '../../functions/musicPlayer.js';
+import {
+    getOrCreatePlayer,
+    destroyPlayer,
+    hasActivePlayer,
+    createMusicStream,
+} from '../../functions/musicPlayer.js';
 
 app.get('/disconnect', async (c) => {
-    const token = c.req.query('token');
+    const token   = c.req.query('token');
     const guildId = c.req.query('guildId');
 
     return createMusicStream(c, async (log, s) => {
@@ -21,32 +26,25 @@ app.get('/disconnect', async (c) => {
             return;
         }
 
-        const { client, player } = await getOrCreatePlayer(token);
+        const { player: manager } = await getOrCreatePlayer(token);
 
-
+        // ── Guild-scoped disconnect ───────────────────────────────────────
         if (guildId) {
             await log(`Disconnecting from guild: ${guildId}`);
-            const queue = player.nodes.get(guildId);
-            if (queue) {
-                queue.delete();
-                await log('Queue destroyed');
-            }
 
-            const guild = client.guilds.cache.get(guildId);
-            const me = guild?.members.me;
-            if (me?.voice.channel) {
-                await log(`Leaving voice channel: ${me.voice.channel.name}`);
-                me.voice.disconnect();
-                await log('Disconnected from voice channel');
+            const guildPlayer = manager.players.get(guildId);
+            if (guildPlayer) {
+                await guildPlayer.destroy();
+                await log('Lavalink player destroyed');
             } else {
-                await log('Bot was not in a voice channel in this guild');
+                await log('No Lavalink player found for this guild');
             }
 
-
+            // Destroy the discord.js client only if no other guilds are active
             let hasActiveNodes = false;
-            for (const [id, node] of player.nodes.cache) {
+            for (const [id, p] of manager.players) {
                 if (id === guildId) continue;
-                if (node.isPlaying() || node.tracks.size > 0) {
+                if (p.playing || p.paused || p.queue.tracks.length > 0) {
                     hasActiveNodes = true;
                     break;
                 }
@@ -54,7 +52,7 @@ app.get('/disconnect', async (c) => {
 
             let killed = false;
             if (!hasActiveNodes) {
-                await log('No other active servers, destroying discord.js client...');
+                await log('No other active guilds, destroying discord.js client...');
                 await destroyPlayer(token);
                 killed = true;
                 await log('Discord.js client destroyed');
@@ -63,18 +61,19 @@ app.get('/disconnect', async (c) => {
             await log('Ending logs response...');
             await s.write(`],"data":${JSON.stringify({
                 status: true,
-                data: { action: 'disconnected', guildId, context_destroyed: killed }
+                data: { action: 'disconnected', guildId, context_destroyed: killed },
             })}}`);
-        } else {
 
+        // ── Full destroy (no guildId) ─────────────────────────────────────
+        } else {
             await log('No guildId specified, destroying entire player...');
             await destroyPlayer(token);
-            await log('Discord.js client and player destroyed');
+            await log('Discord.js client and all Lavalink players destroyed');
             await log('Ending logs response...');
 
             await s.write(`],"data":${JSON.stringify({
                 status: true,
-                data: { action: 'disconnected', context_destroyed: true }
+                data: { action: 'disconnected', context_destroyed: true },
             })}}`);
         }
     });

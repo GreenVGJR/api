@@ -33,6 +33,8 @@ const API_ROUTES = {
         "/search/tidal?q=",
         "/search/genius?q=",
         "/search/pinterest?q=",
+        "/search/imdb?q=",
+        "/search/imgflip?q=",
         "/search/istockphoto?q=",
         "/search/imgur/posts?q=",
         "/search/unsplash?q=",
@@ -139,24 +141,26 @@ const API_ROUTES = {
     ],
     download: [],
     music: [
-        "/music/connect?token=&voiceId=&isDeaf=",
-        "/music/play?token=&q=&platform=&voiceId=",
-        "/music/pause?token=&guildId=",
-        "/music/resume?token=&guildId=",
-        "/music/skip?token=&guildId=&index=",
-        "/music/stop?token=&guildId=&leave=",
-        "/music/seek?token=&guildId=&time=",
-        "/music/volume?token=&guildId=&value=",
-        "/music/loop?token=&guildId=&mode=",
-        "/music/shuffle?token=&guildId=",
-        "/music/remove?token=&guildId=&index=",
-        "/music/clear?token=&guildId=",
-        "/music/jump?token=&guildId=&index=",
-        "/music/move?token=&guildId=&from=&to=",
-        "/music/back?token=&guildId=",
-        "/music/nowplaying?token=&guildId=",
-        "/music/nowplaying/lyrics?token=&guildId=",
-        "/music/queue?token=&guildId=&limit=&offset="
+    "/music/connect?token=&voiceId=&isDeaf=&247=",
+    "/music/disconnect?token=&guildId=",
+    "/music/play?token=&q=&platform=&voiceId=&authorId=&isDeaf=&247=",
+    "/music/pause?token=&guildId=",
+    "/music/resume?token=&guildId=",
+    "/music/skip?token=&guildId=&index=",
+    "/music/stop?token=&guildId=",
+    "/music/seek?token=&guildId=&time=",
+    "/music/volume?token=&guildId=&value=",
+    "/music/loop?token=&guildId=&mode=",
+    "/music/shuffle?token=&guildId=",
+    "/music/remove?token=&guildId=&index=",
+    "/music/clear?token=&guildId=",
+    "/music/jump?token=&guildId=&index=",
+    "/music/move?token=&guildId=&from=&to=",
+    "/music/back?token=&guildId=",
+    "/music/where?token=&guildId=&authorId=",
+    "/music/nowplaying?token=&guildId=",
+    "/music/nowplaying/lyrics?token=&guildId=",
+    "/music/queue?token=&guildId=&limit=&offset=",
     ]
 };
 
@@ -593,11 +597,19 @@ app.get('/', (c: Context) => {
         const uptime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
 
         const listapi = [{
+            source: [{
+                title: "Source Code",
+                url: "https://github.com/GreenVGJR/api"
+            },
+            {
+                title: "Playground",
+                url: "https://api.vgjr.top/playground"
+            }],
             domRendering: typeRender,
             uptime: uptime,
             service: "Hono",
             runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-            fallback_runtime: typeof Bun === "object" ? "Node.js" : "Bun"
+            fallback_runtime: typeof Bun === "object" ? "Node.js" : "Bun",
         },
         {
             routes: API_ROUTES

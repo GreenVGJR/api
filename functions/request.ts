@@ -6121,3 +6121,201 @@ export const Trakteer = async (query: string): Promise<any> => {
         return null;
     }
 }
+
+export const IMDB = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
+        const resBody: any = {"includeAdult":true,"isExactMatch":false,"locale":"en-US","numResults":5,"originalTitleText":true,"searchTerm":query,"skipHasExact":true,"typeFilter":"TITLE"};
+        const exter: any = {"persistedQuery":{"sha256Hash":"b6a7c673cfb2d2cc8d78570a7d5f6e0d65601021fcbbdc71cde7a53468641fa1","version":1}};
+        const res = await session.get(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const response = res.json();
+        session.close();
+
+        const finalres: any = response?.data?.results?.edges;
+
+        return {
+            data: finalres.map((a: any) => {
+                const { __typename, ...node } = a?.node?.entity;
+                return { url: "https://www.imdb.com/title/" + node?.id, ...node };
+            })
+        }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const ImgflipSearch = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    const resolveUrl = (raw: string | null | undefined): string => {
+        if (!raw) return '';
+        if (raw.startsWith('//')) return `https:${raw}`;
+        if (raw.startsWith('/')) return `https://imgflip.com${raw}`;
+        return raw;
+    };
+
+    const hasClass = (el: any, name: string): boolean =>
+        el.getAttribute?.('class')?.split(' ').includes(name) ?? false;
+
+    const text = (el: any): string =>
+        String(el?.textContent ?? '').trim();
+
+    // Parse subtitle string into structured metadata per section
+    const parseMeta = (section: string, subtitle: string, description: string) => {
+        switch (section) {
+            case 'memes': {
+                // e.g. "meme template, 200,000+ captions"
+                const captions = subtitle.match(/([\d,]+\+?)\s+captions?/)?.[1] ?? null;
+                return { subtitle: captions };
+            }
+            case 'images': {
+                // e.g. "user-captioned meme, 3,132 views" / "user-generated gif, 22,183 views"
+                const type  = subtitle.split(',')[0]?.trim() ?? null;
+                const views = subtitle.match(/([\d,]+)\s+views?/)?.[1] ?? null;
+                return {
+                    type,
+                    views,
+                    description: description || null,
+                };
+            }
+            case 'tags': {
+                // e.g. "view all 12,277 images tagged \"anime\""
+                const count = subtitle.match(/([\d,]+)\s+images?/)?.[1] ?? null;
+                return { count };
+            }
+            case 'streams': {
+                // e.g. "60,773 submitted images"
+                const count = subtitle.match(/([\d,]+)\s+submitted/)?.[1] ?? null;
+                return {
+                    count,
+                    description: description || null,
+                };
+            }
+            case 'users': {
+                // e.g. "joined Aug 17 2014, 2,415 creations, 41 comments"
+                const joined    = subtitle.match(/joined\s+([^,]+)/)?.[1]?.trim() ?? null;
+                const creations = subtitle.match(/([\d,]+)\s+creations?/)?.[1] ?? null;
+                const comments  = subtitle.match(/([\d,]+)\s+comments?/)?.[1] ?? null;
+                return {
+                    joined,
+                    creations,
+                    comments,
+                };
+            }
+            default:
+                return { subtitle };
+        }
+    };
+
+    try {
+        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
+        const res = await session.get(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
+            headers: { ...commonHeaders }
+        });
+
+        const html: string = await res.text;
+        session.close();
+
+        const { document } = parseHTML(html);
+        const container = document.querySelector('#s-results');
+        if (!container) return null;
+
+        const data: Record<string, any[] | null> = {
+            memes: null,
+            images: null,
+            tags: null,
+            streams: null,
+            users: null,
+        };
+        let currentSection = 'unknown';
+
+        for (const child of container.children) {
+            // Section heading — direct H2 or H2 inside a wrapper div (.s-results-title-wrap)
+            const heading = child.tagName === 'H2'
+                ? child
+                : child.querySelector?.('h2');
+
+            if (heading) {
+                currentSection = text(heading).toLowerCase();
+                if (data[currentSection] === null) data[currentSection] = [];
+                continue;
+            }
+
+            // Skip non-result elements (buttons, dropdowns, etc.)
+            if (!hasClass(child, 's-result') && !hasClass(child, 's-more-results')) {
+                continue;
+            }
+
+            // Collect anchors — direct .s-result or nested inside .s-more-results
+            const anchors: any[] = hasClass(child, 's-result')
+                ? [child]
+                : [...child.querySelectorAll('a.s-result')];
+
+            for (const el of anchors) {
+                const url         = resolveUrl(el.getAttribute('href'));
+                const title       = text(el.querySelector('.s-result-title'));
+                const subtitle    = text(el.querySelector('.s-result-subtitle'));
+                const rawCover       = el.querySelector('img')?.getAttribute('src');
+                const isGif         = el.getAttribute('href')?.includes('/gif/') ?? false;
+                const cover         = resolveUrl(rawCover);
+                const full_cover    = isGif
+                    ? cover.replace('/2/', '/').replace(/\.jpg$/, '.mp4')
+                    : cover.replace('/2/', '/');
+                const description = text(el.querySelector('.s-result-description'));
+
+                const meta = parseMeta(currentSection, subtitle, description);
+
+                const noCover = currentSection === 'users' || currentSection === 'streams';
+                const entry: Record<string, any> = noCover
+                    ? { url, title, ...meta }
+                    : { url, title, cover: cover || null, full_cover: full_cover || null, ...meta };
+
+                if (Array.isArray(data[currentSection])) {
+                    data[currentSection]!.push(entry);
+                }
+            }
+        }
+
+        return { data };
+    } catch {
+        return null;
+    }
+};
+
+export const OtoDB = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
+        const res = await session.get(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
+            headers: {
+                ...commonHeaders
+            }
+        });
+
+        const response = res.json();
+        session.close();
+
+        if (!response?.result?.data?.[0]) {
+            return { data: null }
+        }
+
+        return {
+            data: response.result.data
+        }
+    }
+    catch {
+        return null;
+    }
+}

@@ -505,7 +505,7 @@ app.get('/playground', (c: Context) => {
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
+    c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush

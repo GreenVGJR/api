@@ -6298,24 +6298,46 @@ export const OtoDB = async (query: string): Promise<any> => {
 
     try {
         const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const res = await session.get(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
-            headers: {
-                ...commonHeaders
+        const res = await session.get(
+            `https://otodb.net/work/search/__data.json?query=${encodeURIComponent(query)}`,
+            {
+                headers: {
+                    ...commonHeaders
+                }
             }
-        });
+        );
 
-        const response = res.json();
+        const json = res.json();
         session.close();
 
-        if (!response?.result?.data?.[0]) {
-            return { data: null }
+        const pageNode = json.nodes?.[1];
+        if (!pageNode?.data) return { data: null };
+
+        const data: any[] = pageNode.data;
+
+        function resolve(index: number): any {
+            const val = data[index];
+
+            if (Array.isArray(val)) return val.map((i: number) => resolve(i));
+
+            if (val !== null && typeof val === 'object') {
+                const resolved: Record<string, any> = {};
+                for (const [key, idx] of Object.entries(val)) {
+                    resolved[key] = resolve(idx as number);
+                }
+                return resolved;
+            }
+
+            return val;
         }
 
-        return {
-            data: response.result.data
-        }
-    }
-    catch {
+        const root = data[0];
+        const results = resolve(root.results);
+
+        if (!results?.items?.[0]) return { data: null };
+
+        return { data: results.items };
+    } catch {
         return null;
     }
-}
+};

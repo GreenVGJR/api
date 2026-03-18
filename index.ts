@@ -39,6 +39,7 @@ const API_ROUTES = {
         "/search/imgur/posts?q=",
         "/search/unsplash?q=",
         "/search/pixiv?q=",
+        "/search/otodb?q=",
         "/search/discord/discovery/apps?q=",
         "/search/discord/discovery/servers?q=",
         "/search/bilibili?q=",

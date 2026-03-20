@@ -267,16 +267,14 @@ const challengeHtml = (verifyUrl: string) => `
 <body style="background:#000;margin:0">
     <script>
     (function() {
-      function executeChallenge() {
-        fetch('${verifyUrl}', { method: 'POST' })
-        .then(res => {
-          if (res.ok) {
-            window.location.href = window.location.pathname;
-          }
-        });
-      }
-      if (document.readyState !== 'loading') { executeChallenge(); }
-      else { document.addEventListener('DOMContentLoaded', executeChallenge); }
+    if (document.readyState !== 'loading') {
+        executeChallenge();
+    } else {
+        document.addEventListener('DOMContentLoaded', executeChallenge);
+    }
+    function executeChallenge() {
+        fetch('${verifyUrl}', { method: 'POST' }).then((r) => r.ok ? window.location.href = window.location.pathname : null);
+    }
     })();
     </script>
 </body>

@@ -273,7 +273,7 @@ const challengeHtml = (verifyUrl: string) => `
         document.addEventListener('DOMContentLoaded', executeChallenge);
     }
     function executeChallenge() {
-        fetch('${verifyUrl}', { method: 'POST' }).then((r) => r.ok ? window.location.href = window.location.pathname : null);
+        fetch('${verifyUrl}', { method: 'POST' }).then((r) => r.ok ? window.location.href = window.location.pathname : null).catch();
     }
     })();
     </script>

@@ -461,7 +461,7 @@ app.get('/playground', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') {
         return c.text('Forbidden', 403);
     }
-    
+
     const host = (c.req.header('host') || '').toLowerCase();
 
     c.header('Content-Type', 'text/html');
@@ -488,7 +488,7 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
     c.header('Content-Type', 'application/javascript');
     await s.write('');
 
@@ -508,7 +508,7 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
     c.header('Content-Type', 'text/css');
     await s.write('');
 

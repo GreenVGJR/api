@@ -461,22 +461,8 @@ app.get('/playground', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') {
         return c.text('Forbidden', 403);
     }
-    const referer = c.req.header('referer') || '';
-    const host = (c.req.header('host') || '').toLowerCase();
     
-    // Simple but robust check: does the referer contain our path?
-    const isAllowedReferer = referer.includes('/playground');
-
-    c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
-
-    if (!isAllowedReferer) {
-        const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
-        const verifyUrl = `/playground.verify/aaol/2026=005=04=829=14=4=5/2/${randomChars}`;
-        
-        c.header('Content-Type', 'text/html');
-        return c.html(challengeHtml(verifyUrl));
-    }
+    const host = (c.req.header('host') || '').toLowerCase();
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');

@@ -544,7 +544,7 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('Cache-Control', 'private, max-age=5, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=5, must-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');

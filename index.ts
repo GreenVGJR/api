@@ -447,28 +447,11 @@ app.get('/tools/health', (c: Context) => {
 
 app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
     try {
-        const headersParam = c.req.param('headers');
-        if (!headersParam) return c.body(null, 403);
-        
-        const currentHost = (c.req.header('host') || '').toLowerCase();
-        const decryptedStr = decryptPayload(headersParam, currentHost);
-        if (!decryptedStr) return c.body(null, 403);
-        
-        const decoded = JSON.parse(decryptedStr);
-        const currentUA = c.req.header('user-agent');
-
-        // Verification logic
-        const matchesUA = decoded['user-agent'] === currentUA;
-        const matchesHost = decoded['host'] === currentHost;
-        const isNotExpired = Date.now() - (decoded.timeGenerate || 0) < 10000; // 10 seconds
-
-        if (!matchesUA || !matchesHost || !isNotExpired) {
-            return c.body(null, 403);
+        if(c.req.header('Accept') === 'application/json') {
+            return c.text('Forbidden', 403);
         }
-
-        c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
-        c.header('Refresh', '0; url=/playground');
-        return c.body(null, 202);
+        c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
+        return c.body(null, 200);
     } catch (e) {
         return c.body(null, 403);
     }
@@ -485,17 +468,11 @@ app.get('/playground', (c: Context) => {
     const isAllowedReferer = referer.includes('/playground');
 
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
 
     if (!isAllowedReferer) {
-        const info = {
-            'user-agent': c.req.header('user-agent'),
-            'host': host,
-            timeGenerate: Date.now()
-        };
-        const encryptedHeaders = encryptPayload(JSON.stringify(info), host);
         const randomChars = crypto.randomBytes(6).toString('hex'); // 12 characters
-        const verifyUrl = `/playground.verify/aaol/${encryptedHeaders}/2/${randomChars}`;
+        const verifyUrl = `/playground.verify/aaol/2026=005=04=829=14=4=5/2/${randomChars}`;
         
         c.header('Content-Type', 'text/html');
         return c.html(challengeHtml(verifyUrl));
@@ -503,16 +480,10 @@ app.get('/playground', (c: Context) => {
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'private, max-age=0, no-transform, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
-        
-        const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-        if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
-            await s.write('Forbidden');
-            return;
-        }
         
         const isLocal = isLocalRequest(host);
         const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
@@ -531,17 +502,11 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
     c.header('Content-Type', 'application/javascript');
     await s.write('');
 
     if (!refPath.endsWith(`${host}/playground`)) {
-        await s.write('Forbidden');
-        return;
-    }
-    
-    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
         await s.write('Forbidden');
         return;
     }
@@ -557,17 +522,11 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
     c.header('Content-Type', 'text/css');
     await s.write('');
 
     if (!refPath.endsWith(`${host}/playground`)) {
-        await s.write('Forbidden');
-        return;
-    }
-    
-    const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-    if(!isMozilla || (c.req.header('Accept') === 'application/json')) {
         await s.write('Forbidden');
         return;
     }
@@ -585,7 +544,7 @@ app.get('/', (c: Context) => {
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('Cache-Control', 'public, max-age=1, no-transform, must-revalidate');
+    c.header('Cache-Control', 'private, max-age=5, must-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');

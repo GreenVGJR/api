@@ -751,12 +751,12 @@ app.get('/where', async (c) => {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required param: token' })}}`);
             return;
         }
-        if (!hasActivePlayer(token)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
-            return;
-        }
+        const isNew = !hasActivePlayer(token);
+        await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
         const { client, player: manager } = await getOrCreatePlayer(token);
+        await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
+        await log('Lavalink manager active');
 
         // ── Bot's connected VCs (array) ───────────────────────────────────
         const botChannels: { id: string; voiceId: string; name: string; guildId: string }[] = [];

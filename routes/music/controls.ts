@@ -825,6 +825,7 @@ app.get('/where', async (c) => {
         await s.write(`],"data":${JSON.stringify({
             status: true,
             data: result,
+            author: authorChannel,
         })}}`);
     });
 });

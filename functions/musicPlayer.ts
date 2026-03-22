@@ -48,7 +48,7 @@ export function createMusicStream(
 
 const LAVALINK_NODE = {
     id: 'main-node',
-    host: 'lavalink.serenetia.com',
+    host: 'lavalinkv4.serenetia.com',
     port: 443,
     authorization: 'https://seretia.link/discord',
     secure: true,

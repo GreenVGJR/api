@@ -759,7 +759,7 @@ app.get('/where', async (c) => {
         const { client, player: manager } = await getOrCreatePlayer(token);
 
         // ── Bot's connected VCs (array) ───────────────────────────────────
-        const botChannels: { id: string; name: string; guildId: string }[] = [];
+        const botChannels: { id: string; voiceId: string; name: string; guildId: string }[] = [];
 
         const playersToCheck = guildId
             ? [[guildId, manager.players.get(guildId)]].filter(([, p]) => p) as [string, any][]
@@ -770,6 +770,7 @@ app.get('/where', async (c) => {
                 const ch = await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null) as any;
                 botChannels.push({
                     id: guildPlayer.voiceChannelId,
+                    voiceId: guildPlayer.voiceChannelId,
                     name: ch?.name ?? 'Unknown',
                     guildId: gid,
                 });
@@ -780,7 +781,7 @@ app.get('/where', async (c) => {
         if (botChannels.length === 0) await log('Bot is not in any voice channel');
 
         // ── Author's current VC ───────────────────────────────────────────
-        let authorChannel: { id: string; name: string; guildId: string } | null = null;
+        let authorChannel: { id: string; voiceId: string; name: string; guildId: string } | null = null;
 
         if (authorId) {
             await log(`Looking up voice channel for user: ${authorId}`);
@@ -792,12 +793,15 @@ app.get('/where', async (c) => {
                 try {
                     const member = await guild.members.fetch(authorId).catch(() => null);
                     if (member?.voice?.channelId) {
+                        const channelId = member.voice.channelId;
+                        const channelName = member.voice.channel?.name ?? 'Unknown';
                         authorChannel = {
-                            id: member.voice.channelId,
-                            name: member.voice.channel?.name ?? 'Unknown',
+                            id: channelId,
+                            voiceId: channelId,
+                            name: channelName,
                             guildId: guild.id,
                         };
-                        await log(`User ${authorId} is in VC: ${authorChannel.name} (${authorChannel.id})`);
+                        await log(`User ${authorId} is in VC: ${channelName} (${channelId})`);
                         break;
                     }
                 } catch { }
@@ -809,6 +813,12 @@ app.get('/where', async (c) => {
         const result = botChannels.map(b => ({
             ...b,
             author: authorChannel?.guildId === b.guildId ? authorChannel : null,
+            client: {
+                id: b.id,
+                voiceId: b.id,
+                name: b.name,
+                guildId: b.guildId,
+            },
             sameChannel: !!(authorChannel && authorChannel.id === b.id),
         }));
 

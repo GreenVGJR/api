@@ -811,14 +811,13 @@ app.get('/where', async (c) => {
 
         // Merge bot channels with author info into a flat array
         const result = botChannels.map(b => ({
-            ...b,
-            author: authorChannel?.guildId === b.guildId ? authorChannel : null,
             client: {
                 id: b.id,
                 voiceId: b.id,
                 name: b.name,
                 guildId: b.guildId,
             },
+            author: authorChannel?.guildId === b.guildId ? authorChannel : null,
             sameChannel: !!(authorChannel && authorChannel.id === b.id),
         }));
 

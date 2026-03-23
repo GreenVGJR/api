@@ -256,7 +256,12 @@ const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 
 const app = new Hono({ strict: false });
 
-app.use('*', compress());
+app.use('*', (c: Context, next: Next) => {
+    if (c.req.header('user-agent')?.startsWith('Mozilla/5.0')) {
+        return compress({ encoding: 'gzip', threshold: 0 })(c, next);
+    }
+    return compress()(c, next);
+});
 
 const challengeHtml = (verifyUrl: string) => `
 <!DOCTYPE html>
@@ -445,6 +450,7 @@ app.get('/tools/health', (c: Context) => {
     return c.text('OK', 200);
 });
 
+/*
 app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
     try {
         if(c.req.header('Accept') === 'application/json') {
@@ -456,6 +462,7 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
         return c.body(null, 403);
     }
 });
+*/
 
 app.get('/playground', (c: Context) => {
     if(c.req.header('Accept') === 'application/json') {
@@ -526,11 +533,10 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
 app.get('/', (c: Context) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     c.header('X-Net', isMozilla ? 'true' : 'false');
-    if(!isMozilla) return c.text('Forbidden', 403);
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
-    c.header('Cache-Control', 'public, max-age=5, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
 
     return stream(c, async (stream) => {
         await stream.write('');

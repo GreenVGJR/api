@@ -23,6 +23,7 @@ if (window.SERVER_ENDPOINTS) {
 const urlInput = document.getElementById('urlInput');
 const copyBtn = document.getElementById('copyBtn');
 const copyResponseBtn = document.getElementById('copyResponseBtn');
+const clearResponseBtn = document.getElementById('clearResponseBtn');
 const sendBtn = document.getElementById('sendBtn');
 const responseArea = document.getElementById('responseArea');
 const statusIndicator = document.getElementById('statusIndicator');
@@ -591,19 +592,28 @@ copyBtn.addEventListener('click', async () => {
 copyResponseBtn.addEventListener('click', async () => {
     if (!lastRawResponse) return;
 
-        try {
+    try {
         await copyToClipboard(lastRawResponse);
         const originalText = copyResponseBtn.querySelector('span').textContent;
         copyResponseBtn.querySelector('span').textContent = 'Copied!';
         copyResponseBtn.classList.add('text-mint-400');
 
-                setTimeout(() => {
+        setTimeout(() => {
             copyResponseBtn.querySelector('span').textContent = originalText;
             copyResponseBtn.classList.remove('text-mint-400');
         }, 1500);
     } catch (err) {
         console.error('Failed to copy response:', err);
     }
+});
+
+clearResponseBtn.addEventListener('click', () => {
+    lastRawResponse = '';
+    responseArea.classList.add('empty-state');
+    responseArea.innerHTML = '<span class="text-gray-600">Nothing to do.</span>';
+    statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-gray-500';
+    statusText.textContent = 'Ready';
+    statusText.className = 'text-gray-500';
 });
 
 sendBtn.addEventListener('click', () => performRequest(urlInput.value));

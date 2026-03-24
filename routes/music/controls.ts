@@ -738,6 +738,48 @@ app.get('/back', async (c) => {
     });
 });
 
+app.get('/247', async (c) => {
+    return createMusicStream(c, async (log, s) => {
+        await log('Request accepted');
+        const token   = c.req.query('token');
+        const guildId = c.req.query('guildId');
+
+        if (!token || !guildId) {
+            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            return;
+        }
+        if (!hasActivePlayer(token)) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            return;
+        }
+
+        const valueStr = c.req.query('value') || '';
+        if (valueStr !== 'true' && valueStr !== 'false') {
+            await s.write(`],"error":${JSON.stringify({ message: 'Value must be "true" or "false"' })}}`);
+            return;
+        }
+
+        const is247 = valueStr === 'true';
+
+        // Check if the bot is actually in the guild
+        const { player } = await getOrCreatePlayer(token);
+        const queue = getQueue(player, guildId);
+
+        if (!queue) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player or queue found for this guild' })}}`);
+            return;
+        }
+
+        set247(token, guildId, is247);
+        await log(`24/7 mode set to ${is247} for guild ${guildId}`);
+
+        await s.write(`],"data":${JSON.stringify({
+            status: true,
+            data: { action: '247_set', is247 },
+        })}}`);
+    });
+});
+
 export default app;
 
 app.get('/where', async (c) => {

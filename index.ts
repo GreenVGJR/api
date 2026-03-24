@@ -142,9 +142,9 @@ const API_ROUTES = {
     ],
     download: [],
     music: [
-    "/music/connect?token=&voiceId=&isDeaf=&247=",
+    "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
     "/music/disconnect?token=&guildId=",
-    "/music/play?token=&q=&platform=&voiceId=&authorId=&isDeaf=&247=",
+    "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
     "/music/pause?token=&guildId=",
     "/music/resume?token=&guildId=",
     "/music/skip?token=&guildId=&index=",
@@ -158,6 +158,7 @@ const API_ROUTES = {
     "/music/jump?token=&guildId=&index=",
     "/music/move?token=&guildId=&from=&to=",
     "/music/back?token=&guildId=",
+    "/music/247?token=&guildId=&value=",
     "/music/where?token=&guildId=&authorId=",
     "/music/nowplaying?token=&guildId=",
     "/music/nowplaying/lyrics?token=&guildId=",
@@ -313,6 +314,31 @@ app.use('*', async (c: Context, next: Next) => {
         c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
         c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
     }
+
+    const currentUrl = new URL(c.req.url);
+    const currentHost = currentUrl.host;
+    const currentHostname = currentUrl.hostname;
+    const queries = c.req.query();
+    for (const key in queries) {
+        const val = queries[key];
+        if (val && (val.startsWith('http://') || val.startsWith('https://'))) {
+            try {
+                const parsed = new URL(val);
+                if (
+                    parsed.host === currentHost || 
+                    parsed.hostname === currentHostname ||
+                    parsed.hostname === 'api.vgjr.top' || 
+                    parsed.hostname === 'localhost' || 
+                    parsed.hostname === '127.0.0.1' ||
+                    parsed.hostname === '[::1]' ||
+                    parsed.hostname === 'vgjr.vercel.app'
+                ) {
+                    return c.json({ error: "Query not allowed" });
+                }
+            } catch {}
+        }
+    }
+
     await next();
 });
 
@@ -495,14 +521,9 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
     c.header('Content-Type', 'application/javascript');
     await s.write('');
-
-    if (!refPath.endsWith(`${host}/playground`)) {
-        await s.write('Forbidden');
-        return;
-    }
     
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'script') return;
@@ -515,14 +536,9 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'private, max-age=0, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
     c.header('Content-Type', 'text/css');
     await s.write('');
-
-    if (!refPath.endsWith(`${host}/playground`)) {
-        await s.write('Forbidden');
-        return;
-    }
     
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'style') return;

@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType, PermissionsBitField } from 'discord.js';
 import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-client';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
@@ -16,8 +16,10 @@ export function createMusicStream(
     c.header('Cache-Control', 'no-cache, no-transform, no-store, max-age=0');
     c.header('X-PO-Client-Id', crypto.createHash('md5').update(oo).digest('hex'));
     c.header('X-PO-Client', signature);
-    c.header('X-Enc-Route', 'v1-beta');
+    c.header('X-Enc-Route', 'v2-beta');
     c.header('X-Route', 'LIVE');
+    c.header('X-Player', "[\"lavalink.serenetia\", \"lavalink.null\"]");
+    c.header('X-Warning', 'Music endpoints are still on development. Expect a unstable and unusual errors');
 
     return stream(c, async (s: any) => {
         const startTime = Date.now();
@@ -278,9 +280,11 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
     });
 
     // ── Login & Init ───────────────────────────────────────────────────────
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
     const readyPromise = new Promise<void>((resolve, reject) => {
         // Give the Discord login + node handshake up to 30 s total
-        const timeout = setTimeout(
+        timeout = setTimeout(
             () => reject(new Error('Timed out waiting for Discord login and Lavalink node connection')),
             30_000
         );
@@ -294,35 +298,35 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
 
                 // Resolve only once at least one Lavalink node is ready
                 manager.nodeManager.once('connect', () => {
-                    clearTimeout(timeout);
+                    if (timeout) clearTimeout(timeout);
                     console.log(`🔗 Lavalink node connected (token: ...${token.slice(-6)})`);
                     resolve();
                 });
 
                 manager.nodeManager.once('error', (_node, err) => {
-                    clearTimeout(timeout);
+                    if (timeout) clearTimeout(timeout);
                     reject(err as Error);
                 });
             } catch (err) {
-                clearTimeout(timeout);
+                if (timeout) clearTimeout(timeout);
                 reject(err);
             }
         });
 
         client.once('error', err => {
-            clearTimeout(timeout);
+            if (timeout) clearTimeout(timeout);
             reject(err);
         });
     });
 
-    const fullReady = client.login(token).then(() => readyPromise);
-
-    const managed: ManagedPlayer = { client, player: manager, ready: fullReady, destroyTimer: null };
+    const managed: ManagedPlayer = { client, player: manager, ready: readyPromise, destroyTimer: null };
     players.set(token, managed);
 
     try {
-        await fullReady;
+        await client.login(token);
+        await readyPromise;
     } catch (err) {
+        if (timeout) clearTimeout(timeout);
         players.delete(token);
         client.destroy();
         throw err;
@@ -351,11 +355,24 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
+export function checkVoicePermissions(channel: any, botUser: any) {
+    const permissions = channel.permissionsFor(botUser);
+    if (!permissions?.has(PermissionsBitField.Flags.Connect)) {
+        throw new Error(`I do not have permission to connect to the voice channel: ${channel.name}`);
+    }
+    if (!permissions?.has(PermissionsBitField.Flags.Speak)) {
+        throw new Error(`I do not have permission to speak in the voice channel: ${channel.name}`);
+    }
+}
+
 export async function resolveVoiceChannel(client: Client, voiceId: string) {
     const channel = await client.channels.fetch(voiceId).catch(() => null);
     if (!channel || channel.type !== ChannelType.GuildVoice) {
         throw new Error('Invalid voice channel ID or not a voice channel');
     }
+
+    checkVoicePermissions(channel, client.user!);
+
     return channel;
 }
 

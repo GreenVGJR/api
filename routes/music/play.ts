@@ -8,7 +8,9 @@ import {
     PLATFORM_SEARCH,
     hasActivePlayer,
     set247,
+    get247,
     createMusicStream,
+    checkVoicePermissions,
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, request, commonHeaders } from '../../functions/request.js';
 
@@ -20,9 +22,10 @@ app.get('/play', async (c) => {
         let query      = c.req.query('q');
         const platform = (c.req.query('platform') || 'spotify').toLowerCase();
         const voiceId  = c.req.query('voiceId');
+        const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
         const isDeaf   = c.req.query('isDeaf') !== 'false';
-        const is247    = c.req.query('247') === 'true';
+        const req247   = c.req.query('247');
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
@@ -167,8 +170,19 @@ app.get('/play', async (c) => {
                     break;
                 }
             }
+            if (!channel && authorId && reqGuildId) {
+                await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
+                const guild = client.guilds.cache.get(reqGuildId as string);
+                if (guild) {
+                    const voiceState = guild.voiceStates.cache.get(authorId as string);
+                    if (voiceState?.channel) {
+                        channel = voiceState.channel;
+                    }
+                }
+            }
             if (channel) {
-                await log(`Found bot in voice channel: ${channel.name}`);
+                await log(`Found target in voice channel: ${channel.name}`);
+                checkVoicePermissions(channel, client.user!);
             } else {
                 await log('No voice channel found');
                 await s.write(`],"error":${JSON.stringify({ message: 'Please join a voice channel' })}}`);
@@ -183,7 +197,7 @@ app.get('/play', async (c) => {
         let requester: any = { id: authorId || 'api', username: 'API' };
         if (authorId) {
             await log(`Fetching user: ${authorId}`);
-            const fetched = await client.users.fetch(authorId).catch(() => null);
+            const fetched = await client.users.fetch(authorId as string).catch(() => null);
             if (fetched) {
                 requester = fetched;
                 await log(`User found: ${fetched.tag}`);
@@ -204,6 +218,11 @@ app.get('/play', async (c) => {
                 selfMute: false,
                 volume: 50,
             });
+        }
+        
+        let is247 = get247(token!, guildId);
+        if (req247 !== undefined) {
+            is247 = req247 === 'true';
             set247(token!, guildId, is247);
         }
 

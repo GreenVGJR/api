@@ -7,6 +7,7 @@ import {
     formatTrack,
     hasActivePlayer,
     createMusicStream,
+    get247,
 } from '../../functions/musicPlayer.js';
 import { YTMusic, YTLyrics } from '../../functions/request.js';
 
@@ -43,6 +44,7 @@ app.get('/nowplaying', async (c) => {
             status: true,
             data: {
                 current: formatTrack(current),
+                is247: get247(token!, guildId!),
                 playing: queue.playing,
                 paused: queue.paused,
                 volume: queue.volume,
@@ -114,6 +116,7 @@ app.get('/nowplaying/lyrics', async (c) => {
                 status: true,
                 data: {
                     track: formatTrack(track),
+                    is247: get247(token!, guildId!),
                     lyrics: lyricsData.lyrics,
                     footer: lyricsData.footer,
                 },
@@ -160,6 +163,7 @@ app.get('/queue', async (c) => {
             status: true,
             data: {
                 current: queue.queue.current ? formatTrack(queue.queue.current) : null,
+                is247: get247(token!, guildId!),
                 tracks: allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)),
                 total: allTracks.length,
                 limit,

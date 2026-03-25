@@ -325,14 +325,28 @@ app.get('/seek', async (c) => {
             return;
         }
 
-        if (queue.queue.current.info.isStream) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cannot seek on a live stream' })}}`);
+        const currentTrack = queue.queue.current;
+        const duration = currentTrack.info.duration || 0;
+
+        if (currentTrack.info.isStream) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cannot seek on a live track' })}}`);
+            return;
+        }
+
+        if (duration <= 0) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cannot seek: track metadata is missing duration' })}}`);
             return;
         }
 
         const time = c.req.query('time') || '';
         const ms   = parseTimeMS(time);
-        const seekTarget = Math.max(0, Math.min(ms, queue.queue.current.info.duration || 0));
+
+        if (ms > duration) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration/1000)}s)` })}}`);
+            return;
+        }
+
+        const seekTarget = Math.max(0, ms);
         await log(`Seeking to ${seekTarget}ms (input: "${time}")...`);
 
         try {

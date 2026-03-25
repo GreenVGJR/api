@@ -12,7 +12,7 @@
     "lavalink-client": "^2.9.9",
     "linkedom": "^0.18.12",
     "tslib": "^2.8.1",
-    "undici": "^7.24.5",
+    "undici": "^7.24.6",
     "x-client-transaction-id": "^0.2.0",
     "youtube-dl-exec": "^3.1.4"
   },

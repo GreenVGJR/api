@@ -339,17 +339,25 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     const managed = players.get(token);
     if (!managed) return false;
 
+    // Remove from map first to prevent 24/7 reconnect from re-creating
+    players.delete(token);
+
     if (managed.destroyTimer) {
         clearTimeout(managed.destroyTimer);
         managed.destroyTimer = null;
     }
 
+    // Destroy all guild players
     for (const [, p] of managed.player.players) {
         await p.destroy().catch(() => { });
     }
 
+    // Disconnect all Lavalink nodes to close their WebSockets
+    for (const node of managed.player.nodeManager.nodes.values()) {
+        try { node.destroy('Player destroyed'); } catch { }
+    }
+
     managed.client.destroy();
-    players.delete(token);
     return true;
 }
 

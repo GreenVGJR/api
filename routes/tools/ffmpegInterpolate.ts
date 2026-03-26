@@ -15,8 +15,8 @@ app.get('/ffmpeg/interpolate', async (c) => {
     if (!videoUrl)
         return c.json({ error: "Missing parameter 'videoUrl'" }, 202);
 
-    if (isNaN(multi) || multi < 2 || multi > 4)
-        return c.json({ error: "Invalid 'multi' parameter. Must be between 2 and 4." }, 202);
+    if (isNaN(multi) || multi < 2 || multi > 3)
+        return c.json({ error: "Invalid 'multi' parameter. Must be between 2 and 3." }, 202);
 
     let resp;
     try {
@@ -72,9 +72,9 @@ app.get('/ffmpeg/interpolate', async (c) => {
             return c.json({ error: "Video over 60fps doesn't allow to process" }, 400);
         }
 
-        if (duration > 300) {
+        if (duration > 60) {
             fs.unlinkSync(inputPath);
-            return c.json({ error: "Video over 5 minutes doesn't allow to process" }, 400);
+            return c.json({ error: "Video over a minute doesn't allow to process" }, 400);
         }
 
         const width: number = stream0.width;
@@ -98,9 +98,9 @@ app.get('/ffmpeg/interpolate', async (c) => {
         return stream(c, async (s) => {
             try {
                 const ffmpeg = spawn('ffmpeg', [
-                    '-threads', String(os.cpus().length),
+                    '-threads', '16',
                     '-i', inputPath,
-                    '-filter_threads', String(os.cpus().length),
+                    '-filter_threads', '16',
                     '-filter:v', `minterpolate=fps=${targetFps}:me=epzs:mb_size=16:vsbmc=1`,
                     '-preset', 'ultrafast',
                     '-movflags', 'frag_keyframe+empty_moov+faststart',

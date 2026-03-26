@@ -875,65 +875,87 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
         if (!videoDetail?.video) return { data: null };
 
+        const responseData: any = {
+            aweme_id: videoDetail.id?.toString(),
+            original_play_url: savetikData?.video_url || null,
+        };
+
+        if (videoDetail.video?.videoID) responseData.videoId = videoDetail.video?.videoID;
+
+        const authorUniqueId = videoDetail.author?.uniqueId;
+        if (authorUniqueId && authorUniqueId !== 'undefined') {
+            responseData.url = "https://www.tiktok.com/@" + authorUniqueId + "/video/" + videoDetail.id;
+            responseData.author = {
+                url: "https://www.tiktok.com/@" + authorUniqueId,
+                aweme_id: videoDetail.author?.id?.toString(),
+                secUid: videoDetail.author?.secUid,
+                uniqueId: videoDetail.author?.uniqueId,
+                nickname: videoDetail.author?.nickname,
+                desc: videoDetail.author?.signature,
+                createTime: videoDetail.author?.createTime?.toString(),
+                verified: videoDetail.author?.verified,
+                tiktokSeller: videoDetail.author?.ttSeller,
+                avatar: videoDetail.author?.avatarLarger,
+                followerCount: videoDetail.authorStatsV2?.followerCount?.toString(),
+                followingCount: videoDetail.authorStatsV2?.followingCount?.toString(),
+                totalLikesCount: videoDetail.authorStatsV2?.heartCount?.toString(),
+                likeCount: videoDetail.authorStatsV2?.diggCount?.toString(),
+                videoCount: videoDetail.authorStatsV2?.videoCount?.toString(),
+            };
+        }
+
+        if (videoDetail?.desc) responseData.desc = videoDetail.desc;
+        if (videoDetail?.textLanguage) responseData.descLanguage = videoDetail.textLanguage;
+        if (videoDetail.createTime && videoDetail.createTime !== '0') responseData.createTime = videoDetail.createTime;
+
+        if (videoDetail.video?.cover) responseData.cover = videoDetail.video?.cover;
+        if (videoDetail.video?.originCover) responseData.originCover = videoDetail.video?.originCover;
+        if (videoDetail.video?.dynamicCover) responseData.dynamicCover = videoDetail.video?.dynamicCover;
+        if (videoDetail.video?.duration) responseData.duration = videoDetail.video?.duration;
+
+        const playUrl = videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233');
+        if (playUrl) responseData.play_url = playUrl;
+
+        if (videoDetail.video?.bitrateInfo) {
+            responseData.bit_rate = videoDetail.video?.bitrateInfo?.map((br: any) => ({
+                gearName: br.GearName,
+                bitrate: br.Bitrate,
+                res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+                format: br.Format,
+                codec: br.CodecType,
+                play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
+            }));
+        }
+
+        if (videoDetail.statsV2?.diggCount) responseData.likeCount = videoDetail.statsV2?.diggCount?.toString();
+        if (videoDetail.statsV2?.shareCount) responseData.shareCount = videoDetail.statsV2?.shareCount?.toString();
+        if (videoDetail.statsV2?.commentCount) responseData.commentCount = videoDetail.statsV2?.commentCount?.toString();
+        if (videoDetail.statsV2?.playCount) responseData.playCount = videoDetail.statsV2?.playCount?.toString();
+        if (videoDetail.statsV2?.collectCount) responseData.favoriteCount = videoDetail.statsV2?.collectCount?.toString();
+
+        if (videoDetail.suggestedWords) responseData.suggested_words = videoDetail.suggestedWords;
+        const searchSuggest = videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word;
+        if (searchSuggest) responseData.search_suggest = searchSuggest;
+
+        if (videoDetail.locationCreated) responseData.location = videoDetail.locationCreated;
+
+        const musicId = videoDetail.music?.id;
+        if (musicId && musicId !== 'undefined') {
+            responseData.music = {
+                url: "https://www.tiktok.com/music/-" + musicId,
+                aweme_id: videoDetail.music?.id?.toString(),
+                title: videoDetail.music?.title,
+                author: videoDetail.music?.authorName,
+                cover: videoDetail.music?.coverLarge,
+                play_url: videoDetail.music?.playUrl,
+                duration: videoDetail.music?.duration,
+                original: videoDetail.music?.original,
+                private: videoDetail.music?.private
+            };
+        }
+
         return {
-            data: {
-                aweme_id: videoDetail.id?.toString(),
-                videoId: videoDetail.video?.videoID,
-                url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId + "/video/" + videoDetail.id,
-                desc: videoDetail?.desc || "",
-                descLanguage: videoDetail?.textLanguage,
-                createTime: videoDetail.createTime,
-                cover: videoDetail.video?.cover,
-                originCover: videoDetail.video?.originCover,
-                dynamicCover: videoDetail.video?.dynamicCover,
-                duration: videoDetail.video?.duration,
-                play_url: videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace('?faid=1988', '?faid=1233'),
-                original_play_url: savetikData?.video_url || null,
-                bit_rate: videoDetail.video?.bitrateInfo?.map((br: any) => ({
-                    gearName: br.GearName,
-                    bitrate: br.Bitrate,
-                    res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
-                    format: br.Format,
-                    codec: br.CodecType,
-                    play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
-                })),
-                likeCount: videoDetail.statsV2?.diggCount?.toString(),
-                shareCount: videoDetail.statsV2?.shareCount?.toString(),
-                commentCount: videoDetail.statsV2?.commentCount?.toString(),
-                playCount: videoDetail.statsV2?.playCount?.toString(),
-                favoriteCount: videoDetail.statsV2?.collectCount?.toString(),
-                suggested_words: videoDetail.suggestedWords,
-                search_suggest: videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word || null,
-                location: videoDetail.locationCreated,
-                author: {
-                    url: "https://www.tiktok.com/@" + videoDetail.author?.uniqueId,
-                    aweme_id: videoDetail.author?.id?.toString(),
-                    secUid: videoDetail.author?.secUid,
-                    uniqueId: videoDetail.author?.uniqueId,
-                    nickname: videoDetail.author?.nickname,
-                    desc: videoDetail.author?.signature,
-                    createTime: videoDetail.author?.createTime?.toString(),
-                    verified: videoDetail.author?.verified,
-                    tiktokSeller: videoDetail.author?.ttSeller,
-                    avatar: videoDetail.author?.avatarLarger,
-                    followerCount: videoDetail.authorStatsV2?.followerCount.toString(),
-                    followingCount: videoDetail.authorStatsV2?.followingCount.toString(),
-                    totalLikesCount: videoDetail.authorStatsV2?.heartCount.toString(),
-                    likeCount: videoDetail.authorStatsV2?.diggCount.toString(),
-                    videoCount: videoDetail.authorStatsV2?.videoCount.toString(),
-                },
-                music: {
-                    url: "https://www.tiktok.com/music/-" + videoDetail.music?.id,
-                    aweme_id: videoDetail.music?.id?.toString(),
-                    title: videoDetail.music?.title,
-                    author: videoDetail.music?.authorName,
-                    cover: videoDetail.music?.coverLarge,
-                    play_url: videoDetail.music?.playUrl,
-                    duration: videoDetail.music?.duration,
-                    original: videoDetail.music?.original,
-                    private: videoDetail.music?.private
-                }
-            }
+            data: responseData
         };
 
     } catch (e) {

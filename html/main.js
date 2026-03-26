@@ -1,3 +1,7 @@
+window.addEventListener('load', () => {
+    document.documentElement.style.visibility = 'visible';
+});
+
 let endpoints = {
     search: [],
     profile: [],
@@ -38,7 +42,7 @@ const paramsCount = document.getElementById('paramsCount');
 const paramsChevron = document.getElementById('paramsChevron');
 
 let paramsOpen = window.innerWidth >= 768;
-let currentParams = []; 
+let currentParams = [];
 
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith('/') ? '' : '/');
 
@@ -83,8 +87,8 @@ function flattenRoutes(obj, parentPath = '') {
         }).flat().filter(Boolean);
     } else if (typeof obj === 'object' && obj !== null) {
         for (const key in obj) {
-             const childResults = flattenRoutes(obj[key]);
-             flatResults = flatResults.concat(childResults);
+            const childResults = flattenRoutes(obj[key]);
+            flatResults = flatResults.concat(childResults);
         }
     }
     return flatResults;
@@ -93,13 +97,13 @@ function flattenRoutes(obj, parentPath = '') {
 async function performRequest(targetUrl) {
     if (isLoading || isCoolingDown) return null;
 
-        isLoading = true;
+    isLoading = true;
     sendBtn.innerHTML = '<span>Loading...</span>';
     sendBtn.classList.add('opacity-70');
     responseArea.classList.add('empty-state');
     responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
 
-        statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
+    statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
     statusText.textContent = 'Fetching';
     statusText.className = 'text-yellow-400';
 
@@ -111,37 +115,52 @@ async function performRequest(targetUrl) {
             headers: { 'Accept': 'application/json' }
         });
 
-                responseArea.classList.add('empty-state');
+        responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
 
-                const contentType = response.headers.get('content-type') || '';
+        const contentType = response.headers.get('content-type') || '';
+        console.log(`${contentType} + ${contentType.startsWith('video/')}`);
         let duration;
 
-                if (contentType.startsWith('image/')) {
+        if (contentType.startsWith('image/')) {
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
             updateStatusUI(response.ok, response.status, duration);
             const imageUrl = URL.createObjectURL(blob);
 
-                        lastRawResponse = '';
+            lastRawResponse = '';
 
-                        responseArea.classList.add('empty-state');
+            responseArea.classList.add('empty-state');
             responseArea.innerHTML = `
                 <div class="w-full h-full flex items-center justify-center p-4">
                     <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
                 </div>
             `;
+        } else if (contentType.startsWith('video/') || contentType === 'application/octet-stream') {
+            const blob = await response.blob();
+            duration = Math.round(performance.now() - startTime);
+            updateStatusUI(response.ok, response.status, duration);
+            const videoUrl = URL.createObjectURL(blob);
+
+            lastRawResponse = '';
+
+            responseArea.classList.add('empty-state');
+            responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                    <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
+                </div>
+            `;
         } else {
             responseArea.classList.remove('empty-state');
 
-                        const text = await response.text();
+            const text = await response.text();
             duration = Math.round(performance.now() - startTime);
             updateStatusUI(response.ok, response.status, duration);
             let formatted = text;
             let isJson = false;
 
-                        try {
+            try {
                 const data = JSON.parse(text);
                 formatted = JSON.stringify(data, null, 2);
                 isJson = true;
@@ -149,19 +168,19 @@ async function performRequest(targetUrl) {
             } catch {
             }
 
-                        lastRawResponse = text;
+            lastRawResponse = text;
 
             responseArea.innerHTML = '<pre style=\"white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;\"></pre>';
             const preElement = responseArea.querySelector('pre');
 
             if (!isJson) {
-                 preElement.textContent = formatted;
+                preElement.textContent = formatted;
             } else {
                 const lines = formatted.split('\n');
                 const CHUNK_SIZE = 1;
                 let chunkIndex = 0;
 
-                                const processChunk = () => {
+                const processChunk = () => {
                     if (chunkIndex >= lines.length) return;
 
                     const deadline = performance.now() + 10;
@@ -185,7 +204,7 @@ async function performRequest(targetUrl) {
                     }
                 };
 
-                                processChunk();
+                processChunk();
             }
         }
     } catch (err) {
@@ -198,11 +217,11 @@ async function performRequest(targetUrl) {
         isLoading = false;
         sendBtn.innerHTML = 'Send';
 
-                isCoolingDown = true;
+        isCoolingDown = true;
         sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
         let timeLeft = 0.5;
 
-                const cooldownInterval = setInterval(() => {
+        const cooldownInterval = setInterval(() => {
             timeLeft -= 0.1;
             if (timeLeft <= 0) {
                 clearInterval(cooldownInterval);
@@ -214,14 +233,14 @@ async function performRequest(targetUrl) {
         }, 100);
     }
 
-        return resultData;
+    return resultData;
 }
 
 
 
 function parseQueryParams(queryString) {
     if (!queryString || !queryString.startsWith('?')) return [];
-    const raw = queryString.substring(1); 
+    const raw = queryString.substring(1);
     const params = [];
     const parts = raw.split('&');
     for (const part of parts) {
@@ -268,7 +287,7 @@ function renderParams() {
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e) { }
 
         paramsContainer.innerHTML = currentParams.map((p, i) => `
             <div class="param-row">
@@ -356,14 +375,14 @@ function syncUrlToParams() {
                 }
             });
         }
-    } catch (e) {}
+    } catch (e) { }
 }
 
 paramsToggle.addEventListener('click', () => {
     paramsOpen = !paramsOpen;
     paramsChevron.classList.toggle('rotated', paramsOpen);
 
-        if (paramsOpen) {
+    if (paramsOpen) {
         paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
     } else {
         paramsBody.style.height = null;
@@ -390,13 +409,13 @@ async function fetchInitialEndpoints() {
 function renderEndpoints() {
     const categoryEndpoints = endpoints[currentCategory] || [];
 
-        if (categoryEndpoints.length === 0) {
-         endpointsList.innerHTML = `
+    if (categoryEndpoints.length === 0) {
+        endpointsList.innerHTML = `
             <div class="text-gray-600 text-xs p-4 text-center">
                 ${Object.keys(endpoints).length === 0 ? 'Loading...' : 'No endpoints found.'}
             </div>
          `;
-         return;
+        return;
     }
 
     endpointsList.innerHTML = categoryEndpoints.map((ep, index) => `
@@ -421,7 +440,7 @@ function attachEndpointListeners() {
             renderEndpoints();
             renderParams();
 
-                        tabBtns.forEach(b => b.classList.remove('active'));
+            tabBtns.forEach(b => b.classList.remove('active'));
             const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
             if (activeTab) activeTab.classList.add('active');
         });
@@ -433,12 +452,12 @@ tabBtns.forEach(btn => {
 
         const wasOpen = paramsOpen;
 
-                if (wasOpen) {
+        if (wasOpen) {
             paramsBody.style.height = null;
             paramsChevron.classList.remove('rotated');
         }
 
-                setTimeout(() => {
+        setTimeout(() => {
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
@@ -452,7 +471,7 @@ tabBtns.forEach(btn => {
             }
             renderEndpoints();
             renderParams();
-        }, wasOpen ? 125 : 0); 
+        }, wasOpen ? 125 : 0);
     });
 });
 
@@ -463,8 +482,8 @@ urlInput.addEventListener('keydown', (e) => {
         sendBtn.click();
     }
 
-        if ((e.key === 'Backspace' || e.key === 'Delete') && 
-        urlInput.selectionStart <= apiBaseUrl.length && 
+    if ((e.key === 'Backspace' || e.key === 'Delete') &&
+        urlInput.selectionStart <= apiBaseUrl.length &&
         urlInput.selectionEnd === urlInput.selectionStart) {
         e.preventDefault();
     }
@@ -473,37 +492,37 @@ urlInput.addEventListener('keydown', (e) => {
 urlInput.addEventListener('input', () => {
     let val = urlInput.value;
 
-        if (!val.startsWith(apiBaseUrl)) {
-         const baseIdx = val.indexOf(apiBaseUrl);
-         if (baseIdx > 0) {
-             val = val.substring(baseIdx);
-         } else {
-             let pathIndex = val.indexOf('/');
-             if (val.match(/^https?:\/\//)) {
-                 pathIndex = val.indexOf('/', 8);
-             }
+    if (!val.startsWith(apiBaseUrl)) {
+        const baseIdx = val.indexOf(apiBaseUrl);
+        if (baseIdx > 0) {
+            val = val.substring(baseIdx);
+        } else {
+            let pathIndex = val.indexOf('/');
+            if (val.match(/^https?:\/\//)) {
+                pathIndex = val.indexOf('/', 8);
+            }
 
-                          let path = '';
-             if (pathIndex !== -1) {
-                 path = val.substring(pathIndex);
-             }
-             val = apiBaseUrl + path;
-         }
+            let path = '';
+            if (pathIndex !== -1) {
+                path = val.substring(pathIndex);
+            }
+            val = apiBaseUrl + path;
+        }
     }
 
-        const queryIdx = val.indexOf('?');
+    const queryIdx = val.indexOf('?');
     let pathPart = queryIdx === -1 ? val.substring(apiBaseUrl.length) : val.substring(apiBaseUrl.length, queryIdx);
     const queryPart = queryIdx === -1 ? '' : val.substring(queryIdx);
 
-        const hostOnly = apiBaseUrl.replace(/^https?:\/\//, '');
+    const hostOnly = apiBaseUrl.replace(/^https?:\/\//, '');
 
-        let dirty = true;
+    let dirty = true;
     let safety = 0;
     while (dirty && safety < 10) {
         dirty = false;
         safety++;
 
-                if (pathPart.startsWith('/' + hostOnly)) {
+        if (pathPart.startsWith('/' + hostOnly)) {
             pathPart = pathPart.substring(1 + hostOnly.length);
             dirty = true;
         } else if (pathPart.startsWith('//' + hostOnly)) {
@@ -521,22 +540,22 @@ urlInput.addEventListener('input', () => {
         }
     }
 
-        if (pathPart && !pathPart.startsWith('/')) {
+    if (pathPart && !pathPart.startsWith('/')) {
         pathPart = '/' + pathPart;
     }
 
     const newVal = apiBaseUrl + pathPart + queryPart;
 
-        if (urlInput.value !== newVal) {
+    if (urlInput.value !== newVal) {
         const cursorPos = urlInput.selectionStart;
         urlInput.value = newVal;
 
-                if (cursorPos > newVal.length) {
+        if (cursorPos > newVal.length) {
             urlInput.setSelectionRange(newVal.length, newVal.length);
         } else if (cursorPos < apiBaseUrl.length) {
             urlInput.setSelectionRange(apiBaseUrl.length, apiBaseUrl.length);
         } else {
-             urlInput.setSelectionRange(cursorPos, cursorPos);
+            urlInput.setSelectionRange(cursorPos, cursorPos);
         }
     }
 
@@ -550,7 +569,7 @@ async function copyToClipboard(text) {
         return true;
     }
 
-        const textArea = document.createElement('textarea');
+    const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
     textArea.style.left = '-9999px';
@@ -559,7 +578,7 @@ async function copyToClipboard(text) {
     textArea.focus();
     textArea.select();
 
-        try {
+    try {
         document.execCommand('copy');
         return true;
     } finally {

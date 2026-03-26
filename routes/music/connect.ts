@@ -30,7 +30,7 @@ app.get('/connect', async (c) => {
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
-        const { client, player: manager } = await getOrCreatePlayer(token);
+        const { client, player: manager } = await getOrCreatePlayer(token, log);
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
 
         if (!voiceId && authorId && reqGuildId) {

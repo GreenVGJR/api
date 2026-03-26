@@ -66,7 +66,7 @@ app.get('/pause', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -109,7 +109,7 @@ app.get('/resume', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -154,7 +154,7 @@ app.get('/skip', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -224,7 +224,7 @@ app.get('/stop', async (c) => {
             return;
         }
 
-        const { player: manager } = await getOrCreatePlayer(token);
+        const { player: manager } = await getOrCreatePlayer(token, log);
         const queue = getQueue(manager, guildId);
 
         if (!queue || (!isActive(queue) && queue.queue.tracks.length === 0)) {
@@ -317,7 +317,7 @@ app.get('/seek', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue) || !queue.queue.current) {
@@ -387,7 +387,7 @@ app.get('/volume', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -435,7 +435,7 @@ app.get('/loop', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -491,7 +491,7 @@ app.get('/shuffle', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -543,7 +543,7 @@ app.get('/remove', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -585,7 +585,7 @@ app.get('/clear', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -623,7 +623,7 @@ app.get('/jump', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -672,7 +672,7 @@ app.get('/move', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -717,7 +717,7 @@ app.get('/back', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -730,6 +730,7 @@ app.get('/back', async (c) => {
             return;
         }
 
+        const skipped = queue.queue.current;
         const prevTrack = queue.queue.previous[0];
         await log(`Backing to previous track: "${prevTrack?.info.title || 'Unknown'}"`);
 
@@ -747,7 +748,15 @@ app.get('/back', async (c) => {
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'back', currentTrack: prevTrack?.info.title ?? null },
+            data: {
+                action: 'back',
+                skippedTrack: skipped
+                    ? { title: skipped.info.title, author: skipped.info.author, url: skipped.info.uri }
+                    : null,
+                currentTrack: prevTrack
+                    ? { title: prevTrack.info.title, author: prevTrack.info.author, url: prevTrack.info.uri }
+                    : null,
+            },
         })}}`);
     });
 });
@@ -776,7 +785,7 @@ app.get('/247', async (c) => {
         const is247 = valueStr === 'true';
 
         // Check if the bot is actually in the guild
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -810,7 +819,7 @@ app.get('/where', async (c) => {
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
-        const { client, player: manager } = await getOrCreatePlayer(token);
+        const { client, player: manager } = await getOrCreatePlayer(token, log);
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
         await log('Lavalink manager active');
 

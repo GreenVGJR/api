@@ -7,7 +7,7 @@ const app = new Hono();
 app.get('/timezone', async (c) => {
     const q = c.req.query('q');
     if (!q) {
-        return c.json({ error: "Missing parameter 'q'" }, 400);
+        return c.json({ error: "Missing parameter 'q'" }, 202);
     }
 
     return await dispatch(c, () => TimezoneInfo(q));

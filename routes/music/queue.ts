@@ -28,7 +28,7 @@ app.get('/nowplaying', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !queue.queue.current) {
@@ -48,6 +48,8 @@ app.get('/nowplaying', async (c) => {
                 playing: queue.playing,
                 paused: queue.paused,
                 volume: queue.volume,
+                loop: queue.repeatMode,
+                queueSize: queue.queue.tracks.length,
                 progress: {
                     current: { label: formatMs(queue.position), value: queue.position },
                     total: { label: formatMs(current.info.duration), value: current.info.duration },
@@ -74,7 +76,7 @@ app.get('/nowplaying/lyrics', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !queue.queue.current) {
@@ -147,7 +149,7 @@ app.get('/queue', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token);
+        const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {

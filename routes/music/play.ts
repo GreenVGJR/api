@@ -50,7 +50,7 @@ app.get('/play', async (c) => {
                 forcedMetadata = {
                     title: scTrack.title,
                     author: scTrack.user?.username || scTrack.publisher_metadata?.artist || 'Unknown',
-                    thumbnail: scTrack.artwork_url?.replace('-large', '-t500x500') || '',
+                    thumbnail: scTrack.artwork_url?.replace('-large', '-original') || '',
                     durationMS: scTrack.duration || 0,
                     url: scTrack.permalink_url,
                 };
@@ -150,7 +150,7 @@ app.get('/play', async (c) => {
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
-        const { client, player: manager } = await getOrCreatePlayer(token);
+        const { client, player: manager } = await getOrCreatePlayer(token, log);
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
         await log('Lavalink manager active');
 
@@ -268,11 +268,14 @@ app.get('/play', async (c) => {
             }
         }
 
-        const track = searchResult.tracks[0];
+        const isPlaylist = searchResult.loadType === 'playlist';
+        const tracks = searchResult.tracks;
 
         // ── Override Metadata (Spotify / Apple Music) ─────────────────────
-
-        if (forcedMetadata) {
+        // (Only for single tracks, usually playlists don't use forcedMetadata here
+        // as the search result itself carries the rich info from the URL)
+        if (forcedMetadata && !isPlaylist) {
+            const track = tracks[0];
             track.info.title     = forcedMetadata.title;
             track.info.author    = forcedMetadata.author;
             track.info.artworkUrl = forcedMetadata.thumbnail;
@@ -281,12 +284,34 @@ app.get('/play', async (c) => {
             await log(`Metadata overridden: "${forcedMetadata.title}" by ${forcedMetadata.author}`);
         }
 
-        await log(`Track resolved: "${track.info.title}" by ${track.info.author}`);
+        if (isPlaylist) {
+            const playlistName = searchResult.playlist?.name || 'Unknown Playlist';
+            const playlistUrl = searchResult.playlist?.uri || searchResult.playlist?.url || '';
+            const playlistTracks = tracks.map((t: any) => ({
+                title: t.info.title,
+                author: t.info.author,
+                url: t.info.uri,
+            }));
 
-        // ── Add to Queue & Play ───────────────────────────────────────────
+            tracks.forEach((t: any) => {
+                t.playlist = {
+                    name: playlistName,
+                    url: playlistUrl,
+                    tracks: playlistTracks,
+                };
+            });
 
-        await guildPlayer.queue.add(track);
-        await log('Track added to queue');
+            await log(`Playlist resolved: "${playlistName}" (${tracks.length} tracks)`);
+            await guildPlayer.queue.add(tracks);
+            await log('Playlist added to queue');
+        } else {
+            const track = tracks[0];
+            await log(`Track resolved: "${track.info.title}" by ${track.info.author}`);
+            await guildPlayer.queue.add(track);
+            await log('Track added to queue');
+        }
+
+        // ── Start Playback ────────────────────────────────────────────────
 
         if (!guildPlayer.playing && !guildPlayer.paused) {
             await log('Starting playback...');
@@ -312,7 +337,7 @@ app.get('/play', async (c) => {
         await s.write(`],"data":${JSON.stringify({
             status: true,
             data: {
-                track: formatTrack(track),
+                track: formatTrack(tracks[0]),
                 platform,
                 is247,
                 isPlaying: guildPlayer.playing,

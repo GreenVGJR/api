@@ -18,7 +18,7 @@ export function createMusicStream(
     c.header('X-PO-Client', signature);
     c.header('X-Enc-Route', 'v2-beta');
     c.header('X-Route', 'LIVE');
-    c.header('X-Player', "[\"lavalink.serenetia\", \"lavalink.null\"]");
+    c.header('X-Player', "[\"lavalink.serenetia\", \"lavalink.serenetia\"]");
     c.header('X-Warning', 'Music endpoints are still on development. Expect a unstable and unusual errors');
 
     return stream(c, async (s: any) => {
@@ -48,9 +48,20 @@ export function createMusicStream(
 
 // ─── Lavalink Node Config ─────────────────────────────────────────────────────
 
+const sg1 = crypto.randomUUID();
+const sg2 = crypto.randomUUID();
+
 const LAVALINK_NODE = {
-    id: 'main-node',
+    id: sg1,
     host: 'lavalinkv4.serenetia.com',
+    port: 443,
+    authorization: 'https://seretia.link/discord',
+    secure: true,
+};
+
+const LAVALINK_NODE_V2 = {
+    id: sg2,
+    host: 'lavalink.serenetia.com',
     port: 443,
     authorization: 'https://seretia.link/discord',
     secure: true,
@@ -65,6 +76,7 @@ interface ManagedPlayer {
     player: LavalinkManager; // "player" kept for API compat with routes
     ready: Promise<void>;
     destroyTimer: ReturnType<typeof setTimeout> | null;
+    contextCached?: boolean;
 }
 
 const players = new Map<string, ManagedPlayer>();
@@ -137,22 +149,27 @@ function cancelAutoDestroy(token: string) {
     managed.destroyTimer = null;
 }
 
-export async function getOrCreatePlayer(token: string): Promise<{ client: Client; player: LavalinkManager }> {
+export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
     const existing = players.get(token);
     if (existing) {
         await existing.ready;
         cancelAutoDestroy(token);
+        if (!existing.contextCached) await ensureContextCached(existing, log);
         return { client: existing.client, player: existing.player };
     }
 
     const client = new Client({
-        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+        intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildVoiceStates,
+            GatewayIntentBits.GuildMembers,
+        ],
         presence: { status: 'invisible' },
     });
 
     // Placeholder until the client is ready (id filled in on clientReady)
     const manager = new LavalinkManager({
-        nodes: [LAVALINK_NODE],
+        nodes: [LAVALINK_NODE_V2, LAVALINK_NODE],
         sendToShard: (guildId, payload) => {
             try {
                 const shard = client.guilds.cache.get(guildId)?.shard;
@@ -325,6 +342,7 @@ export async function getOrCreatePlayer(token: string): Promise<{ client: Client
     try {
         await client.login(token);
         await readyPromise;
+        await ensureContextCached(managed, log);
     } catch (err) {
         if (timeout) clearTimeout(timeout);
         players.delete(token);
@@ -359,6 +377,38 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 
     managed.client.destroy();
     return true;
+}
+
+/** Pre-caches guilds, channels, roles, and members for faster lookups. */
+async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) => Promise<void>) {
+    if (managed.contextCached) return;
+    managed.contextCached = true;
+
+    const msg = 'Caching discord context for better performance...';
+    if (log) await log(msg);
+    else console.log(`[Music] ${msg} (token: ...${players.get(players.get(managed.client.token!) === managed ? managed.client.token! : '') ? '' : ''})`);
+    
+    // We actually just need to iterate guilds and fetch their sub-resources
+    // discord.js caches most of these automatically when fetched.
+    try {
+        const guilds = await managed.client.guilds.fetch();
+        await Promise.all(
+            guilds.map(async (g) => {
+                try {
+                    const guild = await g.fetch();
+                    await Promise.allSettled([
+                        guild.channels.fetch(),
+                        guild.roles.fetch(),
+                        guild.members.fetch(),
+                    ]);
+                } catch {
+                    /* skip guild if fetch fails */
+                }
+            })
+        );
+    } catch (err) {
+        console.error('Context caching failed:', err);
+    }
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -405,13 +455,20 @@ export function formatTrack(track: Track) {
         title: track.info.title,
         author: track.info.author,
         url: track.info.uri,
+        source: (track.info as any).sourceName || '',
         thumbnail: track.info.artworkUrl ?? '',
         duration: formatDuration(track.info.duration),
         durationMS: track.info.duration,
         requestedBy: track.requester
             ? String((track.requester as any).id ?? track.requester)
             : null,
-        playlist: null,
+        requester: track.requester || null,
+        playlist: (track as any).playlist ? {
+            name: (track as any).playlist.name,
+            url: (track as any).playlist.url,
+            size: (track as any).playlist.tracks?.length || 0,
+            tracks: (track as any).playlist.tracks || [],
+        } : null,
     };
 }
 
@@ -446,7 +503,7 @@ export async function autoInit(): Promise<void> {
         tokens.map(async (token) => {
             try {
                 await getOrCreatePlayer(token);
-                console.log(`✅ autoInit: Client ready (token: ...${token.slice(-6)})`);
+                console.log(`✅ autoInit: Client ready and context cached (token: ...${token.slice(-6)})`);
             } catch (err: any) {
                 console.error(`❌ autoInit: Failed for token ...${token.slice(-6)}: ${err.message}`);
             }

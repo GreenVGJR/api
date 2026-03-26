@@ -19,6 +19,9 @@ import info from './routes/info/index.js';
 import profile from './routes/profile/index.js';
 import download from './routes/download/index.js';
 import music from './routes/music/index.js';
+import { autoInit } from './functions/musicPlayer.js';
+
+autoInit().catch(() => {});
 
 const API_ROUTES = {
     search: [
@@ -119,7 +122,8 @@ const API_ROUTES = {
         },
         misc: [
             "/tools/translate?q=&from=&to=",
-            "/tools/timezone?q="
+            "/tools/timezone?q=",
+            "/tools/ffmpeg/interpolate?videoUrl=&multi="
         ]
     },
     info: [
@@ -650,5 +654,5 @@ export default {
     port: port,
     hostname: "127.0.0.1",
     fetch: app.fetch,
-    idleTimeout: 60
+    idleTimeout: 0
 };

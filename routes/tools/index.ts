@@ -15,5 +15,6 @@ import discordWebhook from './discordWebhook.js';
 import magicstudio from './magicstudio.js';
 import flux from './flux.js';
 import discordListMember from './discordListMember.js';
+import ffmpegInterpolate from './ffmpegInterpolate.js';
 
-export default [geminiAmp, translateAmp, meta, grok, perplexity, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember] as any[];
+export default [geminiAmp, translateAmp, meta, grok, perplexity, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate] as any[];

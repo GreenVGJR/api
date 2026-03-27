@@ -40,7 +40,7 @@ export function createMusicStream(
         } catch (err: any) {
             await log(`Error: ${err?.message || 'Failed to process stream'}`);
             try {
-                await s.write(`],"error":${JSON.stringify({ message: err?.message || 'Failed to process stream' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to process stream' })}}`);
             } catch { }
         }
     });

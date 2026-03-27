@@ -58,7 +58,7 @@ app.get('/pause', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -101,7 +101,7 @@ app.get('/resume', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -146,7 +146,7 @@ app.get('/skip', async (c) => {
         const index    = parseInt(indexStr, 10);
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -170,18 +170,27 @@ app.get('/skip', async (c) => {
                 return;
             }
             const targetTrack = tracks[index];
-            await log(`Skipping to index ${index}: "${targetTrack.info.title}"`);
+
+            await log(`Skipping: "${targetTrack.info.title}"...`);
+
             // Remove all tracks before the target, then skip current
             if (index > 0) await queue.queue.splice(0, index);
             await queue.skip();
+
+            await log(`Now playing: "${targetTrack.info.title}"`);
+
             await s.write(`],"data":${JSON.stringify({
                 status: true,
-                data: { action: 'skipped_to_index', targetTrack: { title: targetTrack.info.title, index } },
+                data: {
+                    action: 'skipped',
+                    skippedTrack: { title: targetTrack.info.title, author: targetTrack.info.author, url: targetTrack.info.uri },
+                    currentTrack: { title: targetTrack.info.title, author: targetTrack.info.author, url: targetTrack.info.uri }
+                },
             })}}`);
             return;
         }
 
-        if (queue.queue.tracks.length === 0) {
+        if (queue.queue.tracks.length === 0 && !queue.queue.current) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No tracks in queue to skip' })}}`);
             return;
         }
@@ -189,7 +198,7 @@ app.get('/skip', async (c) => {
         const skipped  = queue.queue.current;
         const nextTrack = queue.queue.tracks[0] ?? null;
 
-        await log(`Skipping: "${skipped?.info.title || 'Unknown'}"...`);
+        await log(nextTrack ? `Skipping: "${nextTrack.info.title}"...` : `Skipping: "${skipped?.info.title || 'Unknown'}"...`);
         await queue.skip();
         await log(nextTrack ? `Now playing: "${nextTrack.info.title}"` : 'Queue ended');
 
@@ -197,9 +206,9 @@ app.get('/skip', async (c) => {
             status: true,
             data: {
                 action: 'skipped',
-                skippedTrack: skipped
-                    ? { title: skipped.info.title, author: skipped.info.author, url: skipped.info.uri }
-                    : null,
+                skippedTrack: nextTrack
+                    ? { title: nextTrack.info.title, author: nextTrack.info.author, url: nextTrack.info.uri }
+                    : (skipped ? { title: skipped.info.title, author: skipped.info.author, url: skipped.info.uri } : null),
                 currentTrack: nextTrack
                     ? { title: nextTrack.info.title, author: nextTrack.info.author, url: nextTrack.info.uri }
                     : null,
@@ -216,7 +225,7 @@ app.get('/stop', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -309,7 +318,7 @@ app.get('/seek', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -373,7 +382,7 @@ app.get('/volume', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -383,7 +392,7 @@ app.get('/volume', async (c) => {
 
         const value = parseInt(c.req.query('value') || '');
         if (isNaN(value) || value < 0 || value > 100) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Volume must be a number between 0 and 100' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Volume must be a number between 0 and 100' })}}`);
             return;
         }
 
@@ -427,7 +436,7 @@ app.get('/loop', async (c) => {
         const mode    = (c.req.query('mode') || '').toLowerCase();
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -459,7 +468,7 @@ app.get('/loop', async (c) => {
             if (!isNaN(num) && num in numMap) {
                 repeatMode = numMap[num];
             } else {
-                await s.write(`],"error":${JSON.stringify({ message: `Invalid loop mode: "${mode}". Use: off, track, queue (or 0-2)` })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: `Invalid loop mode: "${mode}". Use: off, track, queue (or 0-2)` })}}`);
                 return;
             }
         }
@@ -483,7 +492,7 @@ app.get('/shuffle', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -535,7 +544,7 @@ app.get('/remove', async (c) => {
         const index    = parseInt(indexStr, 10);
 
         if (!token || !guildId || indexStr === '' || isNaN(index)) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, index' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, index' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -558,13 +567,19 @@ app.get('/remove', async (c) => {
         }
 
         const trackToRemove = tracks[index];
-        await log(`Removing track at index ${index}: "${trackToRemove.info.title}"`);
+        const current = queue.queue.current;
+
+        await log(`Removing: "${trackToRemove.info.title}"...`);
         await queue.queue.splice(index, 1);
-        await log('Track removed');
+        await log(current ? `Now playing: "${current.info.title}"` : 'Queue ended');
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'removed', track: { title: trackToRemove.info.title, index } },
+            data: {
+                action: 'removed',
+                removedTrack: { title: trackToRemove.info.title, author: trackToRemove.info.author, url: trackToRemove.info.uri },
+                currentTrack: current ? { title: current.info.title, author: current.info.author, url: current.info.uri } : null,
+            },
         })}}`);
     });
 });
@@ -577,7 +592,7 @@ app.get('/clear', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -615,7 +630,7 @@ app.get('/jump', async (c) => {
         const index    = parseInt(indexStr, 10);
 
         if (!token || !guildId || indexStr === '' || isNaN(index)) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, index' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, index' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -664,7 +679,7 @@ app.get('/move', async (c) => {
         const to      = parseInt(toStr, 10);
 
         if (!token || !guildId || fromStr === '' || toStr === '' || isNaN(from) || isNaN(to)) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing or invalid required params: token, guildId, from, to' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, from, to' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -709,7 +724,7 @@ app.get('/back', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -768,7 +783,7 @@ app.get('/247', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -778,7 +793,7 @@ app.get('/247', async (c) => {
 
         const valueStr = c.req.query('value') || '';
         if (valueStr !== 'true' && valueStr !== 'false') {
-            await s.write(`],"error":${JSON.stringify({ message: 'Value must be "true" or "false"' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Value must be "true" or "false"' })}}`);
             return;
         }
 
@@ -813,7 +828,7 @@ app.get('/where', async (c) => {
         const authorId = c.req.query('authorId');
 
         if (!token) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required param: token' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token' })}}`);
             return;
         }
         const isNew = !hasActivePlayer(token);

@@ -19,7 +19,7 @@ app.get('/nowplaying', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -67,7 +67,7 @@ app.get('/nowplaying/lyrics', async (c) => {
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -140,7 +140,7 @@ app.get('/queue', async (c) => {
         const offset  = Math.max(0, parseInt(c.req.query('offset') || '0',  10));
 
         if (!token || !guildId) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {

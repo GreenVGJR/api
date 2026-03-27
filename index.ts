@@ -167,6 +167,7 @@ const API_ROUTES = {
     "/music/nowplaying?token=&guildId=",
     "/music/nowplaying/lyrics?token=&guildId=",
     "/music/queue?token=&guildId=&limit=&offset=",
+    "/music/stats?token=",
     ]
 };
 
@@ -565,6 +566,17 @@ app.get('/', (c: Context) => {
         const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
         const uptime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+        const os_seconds = Math.floor(os.uptime());
+        const os_h = Math.floor(os_seconds / 3600);
+        const os_m = Math.floor((os_seconds % 3600) / 60);
+        const os_s = os_seconds % 60;
+        const os_uptime = [os_h, os_m, os_s].map(v => v.toString().padStart(2, '0')).join(':');
+
+        const cpuUsage = os.loadavg()[0] / os.cpus().length;
+        const cpu = `${(cpuUsage * 100).toFixed(1)}%`;
+        const usedRam = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));
+        const totalRam = Math.round(os.totalmem() / (1024 * 1024));
+        const ram = `${usedRam.toLocaleString()}MB / ${totalRam.toLocaleString()}MB`;
 
         const listapi = [{
             source: [{
@@ -577,12 +589,20 @@ app.get('/', (c: Context) => {
             }],
             domRendering: typeRender,
             uptime: uptime,
+            os_uptime: os_uptime,
             service: "Hono",
             runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
             fallback_runtime: typeof Bun === "object" ? "Node.js" : "Bun",
+            stats: {
+                cpu: cpu,
+                ram: ram
+            }
         },
         {
-            routes: API_ROUTES
+            routes: API_ROUTES,
+            _visitor: {
+                ...c.req.header()
+            }
         }];
 
         stream.onAbort(() => {

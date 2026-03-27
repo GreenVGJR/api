@@ -2842,7 +2842,7 @@ export const Twitch = async function Twitch(que: string) {
     if (!que) return null;
 
     try {
-        const bodyhttp = { "operationName": "SearchResultsPage_SearchResults", "variables": { "query": que, "includeIsDJ": true }, "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5" } } }
+        const bodyhttp = [{ "operationName": "SearchResultsPage_SearchResults", "variables": { "query": que, "includeIsDJ": true, "platform": "web" }, "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5" } } }, { "operationName": "SearchTray_SearchSuggestions", "variables": { "queryFragment": que, "withOfflineChannelContent": true }, "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "176dee782d1da7f1913242153c4abc4ef2a2b0b5ccb490d4a7b679e72bf1f45e" } } }];
         const per = await request(`https://gql.twitch.tv/gql`, {
             method: "POST",
             body: JSON.stringify(bodyhttp),
@@ -2854,8 +2854,9 @@ export const Twitch = async function Twitch(que: string) {
         });
 
         const res: any = await per.body.json();
+        const { __typename, ...finalres } = { ...res?.[1]?.data, ...res?.[0]?.data?.searchFor };
 
-        return { data: res?.data?.searchFor || null };
+        return { data: finalres || null };
     }
     catch (e) {
         console.error(e);
@@ -2875,6 +2876,12 @@ export const InstagramUser = async function InstagramUser(que: string) {
         });
 
         const res: any = await per.body.json();
+        
+        if(res?.errors) {
+            return {
+                error: "Service unavailable. Sign in required"
+            }
+        }
 
         return { data: res?.data?.xdt_api__v1__fbsearch__topsearch_connection?.users || null }
     }
@@ -2918,7 +2925,7 @@ export const Pexels = async function Pexels(que: string) {
         const response = await session.get(`https://www.pexels.com/search/${que}`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
+                // 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
             }
         });
 
@@ -4875,7 +4882,7 @@ export async function PerplexityAI(query: string): Promise<any> {
 export async function DriftProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join'].includes(username.toLowerCase())) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join', 'auth', 'media'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
     let session: any;
     let res: any;
@@ -5272,7 +5279,7 @@ export async function SaweriaProfile(query: string): Promise<any> {
 export async function TrakteerProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'forgot-password', 'cdn-cgi', 'terms', 'privacy-policy', 'auth', 'search', 'explore', 'feed', 'feature-and-pricing', 'career'].includes(username.toLowerCase())) return null;
 
     let session: any;
     try {
@@ -5366,21 +5373,21 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
 export async function GunsProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard'].includes(username.toLowerCase())) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard', 'leaderboard', 'de', 'fr', 'es', 'tr', 'ru', 'pt', 'ar'].includes(username.toLowerCase())) return null;
 
     let session: any;
     let res: any;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
+            session = new Session({ httpVersion: 'h3', echConfigDomain: "cloudflare-ech.com", tlsOnly: true });
             res = await session.get(`https://guns.lol/${username}`, {
                 headers: {
                     ...commonHeaders
                 }
             });
 
-            if (res.statusCode !== 401 || res.statusCode !== 403) {
+            if (res.statusCode !== 401 || res.statusCode !== 403 || res.statusCode !== 429) {
                 break;
             }
 
@@ -5491,7 +5498,7 @@ export async function GunsProfile(query: string): Promise<any> {
 export async function RageProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard'].includes(username.toLowerCase())) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard', 'main_og.png', 'extra.css'].includes(username.toLowerCase())) return null;
 
     let session: any;
     let res: any;
@@ -6149,8 +6156,8 @@ export const IMDB = async (query: string): Promise<any> => {
 
     try {
         const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const resBody: any = {"includeAdult":true,"isExactMatch":false,"locale":"en-US","numResults":5,"originalTitleText":true,"searchTerm":query,"skipHasExact":true,"typeFilter":"TITLE"};
-        const exter: any = {"persistedQuery":{"sha256Hash":"b6a7c673cfb2d2cc8d78570a7d5f6e0d65601021fcbbdc71cde7a53468641fa1","version":1}};
+        const resBody: any = { "includeAdult": true, "isExactMatch": false, "locale": "en-US", "numResults": 5, "originalTitleText": true, "searchTerm": query, "skipHasExact": true, "typeFilter": "TITLE" };
+        const exter: any = { "persistedQuery": { "sha256Hash": "b6a7c673cfb2d2cc8d78570a7d5f6e0d65601021fcbbdc71cde7a53468641fa1", "version": 1 } };
         const res = await session.get(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
             headers: {
                 ...commonHeaders,
@@ -6203,7 +6210,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
             }
             case 'images': {
                 // e.g. "user-captioned meme, 3,132 views" / "user-generated gif, 22,183 views"
-                const type  = subtitle.split(',')[0]?.trim() ?? null;
+                const type = subtitle.split(',')[0]?.trim() ?? null;
                 const views = subtitle.match(/([\d,]+)\s+views?/)?.[1] ?? null;
                 return {
                     type,
@@ -6226,9 +6233,9 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
             }
             case 'users': {
                 // e.g. "joined Aug 17 2014, 2,415 creations, 41 comments"
-                const joined    = subtitle.match(/joined\s+([^,]+)/)?.[1]?.trim() ?? null;
+                const joined = subtitle.match(/joined\s+([^,]+)/)?.[1]?.trim() ?? null;
                 const creations = subtitle.match(/([\d,]+)\s+creations?/)?.[1] ?? null;
-                const comments  = subtitle.match(/([\d,]+)\s+comments?/)?.[1] ?? null;
+                const comments = subtitle.match(/([\d,]+)\s+comments?/)?.[1] ?? null;
                 return {
                     joined,
                     creations,
@@ -6285,13 +6292,13 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
                 : [...child.querySelectorAll('a.s-result')];
 
             for (const el of anchors) {
-                const url         = resolveUrl(el.getAttribute('href'));
-                const title       = text(el.querySelector('.s-result-title'));
-                const subtitle    = text(el.querySelector('.s-result-subtitle'));
-                const rawCover       = el.querySelector('img')?.getAttribute('src');
-                const isGif         = el.getAttribute('href')?.includes('/gif/') ?? false;
-                const cover         = resolveUrl(rawCover);
-                const full_cover    = isGif
+                const url = resolveUrl(el.getAttribute('href'));
+                const title = text(el.querySelector('.s-result-title'));
+                const subtitle = text(el.querySelector('.s-result-subtitle'));
+                const rawCover = el.querySelector('img')?.getAttribute('src');
+                const isGif = el.getAttribute('href')?.includes('/gif/') ?? false;
+                const cover = resolveUrl(rawCover);
+                const full_cover = isGif
                     ? cover.replace('/2/', '/').replace(/\.jpg$/, '.mp4')
                     : cover.replace('/2/', '/');
                 const description = text(el.querySelector('.s-result-description'));

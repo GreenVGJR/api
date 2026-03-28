@@ -466,8 +466,7 @@ export function formatTrack(track: Track) {
         playlist: (track as any).playlist ? {
             name: (track as any).playlist.name,
             url: (track as any).playlist.url,
-            size: (track as any).playlist.tracks?.length || 0,
-            tracks: (track as any).playlist.tracks || [],
+            size: (track as any).playlist.tracks?.length
         } : null,
     };
 }

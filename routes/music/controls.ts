@@ -10,6 +10,7 @@ import {
     clear247,
     set247,
     createMusicStream,
+    formatDuration,
 } from '../../functions/musicPlayer.js';
 // lavalink-client setRepeatMode expects string literals
 type RMValue = 'off' | 'track' | 'queue';
@@ -162,43 +163,26 @@ app.get('/skip', async (c) => {
             return;
         }
 
-        // Skip to specific index
+        if (queue.queue.tracks.length === 0 && !queue.queue.current) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No tracks in queue to skip' })}}`);
+            return;
+        }
+
+        const skippedTrack = queue.queue.current;
+        let nextTrack = queue.queue.tracks[0] ?? null;
+
+        // If index provided, validate and reposition
         if (indexStr !== '' && !isNaN(index)) {
             const tracks = queue.queue.tracks;
             if (index < 0 || index >= tracks.length) {
                 await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
                 return;
             }
-            const targetTrack = tracks[index];
-
-            await log(`Skipping: "${targetTrack.info.title}"...`);
-
-            // Remove all tracks before the target, then skip current
+            nextTrack = tracks[index];
             if (index > 0) await queue.queue.splice(0, index);
-            await queue.skip();
-
-            await log(`Now playing: "${targetTrack.info.title}"`);
-
-            await s.write(`],"data":${JSON.stringify({
-                status: true,
-                data: {
-                    action: 'skipped',
-                    skippedTrack: { title: targetTrack.info.title, author: targetTrack.info.author, url: targetTrack.info.uri },
-                    currentTrack: { title: targetTrack.info.title, author: targetTrack.info.author, url: targetTrack.info.uri }
-                },
-            })}}`);
-            return;
         }
 
-        if (queue.queue.tracks.length === 0 && !queue.queue.current) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No tracks in queue to skip' })}}`);
-            return;
-        }
-
-        const skipped  = queue.queue.current;
-        const nextTrack = queue.queue.tracks[0] ?? null;
-
-        await log(nextTrack ? `Skipping: "${nextTrack.info.title}"...` : `Skipping: "${skipped?.info.title || 'Unknown'}"...`);
+        await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : 'Skipping: Unknown...');
         await queue.skip();
         await log(nextTrack ? `Now playing: "${nextTrack.info.title}"` : 'Queue ended');
 
@@ -206,9 +190,9 @@ app.get('/skip', async (c) => {
             status: true,
             data: {
                 action: 'skipped',
-                skippedTrack: nextTrack
-                    ? { title: nextTrack.info.title, author: nextTrack.info.author, url: nextTrack.info.uri }
-                    : (skipped ? { title: skipped.info.title, author: skipped.info.author, url: skipped.info.uri } : null),
+                skippedTrack: skippedTrack
+                    ? { title: skippedTrack.info.title, author: skippedTrack.info.author, url: skippedTrack.info.uri }
+                    : null,
                 currentTrack: nextTrack
                     ? { title: nextTrack.info.title, author: nextTrack.info.author, url: nextTrack.info.uri }
                     : null,
@@ -269,7 +253,6 @@ app.get('/stop', async (c) => {
                 await log(`Reconnect failed: ${err.message}`);
             }
 
-            await log('Ending logs response...');
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: { action: 'stopped', context_destroyed: false, is247: true },
@@ -302,7 +285,6 @@ app.get('/stop', async (c) => {
             await log('Other active servers exist, keeping client alive');
         }
 
-        await log('Ending logs response...');
         await s.write(`],"data":${JSON.stringify({
             status: true,
             data: { action: 'stopped', context_destroyed: killed, is247: false },
@@ -316,9 +298,10 @@ app.get('/seek', async (c) => {
         await log('Request accepted');
         const token   = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const time = c.req.query('time');
 
-        if (!token || !guildId) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
+        if (!token || !guildId || !time) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId, time' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {
@@ -347,11 +330,15 @@ app.get('/seek', async (c) => {
             return;
         }
 
-        const time = c.req.query('time') || '';
-        const ms   = parseTimeMS(time);
+        const ms = parseTimeMS(time);
 
         if (ms > duration) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration/1000)}s)` })}}`);
+            return;
+        }
+
+        if (ms < 0) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek below song duration` })}}`);
             return;
         }
 
@@ -369,7 +356,7 @@ app.get('/seek', async (c) => {
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'seek', time: seekTarget },
+            data: { action: 'seek', time: String(seekTarget), formatTime: formatDuration(seekTarget) },
         })}}`);
     });
 });
@@ -839,7 +826,7 @@ app.get('/where', async (c) => {
         await log('Lavalink manager active');
 
         // ── Bot's connected VCs (array) ───────────────────────────────────
-        const botChannels: { id: string; voiceId: string; name: string; guildId: string }[] = [];
+        const botChannels: { id: string; voiceId: string; name: string; guildId: string; usersInChannel: { id: string; username: string; displayName: string; isBot: boolean; }[] | null }[] = [];
 
         const playersToCheck = guildId
             ? [[guildId, manager.players.get(guildId)]].filter(([, p]) => p) as [string, any][]
@@ -848,11 +835,20 @@ app.get('/where', async (c) => {
         for (const [gid, guildPlayer] of playersToCheck) {
             if (guildPlayer?.voiceChannelId) {
                 const ch = await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null) as any;
+                const usersInChannel = ch?.members
+                    ? [...ch.members.values()].map((m: any) => ({
+                        id: m.user.id,
+                        username: m.user.username,
+                        displayName: m.displayName,
+                        isBot: m.user.bot,
+                    }))
+                    : null;
                 botChannels.push({
                     id: guildPlayer.voiceChannelId,
                     voiceId: guildPlayer.voiceChannelId,
                     name: ch?.name ?? 'Unknown',
                     guildId: gid,
+                    usersInChannel,
                 });
                 await log(`Bot is in VC: ${ch?.name ?? 'Unknown'} (${guildPlayer.voiceChannelId}) in guild ${gid}`);
             }
@@ -899,6 +895,7 @@ app.get('/where', async (c) => {
             },
             author: authorChannel?.guildId === b.guildId ? authorChannel : null,
             sameChannel: !!(authorChannel && authorChannel.id === b.id),
+            usersInChannel: b.usersInChannel,
         }));
 
         await s.write(`],"data":${JSON.stringify({

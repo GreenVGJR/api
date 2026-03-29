@@ -24,12 +24,9 @@ app.get('/stats', async (c) => {
         await log('Retrieving player stats...');
         const { player: manager, client } = await getOrCreatePlayer(token, log);
 
-        // Calculate node stats
         const nodes = Array.from(manager.nodeManager.nodes.values()).map(node => {
             return {
-                id: node.id,
-                status: node.connected ? 'connected' : 'disconnected',
-                stats: node.stats || null,
+                ...node.options, ...node.stats, ...node.info
             };
         });
 
@@ -46,15 +43,14 @@ app.get('/stats', async (c) => {
             status: true,
             data: {
                 botInfo: {
-                    user: client.user?.tag,
-                    id: client.user?.id,
+                    ...client.user,
                     wsPing: client.ws.ping,
-                    guilds: client.guilds.cache.size,
+                    guildSize: client.guilds.cache.size,
                 },
                 lavalink: {
                     totalPlayers,
                     playingPlayers,
-                    nodes,
+                    nodes: nodes
                 }
             },
         })}}`);

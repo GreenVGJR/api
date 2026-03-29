@@ -733,7 +733,7 @@ export const YTLyrics = async function YTLyrics(url: string) {
                 client:
                 {
                     clientName: "WEB_REMIX",
-                    clientVersion: "1.20251212",
+                    clientVersion: "1.20261212",
                     hl: "en",
                     gl: "US"
                 }
@@ -755,7 +755,7 @@ export const YTLyrics = async function YTLyrics(url: string) {
                 client:
                 {
                     clientName: "WEB_REMIX",
-                    clientVersion: "1.20251212",
+                    clientVersion: "1.20261212",
                     hl: "en",
                     gl: "US"
                 }

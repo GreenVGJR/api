@@ -22,7 +22,7 @@ app.get('/disconnect', async (c) => {
 
         if (!hasActivePlayer(token)) {
             await log('No active player found for this token');
-            await s.write(`],"error":${JSON.stringify({ message: 'No active player found' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
 
@@ -58,7 +58,6 @@ app.get('/disconnect', async (c) => {
                 await log('Discord.js client destroyed');
             }
 
-            await log('Ending logs response...');
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: { action: 'disconnected', guildId, context_destroyed: killed },
@@ -69,7 +68,6 @@ app.get('/disconnect', async (c) => {
             await log('No guildId specified, destroying entire player...');
             await destroyPlayer(token);
             await log('Discord.js client and all Lavalink players destroyed');
-            await log('Ending logs response...');
 
             await s.write(`],"data":${JSON.stringify({
                 status: true,

@@ -11,6 +11,7 @@ import {
     get247,
     createMusicStream,
     checkVoicePermissions,
+    formatDuration,
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, request, commonHeaders } from '../../functions/request.js';
 
@@ -20,7 +21,7 @@ app.get('/play', async (c) => {
 
         const token    = c.req.query('token');
         let query      = c.req.query('q');
-        const platform = (c.req.query('platform') || 'spotify').toLowerCase();
+        const platform = (c.req.query('platform') || 'youtubemusic').toLowerCase();
         const voiceId  = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
@@ -51,7 +52,7 @@ app.get('/play', async (c) => {
                     title: scTrack.title,
                     author: scTrack.user?.username || scTrack.publisher_metadata?.artist || 'Unknown',
                     thumbnail: scTrack.artwork_url?.replace('-large', '-original') || '',
-                    durationMS: scTrack.duration || 0,
+                    durationMS: String(scTrack.duration || 0),
                     url: scTrack.permalink_url,
                 };
                 // scsearch query: plain title + author (no "audio" suffix)
@@ -75,7 +76,7 @@ app.get('/play', async (c) => {
                     title: spTrack.name,
                     author: spTrack.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
                     thumbnail: spTrack.album?.images?.[0]?.url || '',
-                    durationMS: spTrack.duration_ms,
+                    durationMS: String(spTrack.duration_ms),
                     url: spTrack.external_urls?.spotify || `https://open.spotify.com/track/${spTrack.id}`,
                 };
             } else if (Array.isArray(tracksV2) && tracksV2.length > 0) {
@@ -85,7 +86,7 @@ app.get('/play', async (c) => {
                         title: item.name,
                         author: item.artists?.items?.map((a: any) => a.profile?.name).join(', ') || 'Unknown',
                         thumbnail: item.albumOfTrack?.coverArt?.sources?.[0]?.url || '',
-                        durationMS: item.duration?.totalMilliseconds || 0,
+                        durationMS: String(item.duration?.totalMilliseconds || 0),
                         url: `https://open.spotify.com/track/${item.id}`,
                     };
                 }
@@ -114,8 +115,8 @@ app.get('/play', async (c) => {
                     forcedMetadata = {
                         title: amTrack.trackName,
                         author: amTrack.artistName,
-                        thumbnail: amTrack.artworkUrl100?.replace('100x100bb', '500x500bb') || '',
-                        durationMS: amTrack.trackTimeMillis,
+                        thumbnail: amTrack.artworkUrl100?.replace('100x100bb', '1x1ss') || '',
+                        durationMS: String(amTrack.trackTimeMillis),
                         url: amTrack.trackViewUrl,
                     };
                     queryStr = `${forcedMetadata.title} ${forcedMetadata.author} audio`;
@@ -162,14 +163,6 @@ app.get('/play', async (c) => {
             channel = await resolveVoiceChannel(client, voiceId);
             await log('Voice channel resolved');
         } else {
-            await log('Looking for existing voice connection...');
-            for (const [, guild] of client.guilds.cache) {
-                const me = guild.members.me;
-                if (me?.voice.channel) {
-                    channel = me.voice.channel;
-                    break;
-                }
-            }
             if (!channel && authorId && reqGuildId) {
                 await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
                 const guild = client.guilds.cache.get(reqGuildId as string);
@@ -185,7 +178,7 @@ app.get('/play', async (c) => {
                 checkVoicePermissions(channel, client.user!);
             } else {
                 await log('No voice channel found');
-                await s.write(`],"error":${JSON.stringify({ message: 'Please join a voice channel' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cant find a voice channel' })}}`);
                 return;
             }
         }
@@ -218,6 +211,8 @@ app.get('/play', async (c) => {
                 selfMute: false,
                 volume: 50,
             });
+        } else {
+            guildPlayer.options.selfDeaf = isDeaf; // keep in sync even if already connected
         }
         
         let is247 = get247(token!, guildId);
@@ -227,6 +222,7 @@ app.get('/play', async (c) => {
         }
 
         if (!guildPlayer.connected) {
+            guildPlayer.options.selfDeaf = isDeaf; // apply selfDeaf before connecting
             await log('Connecting to voice channel...');
             await guildPlayer.connect();
             await log('Connected');
@@ -288,9 +284,7 @@ app.get('/play', async (c) => {
             const playlistName = searchResult.playlist?.name || 'Unknown Playlist';
             const playlistUrl = searchResult.playlist?.uri || searchResult.playlist?.url || '';
             const playlistTracks = tracks.map((t: any) => ({
-                title: t.info.title,
-                author: t.info.author,
-                url: t.info.uri,
+                ...t.info
             }));
 
             tracks.forEach((t: any) => {
@@ -329,13 +323,12 @@ app.get('/play', async (c) => {
             }
         }
 
-        await log('Successfully playing');
-        await log('Ending logs response...');
-
-        const queueTracks = guildPlayer.queue.tracks.slice(0, 20).map(t => formatTrack(t as any));
+        const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
+        const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
+            nodeId: guildPlayer.node?.id ?? null,
             data: {
                 track: formatTrack(tracks[0]),
                 platform,
@@ -345,6 +338,10 @@ app.get('/play', async (c) => {
                 queue: {
                     size: guildPlayer.queue.tracks.length,
                     tracks: queueTracks,
+                    elapsedTime: {
+                        label: formatDuration(totalQueueDuration),
+                        value: String(totalQueueDuration)
+                    },
                     currentTrack: guildPlayer.queue.current ? formatTrack(guildPlayer.queue.current) : null,
                 },
             },

@@ -69,7 +69,7 @@ const LAVALINK_NODE_V2 = {
 
 // ─── Player Pool ──────────────────────────────────────────────────────────────
 
-const AUTO_DESTROY_DELAY = 1 * 60 * 1000; // 1 minute // 5 minutes
+const AUTO_DESTROY_DELAY = 1 * 60 * 1000; // 1 minute
 
 interface ManagedPlayer {
     client: Client;
@@ -84,6 +84,10 @@ const players = new Map<string, ManagedPlayer>();
 // Persistent 24/7 state: "token:guildId" → true/false
 // Stored separately so it survives Lavalink player object recreation
 const state247 = new Map<string, boolean>();
+
+// Last known voice channel per guild: "token:guildId" → voiceChannelId
+// Used as fallback when playerDestroy fires after voiceChannelId is already null
+const lastVoiceChannel = new Map<string, string>();
 
 export function get247Key(token: string, guildId: string) { return `${token}:${guildId}`; }
 export function set247(token: string, guildId: string, value: boolean) { state247.set(get247Key(token, guildId), value); }
@@ -154,7 +158,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     if (existing) {
         await existing.ready;
         cancelAutoDestroy(token);
-        if (!existing.contextCached) await ensureContextCached(existing, log);
+        if (!existing.contextCached) ensureContextCached(existing, log);
         return { client: existing.client, player: existing.player };
     }
 
@@ -236,6 +240,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 await p.connect();
             }
             set247(token, guildId, true);
+            lastVoiceChannel.set(`${token}:${guildId}`, voiceChannelId);
             console.log(`✅ 24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
         } catch (err: any) {
             console.error(`❌ 24/7 reconnect failed for guild ${guildId}: ${err.message}`);
@@ -260,12 +265,18 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     });
 
     manager.on('playerDestroy', (p) => {
-        const voiceChannelId = p.voiceChannelId;
-        if (get247(token, p.guildId) && voiceChannelId) {
-            console.log(`🔌 Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
-            reconnect247(p.guildId, voiceChannelId, 'playerDestroy');
+        // voiceChannelId may already be null by the time this fires, fall back to last known
+        const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
+        if (get247(token, p.guildId)) {
+            if (voiceChannelId) {
+                console.log(`🔌 Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
+                reconnect247(p.guildId, voiceChannelId, 'playerDestroy');
+            } else {
+                console.log(`🔌 Player destroyed for guild ${p.guildId} in 24/7 mode — no voiceChannelId to reconnect`);
+            }
             return;
         }
+        lastVoiceChannel.delete(`${token}:${p.guildId}`);
         console.log(`🔌 Lavalink player destroyed for guild ${p.guildId}`);
         scheduleAutoDestroy(token);
     });
@@ -281,6 +292,10 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     // ── Discord Events ─────────────────────────────────────────────────────
     client.on('voiceStateUpdate', (oldState, newState) => {
         if (oldState.member?.id !== client.user?.id) return;
+        // Track last known VC whenever bot joins/moves
+        if (newState.channelId) {
+            lastVoiceChannel.set(`${token}:${newState.guild.id}`, newState.channelId);
+        }
         if (oldState.channel && !newState.channel) {
             if (get247(token, oldState.guild.id)) {
                 reconnect247(oldState.guild.id, oldState.channelId!, 'voiceStateUpdate');
@@ -314,9 +329,11 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 await manager.init({ id: readyClient.user.id, username: readyClient.user.username });
 
                 // Resolve only once at least one Lavalink node is ready
-                manager.nodeManager.once('connect', () => {
+                manager.nodeManager.once('connect', async () => {
                     if (timeout) clearTimeout(timeout);
                     console.log(`🔗 Lavalink node connected (token: ...${token.slice(-6)})`);
+                    // Brief wait for the node to fully register as usable
+                    await new Promise(r => setTimeout(r, 500));
                     resolve();
                 });
 
@@ -342,7 +359,16 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     try {
         await client.login(token);
         await readyPromise;
-        await ensureContextCached(managed, log);
+
+        // Verify at least one node is actually connected and usable
+        const connectedNodes = [...managed.player.nodeManager.nodes.values()].filter(n => n.connected);
+        if (connectedNodes.length === 0) {
+            players.delete(token);
+            client.destroy();
+            throw new Error('No Lavalink nodes available after connection');
+        }
+
+        ensureContextCached(managed, log);
     } catch (err) {
         if (timeout) clearTimeout(timeout);
         players.delete(token);
@@ -360,55 +386,56 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     // Remove from map first to prevent 24/7 reconnect from re-creating
     players.delete(token);
 
+    // Clean up last known voice channels for this token
+    for (const [key] of lastVoiceChannel) {
+        if (key.startsWith(token + ':')) lastVoiceChannel.delete(key);
+    }
+
     if (managed.destroyTimer) {
         clearTimeout(managed.destroyTimer);
         managed.destroyTimer = null;
     }
 
+    /*
     // Destroy all guild players
     for (const [, p] of managed.player.players) {
         await p.destroy().catch(() => { });
     }
-
-    // Disconnect all Lavalink nodes to close their WebSockets
-    for (const node of managed.player.nodeManager.nodes.values()) {
-        try { node.destroy('Player destroyed'); } catch { }
-    }
+    */
 
     managed.client.destroy();
     return true;
 }
 
-/** Pre-caches guilds, channels, roles, and members for faster lookups. */
 async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) => Promise<void>) {
     if (managed.contextCached) return;
     managed.contextCached = true;
 
-    const msg = 'Caching discord context for better performance...';
-    if (log) await log(msg);
-    else console.log(`[Music] ${msg} (token: ...${players.get(players.get(managed.client.token!) === managed ? managed.client.token! : '') ? '' : ''})`);
-    
-    // We actually just need to iterate guilds and fetch their sub-resources
-    // discord.js caches most of these automatically when fetched.
-    try {
-        const guilds = await managed.client.guilds.fetch();
-        await Promise.all(
-            guilds.map(async (g) => {
-                try {
-                    const guild = await g.fetch();
-                    await Promise.allSettled([
-                        guild.channels.fetch(),
-                        guild.roles.fetch(),
-                        guild.members.fetch(),
-                    ]);
-                } catch {
-                    /* skip guild if fetch fails */
-                }
-            })
-        );
-    } catch (err) {
-        console.error('Context caching failed:', err);
-    }
+    const msg = 'Caching discord context for better performance (in background)';
+    if (log) log(msg).catch(() => {}); // fire-and-forget log
+
+    // Fire and forget — caller doesn't wait for this
+    (async () => {
+        try {
+            const guilds = await managed.client.guilds.fetch();
+            await Promise.all(
+                guilds.map(async (g) => {
+                    try {
+                        const guild = await g.fetch();
+                        await Promise.allSettled([
+                            guild.channels.fetch(),
+                            guild.roles.fetch(),
+                            guild.members.fetch(),
+                        ]);
+                    } catch {
+                        /* skip guild if fetch fails */
+                    }
+                })
+            );
+        } catch (err) {
+            console.error('Context caching failed:', err);
+        }
+    })();
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -439,7 +466,7 @@ export function getQueue(manager: LavalinkManager, guildId: string): LavalinkPla
     return manager.players.get(guildId) ?? null;
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
     if (!ms || ms <= 0) return '0:00';
     const s = Math.floor(ms / 1000);
     const h = Math.floor(s / 3600);
@@ -450,6 +477,7 @@ function formatDuration(ms: number): string {
 }
 
 export function formatTrack(track: Track) {
+    const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
     return {
         id: track.info.identifier,
         title: track.info.title,
@@ -458,15 +486,21 @@ export function formatTrack(track: Track) {
         source: (track.info as any).sourceName || '',
         thumbnail: track.info.artworkUrl ?? '',
         duration: formatDuration(track.info.duration),
-        durationMS: track.info.duration,
+        durationMS: String(track.info.duration),
+        isSeekable: track.info.isSeekable,
+        isStream: track.info.isStream,
         requestedBy: track.requester
             ? String((track.requester as any).id ?? track.requester)
             : null,
         requester: track.requester || null,
         playlist: (track as any).playlist ? {
             name: (track as any).playlist.name,
-            url: (track as any).playlist.url,
-            size: (track as any).playlist.tracks?.length
+            size: (track as any).playlist.tracks?.length,
+            // ig this might result slow response
+            elapsedTime: {
+                label: formatDuration(totalPlaylistTrack),
+                value: String(totalPlaylistTrack)
+            }
         } : null,
     };
 }
@@ -502,12 +536,9 @@ export async function autoInit(): Promise<void> {
         tokens.map(async (token) => {
             try {
                 await getOrCreatePlayer(token);
-                console.log(`✅ autoInit: Client ready and context cached (token: ...${token.slice(-6)})`);
             } catch (err: any) {
                 console.error(`❌ autoInit: Failed for token ...${token.slice(-6)}: ${err.message}`);
             }
         })
     );
-
-    console.log('🏁 autoInit: All clients initialized');
 }

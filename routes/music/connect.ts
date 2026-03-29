@@ -21,7 +21,7 @@ app.get('/connect', async (c) => {
 
     return createMusicStream(c, async (log, s) => {
         if (!token || (!voiceId && !authorId)) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, voiceId (or authorId)' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, voiceId (or authorId)' })}}`);
             return;
         }
 
@@ -46,7 +46,7 @@ app.get('/connect', async (c) => {
 
         if (!voiceId) {
             await log('No voice channel found');
-            await s.write(`],"error":${JSON.stringify({ message: 'Please join a voice channel' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Please join a voice channel' })}}`);
             return;
         }
 
@@ -86,9 +86,6 @@ app.get('/connect', async (c) => {
             await guildPlayer.connect();
         } else if (needsMove) {
             await log(force ? 'Force reconnecting...' : `Bot is currently in another channel: ${guildPlayer.voiceChannelId}. Moving to ${vId}...`);
-            // Move the bot by sending a gateway voice state update directly.
-            // Do NOT call disconnect() — that triggers voiceStateUpdate cleanup
-            // and destroys the player. Instead, just update the channel via gateway.
             guildPlayer.voiceChannelId = vId;
             const shard = client.guilds.cache.get(guildId)?.shard;
             if (shard) {
@@ -114,7 +111,6 @@ app.get('/connect', async (c) => {
 
         await log('Connected to voice channel');
         await log(`Self deaf: ${isDeaf}`);
-        await log('Ending logs response...');
 
         await s.write(`],"data":${JSON.stringify({
             status: true,

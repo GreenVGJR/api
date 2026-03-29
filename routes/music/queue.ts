@@ -8,6 +8,7 @@ import {
     hasActivePlayer,
     createMusicStream,
     get247,
+    formatDuration,
 } from '../../functions/musicPlayer.js';
 import { YTMusic, YTLyrics } from '../../functions/request.js';
 
@@ -37,22 +38,33 @@ app.get('/nowplaying', async (c) => {
             return;
         }
 
-        const current = queue.queue.current;
+        const current: any = queue.queue.current;
+        const previous: any = queue.queue.previous?.[0];
+        const next: any = queue.queue.tracks?.[0];
+        const totalQueueDuration = queue.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
+
         await log(`Now playing: "${current.info.title}"`);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
+            nodeId: queue.node?.id ?? null,
             data: {
+                previous: previous ? formatTrack(previous) : null,
                 current: formatTrack(current),
+                next: next ? formatTrack(next) : null,
                 is247: get247(token!, guildId!),
                 playing: queue.playing,
                 paused: queue.paused,
                 volume: queue.volume,
                 loop: queue.repeatMode,
                 queueSize: queue.queue.tracks.length,
+                queueElapsedTime: {
+                    label: formatDuration(totalQueueDuration),
+                    value: String(totalQueueDuration)
+                },
                 progress: {
-                    current: { label: formatMs(queue.position), value: queue.position },
-                    total: { label: formatMs(current.info.duration), value: current.info.duration },
+                    current: { label: formatDuration(queue.position), value: queue.position },
+                    total: { label: formatDuration(current.info.duration), value: current.info.duration },
                 },
             },
         })}}`);
@@ -159,34 +171,31 @@ app.get('/queue', async (c) => {
         }
 
         const allTracks = queue.queue.tracks;
-        await log(`Queue has ${allTracks.length} tracks (showing offset=${offset}, limit=${limit})`);
+        const allPreviousTracks = queue.queue.previous;
+        const totalQueueDuration = allTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
+            nodeId: queue.node?.id ?? null,
             data: {
                 current: queue.queue.current ? formatTrack(queue.queue.current) : null,
                 is247: get247(token!, guildId!),
-                tracks: allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)),
+                playing: queue.playing,
+                paused: queue.paused,
+                volume: queue.volume,
+                loop: queue.repeatMode,
+                tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
+                previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
                 total: allTracks.length,
                 limit,
                 offset,
-                playing: queue.playing,
+                elapsedTime: {
+                    label: formatDuration(totalQueueDuration),
+                    value: String(totalQueueDuration)
+                },
             },
         })}}`);
     });
 });
-
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatMs(ms: number): string {
-    if (!ms || ms <= 0) return '0:00';
-    const s   = Math.floor(ms / 1000);
-    const h   = Math.floor(s / 3600);
-    const m   = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-    return `${m}:${String(sec).padStart(2, '0')}`;
-}
 
 export default app;

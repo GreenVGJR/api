@@ -91,7 +91,7 @@ app.get('/ffmpeg/interpolate', async (c) => {
         const targetFps = Math.round(inputFps * multi);
 
         c.header('Content-Type', 'video/mp4');
-        c.header('Cache-Control', 'public, no-transform, max-age=60');
+        c.header('Cache-Control', 'public, no-transform, max-age=86400');
         c.header('Transfer-Encoding', 'chunked');
         c.header('X-Warning', 'You are using experimental endpoint. Expect errors');
         c.header('X-Enc-Data', JSON.stringify(stream0));
@@ -100,8 +100,8 @@ app.get('/ffmpeg/interpolate', async (c) => {
             try {
                 const ffmpeg = spawn('ffmpeg', [
                     '-i', inputPath,
-                    '-filter_threads', '16',
-                    '-filter:v', `minterpolate=fps=${targetFps}:me=epzs:mi_mode=mci:mb_size=16`,
+                    '-filter_threads', '0',
+                    '-filter:v', `scale=-2:640:flags=lanczos,minterpolate=fps=${targetFps}:me=epzs:mi_mode=mci:mb_size=16`,
                     '-movflags', 'frag_keyframe+empty_moov+faststart',
                     '-f', 'mp4',
                     'pipe:1'

@@ -665,7 +665,7 @@ app.use('*', async (c: Context, next: Next) => {
     const checkexists = c.notFound();
 
     if (checkexists) {
-        return c.text('Not Found', 404);
+        return c.text('Not Found.\nIf you looking specific route, you might typo to it.', 404);
     }
     await next();
 });

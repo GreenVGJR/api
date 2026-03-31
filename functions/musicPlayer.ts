@@ -173,7 +173,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
     // Placeholder until the client is ready (id filled in on clientReady)
     const manager = new LavalinkManager({
-        nodes: [LAVALINK_NODE_V2, LAVALINK_NODE],
+        nodes: [LAVALINK_NODE, LAVALINK_NODE_V2],
         sendToShard: (guildId, payload) => {
             try {
                 const shard = client.guilds.cache.get(guildId)?.shard;

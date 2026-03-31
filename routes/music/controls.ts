@@ -11,6 +11,7 @@ import {
     set247,
     createMusicStream,
     formatDuration,
+    formatTrack,
 } from '../../functions/musicPlayer.js';
 // lavalink-client setRepeatMode expects string literals
 type RMValue = 'off' | 'track' | 'queue';
@@ -77,15 +78,13 @@ app.get('/pause', async (c) => {
 
         if (queue.paused) {
             await s.write(`],"data":${JSON.stringify({
-                status: false, message: 'Already paused',
-                data: { action: 'pause', isPaused: true, isPlaying: false },
+                status: true,
+                data: { action: 'none', isPaused: queue.paused, isPlaying: queue.playing },
             })}}`);
             return;
         }
 
-        await log('Pausing playback...');
         await queue.pause();
-        await log('Paused successfully');
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -120,15 +119,13 @@ app.get('/resume', async (c) => {
 
         if (!queue.paused) {
             await s.write(`],"data":${JSON.stringify({
-                status: false, message: 'Already playing',
-                data: { action: 'resume', isPaused: false, isPlaying: true },
+                status: true,
+                data: { action: 'none', isPaused: queue.paused, isPlaying: queue.playing },
             })}}`);
             return;
         }
 
-        await log('Resuming playback...');
         await queue.resume();
-        await log('Resumed successfully');
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -191,10 +188,10 @@ app.get('/skip', async (c) => {
             data: {
                 action: 'skipped',
                 skippedTrack: skippedTrack
-                    ? { title: skippedTrack.info.title, author: skippedTrack.info.author, url: skippedTrack.info.uri }
+                    ? formatTrack(skippedTrack)
                     : null,
                 currentTrack: nextTrack
-                    ? { title: nextTrack.info.title, author: nextTrack.info.author, url: nextTrack.info.uri }
+                    ? formatTrack(nextTrack)
                     : null,
             },
         })}}`);
@@ -338,7 +335,7 @@ app.get('/seek', async (c) => {
         }
 
         if (ms < 0) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek below song duration` })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek below 0` })}}`);
             return;
         }
 
@@ -753,10 +750,10 @@ app.get('/back', async (c) => {
             data: {
                 action: 'back',
                 skippedTrack: skipped
-                    ? { title: skipped.info.title, author: skipped.info.author, url: skipped.info.uri }
+                    ? formatTrack(skipped)
                     : null,
                 currentTrack: prevTrack
-                    ? { title: prevTrack.info.title, author: prevTrack.info.author, url: prevTrack.info.uri }
+                    ? formatTrack(prevTrack)
                     : null,
             },
         })}}`);

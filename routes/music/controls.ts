@@ -166,7 +166,7 @@ app.get('/skip', async (c) => {
         }
 
         const skippedTrack = queue.queue.current;
-        let nextTrack = queue.queue.tracks[0] ?? null;
+        let nextTrack: any = queue.queue.tracks[0] ?? null;
 
         // If index provided, validate and reposition
         if (indexStr !== '' && !isNaN(index)) {

@@ -13,13 +13,13 @@ export function createMusicStream(
     const signature = crypto.createHash('md5').update(JSON.stringify(c.req.header())).digest('hex');
 
     c.header('Content-Type', 'application/json');
-    c.header('Cache-Control', 'no-cache, no-transform, no-store, max-age=0');
+    c.header('Cache-Control', 'public, no-cache, no-transform, no-store, max-age=0');
     c.header('X-PO-Client-Id', crypto.createHash('md5').update(oo).digest('hex'));
     c.header('X-PO-Client', signature);
     c.header('X-Enc-Route', 'v2-beta');
     c.header('X-Route', 'LIVE');
     c.header('X-Player', "[\"lavalink.serenetia\", \"lavalink.serenetia\"]");
-    c.header('X-Warning', 'Music endpoints are still on development. Expect a unstable and unusual errors');
+    c.header('X-Warning', 'Music endpoints are still on development. Expect a unstable or unusual errors');
 
     return stream(c, async (s: any) => {
         const startTime = Date.now();

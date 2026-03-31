@@ -168,6 +168,7 @@ const API_ROUTES = {
     "/music/nowplaying/lyrics?token=&guildId=",
     "/music/queue?token=&guildId=&limit=&offset=",
     "/music/stats?token=",
+    "/music/filter?token=&guildId=&filter=",
     ]
 };
 
@@ -477,7 +478,7 @@ app.get('/robots.txt', (c: Context) => {
 });
 
 app.get('/tools/health', (c: Context) => {
-    c.header('Cache-Control', 'public, max-age=60, immutable');
+    c.header('Cache-Control', 'public, max-age=60');
     return c.text('OK', 200);
 });
 
@@ -496,15 +497,11 @@ app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
 */
 
 app.get('/playground', (c: Context) => {
-    if(c.req.header('Accept') === 'application/json') {
-        return c.text('Forbidden', 403);
-    }
-
     const host = (c.req.header('host') || '').toLowerCase();
 
     c.header('Content-Type', 'text/html');
     c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
@@ -526,12 +523,12 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
-    c.header('Content-Type', 'application/javascript');
-    await s.write('');
-    
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'script') return;
+
+    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Content-Type', 'application/javascript');
+    await s.write('');
 
     await s.write(mainJs);
 }));
@@ -541,12 +538,12 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
-    c.header('Content-Type', 'text/css');
-    await s.write('');
-    
     const secFetchDest = c.req.header('Sec-Fetch-Dest');
     if(secFetchDest && secFetchDest !== 'style') return;
+    
+    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Content-Type', 'text/css');
+    await s.write('');
     
     await s.write(mainCss);
 }));

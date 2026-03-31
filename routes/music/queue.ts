@@ -11,6 +11,7 @@ import {
     formatDuration,
 } from '../../functions/musicPlayer.js';
 import { YTMusic, YTLyrics } from '../../functions/request.js';
+import { getActiveFilters } from './filters.js';
 
 
 app.get('/nowplaying', async (c) => {
@@ -42,6 +43,7 @@ app.get('/nowplaying', async (c) => {
         const previous: any = queue.queue.previous?.[0];
         const next: any = queue.queue.tracks?.[0];
         const totalQueueDuration = queue.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
+        const activeFilters = getActiveFilters(queue);
 
         await log(`Now playing: "${current.info.title}"`);
 
@@ -57,6 +59,10 @@ app.get('/nowplaying', async (c) => {
                 paused: queue.paused,
                 volume: queue.volume,
                 loop: queue.repeatMode,
+                filters: {
+                    array: activeFilters.length > 0 ? activeFilters : [],
+                    string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
+                },
                 queueSize: queue.queue.tracks.length,
                 queueElapsedTime: {
                     label: formatDuration(totalQueueDuration),
@@ -173,6 +179,7 @@ app.get('/queue', async (c) => {
         const allTracks = queue.queue.tracks;
         const allPreviousTracks = queue.queue.previous;
         const totalQueueDuration = allTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
+        const activeFilters = getActiveFilters(queue);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -184,6 +191,10 @@ app.get('/queue', async (c) => {
                 paused: queue.paused,
                 volume: queue.volume,
                 loop: queue.repeatMode,
+                filters: {
+                    array: activeFilters.length > 0 ? activeFilters : [],
+                    string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
+                },
                 tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
                 previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
                 total: allTracks.length,

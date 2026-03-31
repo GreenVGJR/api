@@ -5,5 +5,6 @@ import disconnect from './disconnect.js';
 import controls from './controls.js';
 import connect from './connect.js';
 import stats from './stats.js';
+import filters from './filters.js';
 
-export default [queue, play, disconnect, controls, connect, stats] as any[];
+export default [queue, play, disconnect, controls, connect, stats, filters] as any[];

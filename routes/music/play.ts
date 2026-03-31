@@ -14,6 +14,7 @@ import {
     formatDuration,
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, request, commonHeaders } from '../../functions/request.js';
+import { getActiveFilters } from './filters.js';
 
 app.get('/play', async (c) => {
     return createMusicStream(c, async (log, s) => {
@@ -331,6 +332,7 @@ app.get('/play', async (c) => {
 
         const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
         const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
+        const activeFilters = getActiveFilters(guildPlayer);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -342,6 +344,10 @@ app.get('/play', async (c) => {
                 is247,
                 isPlaying: guildPlayer.playing,
                 isPaused: guildPlayer.paused,
+                filters: {
+                    array: activeFilters.length > 0 ? activeFilters : [],
+                    string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
+                },
                 queue: {
                     size: guildPlayer.queue.tracks.length,
                     tracks: queueTracks,

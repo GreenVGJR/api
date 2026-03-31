@@ -202,6 +202,12 @@ app.get('/play', async (c) => {
         // ── Create / Retrieve Lavalink Player ─────────────────────────────
 
         let guildPlayer = manager.players.get(guildId);
+        const isNewGuildPlayer = !guildPlayer || (
+            !guildPlayer.playing &&
+            !guildPlayer.paused &&
+            guildPlayer.queue.tracks.length === 0 &&
+            !guildPlayer.queue.current
+        );
         if (!guildPlayer) {
             await log('Creating Lavalink player...');
             guildPlayer = await manager.createPlayer({
@@ -330,6 +336,7 @@ app.get('/play', async (c) => {
             status: true,
             nodeId: guildPlayer.node?.id ?? null,
             data: {
+                isNewPlayer: isNewGuildPlayer,
                 track: formatTrack(tracks[0]),
                 platform,
                 is247,

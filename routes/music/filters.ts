@@ -359,8 +359,8 @@ app.get('/filter', async (c) => {
             return;
         }
 
+        // ── Handle reset separately ───────────────────────────────────────
         if (filter === 'reset') {
-            // Check if any filter is actually active by comparing with our presets and raw EQ state
             const isAnyPresetActive = Object.keys(FILTER_PRESETS).some(k => k !== 'reset' && FILTER_PRESETS[k].isActive(queue));
             const hasRawEQ = queue.filterManager.equalizerBands?.some((b: any) => b.gain !== 0) ?? false;
 
@@ -368,8 +368,32 @@ app.get('/filter', async (c) => {
                 await s.write(`],"data":${JSON.stringify({ status: false, message: 'No filters enabled' })}}`);
                 return;
             }
+
+            await log('Resetting all filters...');
+            try {
+                await preset.apply(queue);
+                if (queue.position) {
+                    await queue.seek(queue.position);
+                }
+                await log('All filters reset successfully');
+            } catch (err: any) {
+                await log(`Filter reset failed: ${err?.message || err}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to reset filters: ${err?.message || 'Unknown error'}` })}}`);
+                return;
+            }
+
+            await s.write(`],"data":${JSON.stringify({
+                status: true,
+                data: {
+                    action: 'filters_reset',
+                    filter: 'reset',
+                    description: preset.description,
+                },
+            })}}`);
+            return;
         }
 
+        // ── All other filters use toggle logic ────────────────────────────
         const currentlyActive = preset.isActive(queue);
         const actionType = currentlyActive ? 'filter_disabled' : 'filter_applied';
 

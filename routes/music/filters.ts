@@ -235,6 +235,7 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
         requires: '',
         isActive: (p) => false,
         apply: async (p) => {
+            await p.filterManager.clearEQ();
             await p.filterManager.resetFilters();
         },
         disable: async (p) => {},

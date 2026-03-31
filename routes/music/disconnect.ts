@@ -38,7 +38,7 @@ app.get('/disconnect', async (c) => {
                 await s.write(`],"data":${JSON.stringify({
                     status: false,
                     message: 'Not connected to this guild',
-                })}`);
+                })}}`);
                 return;
             }
 

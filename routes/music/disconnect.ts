@@ -33,12 +33,17 @@ app.get('/disconnect', async (c) => {
             await log(`Disconnecting from guild: ${guildId}`);
 
             const guildPlayer = manager.players.get(guildId);
-            if (guildPlayer) {
-                await guildPlayer.destroy();
-                await log('Lavalink player destroyed');
-            } else {
+            if (!guildPlayer) {
                 await log('No Lavalink player found for this guild');
+                await s.write(`],"data":${JSON.stringify({
+                    status: false,
+                    message: 'Not connected to this guild',
+                })}`);
+                return;
             }
+
+            await guildPlayer.destroy();
+            await log('Lavalink player destroyed');
 
             // Destroy the discord.js client only if no other guilds are active
             let hasActiveNodes = false;

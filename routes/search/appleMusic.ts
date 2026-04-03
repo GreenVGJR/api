@@ -17,7 +17,7 @@ app.get('/applemusic', async (c) => {
     const task = async () => {
         try {
             const [res, res2, res3, res4, res5, res6] = await Promise.all([
-                request(`https://itunes.apple.com/search?media=music&limit=30&country=US&term=${encodeURIComponent(query)}`, { 
+                request(`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`, { 
                     method: 'GET',
                     headers: commonHeaders
                 }),
@@ -25,19 +25,19 @@ app.get('/applemusic', async (c) => {
                     method: 'GET',
                     headers: commonHeaders
                 }),
-                request(`https://itunes.apple.com/search?media=audiobook&limit=30&country=US&term=${encodeURIComponent(query)}`, { 
+                request(`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`, { 
                     method: 'GET',
                     headers: commonHeaders
                 }),
-                request(`https://itunes.apple.com/search?media=podcast&limit=30&country=US&term=${encodeURIComponent(query)}`, { 
+                request(`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`, { 
                     method: 'GET',
                     headers: commonHeaders
                 }),
-                request(`https://itunes.apple.com/search?media=musicVideo&limit=30&country=US&term=${encodeURIComponent(query)}`, { 
+                request(`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`, { 
                     method: 'GET',
                     headers: commonHeaders
                 }),
-                request(`https://itunes.apple.com/search?media=tvShow&limit=30&country=US&term=${encodeURIComponent(query)}`, { 
+                request(`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`, { 
                     method: 'GET',
                     headers: commonHeaders
                 }),

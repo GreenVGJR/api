@@ -131,6 +131,9 @@ const API_ROUTES = {
                 "/tools/discord/voice/unmute?token=&guildId=&userId=",
                 "/tools/discord/voice/kick?token=&guildId=&userId=",
                 "/tools/discord/voice/muteall?token=&guildId=&channelId=",
+                "/tools/discord/voice/unmuteall?token=&guildId=&channelId=",
+                "/tools/discord/voice/deafall?token=&guildId=&channelId=",
+                "/tools/discord/voice/undeafall?token=&guildId=&channelId=",
                 "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
                 "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=",
                 "/tools/discord/voice/list?token=&guildId=&channelId="

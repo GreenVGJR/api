@@ -18,7 +18,7 @@
     "start-6": "pm2 delete api 2>/dev/null; pm2 start \"NODE_OPTIONS='--dns-result-order=ipv6first' bun .\" --name api -i 1 && pm2 save",
     "stop": "pm2 delete api 2>/dev/null",
     "gen": "bun gen-routes.ts",
-    "gen-update": "rm -rf node_modules bun.lock && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun update --latest && bun run gen && bun run start"
+    "gen-update": "rm -rf node_modules bun.lock functions routes && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun update --latest && bun run gen && npm install -g pm2 && bun run start"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

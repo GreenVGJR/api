@@ -240,8 +240,7 @@ app.get('/stop', async (c) => {
                     guildId,
                     voiceChannelId: voiceChannelId!,
                     selfDeaf: true,
-                    selfMute: false,
-                    volume: 50,
+                    selfMute: false
                 });
                 set247(token!, guildId!, true);
                 await newPlayer.connect();

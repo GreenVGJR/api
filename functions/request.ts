@@ -1,5 +1,6 @@
 import { request as undiciRequest, Agent, interceptors, RequestRedirect } from 'undici';
 import { Session } from 'httpcloak';
+import type { Context } from 'hono';
 
 const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
 
@@ -50,6 +51,24 @@ export async function youtubeVisitorKey(): Promise<string | null> {
     }
 }
 
+export const getQuery = (c: Context, key: string) => {
+    const val = c.req.query(key);
+    if (val === undefined) return undefined;
+    if (val === 'null') return null;
+    return val;
+};
+
+export const getToken = (c: Context) => {
+    try {
+        const token = c.req.query('token');
+        if (!token) return null;
+        const checktoken = Number.isInteger(parseInt(atob(token.split('.')[0])));
+        return checktoken ? token : null;
+    } catch {
+        return null;
+    }
+};
+
 const parseAbbreviatedNumber = (str: string | null | undefined): number | null => {
     if (!str) return null;
     const cleanStr = str.replace(/,/g, '').replace(/subscribers|videos|video|views|view|watching/gi, '').trim();
@@ -80,6 +99,28 @@ const formatAbbreviatedNumber = (num: number | string | null | undefined): strin
     if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
     return n.toString();
 };
+
+const parseYtInitial = (html: any) => {
+    try {
+        // Robust parsing of ytInitialData
+        const dataParts = html.split(/ytInitialData\s*=\s*/);
+        if (dataParts.length < 2) return null;
+
+        let jsonStr = dataParts[1];
+        // Find the end of the script tag or the next variable assignment
+        const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') :
+            jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') :
+                jsonStr.length;
+
+        jsonStr = jsonStr.substring(0, endIdx).trim();
+        if (jsonStr.endsWith(';')) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
+
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("YouTube Parse Error:", e);
+        return null;
+    }
+}
 
 const listcodes: { name: string, code: string }[] = [
     { "name": "Abkhaz", "code": "ab" },
@@ -488,9 +529,10 @@ export const imgurKey = async function imgurKey() {
     }
 }
 
-export const YTVideo = async function YTVideo(que: string) {
+export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
     if (!que) return null;
     try {
+        /*
         const bodyload = JSON.stringify({
             query: que,
             context: {
@@ -503,22 +545,84 @@ export const YTVideo = async function YTVideo(que: string) {
                 }
             }
         });
-        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.videoRenderer', {
+        */
+
+        // might use httpcloak if youtube didnt throw captcha often
+        const response = await request(`https://www.youtube.com/results?search_query=${que}`, {
             headers: {
-                ...commonHeaders,
-                'content-type': 'application/json'
+                ...commonHeaders
             },
-            body: bodyload,
-            method: "POST"
         });
 
-        const res: any = await response.body.json();
+        let res: any = await response.body.text();
+
+        res = parseYtInitial(res);
+        if(!res) {
+            return { data: null }
+        }
+
         let alk: any[] = [];
         const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+        const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
-        inrtubeContents.forEach((item: any) => {
+        const mappedTasks = inrtubeContents.map(async (item: any) => {
             const a = item.videoRenderer;
-            if (!a) return;
+            if (!a) return null;
+            const checkmix = a?.navigationEndpoint?.watchEndpoint?.playlistId;
+            let mixData: any = null;
+
+            if(checkmix && deepSearch) {
+                try {
+                    const rlkreq = await request(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
+                        headers: { ...commonHeaders },
+                    });
+                    
+                    let rlkresText = await rlkreq.body.text();
+                    let rlkres: any = parseYtInitial(rlkresText);
+                    
+                    if(rlkres) {
+                        const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
+                        if (kkmvytmx) {
+                            const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
+                            let getmgcf: any = null;
+                            try {
+                                getmgcf = new URL(kkmvytmx.playlistShareUrl);
+                                getmgcf = getmgcf.searchParams.get("list");
+                            }
+                            catch {}
+                            mixData = {
+                                playlistId: getmgcf,
+                                title: kkmvytmx.title,
+                                shareUrl: kkmvytmx.playlistShareUrl,
+                                data: kkmvytmx.contents?.map((c: any) => ({
+                                    videoId: c.playlistPanelVideoRenderer?.videoId,
+                                    url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
+                                    altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+                                    title: c.playlistPanelVideoRenderer?.title?.simpleText,
+                                    duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
+                                    thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
+                                    owner: {
+                                        name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
+                                        url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+                                    }
+                                })) || [],
+                                altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => ({
+                                    videoId: c.lockupViewModel?.contentId,
+                                    url: "https://www.youtube.com/watch?v=" + c.lockupViewModel?.contentId,
+                                    altUrl: "https://www.youtube.com" + c.lockupViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+                                    title: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content,
+                                    thumbnail: "https://s.ytimg.com/vi/" + c.lockupViewModel?.contentId + "/hq720.jpg",
+                                    owner: {
+                                        name: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+                                        url: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+                                        avatar: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                                    }
+                                })) || []
+                            };
+                        }
+                    }
+                } catch(e) { console.error("Mix fetch error:", e); }
+            }
 
             try {
                 const chnl = a.longBylineText?.runs?.[0];
@@ -526,32 +630,46 @@ export const YTVideo = async function YTVideo(que: string) {
                 const fom = {
                     videoId: a.videoId,
                     url: "https://www.youtube.com/watch?v=" + a.videoId,
-                    thumbnails: [
-                        ...(a.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
-                        ...(a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url }))
-                    ],
+                    altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+                    thumbnail: "https://s.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
+                    movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
+                    previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith('/shorts') ? "https://s.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
                     title: a.title?.runs?.[0]?.text,
-                    description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join('') || "",
-                    owner: {
+                    description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join('') || "",
+                    owners: {
                         name: a.ownerText?.runs?.[0]?.text,
                         url: chnl2 ? ["https://www.youtube.com" + chnl2] : chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => "https://www.youtube.com" + d.listItemViewModel.rendererContext.commandContext.onTap.innertubeCommand.commandMetadata.webCommandMetadata.url),
-                        thumbnails: a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]) || (a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails || [])
+                        avatar: a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k?.replace(/=s\d+.*/, "=s0"))
                     },
-                    isLive: a?.viewCountText?.runs?.[1]?.text?.endsWith('watching') || false,
+                    timeChapters: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map((k: any) => ({
+                        text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
+                        time: k?.macroMarkersListItemRenderer?.timeDescription?.runs?.[0]?.text,
+                        thumbnail: k?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url,
+                        isHighlighted: k?.macroMarkersListItemRenderer?.isHighlighted,
+                        url: "https://www.youtube.com/" + k?.macroMarkersListItemRenderer?.onTap?.commandMetadata?.webCommandMetadata?.url
+                    })) || null,
+                    isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === 'LIVE') || false,
+                    isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join('') || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer.icon.iconType === "MUSIC") || false,
+                    isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
+                    isShorts: a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith('/shorts'),
+                    mixPlaylist: mixData,
                     viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(' ')?.[0] || a.viewCountText?.runs?.[0]?.text),
                     duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null
                 };
-                alk.push(fom);
+                return fom;
             } catch (err) {
                 console.error("Error parsing YouTube Video item:", err);
+                return null;
             }
         });
 
-        return { data: alk };
+        alk = (await Promise.all(mappedTasks)).filter(Boolean);
+
+        return { searchParams: queryId, data: alk };
     } catch (e) { console.error("YTSearch Global Error:", e); return null; }
 }
 
-export const YTMusic = async function YTMusic(que: string) {
+export const YTMusic = async function YTMusic(que: string, deepSearch: boolean = false) {
     if (!que) return null;
     try {
         const bodyload = JSON.stringify({
@@ -586,46 +704,249 @@ export const YTMusic = async function YTMusic(que: string) {
 
         const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
 
-        let alk: any[] = [];
-        innerTubeResults.forEach((item: any) => {
+        const mappedTasks = innerTubeResults.map(async (item: any) => {
             const a = item.musicResponsiveListItemRenderer;
-            if (!a) return;
+            if (!a) return null;
 
             try {
                 const flexColumn1 = a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
                 const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+                const flexColumn2 = a.flexColumns?.[2]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
 
-                const artistRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r.navigationEndpoint.browseEndpoint.browseId.startsWith('MPRE'));
+                const artistRuns = flexColumn1.filter((r: any) =>
+                    r?.navigationEndpoint?.browseEndpoint
+                        ?.browseEndpointContextSupportedConfigs
+                        ?.browseEndpointContextMusicConfig
+                        ?.pageType?.startsWith('MUSIC_PAGE_TYPE_ARTIST')
+                );
+
+                const artistRunsFallback = artistRuns.length > 0 ? artistRuns : flexColumn1.filter((r: any) =>
+                    r?.navigationEndpoint?.browseEndpoint?.browseId &&
+                    !r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('MPRE')
+                );
+
+                const artistRunsFinal = artistRunsFallback.length > 0 ? artistRunsFallback : (() => {
+                    const plainRun = flexColumn1[0];
+                    if (!plainRun?.text || plainRun.navigationEndpoint) return [];
+                    return plainRun.text
+                        .replace(/,\s*&\s*/g, ' & ')
+                        .split(/,\s*|\s+&\s+|\s+and\s+/)
+                        .map((name: string) => name.trim())
+                        .filter(Boolean)
+                        .map((name: string) => ({ text: name, navigationEndpoint: null }));
+                })();
+
                 const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('MPRE'));
                 const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(':')).pop() || flexColumn1[flexColumn1.length - 1];
 
-                const kas = {
-                    browseId: artistRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
+                const musch = a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
+                const muspl = a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint?.playlistId;
+                const videoId = a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId;
+
+                let mixData: any = null;
+                if (muspl && deepSearch) {
+                    try {
+                        const rlkreq = await request(`https://www.youtube.com/watch?v=&list=${muspl}`, {
+                            headers: { ...commonHeaders },
+                        });
+
+                        let rlkresText = await rlkreq.body.text();
+                        let rlkres: any = parseYtInitial(rlkresText);
+
+                        if (rlkres) {
+                            const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
+                            if (kkmvytmx) {
+                                const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
+                                let getmgcf: any = null;
+                                try {
+                                    getmgcf = new URL(kkmvytmx.playlistShareUrl);
+                                    getmgcf = getmgcf.searchParams.get("list");
+                                } catch {}
+                                mixData = {
+                                    playlistId: getmgcf,
+                                    title: kkmvytmx.title,
+                                    shareUrl: kkmvytmx.playlistShareUrl,
+                                    data: kkmvytmx.contents?.map((c: any) => ({
+                                        videoId: c.playlistPanelVideoRenderer?.videoId,
+                                        url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
+                                        altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+                                        title: c.playlistPanelVideoRenderer?.title?.simpleText,
+                                        duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
+                                        thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
+                                        owner: {
+                                            name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
+                                            url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+                                        }
+                                    })) || [],
+                                    altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => ({
+                                        videoId: c.lockupViewModel?.contentId,
+                                        url: "https://www.youtube.com/watch?v=" + c.lockupViewModel?.contentId,
+                                        altUrl: "https://www.youtube.com" + c.lockupViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+                                        title: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content,
+                                        thumbnail: "https://s.ytimg.com/vi/" + c.lockupViewModel?.contentId + "/hq720.jpg",
+                                        owner: {
+                                            name: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+                                            url: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+                                            avatar: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                                        }
+                                    })) || []
+                                };
+                            }
+                        }
+                    } catch (e) { console.error("YTMusic mix fetch error:", e); }
+                }
+
+                return {
+                    duration: durationRun?.text || null,
+                    browseId: artistRunsFinal[0]?.navigationEndpoint?.browseEndpoint?.browseId || null,
                     albumBrowseId: albumRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
-                    playlistId: a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint?.playlistId,
-                    videoId: a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId,
-                    url: (a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId) ? "https://music.youtube.com/watch?v=" + (a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId) : null,
-                    thumbnails: (a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
+                    playlistId: muspl,
+                    videoId,
+                    url: videoId ? "https://music.youtube.com/watch?v=" + videoId : null,
+                    altUrl: videoId ? "https://music.youtube.com/watch?v=" + videoId + "&list=" + muspl : null,
+                    baseUrl: videoId ? "https://www.youtube.com/watch?v=" + videoId : null,
+                    shortUrl: videoId ? "https://youtu.be/" + videoId : null,
+                    thumbnail: musch?.startsWith('//') ? 'https:' + musch : musch,
                     title: flexColumn0[0]?.text,
-                    owner: {
-                        name: artistRun?.text || flexColumn1[0]?.text || "Unknown",
-                        url: artistRun?.navigationEndpoint?.browseEndpoint?.browseId ? "https://music.youtube.com/channel/" + artistRun.navigationEndpoint.browseEndpoint.browseId : null
-                    },
-                    duration: durationRun?.text || null
+                    listenCount: String(parseAbbreviatedNumber(flexColumn2[0]?.text?.split(' ')?.[0])),
+                    isATV: flexColumn0[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType === 'MUSIC_VIDEO_TYPE_ATV',
+                    isExplicit: a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType?.startsWith('MUSIC_EXPLICIT') || false,
+                    isCollab: artistRunsFinal.length > 1,
+                    mixPlaylist: mixData,
+                    artists: artistRunsFinal.length > 0
+                        ? artistRunsFinal.map((r: any) => ({
+                            name: r.text,
+                            browseId: r.navigationEndpoint?.browseEndpoint?.browseId || null,
+                            url: r.navigationEndpoint?.browseEndpoint?.browseId
+                                ? "https://music.youtube.com/channel/" + r.navigationEndpoint.browseEndpoint.browseId
+                                : null
+                        }))
+                        : [{ name: flexColumn1[0]?.text || "Unknown", browseId: null, url: null }]
                 };
-                alk.push(kas);
             } catch (err) {
                 console.error("Error parsing YouTube Music item:", err);
+                return null;
             }
         });
 
-        return {
-            data: alk
-        };
+        const alk = (await Promise.all(mappedTasks)).filter(Boolean);
+
+        return { data: alk };
     } catch (e) {
         console.error("YTMusic Global Error:", e);
         return null;
     }
+}
+
+export const YTPlaylist = async function YTPlaylist(que: string) {
+    if (!que) return null;
+    try {
+        const bodyload = JSON.stringify({
+            query: que,
+            params: "EgIQAw==",
+            context: {
+                client: {
+                    clientName: "WEB",
+                    clientVersion: "2.20251212",
+                    hl: "en",
+                    gl: "US"
+                }
+            }
+        });
+
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false', {
+            headers: {
+                ...commonHeaders,
+                'content-type': 'application/json'
+            },
+            body: bodyload,
+            method: "POST"
+        });
+
+        const res: any = await response.body.json();
+        const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+            ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+
+        const alk: any[] = [];
+
+        contents.forEach((item: any) => {
+            const a = item.lockupViewModel;
+            if (!a || a.contentType !== 'LOCKUP_CONTENT_TYPE_PLAYLIST') return;
+
+            try {
+                const meta = a.metadata?.lockupMetadataViewModel;
+                const metadataRows = meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
+
+                // owner
+                const ownerPart = metadataRows[0]?.metadataParts?.[0]?.text;
+                const ownerRun = ownerPart?.commandRuns?.[0];
+                const ownerUrl = ownerRun?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                const browseId = ownerRun?.onTap?.innertubeCommand?.browseEndpoint?.browseId;
+
+                // thumbnail: pick highest width source, ensure hq720
+                const sources: any[] = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
+                    ?.thumbnailViewModel?.image?.sources || [];
+                const bestThumb = sources.reduce((best: any, s: any) => (!best || s.width > best.width) ? s : best, null);
+                const thumbnail = bestThumb
+                    ? (bestThumb.url?.startsWith('//') ? 'https:' + bestThumb.url : bestThumb.url)
+                    : null;
+
+                // video count badge
+                const badge = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
+                    ?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel
+                    ?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
+
+                // target videos: rows that have metadataParts with commandRuns to a watch endpoint
+                const targetVideo = metadataRows
+                    .filter((row: any) => !row.isSpacerRow && row.metadataParts?.[0]?.text?.commandRuns?.length)
+                    .map((row: any) => {
+                        const part = row.metadataParts[0].text;
+                        const run = part.commandRuns?.[0];
+                        const webUrl = run?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                        if (!webUrl?.startsWith('/watch')) return null;
+
+                        const watchEndpoint = run?.onTap?.innertubeCommand?.watchEndpoint;
+                        const videoId = watchEndpoint?.videoId;
+
+                        // split "title · duration" from content
+                        const raw: string = part.content || '';
+                        const sepIdx = raw.lastIndexOf(' · ');
+                        const title = sepIdx !== -1 ? raw.slice(0, sepIdx) : raw;
+                        const duration = sepIdx !== -1 ? raw.slice(sepIdx + 3) : null;
+
+                        // url without list, altUrl with list
+                        const url = videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
+                        const altUrl = webUrl ? `https://www.youtube.com${webUrl}` : null;
+
+                        const videoThumb = videoId
+                            ? `https://i.ytimg.com/vi/${videoId}/hq720.jpg`
+                            : null;
+
+                        return { title, url, altUrl, duration, thumbnail: videoThumb };
+                    })
+                    .filter(Boolean);
+
+                const fom = {
+                    playlistId: a.contentId,
+                    url: "https://www.youtube.com/playlist?list=" + a.contentId,
+                    title: meta?.title?.content,
+                    videoCount: badge ? parseInt(badge.replace(/[^0-9]/g, '')) || null : null,
+                    thumbnail,
+                    targetVideo,
+                    owner: {
+                        name: ownerPart?.content,
+                        browseId: browseId || null,
+                        url: ownerUrl ? "https://www.youtube.com" + ownerUrl : null
+                    }
+                };
+                alk.push(fom);
+            } catch (err) {
+                console.error("Error parsing YouTube Playlist item:", err);
+            }
+        });
+
+        return { data: alk };
+    } catch (e) { console.error("YTPlaylist Global Error:", e); return null; }
 }
 
 export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
@@ -666,7 +987,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
     } catch (e) { if (session) session.close(); console.error(e); return null; }
 }
 
-export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 20): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
     if (!que) return null;
 
     if (refresh_auth || !keysp || !keysptoken) {
@@ -680,37 +1001,51 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
 
     try {
         const perbody = { "variables": { "searchTerm": que, "offset": 0, "limit": limit_number, "numberOfTopResults": limit_number, "includeAudiobooks": true, "includeArtistHasConcertsField": true, "includePreReleases": true, "includeAuthors": true }, "operationName": "searchDesktop", "extensions": { "persistedQuery": { "version": 1, "sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c" } } };
-        const [per, per2] = await Promise.all([
-            request(`https://api.spotify.com/v1/search?q=${que}&type=track&offset=0&limit=20&market=US`, {
-                headers: {
-                    'Authorization': 'Bearer ' + keysp,
-                    'App-Platform': 'WebPlayer',
-                    ...commonHeaders,
-                }
-            }),
-            request(`https://api-partner.spotify.com/pathfinder/v2/query`, {
-                method: "POST",
-                body: JSON.stringify(perbody),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Origin': 'https://open.spotify.com',
-                    'Authorization': 'Bearer ' + keysp,
-                    'App-Platform': 'WebPlayer',
-                    'Client-Token': keysptoken,
-                    ...commonHeaders,
-                }
-            })
-        ]);
+        const per2 = await request(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+            method: "POST",
+            body: JSON.stringify(perbody),
+            headers: {
+                'Content-Type': 'application/json',
+                'Origin': 'https://open.spotify.com',
+                'Authorization': 'Bearer ' + keysp,
+                'App-Platform': 'WebPlayer',
+                'Client-Token': keysptoken,
+                ...commonHeaders,
+            }
+        });
 
-        if (per.statusCode === 401 || per.statusCode === 400 || per2.statusCode === 401 || per2.statusCode === 400) {
+        if (per2.statusCode === 403) {
+            return {
+                error: "IP Blocked"
+            }
+        }
+
+        if (per2.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        if (per2.statusCode === 401 || per2.statusCode === 400) {
             return await SPMusic(que, true);
         }
         else {
-            const [pes, pes2] = await Promise.all([
-                (per.statusCode === 403 || per.statusCode === 429) ? Promise.resolve(null) : per.body?.json() as Promise<any>,
-                (per2.statusCode === 403 || per2.statusCode === 429) ? Promise.resolve(null) : per2.body?.json() as Promise<any>
-            ]);
-            return { data: [pes === null ? { error: "Rate-limited" } : (pes?.tracks?.items || null), pes2 === null ? { error: "Rate-limited" } : (pes2?.data?.searchV2 || null)] };
+            const pes2: any = await per2.body?.json();
+            const finalpes: any = pes2?.data?.searchV2;
+            return { 
+                data: { 
+                    albums: finalpes.albumsV2.items?.map((a: any) => a.data) || null,
+                    artists: finalpes.artists.items?.map((a: any) => a.data) || null,
+                    audiobooks: finalpes.audiobooks.items?.map((a: any) => a.data) || null,
+                    featured: finalpes.topResultsV2.itemsV2?.map((a: any) => a.item.data) || null,
+                    episodes: finalpes.episodes.items?.map((a: any) => a.data) || null,
+                    genres: finalpes.genres.items?.map((a: any) => a.data) || null,
+                    playlists: finalpes.playlists.items?.map((a: any) => a.data) || null,
+                    podcasts: finalpes.podcasts.items?.map((a: any) => a.data) || null,
+                    tracks: finalpes.tracksV2.items?.map((a: any) => a.item.data) || null,
+                    users: finalpes.users.items?.map((a: any) => a.data) || null,
+                }
+            };
         }
     } catch { return null; }
 }
@@ -3667,7 +4002,7 @@ export const YTChannel = async function YTChannel(que: string) {
             params: "EgIQAg%3D%3D",
             context: {
                 client: {
-                    clientName: "WEB",
+                    clientName: "MWEB",
                     clientVersion: "2.20251212",
                     hl: "en",
                     gl: "US"
@@ -3675,7 +4010,7 @@ export const YTChannel = async function YTChannel(que: string) {
             }
         });
 
-        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents.channelRenderer', {
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer', {
             headers: {
                 ...commonHeaders,
                 'content-type': 'application/json'
@@ -3685,11 +4020,11 @@ export const YTChannel = async function YTChannel(que: string) {
         });
 
         const res: any = await response.body.json();
-        const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+        const contents = res?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
         let alk: any[] = [];
         contents.forEach((item: any) => {
-            const a = item.channelRenderer;
+            const a = item.compactChannelRenderer;
             if (!a) return;
 
             try {
@@ -3701,13 +4036,14 @@ export const YTChannel = async function YTChannel(que: string) {
                 const subs = allMetadata.find(t => t.toLowerCase().includes('subscriber'));
                 const videos = allMetadata.find(t => t.toLowerCase().includes('video') || (t.match(/^\d+/) && !t.includes('subscriber') && !t.startsWith('@')));
 
+                const ava = a.thumbnail?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0");
                 const fom = {
                     channelId: a.channelId,
                     url: "https://www.youtube.com/channel/" + a.channelId,
                     handle: handle || null,
-                    thumbnails: (a.thumbnail?.thumbnails || []).map((t: any) => ({ ...t, url: t.url?.startsWith('//') ? 'https:' + t.url : t.url })),
+                    avatar: (ava?.startsWith('//') ? "https:" + ava : ava) || null,
+                    banner: a.tvBanner?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0") || null,
                     name: a.title?.simpleText || a.title?.runs?.[0]?.text,
-                    description: a.descriptionSnippet?.runs?.map((r: any) => r.text).join('') || "",
                     subscriberCount: parseAbbreviatedNumber(subs),
                     videoCount: parseAbbreviatedNumber(videos),
                     verified: !!a.ownerBadges?.find((b: any) =>
@@ -4123,20 +4459,31 @@ export const Tenor = async function Tenor(que: string, type?: string) {
     };
 
     try {
-        const apiRes = await request(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+        const [apiRes, apiRes2] = await Promise.all([
+            request(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
             headers: {
                 ...commonHeaders,
                 'Referer': 'https://tenor.com',
                 'Origin': 'https://tenor.com',
-                'X-Goog-Api-Key': 'AIzaSyC-P6_qz3FzCoXGLk6tgitZo4jEJ5mLzD8'
+                'X-Goog-Api-Key': process.env.GOOG_TENOR
             }
-        });
+        }),
+            request(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+            headers: {
+                ...commonHeaders,
+                'Referer': 'https://tenor.com',
+                'Origin': 'https://tenor.com',
+                'X-Goog-Api-Key': process.env.GOOG_TENOR
+            }
+        })
+        ]);
 
         if (apiRes.statusCode === 200) {
             const apiData: any = await apiRes.body.json();
+            const apiData2: any = await apiRes2.body.json();
             return {
                 data: {
-                    suggestion: null,
+                    suggestion: apiData2?.results,
                     data: apiData?.results || []
                 }
             };
@@ -4751,7 +5098,7 @@ export async function googleWeather(query: string): Promise<any> {
             headers: {
                 ...commonHeaders,
                 'Referer': 'https://storage.googleapis.com/',
-                'X-Goog-Api-Key': 'AIzaSyD5EfYCuwqofCvOpEj1DcuuvAdxKi4dKSI'
+                'X-Goog-Api-Key': process.env.GOOG_WEATHER
             }
         });
 
@@ -4764,8 +5111,8 @@ export async function googleWeather(query: string): Promise<any> {
                     ...datageo.address,
                     ...datageo.geo,
                     mapsView: {
-                        preview: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=800x300&markers=${encodeURI("color:red|" + coords)}&key=AIzaSyBoYjeRtfVI0Jd8Q_9mnflo9i4sOYpShB0`,
-                        highest: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=2048x768&markers=${encodeURI("color:red|" + coords)}&key=AIzaSyBoYjeRtfVI0Jd8Q_9mnflo9i4sOYpShB0`
+                        preview: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=800x300&markers=${encodeURI("color:red|" + coords)}&key=${process.env.GOOG_MAPS}`,
+                        highest: `https://maps.googleapis.com/maps/api/staticmap?alt=media&center=${coords}&zoom=15&size=2048x768&markers=${encodeURI("color:red|" + coords)}&key=${process.env.GOOG_MAPS}`
                     }
                 },
                 finalk
@@ -4820,57 +5167,6 @@ export async function GrokAI(query: string): Promise<any> {
             response: response || null,
             data: {
                 model: "grok-4.1-fast-preview"
-            }
-        }
-    }
-    catch {
-        return null;
-    }
-}
-
-export async function PerplexityAI(query: string): Promise<any> {
-    if (!query) return null;
-    const bodyhttp = { "id": "perplexity", "messages": [{ "id": crypto.randomBytes(12).toString('base64url'), "createdAt": new Date().toISOString(), "role": "user", "content": query, "parts": [{ "type": "text", "text": query }] }], "fp": "perplexity" };
-
-    try {
-        const req = await request("https://leaves.mintlify.com/api/assistant/perplexity/message", {
-            method: "POST",
-            body: JSON.stringify(bodyhttp),
-            headers: { ...commonHeaders, 'Content-Type': 'application/json' }
-        });
-
-        if (req.statusCode === 429) {
-            return {
-                error: "Rate-limited"
-            }
-        }
-        else if (req.statusCode === 403) {
-            return {
-                error: "Blocked"
-            }
-        }
-        else if (req.statusCode !== 200) {
-            return {
-                data: null
-            }
-        }
-
-        const res = await req.body.text();
-        const response = res.split('\n')
-            .filter((line: string) => line.startsWith('0:'))
-            .map((line: string) => {
-                try {
-                    return JSON.parse(line.substring(line.indexOf(':') + 1));
-                } catch {
-                    return '';
-                }
-            })
-            .join('');
-
-        return {
-            response: response || null,
-            data: {
-                model: "sonar-fast-perplexity"
             }
         }
     }
@@ -6368,5 +6664,114 @@ export const OtoDB = async (query: string): Promise<any> => {
         return { data: results.items };
     } catch {
         return null;
+    }
+};
+
+export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
+    if (!token || !guildId || !action) return { error: 'Missing required parameters' };
+
+    const modifyMember = async (userId: string, data: any) => {
+        const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            const body = await res.text();
+            let parsed: any;
+            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
+            const err: any = new Error(parsed.message || 'Failed to modify member');
+            err.json = parsed;
+            err.status = res.status;
+            throw err;
+        }
+        const body = res.status === 204 ? {} : await res.json();
+        return { status: res.status, data: body };
+    };
+
+    const buildAllResult = (action: string, channelId: string, members: any[], results: PromiseSettledResult<any>[], extra?: Record<string, any>) => {
+        const data = members.map((member, i) => {
+            const result = results[i];
+            return {
+                userId: member.id,
+                success: result.status === 'fulfilled',
+                status: result.status === 'fulfilled' ? result.value.status : result.reason?.status ?? null,
+                data: result.status === 'fulfilled' ? result.value.data : null,
+                error: result.status === 'rejected' ? (result.reason?.json ?? { message: result.reason?.message }) : null
+            };
+        });
+        return {
+            data: {
+                action,
+                channelId,
+                success: data.filter(r => r.success).length,
+                failed: data.filter(r => !r.success).length,
+                data,
+                ...extra
+            }
+        };
+    };
+
+    try {
+        if (['deafen', 'undeafen', 'mute', 'unmute', 'kick'].includes(action)) {
+            const { userId } = payload;
+            if (!userId) return { error: 'Missing valid parameter: userId' };
+
+            let result: any;
+            if (action === 'deafen') result = await modifyMember(userId, { deaf: true });
+            else if (action === 'undeafen') result = await modifyMember(userId, { deaf: false });
+            else if (action === 'mute') result = await modifyMember(userId, { mute: true });
+            else if (action === 'unmute') result = await modifyMember(userId, { mute: false });
+            else if (action === 'kick') result = await modifyMember(userId, { channel_id: null });
+
+            return { data: { status: true, action, userId, httpStatus: result.status, data: result.data } };
+        }
+
+        const { channelId } = payload;
+        if (!channelId) return { error: 'Missing valid parameter: channelId' };
+
+        const { getOrCreatePlayer } = await import('./musicPlayer.js');
+        const { client } = await getOrCreatePlayer(token);
+        const guild = await client.guilds.fetch(guildId);
+        const channel = await guild.channels.fetch(channelId);
+
+        if (!channel || !channel.isVoiceBased()) return { error: 'Invalid voice channel' };
+
+        if (action === 'list') {
+            const membersList = channel.members.map((m: any) => {
+                const { guild: _g, ...member } = m;
+                const { guild: _vg, member: _vm, ...voiceState } = m.voice;
+                return { member, voiceState };
+            });
+            return { data: membersList };
+        }
+
+        if (action === 'muteall') {
+            const members = [...channel.members.values()];
+            const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: true })));
+            return buildAllResult('muteall', channelId, members, results);
+        }
+
+        if (action === 'kickall') {
+            const { authorId } = payload;
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: null })));
+            return buildAllResult('kickall', channelId, members, results);
+        }
+
+        if (action === 'moveall') {
+            const { toChannelId } = payload;
+            if (!toChannelId) return { error: 'Missing valid parameter: toChannelId' };
+            const members = [...channel.members.values()];
+            const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: toChannelId })));
+            return buildAllResult('moveall', channelId, members, results, { toChannelId });
+        }
+
+        return { error: 'Unknown action' };
+    } catch (e: any) {
+        return { error: e.json ?? { message: e.message } };
     }
 };

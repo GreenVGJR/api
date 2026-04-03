@@ -22,8 +22,8 @@ app.get('/discord/infoMember', async (c) => {
     const queryGuildId = c.req.query('guildId');
     const guildId = (queryGuildId && Number.isInteger(parseInt(queryGuildId))) ? queryGuildId : undefined;
 
-    if (!token) return c.json(["Missing valid parameter: token"], 202);
-    if (!userId) return c.json(["Missing valid parameter: userId"], 202);
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
     c.header('X-Route', 'discord.com');
     return await dispatch(c, () => DiscordInfoMember(token!, userId!, guildId));

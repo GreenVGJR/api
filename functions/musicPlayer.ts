@@ -61,10 +61,10 @@ const LAVALINK_NODE = {
 
 const LAVALINK_NODE_V2 = {
     id: sg2,
-    host: 'lavalink.serenetia.com',
-    port: 443,
+    host: 'lavalinkv4.serenetia.com',
+    port: 80,
     authorization: 'https://seretia.link/discord',
-    secure: true,
+    secure: false,
 };
 
 // ─── Player Pool ──────────────────────────────────────────────────────────────
@@ -231,8 +231,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                     guildId,
                     voiceChannelId,
                     selfDeaf: true,
-                    selfMute: false,
-                    volume: 50,
+                    selfMute: false
                 });
             }
             if (!p.connected) {

@@ -1,5 +1,3 @@
-
-
 import { Hono } from 'hono';
 const app = new Hono();
 
@@ -22,8 +20,8 @@ app.get('/discord/modifyMemberServer', async (c) => {
     const queryGuildId = c.req.query('guildId');
     const guildId = (queryGuildId && Number.isInteger(parseInt(queryGuildId))) ? queryGuildId : null;
 
-    if (!token) return c.json(["Missing valid parameter: token"], 202);
-    if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
     const getQuery = (key: string) => {
         const val = c.req.query(key);
@@ -40,7 +38,7 @@ app.get('/discord/modifyMemberServer', async (c) => {
     const bio = getQuery('bio');
     const reset = getQuery('reset');
 
-        const avatar = getQuery('avatar');
+    const avatar = getQuery('avatar');
     const banner = getQuery('banner');
 
     if (reset !== undefined) {
@@ -60,7 +58,7 @@ app.get('/discord/modifyMemberServer', async (c) => {
             if (pAvatar) payload.avatar = pAvatar;
         }
 
-                if (banner === null) {
+        if (banner === null) {
             payload.banner = null;
         } else if (banner) {
             const pBanner = await processImage(c, banner);

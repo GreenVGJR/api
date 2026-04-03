@@ -13,139 +13,96 @@ import {
     checkVoicePermissions,
     formatDuration,
 } from '../../functions/musicPlayer.js';
-import { SCMusic, SPMusic, request, commonHeaders } from '../../functions/request.js';
+import { SCMusic, SPMusic, YTMusic, YTVideo, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
+
+// ── Custom search result ──────────────────────────────────────────────────────
+
+interface CustomSearchResult {
+    url: string;
+    // Title + author are used to build a ytsearch fallback when the URL itself
+    // can't be loaded by Lavalink (e.g. no SC source manager on the node).
+    title?: string;
+    author?: string;
+}
+
+async function customSearch(platform: string, query: string): Promise<CustomSearchResult | null> {
+    try {
+        switch (platform) {
+            case 'soundcloud': {
+                const res   = await SCMusic(query, undefined, 1);
+                const track = res?.data?.[0]?.[0];
+                if (!track?.permalink_url) return null;
+                return {
+                    url:    track.permalink_url,
+                    title:  track.title,
+                    author: track.user?.username || track.publisher_metadata?.artist,
+                };
+            }
+            case 'spotify': {
+                const res   = await SPMusic(query, undefined, 1);
+                const track = res?.data?.tracks?.[0];
+                if (!track?.id) return null;
+                return {
+                    url:    `https://open.spotify.com/track/${track.id}`,
+                    title:  track.name,
+                    author: track.artists?.items?.map((a: any) => a.profile?.name).join(', '),
+                };
+            }
+            case 'youtube': {
+                const res   = await YTVideo(query, false);
+                const track = res?.data?.[0];
+                if (!track?.url) return null;
+                return { url: track.url, title: track.title, author: track.author };
+            }
+            case 'youtubemusic': {
+                const res   = await YTMusic(query, false);
+                const track = res?.data?.[0];
+                if (!track?.url) return null;
+                return { url: track.url, title: track.title, author: track.author };
+            }
+            case 'applemusic': {
+                const amRes  = await request(
+                    `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
+                    { method: 'GET', headers: commonHeaders }
+                );
+                const parsed: any = await amRes.body.json();
+                const track = parsed?.results?.[0];
+                if (!track) return null;
+                return {
+                    url:    track.trackViewUrl,
+                    title:  track.trackName,
+                    author: track.artistName,
+                };
+            }
+            default:
+                return null;
+        }
+    } catch {
+        return null;
+    }
+}
 
 app.get('/play', async (c) => {
     return createMusicStream(c, async (log, s) => {
         await log('Request accepted');
 
-        const token    = c.req.query('token');
-        let query      = c.req.query('q');
-        const platform = (c.req.query('platform') || 'youtubemusic').toLowerCase();
-        const voiceId  = c.req.query('voiceId');
+        const token      = c.req.query('token');
+        const query      = c.req.query('q');
+        const platform   = (c.req.query('platform') || 'spotify').toLowerCase();
+        const voiceId    = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
-        const authorId = c.req.query('authorId');
-        const isDeaf   = c.req.query('isDeaf') !== 'false';
-        const req247   = c.req.query('247');
+        const authorId   = c.req.query('authorId');
+        const isDeaf     = c.req.query('isDeaf') !== 'false';
+        const req247     = c.req.query('247');
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
             return;
         }
 
-        let queryStr = query as string;
-        let forcedMetadata: any = null;
-        const isUrl = queryStr.startsWith('http://') || queryStr.startsWith('https://');
-
-        // ── Platform Search Resolution ────────────────────────────────────
-
-        if (platform === 'soundcloud' && !isUrl) {
-            // Use SCMusic to get rich metadata (thumbnail, exact title, author, url)
-            // but let Lavalink resolve the actual stream via scsearch — avoids
-            // raw-URL load failures on nodes without the SC plugin file server.
-            await log(`Searching SoundCloud using custom engine: "${queryStr}"`);
-            const scRes = await SCMusic(queryStr, undefined, 1);
-            const scTracks = scRes?.data?.[0];
-            if (scTracks && scTracks.length > 0) {
-                const scTrack = scTracks[0];
-                forcedMetadata = {
-                    title: scTrack.title,
-                    author: scTrack.user?.username || scTrack.publisher_metadata?.artist || 'Unknown',
-                    thumbnail: scTrack.artwork_url?.replace('-large', '-original') || '',
-                    durationMS: String(scTrack.duration || 0),
-                    url: scTrack.permalink_url,
-                };
-                // scsearch query: plain title + author (no "audio" suffix)
-                queryStr = `${forcedMetadata.title} ${forcedMetadata.author}`.trim();
-                await log(`SoundCloud metadata found: "${forcedMetadata.title}" — will try scsearch, fallback ytsearch`);
-            } else {
-                await log(`No SoundCloud results found for "${queryStr}"`);
-                await s.write(`],"error":${JSON.stringify({ message: `No results found for "${queryStr}" on SoundCloud` })}}`);
-                return;
-            }
-
-        } else if (platform === 'spotify' && !isUrl) {
-            await log(`Searching Spotify using custom engine: "${queryStr}"`);
-            const spRes = await SPMusic(queryStr, undefined, 1);
-            const tracksV1 = spRes?.data?.[0];
-            const tracksV2 = spRes?.data?.[1]?.tracksV2?.items;
-
-            if (Array.isArray(tracksV1) && tracksV1.length > 0 && !tracksV1[0].error) {
-                const spTrack = tracksV1[0];
-                forcedMetadata = {
-                    title: spTrack.name,
-                    author: spTrack.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
-                    thumbnail: spTrack.album?.images?.[0]?.url || '',
-                    durationMS: String(spTrack.duration_ms),
-                    url: spTrack.external_urls?.spotify || `https://open.spotify.com/track/${spTrack.id}`,
-                };
-            } else if (Array.isArray(tracksV2) && tracksV2.length > 0) {
-                const item = tracksV2[0].item?.data;
-                if (item) {
-                    forcedMetadata = {
-                        title: item.name,
-                        author: item.artists?.items?.map((a: any) => a.profile?.name).join(', ') || 'Unknown',
-                        thumbnail: item.albumOfTrack?.coverArt?.sources?.[0]?.url || '',
-                        durationMS: String(item.duration?.totalMilliseconds || 0),
-                        url: `https://open.spotify.com/track/${item.id}`,
-                    };
-                }
-            }
-
-            if (forcedMetadata) {
-                queryStr = `${forcedMetadata.title} ${forcedMetadata.author} audio`;
-                await log(`Mapped to YouTube search: "${queryStr}"`);
-            } else {
-                await log(`No Spotify results found for "${queryStr}"`);
-                await s.write(`],"error":${JSON.stringify({ message: `No results found for "${queryStr}" on Spotify` })}}`);
-                return;
-            }
-
-        } else if (platform === 'applemusic' && !isUrl) {
-            await log(`Searching Apple Music using custom engine: "${queryStr}"`);
-            try {
-                const amRes = await request(
-                    `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(queryStr)}`,
-                    { method: 'GET', headers: commonHeaders }
-                );
-                const parseAm: any = await amRes.body.json();
-                const tracks = parseAm?.results;
-                if (tracks && tracks.length > 0) {
-                    const amTrack = tracks[0];
-                    forcedMetadata = {
-                        title: amTrack.trackName,
-                        author: amTrack.artistName,
-                        thumbnail: amTrack.artworkUrl100?.replace('100x100bb', '1x1ss') || '',
-                        durationMS: String(amTrack.trackTimeMillis),
-                        url: amTrack.trackViewUrl,
-                    };
-                    queryStr = `${forcedMetadata.title} ${forcedMetadata.author} audio`;
-                    await log(`Mapped to YouTube search: "${queryStr}"`);
-                } else {
-                    await log(`No Apple Music results found for "${queryStr}"`);
-                    await s.write(`],"error":${JSON.stringify({ message: `No results found for "${queryStr}" on Apple Music` })}}`);
-                    return;
-                }
-            } catch (e) {
-                await log(`Failed to search Apple Music: ${e}`);
-                await s.write(`],"error":${JSON.stringify({ message: `Failed to search Apple Music for "${queryStr}"` })}}`);
-                return;
-            }
-        }
-
-        // ── Determine Search Source ───────────────────────────────────────
-
-        let searchSource: string;
-        if (queryStr.startsWith('http://') || queryStr.startsWith('https://')) {
-            searchSource = 'url';
-        } else if (forcedMetadata && platform === 'soundcloud') {
-            searchSource = 'scsearch'; // try SC first, fallback handled at search time
-        } else if (forcedMetadata) {
-            searchSource = 'ytsearch'; // Spotify / Apple Music always via YouTube
-        } else {
-            searchSource = PLATFORM_SEARCH[platform] || 'ytsearch';
-        }
+        const queryStr = query as string;
+        const isUrl    = queryStr.startsWith('http://') || queryStr.startsWith('https://');
 
         // ── Client Setup ──────────────────────────────────────────────────
 
@@ -163,25 +120,23 @@ app.get('/play', async (c) => {
             await log(`Resolving voice channel: ${voiceId}`);
             channel = await resolveVoiceChannel(client, voiceId);
             await log('Voice channel resolved');
-        } else {
-            if (!channel && authorId && reqGuildId) {
-                await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
-                const guild = client.guilds.cache.get(reqGuildId as string);
-                if (guild) {
-                    const voiceState = guild.voiceStates.cache.get(authorId as string);
-                    if (voiceState?.channel) {
-                        channel = voiceState.channel;
-                    }
-                }
+        } else if (authorId && reqGuildId) {
+            await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
+            const guild = client.guilds.cache.get(reqGuildId as string);
+            if (guild) {
+                const voiceState = guild.voiceStates.cache.get(authorId as string);
+                if (voiceState?.channel) channel = voiceState.channel;
             }
             if (channel) {
                 await log(`Found target in voice channel: ${channel.name}`);
                 checkVoicePermissions(channel, client.user!);
-            } else {
-                await log('No voice channel found');
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cant find a voice channel' })}}`);
-                return;
             }
+        }
+
+        if (!channel) {
+            await log('No voice channel found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cant find a voice channel' })}}`);
+            return;
         }
 
         const guildId = channel.guild.id;
@@ -215,13 +170,12 @@ app.get('/play', async (c) => {
                 guildId,
                 voiceChannelId: channel.id,
                 selfDeaf: isDeaf,
-                selfMute: false,
-                volume: 50,
+                selfMute: false
             });
         } else {
-            guildPlayer.options.selfDeaf = isDeaf; // keep in sync even if already connected
+            guildPlayer.options.selfDeaf = isDeaf;
         }
-        
+
         let is247 = get247(token!, guildId);
         if (req247 !== undefined) {
             is247 = req247 === 'true';
@@ -229,7 +183,7 @@ app.get('/play', async (c) => {
         }
 
         if (!guildPlayer.connected) {
-            guildPlayer.options.selfDeaf = isDeaf; // apply selfDeaf before connecting
+            guildPlayer.options.selfDeaf = isDeaf;
             await log('Connecting to voice channel...');
             await guildPlayer.connect();
             await log('Connected');
@@ -237,69 +191,93 @@ app.get('/play', async (c) => {
 
         // ── Search ────────────────────────────────────────────────────────
 
-        await log(`Searching: "${queryStr}" (source: ${searchSource})`);
+        const doSearch = async (q: string, src: string) => {
+            try {
+                const res = await guildPlayer!.search(
+                    { query: q, source: (src === 'url' ? undefined : src) as any },
+                    requester
+                );
+                if (!res?.tracks?.length) throw new Error(`No results for "${q}"`);
+                return res;
+            } catch (err: any) {
+                if (err?.message === 'Failed to parse JSON') {
+                    throw new Error("sourceManager disabled or lavalink don't support");
+                }
+                throw err;
+            }
+        };
 
         let searchResult: any;
 
-        const doSearch = async (q: string, src: string) => {
-            const res = await guildPlayer!.search(
-                { query: q, source: (src === 'url' ? undefined : src) as any },
-                requester
-            );
-            if (!res?.tracks?.length) throw new Error(`No results for "${q}"`);
-            return res;
-        };
+        if (isUrl) {
+            // ── Direct URL ────────────────────────────────────────────────
+            await log(`Loading URL directly: "${queryStr}"`);
+            try {
+                searchResult = await doSearch(queryStr, 'url');
+            } catch (err: any) {
+                await log(`URL load failed: ${err?.message}`);
+                await s.write(`],"error":${JSON.stringify({ message: err?.message || 'Failed to load URL' })}}`);
+                return;
+            }
+        } else {
+            // ── Attempt 1: Custom search → direct URL ─────────────────────
+            await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
+            const customResult = await customSearch(platform, queryStr);
 
-        try {
-            searchResult = await doSearch(queryStr, searchSource);
-        } catch (firstErr: any) {
-            // SoundCloud: scsearch failed → retry with ytsearch
-            if (platform === 'soundcloud' && forcedMetadata && searchSource === 'scsearch') {
-                const ytQuery = `${forcedMetadata.title} ${forcedMetadata.author} audio`;
-                await log(`scsearch failed (${firstErr?.message}) — retrying with ytsearch: "${ytQuery}"`);
+            if (customResult) {
+                await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
                 try {
-                    searchResult = await doSearch(ytQuery, 'ytsearch');
-                } catch (secondErr: any) {
-                    await log(`ytsearch fallback also failed: ${secondErr?.message}`);
-                    await s.write(`],"error":${JSON.stringify({ message: secondErr?.message || 'Search failed' })}}`);
-                    return;
+                    searchResult = await doSearch(customResult.url, 'url');
+                    await log('[Attempt 1] Direct URL load succeeded');
+                } catch (e: any) {
+                    await log(`[Attempt 1] Direct URL load failed (${e?.message}) — falling back to Lavalink search`);
                 }
             } else {
-                await log(`Search failed: ${firstErr?.message || firstErr}`);
-                await s.write(`],"error":${JSON.stringify({ message: firstErr?.message || 'Search failed' })}}`);
-                return;
+                await log(`[Attempt 1] No URL returned — falling back to Lavalink search`);
+            }
+
+            // ── Attempt 2: Lavalink named search ──────────────────────────
+            // If custom search returned title+author (e.g. SCMusic found the track but the node
+            // has no SC source manager), try ytmsearch with that metadata first before falling
+            // back to the platform's own search prefix.
+            if (!searchResult) {
+                const hasMeta        = customResult?.title && customResult?.author;
+                const ytQuery        = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
+                const platformSearch = PLATFORM_SEARCH[platform] || 'ytmsearch';
+
+                const attempts: Array<{ label: string; q: string; src: string }> = [];
+                if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery,  src: 'ytmsearch' });
+                attempts.push(            { label: platformSearch,          q: queryStr, src: platformSearch });
+
+                for (const attempt of attempts) {
+                    await log(`[Attempt 2] Lavalink search: "${attempt.src}:${attempt.q}"`);
+                    try {
+                        searchResult = await doSearch(attempt.q, attempt.src);
+                        await log(`[Attempt 2] Lavalink search succeeded (${attempt.label})`);
+                        break;
+                    } catch (err: any) {
+                        await log(`[Attempt 2] "${attempt.label}" failed: ${err?.message}`);
+                        if (attempt === attempts[attempts.length - 1]) {
+                            await s.write(`],"error":${JSON.stringify({ message: err?.message || 'All search methods failed' })}}`);
+                            return;
+                        }
+                    }
+                }
             }
         }
 
-        const isPlaylist = searchResult.loadType === 'playlist';
-        const tracks = searchResult.tracks;
+        // ── Queue Tracks ──────────────────────────────────────────────────
 
-        // ── Override Metadata (Spotify / Apple Music) ─────────────────────
-        // (Only for single tracks, usually playlists don't use forcedMetadata here
-        // as the search result itself carries the rich info from the URL)
-        if (forcedMetadata && !isPlaylist) {
-            const track = tracks[0];
-            track.info.title     = forcedMetadata.title;
-            track.info.author    = forcedMetadata.author;
-            track.info.artworkUrl = forcedMetadata.thumbnail;
-            track.info.uri       = forcedMetadata.url;
-            if (forcedMetadata.durationMS) track.info.duration = forcedMetadata.durationMS;
-            await log(`Metadata overridden: "${forcedMetadata.title}" by ${forcedMetadata.author}`);
-        }
+        const isPlaylist = searchResult.loadType === 'playlist';
+        const tracks     = searchResult.tracks;
 
         if (isPlaylist) {
-            const playlistName = searchResult.playlist?.name || 'Unknown Playlist';
-            const playlistUrl = searchResult.playlist?.uri || searchResult.playlist?.url || '';
-            const playlistTracks = tracks.map((t: any) => ({
-                ...t.info
-            }));
+            const playlistName   = searchResult.playlist?.name || 'Unknown Playlist';
+            const playlistUrl    = searchResult.playlist?.uri || searchResult.playlist?.url || '';
+            const playlistTracks = tracks.map((t: any) => ({ ...t.info }));
 
             tracks.forEach((t: any) => {
-                t.playlist = {
-                    name: playlistName,
-                    url: playlistUrl,
-                    tracks: playlistTracks,
-                };
+                t.playlist = { name: playlistName, url: playlistUrl, tracks: playlistTracks };
             });
 
             await log(`Playlist resolved: "${playlistName}" (${tracks.length} tracks)`);
@@ -330,9 +308,9 @@ app.get('/play', async (c) => {
             }
         }
 
-        const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
+        const queueTracks        = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
         const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
-        const activeFilters = getActiveFilters(guildPlayer);
+        const activeFilters      = getActiveFilters(guildPlayer);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -343,17 +321,17 @@ app.get('/play', async (c) => {
                 platform,
                 is247,
                 isPlaying: guildPlayer.playing,
-                isPaused: guildPlayer.paused,
+                isPaused:  guildPlayer.paused,
                 filters: {
-                    array: activeFilters.length > 0 ? activeFilters : [],
-                    string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
+                    array:  activeFilters.length > 0 ? activeFilters : [],
+                    string: activeFilters.length > 0 ? activeFilters.join(', ') : '',
                 },
                 queue: {
                     size: guildPlayer.queue.tracks.length,
                     tracks: queueTracks,
                     elapsedTime: {
                         label: formatDuration(totalQueueDuration),
-                        value: String(totalQueueDuration)
+                        value: String(totalQueueDuration),
                     },
                     currentTrack: guildPlayer.queue.current ? formatTrack(guildPlayer.queue.current) : null,
                 },

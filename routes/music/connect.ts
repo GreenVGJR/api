@@ -80,8 +80,7 @@ app.get('/connect', async (c) => {
                 guildId,
                 voiceChannelId: vId,
                 selfDeaf: isDeaf,
-                selfMute: false,
-                volume: 50,
+                selfMute: false
             });
             await guildPlayer.connect();
         } else if (needsMove) {

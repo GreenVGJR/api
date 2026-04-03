@@ -177,6 +177,7 @@ app.get('/queue', async (c) => {
         }
 
         const allTracks = queue.queue.tracks;
+        const currentTrack: any = queue.queue.current;
         const allPreviousTracks = queue.queue.previous;
         const totalQueueDuration = allTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
         const activeFilters = getActiveFilters(queue);
@@ -203,6 +204,10 @@ app.get('/queue', async (c) => {
                 elapsedTime: {
                     label: formatDuration(totalQueueDuration),
                     value: String(totalQueueDuration)
+                },
+                progress: {
+                    current: { label: formatDuration(queue.position), value: queue.position },
+                    total: { label: formatDuration(currentTrack.info.duration), value: currentTrack.info.duration },
                 },
             },
         })}}`);

@@ -3,7 +3,6 @@ import geminiAmp from './geminiAmp.js';
 import translateAmp from './translateAmp.js';
 import meta from './meta.js';
 import grok from './grok.js';
-import perplexity from './perplexity.js';
 import discordInfoMember from './discordInfoMember.js';
 import discordInfoMessages from './discordInfoMessages.js';
 import timezone from './timezone.js';
@@ -16,5 +15,6 @@ import magicstudio from './magicstudio.js';
 import flux from './flux.js';
 import discordListMember from './discordListMember.js';
 import ffmpegInterpolate from './ffmpegInterpolate.js';
+import discordVoice from './discordVoice.js';
 
-export default [geminiAmp, translateAmp, meta, grok, perplexity, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate] as any[];
+export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice] as any[];

@@ -1,7 +1,3 @@
-window.addEventListener('load', () => {
-    document.documentElement.style.visibility = 'visible';
-});
-
 let endpoints = {
     search: [],
     profile: [],
@@ -420,7 +416,7 @@ function renderEndpoints() {
 
     endpointsList.innerHTML = categoryEndpoints.map((ep, index) => `
         <button 
-            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-gray-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
+            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
             data-index="${index}"
         >
             ${ep.path}
@@ -471,7 +467,7 @@ tabBtns.forEach(btn => {
             }
             renderEndpoints();
             renderParams();
-        }, wasOpen ? 125 : 0);
+        }, wasOpen ? 50 : 0);
     });
 });
 

@@ -25,8 +25,8 @@ app.get('/discord/listMember', async (c) => {
     const queryType = c.req.query('type') as any;
     const type = ['user', 'bot', 'all'].includes(queryType) ? queryType : 'all';
 
-    if (!token) return c.json(["Missing valid parameter: token"], 202);
-    if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
     c.header('X-Route', 'discord.com');
     return await dispatch(c, () => DiscordListMember(token!, guildId!, limit, type));

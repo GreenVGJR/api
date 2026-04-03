@@ -28,6 +28,7 @@ const API_ROUTES = {
         "/search/youtube/video?q=",
         "/search/youtube/music?q=",
         "/search/youtube/channel?q=",
+        "/search/youtube/playlist?q=",
         "/search/soundcloud?q=",
         "/search/spotify?q=",
         "/search/applemusic?q=",
@@ -86,14 +87,18 @@ const API_ROUTES = {
         chat: [
             "/tools/chat/gemini?prompt=&conversation=",
             "/tools/chat/meta?prompt=",
-            "/tools/chat/grok?prompt=",
-            "/tools/chat/sonar?prompt="
+            "/tools/chat/grok?prompt="
         ],
         image_generation: [
             "/tools/ai-image/flux_schnell?prompt=",
             "/tools/ai-image/magicstudio?prompt=",
             ],
         },
+        misc: [
+            "/tools/translate?q=&from=&to=",
+            "/tools/timezone?q=",
+            "/tools/ffmpeg/interpolate?videoUrl=&multi="
+        ],
         discord: {
             stream: [
                 "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed="
@@ -118,13 +123,19 @@ const API_ROUTES = {
             ],
             message: [
                 "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
+            ],
+            voice: [
+                "/tools/discord/voice/deafen?token=&guildId=&userId=",
+                "/tools/discord/voice/undeafen?token=&guildId=&userId=",
+                "/tools/discord/voice/mute?token=&guildId=&userId=",
+                "/tools/discord/voice/unmute?token=&guildId=&userId=",
+                "/tools/discord/voice/kick?token=&guildId=&userId=",
+                "/tools/discord/voice/muteall?token=&guildId=&channelId=",
+                "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
+                "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=",
+                "/tools/discord/voice/list?token=&guildId=&channelId="
             ]
-        },
-        misc: [
-            "/tools/translate?q=&from=&to=",
-            "/tools/timezone?q=",
-            "/tools/ffmpeg/interpolate?videoUrl=&multi="
-        ]
+        },        
     },
     info: [
         "/info/youtube/video?url=",

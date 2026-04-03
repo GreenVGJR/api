@@ -24,8 +24,8 @@ app.get('/discord/infoMessages', async (c) => {
     const queryLimit = c.req.query('limit');
     const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : undefined;
 
-    if (!token) return c.json(["Missing valid parameter: token"], 202);
-    if (!channelId) return c.json(["Missing valid parameter: channelId"], 202);
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
     c.header('X-Route', 'discord.com');
     return await dispatch(c, () => DiscordInfoMessages(token!, channelId!, sort, limit));

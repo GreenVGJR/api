@@ -6741,11 +6741,14 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         };
     };
 
-        if (['deafen', 'undeafen', 'mute', 'unmute', 'kick'].includes(action)) {
+        if (['deafen', 'undeafen', 'mute', 'unmute', 'kick', 'move'].includes(action)) {
             const { userId } = payload;
             if (!userId) return { error: 'Missing valid parameter: userId' };
 
             const memberObj = await guild.members.fetch(userId);
+            if (!memberObj.voice.channelId) {
+                return { error: { message: "Target user is not connected to voice.", code: 40032 } };
+            }
             const oldData = formatMemberData(memberObj);
 
             let result: any;
@@ -6754,6 +6757,11 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
             else if (action === 'mute') result = await modifyMember(userId, { mute: true });
             else if (action === 'unmute') result = await modifyMember(userId, { mute: false });
             else if (action === 'kick') result = await modifyMember(userId, { channel_id: null });
+            else if (action === 'move') {
+                const { toChannelId } = payload;
+                if (!toChannelId) return { error: 'Missing valid parameter: toChannelId' };
+                result = await modifyMember(userId, { channel_id: toChannelId });
+            }
 
             // Construct the updated state in the same structure
             const newData = formatMemberData(memberObj);
@@ -6763,6 +6771,9 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
             }
             if (action === 'kick') {
                 newData.voiceState.channelId = null;
+            }
+            if (action === 'move') {
+                newData.voiceState.channelId = payload.toChannelId;
             }
 
             return {
@@ -6791,28 +6802,32 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         }
 
         if (action === 'muteall') {
-            const members = [...channel.members.values()];
+            const { authorId } = payload;
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: true })));
             return buildAllResult('muteall', channelId, oldData, results);
         }
 
         if (action === 'unmuteall') {
-            const members = [...channel.members.values()];
+            const { authorId } = payload;
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: false })));
             return buildAllResult('unmuteall', channelId, oldData, results);
         }
 
         if (action === 'deafall') {
-            const members = [...channel.members.values()];
+            const { authorId } = payload;
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: true })));
             return buildAllResult('deafall', channelId, oldData, results);
         }
 
         if (action === 'undeafall') {
-            const members = [...channel.members.values()];
+            const { authorId } = payload;
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: false })));
             return buildAllResult('undeafall', channelId, oldData, results);
@@ -6827,9 +6842,9 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         }
 
         if (action === 'moveall') {
-            const { toChannelId } = payload;
+            const { toChannelId, authorId } = payload;
             if (!toChannelId) return { error: 'Missing valid parameter: toChannelId' };
-            const members = [...channel.members.values()];
+            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: toChannelId })));
             return buildAllResult('moveall', channelId, oldData, results, { toChannelId });

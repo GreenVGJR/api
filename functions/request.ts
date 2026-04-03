@@ -6733,6 +6733,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
             data: {
                 action,
                 channelId,
+                usersCount: results.length,
                 success: results.filter(r => r.status === 'fulfilled').length,
                 failed: results.filter(r => r.status === 'rejected').length,
                 data: [oldData, newData],

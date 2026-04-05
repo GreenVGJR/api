@@ -1789,11 +1789,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
 
         const pull2 = await res2.text;
 
-        let testpar: any = null;
-        try {
-            testpar = JSON.parse(pull2.split('ytInitialData =')[1].split(';')[0]);
-        }
-        catch { }
+        let testpar: any = parseYtInitial(pull2);
 
         // aka status not ok in innertube
         if(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {

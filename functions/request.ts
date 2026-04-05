@@ -4408,12 +4408,16 @@ export const instagramUser = async function instagramUser(que: string) {
         let b: any = null;
 
         const [res, res2]: any = await Promise.all([
-            Promise.resolve().then(async () => {
-                const text = await req.text;
-                if (!text || text.trim() === "") return null;
-                try { return await req.json(); } catch { return null; }
-            }),
-            req2.json().catch(() => null)
+            (async () => {
+                try {
+                    const text = await req.text;
+                    if (!text || text.trim() === "") return null;
+                    return await req.json();
+                } catch { return null; }
+            })(),
+            (async () => {
+                try { return await req2.json(); } catch { return null; }
+            })()
         ]);
 
         a = res?.data?.user;
@@ -4471,7 +4475,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
         ]);
 
         const [res, resText2]: [any, string] = await Promise.all([
-            per.statusCode === 200 ? (async () => { try { return per.json(); } catch { return null; } })() : Promise.resolve(null),
+            per.statusCode === 200 ? (async () => { try { return await per.json(); } catch { return null; } })() : Promise.resolve(null),
             per2.statusCode === 200 ? Promise.resolve(per2.text) : Promise.resolve("")
         ]);
 

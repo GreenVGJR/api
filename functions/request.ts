@@ -587,11 +587,11 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
             },
             useH2: true
         });
-        
+
         let res: any = await response.text;
 
         res = parseYtInitial(res);
-        if(!res) {
+        if (!res) {
             return { data: null }
         }
 
@@ -605,17 +605,17 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
             const checkmix = a?.navigationEndpoint?.watchEndpoint?.playlistId;
             let mixData: any = null;
 
-            if(checkmix && deepSearch) {
+            if (checkmix && deepSearch) {
                 try {
                     const rlkreq = await request(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
                         headers: { ...commonHeaders },
                         useH2: true
                     });
-                    
+
                     let rlkresText = await rlkreq.text;
                     let rlkres: any = parseYtInitial(rlkresText);
-                    
-                    if(rlkres) {
+
+                    if (rlkres) {
                         const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
                         if (kkmvytmx) {
                             const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
@@ -624,7 +624,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                                 getmgcf = new URL(kkmvytmx.playlistShareUrl);
                                 getmgcf = getmgcf.searchParams.get("list");
                             }
-                            catch {}
+                            catch { }
                             mixData = {
                                 playlistId: getmgcf,
                                 title: kkmvytmx.title,
@@ -641,22 +641,27 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                                         url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
                                     }
                                 })) || [],
-                                altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => ({
-                                    videoId: c.lockupViewModel?.contentId,
-                                    url: "https://www.youtube.com/watch?v=" + c.lockupViewModel?.contentId,
-                                    altUrl: "https://www.youtube.com" + c.lockupViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
-                                    title: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content,
-                                    thumbnail: "https://s.ytimg.com/vi/" + c.lockupViewModel?.contentId + "/hq720.jpg",
-                                    owner: {
-                                        name: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
-                                        url: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
-                                        avatar: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
-                                    }
-                                })) || []
+                                altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => {
+                                    const lvm = c.lockupViewModel;
+                                    const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+                                    const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
+                                    return {
+                                        videoId: rId,
+                                        url: "https://www.youtube.com/watch?v=" + rId,
+                                        altUrl: "https://www.youtube.com" + nUrl,
+                                        title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
+                                        thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+                                        owner: {
+                                            name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+                                            url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+                                            avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                                        }
+                                    };
+                                }) || []
                             };
                         }
                     }
-                } catch(e) { console.error("Mix fetch error:", e); }
+                } catch (e) { console.error("Mix fetch error:", e); }
             }
 
             try {
@@ -674,9 +679,9 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                     owners: {
                         name: a.ownerText?.runs?.[0]?.text,
                         url: (chnl2 ? ["https://www.youtube.com" + chnl2] : chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
-                            const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || 
-                                      d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
-                                      d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                            const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
                             return u ? "https://www.youtube.com" + u : null;
                         }).filter(Boolean)) || [],
                         avatar: (a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0"))
@@ -802,7 +807,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                                 try {
                                     getmgcf = new URL(kkmvytmx.playlistShareUrl);
                                     getmgcf = getmgcf.searchParams.get("list");
-                                } catch {}
+                                } catch { }
                                 mixData = {
                                     playlistId: getmgcf,
                                     title: kkmvytmx.title,
@@ -819,18 +824,23 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                                             url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
                                         }
                                     })) || [],
-                                    altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => ({
-                                        videoId: c.lockupViewModel?.contentId,
-                                        url: "https://www.youtube.com/watch?v=" + c.lockupViewModel?.contentId,
-                                        altUrl: "https://www.youtube.com" + c.lockupViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
-                                        title: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content,
-                                        thumbnail: "https://s.ytimg.com/vi/" + c.lockupViewModel?.contentId + "/hq720.jpg",
-                                        owner: {
-                                            name: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
-                                            url: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
-                                            avatar: c.lockupViewModel?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
-                                        }
-                                    })) || []
+                                    altData: kkmvytfd?.filter((c: any) => c.lockupViewModel)?.map((c: any) => {
+                                        const lvm = c.lockupViewModel;
+                                        const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+                                        const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
+                                        return {
+                                            videoId: rId,
+                                            url: "https://www.youtube.com/watch?v=" + rId,
+                                            altUrl: "https://www.youtube.com" + nUrl,
+                                            title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
+                                            thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+                                            owner: {
+                                                name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+                                                url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+                                                avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+                                            }
+                                        };
+                                    }) || []
                                 };
                             }
                         }
@@ -1070,8 +1080,8 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
         else {
             const pes2: any = await per2.json();
             const finalpes: any = pes2?.data?.searchV2;
-            return { 
-                data: { 
+            return {
+                data: {
                     albums: finalpes.albumsV2.items?.map((a: any) => a.data) || null,
                     artists: finalpes.artists.items?.map((a: any) => a.data) || null,
                     audiobooks: finalpes.audiobooks.items?.map((a: any) => a.data) || null,
@@ -1792,7 +1802,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
         let testpar: any = parseYtInitial(pull2);
 
         // aka status not ok in innertube
-        if(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {
+        if (testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {
             return {
                 error: testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer?.title?.runs?.[0]?.text || null
             }
@@ -1929,21 +1939,21 @@ export const infoYoutube = async function infoYoutube(que: string) {
                 releaseDate: (first?.dateText?.simpleText?.split('streaming on ')?.[1] || first?.dateText?.simpleText?.split('live on ')?.[1] || first?.dateText?.simpleText) || null,
                 viewCount: String(parseAbbreviatedNumber(first?.viewCount?.videoViewCountRenderer?.viewCount?.simpleText?.split(' ')?.[0]) || 0),
                 owners: {
-                        name: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.text || second?.owner?.videoOwnerRenderer?.attributedTitle?.content) || null,
-                        url: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url 
-                                ? ["https://www.youtube.com" + second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url] 
-                                : second?.owner?.videoOwnerRenderer?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
-                                        const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || 
-                                                d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
-                                                d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-                                        return u ? "https://www.youtube.com" + u : null;
-                                }).filter(Boolean)) || [],
-                        avatar: Array.from(new Set((second?.owner?.videoOwnerRenderer?.avatarStack?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || 
-                                (second?.owner?.videoOwnerRenderer?.thumbnail?.thumbnails || second?.owner?.videoOwnerRenderer?.avatar?.thumbnails)?.map((k: any) => k?.url))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")) || []))
+                    name: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.text || second?.owner?.videoOwnerRenderer?.attributedTitle?.content) || null,
+                    url: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+                        ? ["https://www.youtube.com" + second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url]
+                        : second?.owner?.videoOwnerRenderer?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
+                            const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                            return u ? "https://www.youtube.com" + u : null;
+                        }).filter(Boolean)) || [],
+                    avatar: Array.from(new Set((second?.owner?.videoOwnerRenderer?.avatarStack?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) ||
+                        (second?.owner?.videoOwnerRenderer?.thumbnail?.thumbnails || second?.owner?.videoOwnerRenderer?.avatar?.thumbnails)?.map((k: any) => k?.url))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")) || []))
                 },
                 tags: (first?.superTitleLink?.runs?.map((a: any) => {
                     const u = a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
-                    if(u) {
+                    if (u) {
                         return {
                             text: a.text || "",
                             url: "https://www.youtube.com" + u
@@ -1968,21 +1978,23 @@ export const infoYoutube = async function infoYoutube(que: string) {
                             }).filter(Boolean) || null;
 
                     const ownerAvatars: string[] | string | null = img?.decoratedAvatarViewModel
-                    ? (img.decoratedAvatarViewModel.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0") ?? null)
-                        ? [img.decoratedAvatarViewModel.avatar.avatarViewModel.image.sources[0].url.replace(/=s\d+.*/, "=s0")]
-                        : null
-                    : stackItems
-                        ?.map((d: any) => {
-                            const u = d.listItemViewModel?.leadingAccessory?.avatarViewModel?.image?.sources?.[0]?.url;
-                            return u ? u.replace(/=s\d+.*/, "=s0") : null;
-                        }).filter(Boolean) || null;
+                        ? (img.decoratedAvatarViewModel.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0") ?? null)
+                            ? [img.decoratedAvatarViewModel.avatar.avatarViewModel.image.sources[0].url.replace(/=s\d+.*/, "=s0")]
+                            : null
+                        : stackItems
+                            ?.map((d: any) => {
+                                const u = d.listItemViewModel?.leadingAccessory?.avatarViewModel?.image?.sources?.[0]?.url;
+                                return u ? u.replace(/=s\d+.*/, "=s0") : null;
+                            }).filter(Boolean) || null;
 
+                    const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+                    const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
                     return {
-                        videoId: lvm?.contentId,
-                        url: "https://www.youtube.com/watch?v=" + lvm?.contentId,
-                        altUrl: "https://www.youtube.com" + lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+                        videoId: rId,
+                        url: "https://www.youtube.com/watch?v=" + rId,
+                        altUrl: "https://www.youtube.com" + nUrl,
                         title: meta?.title?.content,
-                        thumbnail: "https://s.ytimg.com/vi/" + lvm?.contentId + "/hq720.jpg",
+                        thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
                         owner: {
                             name: meta?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
                             url: ownerUrls,
@@ -3319,8 +3331,8 @@ export const InstagramUser = async function InstagramUser(que: string) {
         });
 
         const res: any = await per.json();
-        
-        if(res?.errors) {
+
+        if (res?.errors) {
             return {
                 error: "Service unavailable. Sign in required"
             }
@@ -4553,21 +4565,21 @@ export const Tenor = async function Tenor(que: string, type?: string) {
     try {
         const [apiRes, apiRes2] = await Promise.all([
             request(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
-            headers: {
-                ...commonHeaders,
-                'Referer': 'https://tenor.com',
-                'Origin': 'https://tenor.com',
-                'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
-            }
-        }),
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://tenor.com',
+                    'Origin': 'https://tenor.com',
+                    'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
+                }
+            }),
             request(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
-            headers: {
-                ...commonHeaders,
-                'Referer': 'https://tenor.com',
-                'Origin': 'https://tenor.com',
-                'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
-            }
-        })
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://tenor.com',
+                    'Origin': 'https://tenor.com',
+                    'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
+                }
+            })
         ]);
 
         if (apiRes.statusCode === 200) {
@@ -6775,46 +6787,46 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         const { client } = await getOrCreatePlayer(token);
         const guild = await client.guilds.fetch(guildId);
 
-    const formatMemberData = (m: any) => {
-        // Deep clone to ensure old and new data are independent
-        // We use JSON.parse/stringify to get a clean slice of the current state
-        return JSON.parse(JSON.stringify({ member: m, voiceState: m.voice }));
-    };
-
-    const buildAllResult = (action: string, channelId: string, oldData: any[], results: PromiseSettledResult<any>[], totalVoiceMembers: number, excludeAuthors: string[], extra?: Record<string, any>) => {
-        const newData = oldData.map((old, i) => {
-            const result = results[i];
-            const formatted = JSON.parse(JSON.stringify(old));
-            if (result.status === 'fulfilled') {
-                const apiData = result.value.data;
-                if (apiData) {
-                    if (apiData.deaf !== undefined) formatted.voiceState.serverDeaf = apiData.deaf;
-                    if (apiData.mute !== undefined) formatted.voiceState.serverMute = apiData.mute;
-                }
-                if (action === 'kickall' || action === 'kick') {
-                    formatted.voiceState.channelId = null;
-                }
-                if (action === 'moveall' && extra?.toChannelId) {
-                    formatted.voiceState.channelId = extra.toChannelId;
-                }
-            }
-            return formatted;
-        });
-
-        return {
-            data: {
-                action,
-                channelId,
-                excludeAuthors: excludeAuthors,
-                usersCount: totalVoiceMembers,
-                affectedCount: results.length,
-                success: results.filter(r => r.status === 'fulfilled').length,
-                failed: results.filter(r => r.status === 'rejected').length,
-                data: [oldData, newData],
-                ...extra
-            }
+        const formatMemberData = (m: any) => {
+            // Deep clone to ensure old and new data are independent
+            // We use JSON.parse/stringify to get a clean slice of the current state
+            return JSON.parse(JSON.stringify({ member: m, voiceState: m.voice }));
         };
-    };
+
+        const buildAllResult = (action: string, channelId: string, oldData: any[], results: PromiseSettledResult<any>[], totalVoiceMembers: number, excludeAuthors: string[], extra?: Record<string, any>) => {
+            const newData = oldData.map((old, i) => {
+                const result = results[i];
+                const formatted = JSON.parse(JSON.stringify(old));
+                if (result.status === 'fulfilled') {
+                    const apiData = result.value.data;
+                    if (apiData) {
+                        if (apiData.deaf !== undefined) formatted.voiceState.serverDeaf = apiData.deaf;
+                        if (apiData.mute !== undefined) formatted.voiceState.serverMute = apiData.mute;
+                    }
+                    if (action === 'kickall' || action === 'kick') {
+                        formatted.voiceState.channelId = null;
+                    }
+                    if (action === 'moveall' && extra?.toChannelId) {
+                        formatted.voiceState.channelId = extra.toChannelId;
+                    }
+                }
+                return formatted;
+            });
+
+            return {
+                data: {
+                    action,
+                    channelId,
+                    excludeAuthors: excludeAuthors,
+                    usersCount: totalVoiceMembers,
+                    affectedCount: results.length,
+                    success: results.filter(r => r.status === 'fulfilled').length,
+                    failed: results.filter(r => r.status === 'rejected').length,
+                    data: [oldData, newData],
+                    ...extra
+                }
+            };
+        };
 
         if (['deafen', 'undeafen', 'mute', 'unmute', 'kick', 'move'].includes(action)) {
             const { userId } = payload;
@@ -6874,7 +6886,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
                 const { guild: _vg, member: _vm, ...voiceState } = m.voice;
                 return { member, voiceState };
             });
-            return { 
+            return {
                 data: {
                     usersCount: membersCount,
                     data: membersList,

@@ -1920,8 +1920,8 @@ export const infoYoutube = async function infoYoutube(que: string) {
             }
         }
 
-        const first: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer;
-        const second: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[1]?.videoSecondaryInfoRenderer;
+        const first: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.find((a: any) => !!a?.videoPrimaryInfoRenderer)?.videoPrimaryInfoRenderer;
+        const second: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.find((a: any) => !!a?.videoSecondaryInfoRenderer)?.videoSecondaryInfoRenderer;
 
         return {
             "data": {

@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { dispatch } from '../../functions/httpRequest.js';
 import { request, commonHeaders } from '../../functions/request.js';
-import { Session } from 'httpcloak';
 import { decodeHTML } from 'entities';
 
 const app = new Hono();
@@ -23,7 +22,7 @@ app.get('/shazam', async (c) => {
                 `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
                 { method: 'GET', headers: commonHeaders }
             );
-            const itunesData: any = await itunesRes.body.json();
+            const itunesData: any = await itunesRes.json();
             const tracks = itunesData?.results;
 
             if (!tracks || tracks.length === 0) {
@@ -58,17 +57,14 @@ app.get('/shazam', async (c) => {
             let syncLyrics: string | null = null;
 
             if (shazamUrl) {
-                let session: any;
                 try {
-                    session = new Session({ httpVersion: 'h2' });
-                    const shazamRes = await session.get(shazamUrl, {
+                    const shazamRes = await request(shazamUrl, {
                         headers: {
                             ...commonHeaders
                         }
                     });
-                    session.close();
 
-                    const html = shazamRes.text;
+                    const html = await shazamRes.text;
 
 
                     try {
@@ -222,7 +218,6 @@ app.get('/shazam', async (c) => {
                     }
 
                 } catch (e) {
-                    if (session) session.close();
                     console.error('Shazam fetch error:', e);
                 }
             }

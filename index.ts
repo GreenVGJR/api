@@ -221,57 +221,6 @@ const PLAYGROUND_ENDPOINTS = {
 };
 
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
-import tls from 'tls';
-
-
-const defaultCiphers = tls.DEFAULT_CIPHERS.split(':');
-const shuffledCiphers = [
-    defaultCiphers[1],
-    defaultCiphers[2],
-    defaultCiphers[0],
-    ...defaultCiphers.slice(3)
-].join(':');
-
-
-const firefoxCiphers = [
-    'TLS_AES_128_GCM_SHA256',
-    'TLS_CHACHA20_POLY1305_SHA256',
-    'TLS_AES_256_GCM_SHA384',
-    'ECDHE-ECDSA-AES128-GCM-SHA256',
-    'ECDHE-RSA-AES128-GCM-SHA256',
-    'ECDHE-ECDSA-CHACHA20-POLY1305',
-    'ECDHE-RSA-CHACHA20-POLY1305',
-    'ECDHE-ECDSA-AES256-GCM-SHA384',
-    'ECDHE-RSA-AES256-GCM-SHA384',
-    'ECDHE-ECDSA-AES256-SHA',
-    'ECDHE-ECDSA-AES128-SHA',
-    'ECDHE-RSA-AES128-SHA',
-    'ECDHE-RSA-AES256-SHA',
-    'AES128-GCM-SHA256',
-    'AES256-GCM-SHA384',
-    'AES128-SHA',
-    'AES256-SHA'
-].join(':');
-
-
-const connector = buildConnector({
-    rejectUnauthorized: false,
-    minVersion: 'TLSv1.2',
-    ciphers: firefoxCiphers,        
-    ALPNProtocols: ['h2', 'http/1.1'],  
-    maxCachedSessions: 10,          
-    noDelay: true,
-    keepAlive: true
-});
-
-setGlobalDispatcher(new Agent({
-    allowH2: true,
-    connect: connector,            
-    headersTimeout: 60000,
-    bodyTimeout: 60000,
-    connectTimeout: 60000,
-    keepAliveTimeout: 60000
-}));
 
 const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 

@@ -42,6 +42,10 @@ app.get('/disconnect', async (c) => {
                 return;
             }
 
+            if (guildPlayer.queue.previous.length > 0) {
+                await log('Clearing queue history...');
+                guildPlayer.queue.previous.splice(0, guildPlayer.queue.previous.length);
+            }
             await guildPlayer.destroy();
             await log('Lavalink player destroyed');
 

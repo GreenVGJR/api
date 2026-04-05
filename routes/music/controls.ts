@@ -232,6 +232,10 @@ app.get('/stop', async (c) => {
             const voiceChannelId = queue.voiceChannelId;
             await log(`24/7 mode — stopping and reconnecting to VC: ${voiceChannelId}`);
             clear247(token!, guildId!);
+            if (queue.queue.previous.length > 0) {
+                await log('Clearing queue history...');
+                queue.queue.previous.splice(0, queue.queue.previous.length);
+            }
             await queue.destroy();
             await log('Player destroyed');
 
@@ -256,6 +260,10 @@ app.get('/stop', async (c) => {
             return;
         }
 
+        await log('Clearing queue history...');
+        if (queue.queue.previous.length > 0) {
+            queue.queue.previous.splice(0, queue.queue.previous.length);
+        }
         await log('Destroying Lavalink player...');
         await queue.destroy();
         await log('Player destroyed');

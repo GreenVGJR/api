@@ -66,7 +66,7 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                     `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
                     { method: 'GET', headers: commonHeaders }
                 );
-                const parsed: any = await amRes.body.json();
+                const parsed: any = await amRes.json();
                 const track = parsed?.results?.[0];
                 if (!track) return null;
                 return {

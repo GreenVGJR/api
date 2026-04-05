@@ -44,12 +44,12 @@ app.get('/applemusic', async (c) => {
             ]);
 
             const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([
-                res.body.json(),
-                res2.body.text(),
-                res3.body.json(),
-                res4.body.json(),
-                res5.body.json(),
-                res6.body.json(),
+                res.json(),
+                res2.text,
+                res3.json(),
+                res4.json(),
+                res5.json(),
+                res6.json(),
             ]);
 
             let parselks2: any = [];

@@ -1,19 +1,51 @@
-import { request as undiciRequest, Agent, interceptors, RequestRedirect } from 'undici';
 import { Session } from 'httpcloak';
-import type { Context } from 'hono';
+import { type Context } from 'hono';
 
-const DEFAULT_TIMEOUT_MS = 60000; // 1 minute
+let session = new Session({ preset: 'firefox-149-linux', preferIpv4: true });
+let sessionH2 = new Session({ preset: 'firefox-149-linux', preferIpv4: true, httpVersion: 'h2' });
+let lastSessionResetTime = Date.now();
+const SESSION_ROTATION_MS = 6 * 60 * 60 * 1000;
 
-export const request: typeof undiciRequest = (url, options = {}) => {
+const resetSessions = () => {
+    try { session.close(); } catch { }
+    try { sessionH2.close(); } catch { }
+    session = new Session({ preset: 'firefox-149-linux', preferIpv4: true });
+    sessionH2 = new Session({ preset: 'firefox-149-linux', preferIpv4: true, httpVersion: 'h2' });
+    lastSessionResetTime = Date.now();
+};
+
+const DEFAULT_TIMEOUT_MS = 60000;
+
+export const request = async (url: string, options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string | Buffer;
+    signal?: AbortSignal;
+    useH2?: boolean;
+} = {}) => {
+    if (Date.now() - lastSessionResetTime > SESSION_ROTATION_MS) {
+        resetSessions();
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
 
-    return undiciRequest(url, {
-        ...options,
-        signal: controller.signal,
-    }).finally(() => {
+    const parentSignal = options.signal;
+    const signal = parentSignal
+        ? AbortSignal.any([controller.signal, parentSignal])
+        : controller.signal;
+
+    try {
+        const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
+        const activeSession = options.useH2 ? sessionH2 : session;
+        const res = await activeSession[method](url, {
+            headers: options.headers,
+            body: options.body,
+            timeout: DEFAULT_TIMEOUT_MS / 1000
+        });
+        return res;
+    } finally {
         clearTimeout(timeoutId);
-    });
+    }
 };
 
 import { ClientTransaction } from "x-client-transaction-id";
@@ -25,7 +57,7 @@ import { resolve6 } from 'dns';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/148.0';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/149.0';
 
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -41,9 +73,10 @@ let keyYoutubeVisitor: string | null = null;
 export async function youtubeVisitorKey(): Promise<string | null> {
     try {
         const res = await request('https://www.youtube.com/', {
-            headers: commonHeaders
+            headers: commonHeaders,
+            useH2: true
         });
-        const text = await res.body.text();
+        const text = await res.text;
         return text.split('"visitorData":"')[1]?.split('"')[0] || null;
     } catch (e) {
         console.error("Error fetching visitorData:", e);
@@ -78,8 +111,8 @@ const parseAbbreviatedNumber = (str: string | null | undefined): number | null =
         return isNaN(n) ? null : Math.floor(n);
     }
 
-    let num = parseFloat(match[1]);
-    const unit = match[2].toUpperCase();
+    let num = parseFloat(match[1]!);
+    const unit = match[2]!.toUpperCase();
 
     switch (unit) {
         case 'K': num *= 1000; break;
@@ -401,7 +434,7 @@ export const soundcloudKey = async function soundcloudKey() {
                 ...commonHeaders,
             }
         });
-        const text = await res.body.text();
+        const text = await res.text;
         return text.split('"clientId":"')[1].split('"')[0];
     } catch {
         return undefined;
@@ -415,7 +448,7 @@ export const spotifyKey = async function spotifyKey() {
                 ...commonHeaders,
             }
         });
-        const text = await res.body.text();
+        const text = await res.text;
         return text.split('"accessToken":"')[1].split('"')[0];
     } catch {
         return undefined;
@@ -437,7 +470,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
             }
         });
 
-        const res: any = await req.body.json();
+        const res: any = await req.json();
         return res.granted_token.token;
     }
     catch {
@@ -453,13 +486,13 @@ export const tidalKeys = async function tidalKeys() {
                 ...commonHeaders,
             }
         });
-        const rest_get = await rest.body.text();
+        const rest_get = await rest.text;
         const rest2 = await request("https://embed.tidal.com" + rest_get.split('type="module"')[0].split('script src="')[1].split('"')[0], {
             headers: {
                 ...commonHeaders,
             }
         });
-        const rest2_get = await rest2.body.text();
+        const rest2_get = await rest2.text;
         return rest2_get.split('"X-Tidal-Token","')[1].split('"')[0];
     } catch { return undefined; }
 }
@@ -471,7 +504,7 @@ export const deezerKeys = async function deezerKeys() {
                 ...commonHeaders,
             }
         });
-        let rest_get: any = await rest.body.text();
+        let rest_get: any = await rest.text;
         rest_get = JSON.parse(rest_get);
         return rest_get.jwt;
     } catch { return undefined; }
@@ -480,7 +513,7 @@ export const deezerKeys = async function deezerKeys() {
 export const twitterKey = async function twitterKey(typeName: string) {
     try {
         const response = await request("https://x.com/", { headers: { ...commonHeaders } });
-        const html = await response.body.text();
+        const html = await response.text;
         const { document } = parseHTML(html);
         twitterDocument = document;
 
@@ -489,7 +522,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
         const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
-        const res1 = await pul1.body.text();
+        const res1 = await pul1.text;
         twitterAuth = 'AAAAAAAAA' + res1.split('"AAAAAAAAA')[1].split('"')[0];
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
@@ -518,10 +551,10 @@ export const twitterKey = async function twitterKey(typeName: string) {
 export const imgurKey = async function imgurKey() {
     try {
         const req = await request('https://imgur.com', { headers: { ...commonHeaders } });
-        const res = await req.body.text();
+        const res = await req.text;
 
         const req2 = await request('https://s.imgur.com/desktop-assets/js/main' + res.split("desktop-assets/js/main")[1].split('>')[0], { headers: { ...commonHeaders } });
-        const res2 = await req2.body.text();
+        const res2 = await req2.text;
         return res2.split('apiClientId:"')[1].split('"')[0];
     }
     catch (e) {
@@ -548,13 +581,14 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
         */
 
         // might use httpcloak if youtube didnt throw captcha often
-        const response = await request(`https://www.youtube.com/results?search_query=${que}`, {
+        const response = await request(`https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             },
+            useH2: true
         });
-
-        let res: any = await response.body.text();
+        
+        let res: any = await response.text;
 
         res = parseYtInitial(res);
         if(!res) {
@@ -575,9 +609,10 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                 try {
                     const rlkreq = await request(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
                         headers: { ...commonHeaders },
+                        useH2: true
                     });
                     
-                    let rlkresText = await rlkreq.body.text();
+                    let rlkresText = await rlkreq.text;
                     let rlkres: any = parseYtInitial(rlkresText);
                     
                     if(rlkres) {
@@ -638,8 +673,13 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                     description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join('') || "",
                     owners: {
                         name: a.ownerText?.runs?.[0]?.text,
-                        url: chnl2 ? ["https://www.youtube.com" + chnl2] : chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => "https://www.youtube.com" + d.listItemViewModel.rendererContext.commandContext.onTap.innertubeCommand.commandMetadata.webCommandMetadata.url),
-                        avatar: a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k?.replace(/=s\d+.*/, "=s0"))
+                        url: (chnl2 ? ["https://www.youtube.com" + chnl2] : chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
+                            const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || 
+                                      d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                      d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                            return u ? "https://www.youtube.com" + u : null;
+                        }).filter(Boolean)) || [],
+                        avatar: (a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0"))
                     },
                     timeChapters: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map((k: any) => ({
                         text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
@@ -694,7 +734,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
             method: "POST"
         });
 
-        const res: any = await response.body.json();
+        const res: any = await response.json();
 
         if (!res?.contents?.tabbedSearchResultsRenderer) {
             return {
@@ -748,9 +788,10 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                     try {
                         const rlkreq = await request(`https://www.youtube.com/watch?v=&list=${muspl}`, {
                             headers: { ...commonHeaders },
+                            useH2: true
                         });
 
-                        let rlkresText = await rlkreq.body.text();
+                        let rlkresText = await rlkreq.text;
                         let rlkres: any = parseYtInitial(rlkresText);
 
                         if (rlkres) {
@@ -863,7 +904,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
             method: "POST"
         });
 
-        const res: any = await response.body.json();
+        const res: any = await response.json();
         const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents
             ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
@@ -956,35 +997,32 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
         keysc = await soundcloudKey();
     }
 
-    let session: any;
     try {
-        session = new Session({ httpVersion: 'h1' });
-
         const [per, per2] = await Promise.all([
-            session.get(`https://api-v2.soundcloud.com/search/tracks?q=${que}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`, {
+            request(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`, {
                 headers: {
                     ...commonHeaders,
                 }
             }),
-            session.get(`https://mobi.soundcloud.com/search/tracks?q=${que}`, {
+            request(`https://mobi.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders,
                 }
             })
         ]);
-        session.close();
 
         if (per.statusCode === 401) {
             return await SCMusic(que, true);
         }
-        const pes = per.statusCode === 200 ? per.json() : null;
+        const pes = per.statusCode === 200 ? await per.json() : null;
         let testpes: any = null;
         try {
-            testpes = JSON.parse(per2.text.split('type="application/json">')[1].split('</script>')[0]);
+            const per2Text = await per2.text;
+            testpes = JSON.parse(per2Text.split('type="application/json">')[1].split('</script>')[0]);
         }
         catch { }
         return { data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null] };
-    } catch (e) { if (session) session.close(); console.error(e); return null; }
+    } catch (e) { console.error(e); return null; }
 }
 
 export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
@@ -1007,9 +1045,9 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
             headers: {
                 'Content-Type': 'application/json',
                 'Origin': 'https://open.spotify.com',
-                'Authorization': 'Bearer ' + keysp,
+                'Authorization': 'Bearer ' + (keysp || ''),
                 'App-Platform': 'WebPlayer',
-                'Client-Token': keysptoken,
+                'Client-Token': keysptoken || '',
                 ...commonHeaders,
             }
         });
@@ -1030,7 +1068,7 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
             return await SPMusic(que, true);
         }
         else {
-            const pes2: any = await per2.body?.json();
+            const pes2: any = await per2.json();
             const finalpes: any = pes2?.data?.searchV2;
             return { 
                 data: { 
@@ -1082,7 +1120,7 @@ export const YTLyrics = async function YTLyrics(url: string) {
             body: bodyload,
             method: "POST"
         });
-        const res: any = await response.body.json();
+        const res: any = await response.json();
 
         const bodyload2 = JSON.stringify({
             browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
@@ -1106,7 +1144,7 @@ export const YTLyrics = async function YTLyrics(url: string) {
             method: "POST"
         });
 
-        const res2: any = await pull.body.json();
+        const res2: any = await pull.json();
 
         responseBody['data'] = {
             browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
@@ -1123,12 +1161,13 @@ export const YTLyrics = async function YTLyrics(url: string) {
 export const Shazam = async function Shazam(que: string) {
     if (!que) return null;
     try {
-        const pull = await request(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${que}`, {
+        // always return 304 using httpcloak
+        const pull = await fetch(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
         });
-        const res: any = await pull.body.json();
+        const res: any = await pull.json();
         return { data: res?.results?.songs?.data || null };
     } catch { return null; }
 }
@@ -1136,12 +1175,12 @@ export const Shazam = async function Shazam(que: string) {
 export const Deezer = async function Deezer(que: string) {
     if (!que) return null;
     try {
-        const pull = await request(`https://api.deezer.com/search?limit=10&q=${que}`, {
+        const pull = await request(`https://api.deezer.com/search?limit=10&q=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
         });
-        const res: any = await pull.body.json();
+        const res: any = await pull.json();
         return { data: res?.data || null };
     } catch { return null; }
 }
@@ -1157,7 +1196,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
         try {
             const redirectParams = {
                 method: 'HEAD',
-                redirect: 'manual' as RequestRedirect
+                redirect: 'manual' as const
             };
             const res = await request(url, redirectParams);
             if (res.statusCode === 301 || res.statusCode === 302) {
@@ -1200,7 +1239,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
             SavetikVideo(targetUrl)
         ]);
 
-        const html = await response.body.text();
+        const html = await response.text;
         const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split('</script>')[0];
 
         if (!scriptContent) return { error: "WAF Challenge" };
@@ -1315,7 +1354,7 @@ async function SavetikVideo(url: string) {
             }).toString()
         });
 
-        const json: any = await response.body.json();
+        const json: any = await response.json();
         if (!json || !json.data) return null;
 
         const { document } = parseHTML(json.data);
@@ -1395,7 +1434,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
             body: JSON.stringify(body)
         });
 
-        const res: any = await pull.body.json();
+        const res: any = await pull.json();
 
         if (res?.errors?.[0]) {
             return await deezerLyrics(que, true);
@@ -1428,7 +1467,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
             body: JSON.stringify(body2)
         });
 
-        const res2: any = await pull2.body.json();
+        const res2: any = await pull2.json();
 
         if (res2?.errors?.[0]?.message.includes('Given jwt')) {
             return await deezerLyrics(que, true);
@@ -1448,10 +1487,10 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean): Promi
     }
 
     try {
-        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${que}`, {
+        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
-                'X-Tidal-Token': keytidal
+                'X-Tidal-Token': keytidal || ''
             }
         });
 
@@ -1459,53 +1498,50 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean): Promi
             return await Tidal(que, true);
         }
 
-        const res: any = await pull.body.json();
+        const res: any = await pull.json();
         return { data: res?.items || null };
     } catch { return null; }
 }
 
 export const Genius = async function Genius(que: string) {
     if (!que) return null;
-    let session: any;
-
     try {
-        session = new Session({
-            httpVersion: 'h2',
-            echConfigDomain: "genius.com"
-        });
 
-        const [reqSong, reqMulti] = await Promise.all([
-            session.get(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
+        // always return 304 using httpcloak
+        const [per, per2] = await Promise.all([
+            fetch(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
                 headers: {
-                    ...commonHeaders,
-                    'Origin': 'https://genius.com/'
+                    ...commonHeaders
                 }
             }),
-            session.get(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
+            fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
                 headers: {
-                    ...commonHeaders,
-                    'Origin': 'https://genius.com/'
+                    ...commonHeaders
                 }
             })
         ]);
 
-        const resSong = reqSong.statusCode === 200 ? reqSong.json() : (reqSong.statusCode === 403 ? { error: "Cloudflare Turnstile asking to verify you're not a bot" } : null);
-        const resMulti = reqMulti.statusCode === 200 ? reqMulti.json() : (reqMulti.statusCode === 403 ? { error: "Cloudflare Turnstile asking to verify you're not a bot" } : null);
+        const [data, data2] = await Promise.all([
+            per.status === 200 ? per.json() : Promise.resolve(null),
+            per2.status === 200 ? per2.json() : Promise.resolve(null)
+        ]);
 
-        const songs = resSong?.error ? resSong : (resSong?.response?.sections?.[0]?.hits?.map((a: any) => a?.result) || null);
-        const multi = resMulti?.error ? resMulti : (resMulti?.response?.sections || null);
+        const hits = (data as any)?.response?.hits || [];
+        const sections = (data2 as any)?.response?.sections || [];
 
-        if (session) session.close();
+        const results = hits.map((hit: any) => ({
+            title: hit.result.title,
+            fullTitle: hit.result.full_title,
+            artist: hit.result.primary_artist.name,
+            artistUrl: hit.result.primary_artist.url,
+            thumbnail: hit.result.song_art_image_thumbnail_url,
+            url: hit.result.url,
+            id: hit.result.id
+        }));
 
-        return {
-            data: [
-                songs,
-                multi
-            ]
-        };
+        return { data: results, sections };
     } catch (e) {
         console.error(e);
-        if (session) session.close();
         return null;
     }
 }
@@ -1514,6 +1550,33 @@ function Number_random(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+export const bard = async function bard(que: string): Promise<any> {
+    if (!que) return null;
+
+    try {
+        const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`, {
+            method: "POST",
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+                'Referer': 'https://gemini.google.com/',
+                'Origin': 'https://gemini.google.com/',
+            },
+            body: `f.req=%5Bnull%2C%22%5B%5B%5B%5C%22${encodeURIComponent(que)}%5C%22%2C0%2Cnull%2C%5B%5D%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en%5C%22%5D%2C%5Bnull%2Cnull%2Cnull%2C%5B%5D%2C%5B%5D%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%2C%5B%5D%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%22%5D%2Cnull%2C%5C%22%5C%22%5D&at=ABPS6S3C6P1Yn5D3t5Z8W6v5JzO_6%3A1706691666611&`
+        });
+
+        const resText = await req.text;
+        const res = resText.split('[[')[1]?.split(']]')[0] || null;
+        if (!res) return null;
+
+        const data = JSON.parse('[[' + res + ']]');
+        const text = data[0][2];
+        return { data: text };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
 
 export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {
     if (!que) return null;
@@ -1547,8 +1610,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
 
     const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%5D%22%5D%26`;
 
-    const session = new Session({ httpVersion: 'h1' });
-    const req = await session.post(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`, {
+    const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`, {
+        method: 'POST',
         headers: {
             ...commonHeaders,
             ...(qCookies ? { 'Cookie': qCookies } : {}),
@@ -1563,33 +1626,28 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     });
 
     if (req.url.includes('google.com/sorry')) {
-        session.close();
         return {
             "error": "Google asking to verify you're not a bot"
         }
     }
     if (req.statusCode === 400) {
-        session.close();
         return {
             "error": "Gemini is not available in your country"
         }
     }
     if (req.statusCode === 429) {
-        session.close();
         return {
             "error": "Rate-limited"
         }
     }
     if (req.statusCode === 403) {
-        session.close();
         return {
             "error": "Blocked"
         }
     }
 
     const cookiess: any = req.headers?.['set-cookie'];
-    const resText = req.text;
-    session.close();
+    const resText = await req.text;
     let response;
 
     let data: any[] = [];
@@ -1689,7 +1747,7 @@ export const Translate = async function Translate(que: string, from?: string, to
             }
         });
 
-        const data: any = await response.body.json();
+        const data: any = await response.json();
 
         let translatedText = '';
         if (data.sentences) {
@@ -1720,19 +1778,16 @@ export const infoYoutube = async function infoYoutube(que: string) {
     if (!videoId) return null;
 
     try {
-        if (!keyYoutubeVisitor) {
-            keyYoutubeVisitor = await youtubeVisitorKey();
-        }
-
         const res2 = await request(`https://www.youtube.com/watch?v=${videoId}`, {
             method: "GET",
             headers: {
                 ...commonHeaders,
                 'User-Agent': 'Bot'
-            }
+            },
+            useH2: true
         });
 
-        const pull2 = await res2.body.text();
+        const pull2 = await res2.text;
 
         let testpar: any = null;
         try {
@@ -1740,8 +1795,16 @@ export const infoYoutube = async function infoYoutube(que: string) {
         }
         catch { }
 
+        // aka status not ok in innertube
+        if(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {
+            return {
+                error: testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer?.title?.runs?.[0]?.text || null
+            }
+        }
+
         let commentToken: string | null = null;
         let isLiveChat = false;
+        const visitorData: any = testpar?.responseContext?.webResponseContextExtensionData?.ytConfigData?.visitorData;
         const findToken = (obj: any) => {
             if (!obj || (commentToken && isLiveChat)) return;
             if (typeof obj === "object") {
@@ -1773,7 +1836,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
                 const commentRes = await request(endpoint, {
                     method: "POST",
                     body: JSON.stringify({
-                        context: { client: { clientName: 1, clientVersion: "2.20261231" } },
+                        context: { client: { clientName: 1, clientVersion: "2.20261231", visitorData: visitorData } },
                         continuation: commentToken
                     }),
                     headers: {
@@ -1781,7 +1844,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
                         'Content-Type': 'application/json'
                     }
                 });
-                const commentData: any = await commentRes.body.json();
+                const commentData: any = await commentRes.json();
 
                 if (isLiveChat) {
                     const actions = commentData?.continuationContents?.liveChatContinuation?.actions || [];
@@ -1857,10 +1920,80 @@ export const infoYoutube = async function infoYoutube(que: string) {
             }
         }
 
+        const first: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer;
+        const second: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[1]?.videoSecondaryInfoRenderer;
+
         return {
             "data": {
-                ...(testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.reduce((acc: any, obj: any) => Object.assign(acc, obj), {}) || { "videoDetails": null }),
-                "nextVideosList": testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || null,
+                videoId: videoId,
+                thumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
+                previewThumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxres1.jpg",
+                title: first?.title?.runs?.[0]?.text || null,
+                description: second?.attributedDescription?.content || null,
+                releaseDate: (first?.dateText?.simpleText?.split('streaming on ')?.[1] || first?.dateText?.simpleText?.split('live on ')?.[1] || first?.dateText?.simpleText) || null,
+                viewCount: String(parseAbbreviatedNumber(first?.viewCount?.videoViewCountRenderer?.viewCount?.simpleText?.split(' ')?.[0]) || 0),
+                owners: {
+                        name: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.text || second?.owner?.videoOwnerRenderer?.attributedTitle?.content) || null,
+                        url: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url 
+                                ? ["https://www.youtube.com" + second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url] 
+                                : second?.owner?.videoOwnerRenderer?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
+                                        const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || 
+                                                d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
+                                                d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                                        return u ? "https://www.youtube.com" + u : null;
+                                }).filter(Boolean)) || [],
+                        avatar: Array.from(new Set((second?.owner?.videoOwnerRenderer?.avatarStack?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || 
+                                (second?.owner?.videoOwnerRenderer?.thumbnail?.thumbnails || second?.owner?.videoOwnerRenderer?.avatar?.thumbnails)?.map((k: any) => k?.url))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")) || []))
+                },
+                tags: (first?.superTitleLink?.runs?.map((a: any) => {
+                    const u = a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+                    if(u) {
+                        return {
+                            text: a.text || "",
+                            url: "https://www.youtube.com" + u
+                        }
+                    }
+                    return null;
+                }) || []).filter(Boolean),
+                feeds: testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents.filter((c: any) => c.lockupViewModel)?.map((c: any) => {
+                    const lvm = c.lockupViewModel;
+                    const meta = lvm?.metadata?.lockupMetadataViewModel;
+                    const img = meta?.image;
+
+                    const singleUrl = img?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                    const stackItems = img?.avatarStackViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems;
+
+                    const ownerUrls: string[] | null = singleUrl
+                        ? ["https://www.youtube.com" + singleUrl]
+                        : stackItems
+                            ?.map((d: any) => {
+                                const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+                                return u ? "https://www.youtube.com" + u : null;
+                            }).filter(Boolean) || null;
+
+                    const ownerAvatars: string[] | string | null = img?.decoratedAvatarViewModel
+                    ? (img.decoratedAvatarViewModel.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0") ?? null)
+                        ? [img.decoratedAvatarViewModel.avatar.avatarViewModel.image.sources[0].url.replace(/=s\d+.*/, "=s0")]
+                        : null
+                    : stackItems
+                        ?.map((d: any) => {
+                            const u = d.listItemViewModel?.leadingAccessory?.avatarViewModel?.image?.sources?.[0]?.url;
+                            return u ? u.replace(/=s\d+.*/, "=s0") : null;
+                        }).filter(Boolean) || null;
+
+                    return {
+                        videoId: lvm?.contentId,
+                        url: "https://www.youtube.com/watch?v=" + lvm?.contentId,
+                        altUrl: "https://www.youtube.com" + lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+                        title: meta?.title?.content,
+                        thumbnail: "https://s.ytimg.com/vi/" + lvm?.contentId + "/hq720.jpg",
+                        owner: {
+                            name: meta?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+                            url: ownerUrls,
+                            avatar: ownerAvatars,
+                        }
+                    };
+                }) || [],
                 "comments": comments
             }
         };
@@ -1888,7 +2021,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 ...commonHeaders
             }
         });
-        const html = await response.body.text();
+        const html = await response.text;
         let data: any;
         try {
             // Robust parsing of ytInitialData
@@ -1911,6 +2044,10 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
         }
 
         if (!data) return { data: null };
+
+        if (!keyYoutubeVisitor) {
+            keyYoutubeVisitor = await youtubeVisitorKey();
+        }
 
         const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer || t.expandableTabRenderer).filter(Boolean) || [];
 
@@ -2204,7 +2341,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                         }
                     })
                 });
-                const continuationRes: any = await continuationReq.body.json();
+                const continuationRes: any = await continuationReq.json();
 
                 extractData(continuationRes);
             } catch { }
@@ -2283,7 +2420,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                     body: bodyload
                 });
 
-                const res: any = await req.body.json();
+                const res: any = await req.json();
                 const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content ||
                     res?.contents?.sectionListRenderer ||
                     res?.contents ||
@@ -2447,40 +2584,37 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
     if (refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
-    let session: any;
     try {
         const test = new URL(que);
         if (!test.host.endsWith('soundcloud.com')) return null;
 
-        session = new Session({ httpVersion: 'h1' });
         const [res, res2] = await Promise.all([
-            session.get(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
+            request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
                 headers: {
                     ...commonHeaders
                 }
             }),
-            session.get("https://mobi.soundcloud.com" + test.pathname, {
+            request("https://mobi.soundcloud.com" + test.pathname, {
                 headers: {
                     ...commonHeaders
                 }
             })
         ]);
-        session.close();
 
-        if (res.statusCode === 401 || res.statusCode === 400) {
+        if (res.statusCode === 401) {
             return await infoSoundcloud(que, true);
         }
-        const pull = res.statusCode === 200 ? res.json() : null;
+        const pull = res.statusCode === 200 ? await res.json() : null;
 
         let pull2: any = null;
         try {
-            pull2 = JSON.parse(res2.text.split('type="application/json">')[1].split('</script>')[0]);
+            const res2Text = await res2.text;
+            pull2 = JSON.parse(res2Text.split('type="application/json">')[1].split('</script>')[0]);
         } catch { }
 
         return { data: [pull || null, pull2?.props?.pageProps?.initialStoreState?.entities || null] };
     }
     catch (e) {
-        if (session) session.close();
         console.error("infoSoundcloud error:", e);
         return null;
     }
@@ -2492,14 +2626,14 @@ export const infoSpotify = async function infoSpotify(que: string) {
         const test = new URL(que);
         if (test.host !== 'open.spotify.com') return null;
 
-        const res = await request(`https://open.spotify.com/oembed?url=${que}`, {
+        const res = await request(`https://open.spotify.com/oembed?url=${encodeURIComponent(que)}`, {
             method: 'GET',
             headers: {
                 ...commonHeaders
             }
         });
 
-        const pull: any = await res.body.json();
+        const pull: any = await res.json();
 
         const res2 = await request(pull.iframe_url, {
             method: 'GET',
@@ -2509,7 +2643,7 @@ export const infoSpotify = async function infoSpotify(que: string) {
             }
         });
 
-        const pull2 = await res2.body.text();
+        const pull2 = await res2.text;
         const test2 = JSON.parse(pull2.split('type="application/json">')[1].split('</script>')[0]);
         return { data: test2?.props?.pageProps?.state?.data?.entity || null };
     }
@@ -2558,7 +2692,7 @@ export const pinterest = async function pinterest(que: string) {
     if (!que) return null;
     try {
         const feat = { "options": { "query": que, "scope": "pins" }, "context": {} };
-        const req = await request(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${que}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
+        const req = await request(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
             method: 'GET',
             headers: {
                 ...commonHeaders,
@@ -2566,7 +2700,7 @@ export const pinterest = async function pinterest(que: string) {
             }
         });
 
-        const res: any = await req.body.json();
+        const res: any = await req.json();
         return res.resource_response.data.results[0] ? { data: res.resource_response.data.results } : {
             'error': 'Looks like your search violate our terms of service'
         };
@@ -2578,20 +2712,17 @@ export const pinterest = async function pinterest(que: string) {
 
 export const infoPinterest = async function infoPinterest(que: string) {
     if (!que) return null;
-    let session: any;
     try {
         const test = new URL(que);
         if (!test.host.includes('pinterest.') && !test.host.includes('pin.it')) return null;
 
-        session = new Session({ httpVersion: 'h2' });
-        const res = await session.get(que, {
+        const res = await request(que, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const html = res.text;
-        session.close();
+        const html = await res.text;
 
         const data: any[] = [];
         const scriptRegex = /<script\s+data-relay-completed-request="true"[^>]*>([\s\S]*?)<\/script>/g;
@@ -2998,14 +3129,14 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
 export const GettyImage = async function GettyImage(que: string) {
     if (!que) return null;
     try {
-        const req = await request(`https://www.istockphoto.com/en/search/2/image?phrase=${que}&page=1`, {
+        const req = await request(`https://www.istockphoto.com/en/search/2/image?phrase=${encodeURIComponent(que)}&page=1`, {
             headers: {
                 ...commonHeaders,
                 'Accept': 'application/json'
             }
         });
 
-        const res: any = await req.body.json();
+        const res: any = await req.json();
         return {
             data: [res?.gallery?.assets ?? null, res?.relatedTerms ?? null]
         };
@@ -3020,7 +3151,7 @@ export const Unsplash = async function Unsplash(que: string) {
     if (!que) return null;
 
     try {
-        const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${que}`, {
+        const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
                 'client-geo-region': 'global'
@@ -3033,7 +3164,7 @@ export const Unsplash = async function Unsplash(que: string) {
             }
         }
 
-        const res: any = await pull.body.json();
+        const res: any = await pull.json();
         return {
             data: res?.results?.[0] ? {
                 non_premium: res?.results.filter((a: any) => !a.premium),
@@ -3047,13 +3178,13 @@ export const Pixiv = async function Pixiv(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://www.pixiv.net/ajax/search/artworks/${que}?word=${que}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
+        const per = await request(`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         const items = res?.body?.illust?.data || res?.body?.illustManga?.data || [];
         return {
             data: {
@@ -3076,7 +3207,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://discord.com/api/v10/discovery/search?query=${que}&limit=10`, {
+        const per = await request(`https://discord.com/api/v10/discovery/search?query=${encodeURIComponent(que)}&limit=10`, {
             headers: {
                 ...commonHeaders
             }
@@ -3088,7 +3219,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
             }
         }
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         return { data: res?.hits || null }
     }
     catch (e) {
@@ -3101,7 +3232,7 @@ export const Bilibili = async function Bilibili(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${que}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
+        const per = await request(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${encodeURIComponent(que)}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
             headers: {
                 ...commonHeaders
             }
@@ -3113,7 +3244,7 @@ export const Bilibili = async function Bilibili(que: string) {
             }
         }
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         return { data: (res?.data?.modules?.[0]?.items || res?.data?.modules?.[1]?.items) || null }
     }
     catch (e) {
@@ -3126,7 +3257,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://discord.com/api/v10/application-directory/search?query=${que}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
+        const per = await request(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
             headers: {
                 ...commonHeaders
             }
@@ -3138,7 +3269,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
             }
         }
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         return { data: res?.results || null }
     }
     catch (e) {
@@ -3151,13 +3282,13 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${que}`, {
+        const per = await request(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         const items = res?.results || [];
 
         return {
@@ -3188,7 +3319,7 @@ export const Twitch = async function Twitch(que: string) {
             }
         });
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         const { __typename, ...finalres } = { ...res?.[1]?.data, ...res?.[0]?.data?.searchFor };
 
         return { data: finalres || null };
@@ -3210,7 +3341,7 @@ export const InstagramUser = async function InstagramUser(que: string) {
             }
         });
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
         
         if(res?.errors) {
             return {
@@ -3240,7 +3371,7 @@ export const ThreadUser = async function ThreadUser(que: string) {
             }
         });
 
-        const res: any = await per.body.json();
+        const res: any = await per.json();
 
         return { data: res?.data?.xdt_api__v1__users__search_connection?.edges?.map((a: any) => a?.node) || null }
     }
@@ -3253,14 +3384,10 @@ export const ThreadUser = async function ThreadUser(que: string) {
 export const Pexels = async function Pexels(que: string) {
     if (!que) return null;
 
-    let session: any;
-
     try {
-        session = new Session({ httpVersion: 'h3' });
-        const response = await session.get(`https://www.pexels.com/search/${que}`, {
+        const response = await request(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
-                // 'User-Agent': 'Mozilla/5.0 (compatible; Twitterbot/1.0; +http://help.twitter.com/bots)'
             }
         });
 
@@ -3269,18 +3396,16 @@ export const Pexels = async function Pexels(que: string) {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             };
         }
-        const html = response.text;
+        const html = await response.text;
         let pull = null;
         try {
             pull = JSON.parse(html.split('"application/json">')?.[1]?.split('</script>')?.[0]);
         }
         catch { }
-        if (session) session.close();
         return { data: pull?.props?.pageProps?.initialData || null };
     }
     catch (e) {
         console.error(e);
-        if (session) session.close();
         return null;
     }
 };
@@ -3289,14 +3414,14 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
     if (!que) return null;
 
     try {
-        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${que}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
             headers: {
                 ...commonHeaders,
                 'X-Khronos': Math.floor(Date.now() / 1000).toString()
             }
         });
 
-        const res = await pul.body.text();
+        const res = await pul.text;
         if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
@@ -3318,13 +3443,13 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
     if (!que) return null;
 
     try {
-        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${que}`, {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const res = await pul.body.text();
+        const res = await pul.text;
         if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
@@ -3346,13 +3471,13 @@ export const TiktokUser = async function TiktokUser(que: string) {
     if (!que) return null;
 
     try {
-        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${que}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
+        const pul = await request(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const res = await pul.body.text();
+        const res = await pul.text;
         if (res === '') {
             return {
                 "error": "Akamai Captcha asking to verify you're not a bot"
@@ -3372,11 +3497,6 @@ export const TiktokUser = async function TiktokUser(que: string) {
 
 export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code: any = '') {
     const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en`;
-    const client = new Session({
-        preset: 'firefox-148-linux',
-        httpVersion: 'h2',
-        tlsOnly: false
-    });
     const headers = {
         ...commonHeaders,
         'Accept-Language': 'en-US',
@@ -3385,8 +3505,8 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
 
     for (let i = 0; i < 3; i++) {
         try {
-            const pul = await client.get(url, { headers });
-            const res = pul.text;
+            const pul = await request(url, { headers });
+            const res = await pul.text;
 
             if (res === '' || pul.statusCode !== 200) {
                 if (i === 2) return { "error": "Akamai Captcha asking to verify you're not a bot" };
@@ -3521,7 +3641,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
             }
         });
 
-        const channelData: any = await channelCheck.body.json();
+        const channelData: any = await channelCheck.json();
 
         if (channelCheck.statusCode !== 200) {
             return { error: channelData || "Channel verification failed" };
@@ -3535,7 +3655,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
                 }
             });
 
-            const messageData: any = await messageCheck.body.json();
+            const messageData: any = await messageCheck.json();
 
             if (messageCheck.statusCode !== 200) {
                 return { error: messageData || "Message verification failed" };
@@ -3584,13 +3704,12 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
             // Check size from headers before consuming the body
             if (contentLength > MAX_DISCORD_SIZE) {
-                vidReq.body.destroy(); // Properly discard the body
                 continue;
             }
 
-            const buffer = await vidReq.body.arrayBuffer();
+            const buffer = vidReq.body.buffer;
             if (buffer.byteLength <= MAX_DISCORD_SIZE) {
-                videoBuffer = buffer;
+                videoBuffer = buffer as ArrayBuffer;
                 break;
             }
         } catch (e) {
@@ -3659,7 +3778,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
             }
         });
 
-        const channelData: any = await channelCheck.body.json();
+        const channelData: any = await channelCheck.json();
 
         if (channelCheck.statusCode !== 200) {
             return { error: channelData || "Channel verification failed" };
@@ -3673,7 +3792,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
                 }
             });
 
-            messageData = await messageCheck.body.json();
+            messageData = await messageCheck.json();
 
             if (messageCheck.statusCode !== 200) {
                 return { error: messageData || "Message verification failed" };
@@ -3845,7 +3964,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
 
         if (pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
 
-        const responseText = await pul.body.text();
+        const responseText = await pul.text;
         let res;
         try {
             res = JSON.parse(responseText);
@@ -3861,7 +3980,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
                 }
             });
             try {
-                const body2 = await pul2.body.text();
+                const body2 = await pul2.text;
                 res2 = JSON.parse(body2.split('type="application/json">')[1].split('</script>')[0]);
             }
             catch { }
@@ -3899,7 +4018,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
                     'authorization': 'Bearer ' + twitterAuth,
                 }
             }),
-            request(`https://cdn.syndication.twimg.com/tweet-result?id=${que}&lang=en&token=abc`, {
+            request(`https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(que)}&lang=en&token=abc`, {
                 headers: {
                     ...commonHeaders,
                 }
@@ -3910,7 +4029,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
 
         const tryParseJson = async (p: any) => {
             if (p.statusCode !== 200) return null;
-            try { return await p.body.json(); } catch { return null; }
+            try { return await p.json(); } catch { return null; }
         };
 
         const [res, res2] = await Promise.all([
@@ -3930,7 +4049,7 @@ export const redditMedia = async function redditMedia(que: string) {
     if (!que) return null;
 
     try {
-        const req = await request(`https://old.reddit.com/search/.json?q=${que}&sort=relevance&type=media`, {
+        const req = await request(`https://old.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`, {
             headers: {
                 ...commonHeaders,
                 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
@@ -3949,7 +4068,7 @@ export const redditMedia = async function redditMedia(que: string) {
             }
         }
 
-        const res: any = await req.body?.json();
+        const res: any = await req.json();
         return { data: res?.data?.children?.map((a: any) => a?.data) || null }
     }
     catch {
@@ -3961,13 +4080,13 @@ export const robloxGames = async function robloxGames(que: string) {
     if (!que) return null;
 
     try {
-        const pul1 = await request(`https://apis.roblox.com/search-api/omni-search?searchQuery=${que}&sessionId=abc`, {
+        const pul1 = await request(`https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(que)}&sessionId=abc`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const res1: any = await pul1.body.json();
+        const res1: any = await pul1.json();
         const gamesList = res1.searchResults?.flatMap((group: any) => group.contents) || [];
         const restIds = gamesList.filter((b: any) => b?.universeId).map((b: any) => b.universeId).join(',');
 
@@ -3979,7 +4098,7 @@ export const robloxGames = async function robloxGames(que: string) {
             }
         });
 
-        const res2: any = await pul2.body.json();
+        const res2: any = await pul2.json();
         const detailsMap = new Map(res2.data.map((game: any) => [game.id, game]));
 
         return {
@@ -4019,7 +4138,7 @@ export const YTChannel = async function YTChannel(que: string) {
             method: "POST"
         });
 
-        const res: any = await response.body.json();
+        const res: any = await response.json();
         const contents = res?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
         let alk: any[] = [];
@@ -4074,7 +4193,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
             }
         });
 
-        const res1: any = await pul1.body.json();
+        const res1: any = await pul1.json();
         const assetList = res1.data || [];
         const assetIds = assetList.map((b: any) => b.id).join(',');
 
@@ -4094,8 +4213,8 @@ export const robloxAudio = async function robloxAudio(que: string) {
         ]);
 
         const [res2, res3] = await Promise.all([
-            pul2.body.json() as Promise<any>,
-            pul3.body.json() as Promise<any>
+            pul2.json() as Promise<any>,
+            pul3.json() as Promise<any>
         ]);
 
         const thumbnails = res3.data || [];
@@ -4139,7 +4258,7 @@ export const Bandcamp = async function Bandcamp(que: string) {
             }
         });
 
-        const res: any = await pul.body.json();
+        const res: any = await pul.json();
         const results = res?.auto?.results || [];
 
         return {
@@ -4197,7 +4316,7 @@ export const Capcut = async function Capcut(que: string) {
             }
         });
 
-        const res: any = await pul.body.json();
+        const res: any = await pul.json();
         const templates = res?.data?.video_templates || [];
 
         return {
@@ -4239,7 +4358,7 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
             }
         }
 
-        const res: any = await req.body?.json();
+        const res: any = await req.json();
         return { data: res?.data?.children?.map((a: any) => a?.data) || null }
     }
     catch {
@@ -4249,10 +4368,9 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
 
 export const instagramUser = async function instagramUser(que: string) {
     if (!que) return null;
-    let session: any;
 
     try {
-        const testreq = await request(`https://www.instagram.com/${que}/embed`, {
+        const testreq = await request(`https://www.instagram.com/${encodeURIComponent(que)}/embed`, {
             headers: {
                 ...commonHeaders,
                 'Sec-Fetch-Dest': 'iframe'
@@ -4265,7 +4383,7 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         }
 
-        const resreq = await testreq.body.text();
+        const resreq = await testreq.text;
         const profile_id = resreq.split('owner-id="')[1]?.split('"')?.[0];
 
         if (!profile_id) {
@@ -4274,13 +4392,12 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         }
 
-        session = new Session({ preset: 'chrome-143', httpVersion: 'h3' });
-
         const bodyhttp = { "enable_integrity_filters": true, "id": profile_id, "render_surface": "PROFILE", "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": true, "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": false, "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": false };
 
         const [req, req2] = await Promise.all([
-            session.get(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${que}`, {
+            request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
                 headers: {
+                    ...commonHeaders,
                     'X-IG-App-ID': "936619743392459",
                     'X-ASBD-ID': "198387",
                     'X-IG-WWW-Claim': "0",
@@ -4302,18 +4419,19 @@ export const instagramUser = async function instagramUser(que: string) {
         let b: any = null;
 
         const [res, res2]: any = await Promise.all([
-            Promise.resolve().then(() => {
-                if (!req.text || req.text.trim() === "") return null;
-                try { return req.json(); } catch { return null; }
+            Promise.resolve().then(async () => {
+                const text = await req.text;
+                if (!text || text.trim() === "") return null;
+                try { return await req.json(); } catch { return null; }
             }),
-            req2.body.json().catch(() => null)
+            req2.json().catch(() => null)
         ]);
 
         a = res?.data?.user;
         b = res2?.data?.user || res2?.data || res2;
 
         if (!a && req.statusCode !== 200 && req.statusCode !== 404) {
-            try { a = req.json(); } catch { a = { body: req.text }; }
+            try { a = await req.json(); } catch { a = { body: await req.text }; }
         }
 
         const source = (a && a.id) ? a : (b?.user ? b.user : b);
@@ -4334,12 +4452,9 @@ export const instagramUser = async function instagramUser(que: string) {
             pronouns: source.pronouns?.[0] ? source.pronouns : null
         } : null;
 
-        if (session) session.close();
-
         return { data: [formatted || null, a || null, b || null] };
     } catch (e) {
         console.error(e);
-        if (session) session.close();
         return null;
     }
 }
@@ -4361,14 +4476,14 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
                     'X-LOGGED-OUT-THREADS-MIGRATED-REQUEST': 'true'
                 }
             }),
-            request(`https://www.threads.com/@${que}`, {
+            request(`https://www.threads.com/@${encodeURIComponent(que)}`, {
                 headers: { ...commonHeaders }
             })
         ]);
 
         const [res, resText2]: [any, string] = await Promise.all([
-            per.statusCode === 200 ? per.body.json().catch(() => null) : Promise.resolve(null),
-            per2.statusCode === 200 ? per2.body.text().catch(() => "") : Promise.resolve("")
+            per.statusCode === 200 ? (async () => { try { return per.json(); } catch { return null; } })() : Promise.resolve(null),
+            per2.statusCode === 200 ? Promise.resolve(per2.text) : Promise.resolve("")
         ]);
 
         let webData: any[] = [];
@@ -4418,7 +4533,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
             });
 
             if (per3.statusCode === 200) {
-                const res3 = await per3.body.json() as any;
+                const res3 = await per3.json() as any;
                 edges = res3?.data?.mediaData?.edges?.map((a: any) => a?.node?.thread_items?.[0]?.post) || null;
             }
 
@@ -4465,7 +4580,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
                 ...commonHeaders,
                 'Referer': 'https://tenor.com',
                 'Origin': 'https://tenor.com',
-                'X-Goog-Api-Key': process.env.GOOG_TENOR
+                'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
             }
         }),
             request(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
@@ -4473,14 +4588,14 @@ export const Tenor = async function Tenor(que: string, type?: string) {
                 ...commonHeaders,
                 'Referer': 'https://tenor.com',
                 'Origin': 'https://tenor.com',
-                'X-Goog-Api-Key': process.env.GOOG_TENOR
+                'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
             }
         })
         ]);
 
         if (apiRes.statusCode === 200) {
-            const apiData: any = await apiRes.body.json();
-            const apiData2: any = await apiRes2.body.json();
+            const apiData: any = await apiRes.json();
+            const apiData2: any = await apiRes2.json();
             return {
                 data: {
                     suggestion: apiData2?.results,
@@ -4502,7 +4617,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
             return { error: `${webRes.statusCode} - Can't process this` };
         }
 
-        const html = await webRes.body.text();
+        const html = await webRes.text;
 
         if (html.includes('form id="captcha-form"')) {
             return { error: 'Blocked recaptcha' };
@@ -4556,7 +4671,7 @@ export const infoTenor = async function infoTenor(url: string) {
             return { error: `${res.statusCode} - Can't process this` };
         }
 
-        const html = await res.body.text();
+        const html = await res.text;
         const gifMatch = html.match(/<script id="gif-json"[^>]*>([\s\S]*?)<\/script>/);
 
         if (!gifMatch) {
@@ -4573,7 +4688,6 @@ export const infoTenor = async function infoTenor(url: string) {
 
 export const infoGiphy = async function infoGiphy(url: string) {
     if (!url) return null;
-    let session: any;
 
     try {
         const urlObj = new URL(url);
@@ -4581,20 +4695,17 @@ export const infoGiphy = async function infoGiphy(url: string) {
             return { error: 'Invalid Giphy URL' };
         }
 
-        session = new Session({ httpVersion: 'h2' });
-        const res = await session.get(url, {
+        const res = await request(url, {
             headers: {
                 ...commonHeaders
             }
         });
 
         if (res.statusCode !== 200) {
-            if (session) session.close();
             return { error: `${res.statusCode} - Can't process this` };
         }
 
-        const html = res.text;
-        if (session) session.close();
+        const html = await res.text;
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
@@ -4622,7 +4733,6 @@ export const infoGiphy = async function infoGiphy(url: string) {
             }
         };
     } catch (e) {
-        if (session) session.close();
         console.error(e);
         return { error: 'Failed to fetch Giphy info' };
     }
@@ -4631,7 +4741,6 @@ export const infoGiphy = async function infoGiphy(url: string) {
 
 export const Giphy = async function Giphy(que: string, type?: string) {
     if (!que) return null;
-    let session: any;
 
     const getTypeQuery = (t?: string) => {
         if (t === 'sticker') return '-stickers';
@@ -4640,20 +4749,17 @@ export const Giphy = async function Giphy(que: string, type?: string) {
     };
 
     try {
-        session = new Session({ preset: 'chrome-143', httpVersion: 'h2' });
-        const res = await session.get(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
+        const res = await request(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
         if (res.statusCode !== 200) {
-            if (session) session.close();
             return { error: `${res.statusCode} - Can't process this` };
         }
 
-        const html = res.text;
-        if (session) session.close();
+        const html = await res.text;
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
@@ -4670,7 +4776,6 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 
         return { data: initialGifs || [] };
     } catch (e) {
-        if (session) session.close();
         console.error(e);
         return { error: 'Failed to fetch Giphy data' };
     }
@@ -4695,7 +4800,7 @@ async function fetchWithRetry(url: string, options: any, retries = 5): Promise<a
                 headers: options.headers,
                 body: options.body,
             });
-            const body = await res.body.text();
+            const body = await res.text;
             const setCookies = res.headers['set-cookie'];
             return {
                 status: res.statusCode,
@@ -5080,7 +5185,7 @@ export async function googleWeather(query: string): Promise<any> {
             headers: { ...commonHeaders }
         });
 
-        let ls: any = await l.body.text();
+        let ls: any = await l.text;
 
         try {
             ls = JSON.parse(ls);
@@ -5098,13 +5203,13 @@ export async function googleWeather(query: string): Promise<any> {
             headers: {
                 ...commonHeaders,
                 'Referer': 'https://storage.googleapis.com/',
-                'X-Goog-Api-Key': process.env.GOOG_WEATHER
+                'X-Goog-Api-Key': process.env.GOOG_WEATHER || ''
             }
         });
 
         if (k.statusCode !== 200) return { data: null }
 
-        const finalk = await k.body.json();
+        const finalk = await k.json();
         return {
             data: [
                 {
@@ -5151,7 +5256,7 @@ export async function GrokAI(query: string): Promise<any> {
             }
         }
 
-        const res = await req.body.text();
+        const res = await req.text;
         const response = res.split('\n')
             .filter((line: string) => line.startsWith('0:'))
             .map((line: string) => {
@@ -6189,7 +6294,7 @@ export const ImgurPost = async (query: string, refresh_auth: boolean = false): P
     try {
         const req = await request(`https://api.imgur.com/post/v1/posts/t/${query}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
         if (req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
-        const res: any = await req.body.json();
+        const res: any = await req.json();
         return { data: res?.posts || null };
     }
     catch {
@@ -6210,7 +6315,7 @@ export const Klipy = async function Klipy(que: string, type?: string) {
 
     try {
         const queryType = getQueryType(type);
-        const req = await request(`https://api.klipy.com/api/v1/web/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=50`, {
+        const req = await request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=50`, {
             headers: {
                 ...commonHeaders,
                 'Referer': 'https://klipy.com',
@@ -6219,7 +6324,7 @@ export const Klipy = async function Klipy(que: string, type?: string) {
         });
 
         if (req.statusCode === 200) {
-            const res: any = await req.body.json();
+            const res: any = await req.json();
             return { data: res?.data?.data || null };
         }
 
@@ -6244,7 +6349,7 @@ export const infoKlipy = async function infoKlipy(url: string) {
             return { error: 'Invalid Klipy URL path' };
         }
 
-        const req = await request(`https://api.klipy.com/api/v1/web/${klipyPath}`, {
+        const req = await request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`, {
             headers: {
                 ...commonHeaders
             }
@@ -6255,7 +6360,7 @@ export const infoKlipy = async function infoKlipy(url: string) {
         }
 
         if (req.statusCode === 200) {
-            const res: any = await req.body.json();
+            const res: any = await req.json();
             return { data: res?.data || null };
         }
 
@@ -6397,15 +6502,13 @@ export const PatreonSearch = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const res = await session.get(`https://www.patreon.com/api/search?q=${query}`, {
+        const res = await request(`https://www.patreon.com/api/search?q=${query}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const response = res.json();
-        session.close();
+        const response = await res.json();
 
         if (!response?.data?.[0]) {
             return { data: null }
@@ -6424,15 +6527,13 @@ export const Trakteer = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const res = await session.get(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
+        const res = await request(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
             headers: {
                 ...commonHeaders
             }
         });
 
-        const response = res.json();
-        session.close();
+        const response = await res.json();
 
         if (!response?.result?.data?.[0]) {
             return { data: null }
@@ -6451,10 +6552,9 @@ export const IMDB = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
         const resBody: any = { "includeAdult": true, "isExactMatch": false, "locale": "en-US", "numResults": 5, "originalTitleText": true, "searchTerm": query, "skipHasExact": true, "typeFilter": "TITLE" };
         const exter: any = { "persistedQuery": { "sha256Hash": "b6a7c673cfb2d2cc8d78570a7d5f6e0d65601021fcbbdc71cde7a53468641fa1", "version": 1 } };
-        const res = await session.get(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
+        const res = await request(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
             headers: {
                 ...commonHeaders,
                 'Accept': 'application/json',
@@ -6462,8 +6562,7 @@ export const IMDB = async (query: string): Promise<any> => {
             }
         });
 
-        const response = res.json();
-        session.close();
+        const response = await res.json();
 
         const finalres: any = response?.data?.results?.edges;
 
@@ -6544,13 +6643,11 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
     };
 
     try {
-        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const res = await session.get(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
+        const res = await request(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
             headers: { ...commonHeaders }
         });
 
         const html: string = await res.text;
-        session.close();
 
         const { document } = parseHTML(html);
         const container = document.querySelector('#s-results');
@@ -6622,8 +6719,7 @@ export const OtoDB = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const session = new Session({ httpVersion: 'h2', tlsOnly: false });
-        const res = await session.get(
+        const res = await request(
             `https://otodb.net/work/search/__data.json?query=${encodeURIComponent(query)}`,
             {
                 headers: {
@@ -6632,8 +6728,7 @@ export const OtoDB = async (query: string): Promise<any> => {
             }
         );
 
-        const json = res.json();
-        session.close();
+        const json = await res.json();
 
         const pageNode = json.nodes?.[1];
         if (!pageNode?.data) return { data: null };
@@ -6709,7 +6804,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         return JSON.parse(JSON.stringify({ member: m, voiceState: m.voice }));
     };
 
-    const buildAllResult = (action: string, channelId: string, oldData: any[], results: PromiseSettledResult<any>[], extra?: Record<string, any>) => {
+    const buildAllResult = (action: string, channelId: string, oldData: any[], results: PromiseSettledResult<any>[], totalVoiceMembers: number, excludeAuthors: string[], extra?: Record<string, any>) => {
         const newData = oldData.map((old, i) => {
             const result = results[i];
             const formatted = JSON.parse(JSON.stringify(old));
@@ -6733,7 +6828,9 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
             data: {
                 action,
                 channelId,
-                usersCount: results.length,
+                excludeAuthors: excludeAuthors,
+                usersCount: totalVoiceMembers,
+                affectedCount: results.length,
                 success: results.filter(r => r.status === 'fulfilled').length,
                 failed: results.filter(r => r.status === 'rejected').length,
                 data: [oldData, newData],
@@ -6790,65 +6887,69 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         const { channelId } = payload;
         if (!channelId) return { error: 'Missing valid parameter: channelId' };
 
-        const channel = await guild.channels.fetch(channelId);
+        const channel: any = await guild.channels.fetch(channelId);
         if (!channel || !channel.isVoiceBased()) return { error: 'Invalid voice channel' };
 
         if (action === 'list') {
+            const membersCount = channel.members.size;
             const membersList = channel.members.map((m: any) => {
                 const { guild: _g, ...member } = m;
                 const { guild: _vg, member: _vm, ...voiceState } = m.voice;
                 return { member, voiceState };
             });
-            return { data: membersList };
+            return { 
+                data: {
+                    usersCount: membersCount,
+                    data: membersList,
+                    ...channel
+                }
+            };
         }
 
+        const authorIds = (payload.authorId || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+
         if (action === 'muteall') {
-            const { authorId } = payload;
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: true })));
-            return buildAllResult('muteall', channelId, oldData, results);
+            return buildAllResult('muteall', channelId, oldData, results, channel.members.size, authorIds);
         }
 
         if (action === 'unmuteall') {
-            const { authorId } = payload;
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: false })));
-            return buildAllResult('unmuteall', channelId, oldData, results);
+            return buildAllResult('unmuteall', channelId, oldData, results, channel.members.size, authorIds);
         }
 
         if (action === 'deafall') {
-            const { authorId } = payload;
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: true })));
-            return buildAllResult('deafall', channelId, oldData, results);
+            return buildAllResult('deafall', channelId, oldData, results, channel.members.size, authorIds);
         }
 
         if (action === 'undeafall') {
-            const { authorId } = payload;
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: false })));
-            return buildAllResult('undeafall', channelId, oldData, results);
+            return buildAllResult('undeafall', channelId, oldData, results, channel.members.size, authorIds);
         }
 
         if (action === 'kickall') {
-            const { authorId } = payload;
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: null })));
-            return buildAllResult('kickall', channelId, oldData, results);
+            return buildAllResult('kickall', channelId, oldData, results, channel.members.size, authorIds);
         }
 
         if (action === 'moveall') {
-            const { toChannelId, authorId } = payload;
+            const { toChannelId } = payload;
             if (!toChannelId) return { error: 'Missing valid parameter: toChannelId' };
-            const members = [...channel.members.values()].filter((member: any) => member.id !== authorId);
+            const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
             const oldData = members.map(formatMemberData);
             const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: toChannelId })));
-            return buildAllResult('moveall', channelId, oldData, results, { toChannelId });
+            return buildAllResult('moveall', channelId, oldData, results, channel.members.size, authorIds, { toChannelId });
         }
 
         return { error: 'Unknown action' };

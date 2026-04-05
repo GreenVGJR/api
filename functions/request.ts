@@ -2018,26 +2018,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             }
         });
         const html = await response.text;
-        let data: any;
-        try {
-            // Robust parsing of ytInitialData
-            const dataParts = html.split(/ytInitialData\s*=\s*/);
-            if (dataParts.length < 2) return { data: null };
-
-            let jsonStr = dataParts[1];
-            // Find the end of the script tag or the next variable assignment
-            const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') :
-                jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') :
-                    jsonStr.length;
-
-            jsonStr = jsonStr.substring(0, endIdx).trim();
-            if (jsonStr.endsWith(';')) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
-
-            data = JSON.parse(jsonStr);
-        } catch (e) {
-            console.error("YouTube Parse Error:", e);
-            return null;
-        }
+        let data: any = parseYtInitial(html);
 
         if (!data) return { data: null };
 

@@ -26,7 +26,7 @@ app.get('/stats', async (c) => {
 
         const nodes = Array.from(manager.nodeManager.nodes.values()).map(node => {
             return {
-                ...node.options, ...node.stats, ...node.info
+                ...node.stats, ...node.info
             };
         });
 

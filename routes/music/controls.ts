@@ -160,8 +160,8 @@ app.get('/skip', async (c) => {
             return;
         }
 
-        if (queue.queue.tracks.length === 0 && !queue.queue.current) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No tracks in queue to skip' })}}`);
+        if (queue.queue.tracks.length === 0) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No more tracks in queue to skip to' })}}`);
             return;
         }
 
@@ -180,7 +180,14 @@ app.get('/skip', async (c) => {
         }
 
         await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : 'Skipping: Unknown...');
-        await queue.skip();
+        
+        // Use skip(0, false) originally intended, but if it's a live track,
+        // we use stopPlaying(false) to ensure it stops correctly then plays next.
+        if (skippedTrack?.info.isStream) {
+            await (queue as any).stopPlaying(false);
+        } else {
+            await queue.skip(0, false);
+        }
         await log(nextTrack ? `Now playing: "${nextTrack.info.title}"` : 'Queue ended');
 
         await s.write(`],"data":${JSON.stringify({

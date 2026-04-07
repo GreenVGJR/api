@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, ChannelType, PermissionsBitField } from 'dis
 import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-client';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
+import config from '../config.json' with { type: 'json' };
 
 // ─── Streaming Helper ────────────────────────────────────────────────────────
 
@@ -9,17 +10,12 @@ export function createMusicStream(
     c: any,
     callback: (log: (msg: string) => Promise<void>, s: any) => Promise<void>
 ) {
-    const oo = String(Date.now() / 3600000).split('.')[0];
-    const signature = crypto.createHash('md5').update(JSON.stringify(c.req.header())).digest('hex');
-
+    
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-cache, no-transform, no-store, max-age=0');
-    c.header('X-PO-Client-Id', crypto.createHash('md5').update(oo).digest('hex'));
-    c.header('X-PO-Client', signature);
-    c.header('X-Enc-Route', 'v2-beta');
+    c.header('X-Enc-Route', 'v3');
     c.header('X-Route', 'LIVE');
-    c.header('X-Player', "[\"lavalink.serenetia\", \"lavalink.serenetia\"]");
-    c.header('X-Warning', 'Music endpoints are still on development. Expect a unstable or unusual errors');
+    c.header('X-Player', "lavalink");
 
     return stream(c, async (s: any) => {
         const startTime = Date.now();
@@ -48,24 +44,28 @@ export function createMusicStream(
 
 // ─── Lavalink Node Config ─────────────────────────────────────────────────────
 
-const sg1 = crypto.randomUUID();
-const sg2 = crypto.randomUUID();
+const sg = crypto.randomUUID();
 
-const LAVALINK_NODE = {
-    id: sg1,
-    host: 'lavalinkv4.serenetia.com',
-    port: 443,
-    authorization: 'https://seretia.link/discord',
-    secure: true,
-};
+let LAVALINK_NODE: any;
 
-const LAVALINK_NODE_V2 = {
-    id: sg2,
-    host: 'lavalinkv4.serenetia.com',
-    port: 80,
-    authorization: 'https://seretia.link/discord',
-    secure: false,
-};
+if(config.useLocalLavalink) {
+    LAVALINK_NODE = {
+        id: sg,
+        host: process.env.LAVALINK_HOST || '',
+        port: parseInt(process.env.LAVALINK_PORT || '2333'),
+        authorization: process.env.LAVALINK_PASS || 'youshallnotpass',
+        secure: process.env.LAVALINK_SSL === 'true',
+    };
+}
+else {
+    LAVALINK_NODE = {
+        id: sg,
+        host: 'lavalinkv4.serenetia.com',
+        port: 443,
+        authorization: 'https://seretia.link/discord',
+        secure: true,
+    };
+}
 
 // ─── Player Pool ──────────────────────────────────────────────────────────────
 
@@ -173,7 +173,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
     // Placeholder until the client is ready (id filled in on clientReady)
     const manager = new LavalinkManager({
-        nodes: [LAVALINK_NODE, LAVALINK_NODE_V2],
+        nodes: [LAVALINK_NODE].filter(n => n.host && n.host.length > 0),
         sendToShard: (guildId, payload) => {
             try {
                 const shard = client.guilds.cache.get(guildId)?.shard;
@@ -183,7 +183,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         client: { id: 'pending', username: 'pending' },
         autoSkip: true,
         playerOptions: {
-            defaultSearchPlatform: 'ytsearch',
+            defaultSearchPlatform: 'ytmsearch',
             onDisconnect: {
                 autoReconnect: false,
                 destroyPlayer: true,
@@ -511,6 +511,8 @@ export const PLATFORM_SEARCH: Record<string, string> = {
     applemusic: 'amsearch',
     youtube: 'ytsearch',
     youtubemusic: 'ytmsearch',
+    deezer: 'dzsearch',
+    tidal: 'tdsearch',
 };
 
 // ─── Auto-Init ────────────────────────────────────────────────────────────────

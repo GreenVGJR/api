@@ -1,16 +1,16 @@
 import { Session } from 'httpcloak';
 import { type Context } from 'hono';
 
-let session = new Session({ preset: 'firefox-149-linux', preferIpv4: true });
-let sessionH2 = new Session({ preset: 'firefox-149-linux', preferIpv4: true, httpVersion: 'h2' });
+let session = new Session({ preferIpv4: true });
+let sessionH2 = new Session({ preferIpv4: true, httpVersion: 'h2' });
 let lastSessionResetTime = Date.now();
 const SESSION_ROTATION_MS = 6 * 60 * 60 * 1000;
 
 const resetSessions = () => {
     try { session.close(); } catch { }
     try { sessionH2.close(); } catch { }
-    session = new Session({ preset: 'firefox-149-linux', preferIpv4: true });
-    sessionH2 = new Session({ preset: 'firefox-149-linux', preferIpv4: true, httpVersion: 'h2' });
+    session = new Session({ preferIpv4: true });
+    sessionH2 = new Session({ preferIpv4: true, httpVersion: 'h2' });
     lastSessionResetTime = Date.now();
 };
 
@@ -37,8 +37,12 @@ export const request = async (url: string, options: {
     try {
         const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
         const activeSession = options.useH2 ? sessionH2 : session;
+        const headers: any = { ...options.headers };
+        if (url.includes('discord.com/api/')) {
+            headers['User-Agent'] = headers['User-Agent'] || 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+        }
         const res = await activeSession[method](url, {
-            headers: options.headers,
+            headers: headers,
             body: options.body,
             timeout: DEFAULT_TIMEOUT_MS / 1000
         });
@@ -1074,7 +1078,7 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
             }
         }
 
-        if (per2.statusCode === 401 || per2.statusCode === 400) {
+        if ((per2.statusCode === 401 || per2.statusCode === 400) && !refresh_auth) {
             return await SPMusic(que, true);
         }
         else {
@@ -1182,10 +1186,10 @@ export const Shazam = async function Shazam(que: string) {
     } catch { return null; }
 }
 
-export const Deezer = async function Deezer(que: string) {
+export const Deezer = async function Deezer(que: string, limits: number = 10) {
     if (!que) return null;
     try {
-        const pull = await request(`https://api.deezer.com/search?limit=10&q=${encodeURIComponent(que)}`, {
+        const pull = await request(`https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             }
@@ -1490,14 +1494,14 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 }
 
 
-export const Tidal = async function Tidal(que: string, refresh?: boolean): Promise<any> {
+export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 10): Promise<any> {
     if (!que) return null;
     if (refresh) {
         keytidal = await tidalKeys();
     }
 
     try {
-        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=10&offset=0&query=${encodeURIComponent(que)}`, {
+        const pull = await request(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=${limits}&offset=0&query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
                 'X-Tidal-Token': keytidal || ''
@@ -1560,34 +1564,6 @@ function Number_random(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export const bard = async function bard(que: string): Promise<any> {
-    if (!que) return null;
-
-    try {
-        const req = await request(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`, {
-            method: "POST",
-            headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
-                'Referer': 'https://gemini.google.com/',
-                'Origin': 'https://gemini.google.com/',
-            },
-            body: `f.req=%5Bnull%2C%22%5B%5B%5B%5C%22${encodeURIComponent(que)}%5C%22%2C0%2Cnull%2C%5B%5D%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en%5C%22%5D%2C%5Bnull%2Cnull%2Cnull%2C%5B%5D%2C%5B%5D%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%2C%5B%5D%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2C%5B%5D%5D%22%5D%2Cnull%2C%5C%22%5C%22%5D&at=ABPS6S3C6P1Yn5D3t5Z8W6v5JzO_6%3A1706691666611&`
-        });
-
-        const resText = await req.text;
-        const res = resText.split('[[')[1]?.split(']]')[0] || null;
-        if (!res) return null;
-
-        const data = JSON.parse('[[' + res + ']]');
-        const text = data[0][2];
-        return { data: text };
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
-}
-
 export const Gemini = async function Gemini(que: string, convo: any, retry: boolean = false) {
     if (!que) return null;
 
@@ -1642,7 +1618,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     }
     if (req.statusCode === 400) {
         return {
-            "error": "Gemini is not available in your country"
+            "error": "Timeout / Bad Request"
         }
     }
     if (req.statusCode === 429) {
@@ -1652,7 +1628,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     }
     if (req.statusCode === 403) {
         return {
-            "error": "Blocked"
+            "error": "Blocked / Geo-restricted"
         }
     }
 
@@ -1716,14 +1692,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
     }
 
     return responseBody;
-}
-
-export const Chatplus = async function Chatplus(que: string) {
-    if (!que) return null;
-    return {
-        response: null,
-        data: null
-    }
 }
 
 export const Translate = async function Translate(que: string, from?: string, to?: string) {
@@ -3626,7 +3594,8 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         const channelCheck = await request(`https://discord.com/api/v10/channels/${channelId}`, {
             headers: {
                 'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
             }
         });
 
@@ -3640,7 +3609,8 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
             const messageCheck = await request(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
                 headers: {
                     'Authorization': `Bot ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
                 }
             });
 
@@ -3681,7 +3651,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
     for (const url of urlsToTry) {
         try {
-            const vidReq = await request(url as string, {
+            const vidReq = await fetch(url as string, {
                 method: 'GET',
                 headers: {
                     ...commonHeaders,
@@ -3689,14 +3659,14 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
                 }
             });
 
-            const contentLength = parseInt(vidReq.headers['content-length'] as string || '0');
+            const contentLength = parseInt(vidReq.headers.get('content-length') || '0');
 
             // Check size from headers before consuming the body
             if (contentLength > MAX_DISCORD_SIZE) {
                 continue;
             }
 
-            const buffer = vidReq.body.buffer;
+            const buffer = await vidReq.arrayBuffer();
             if (buffer.byteLength <= MAX_DISCORD_SIZE) {
                 videoBuffer = buffer as ArrayBuffer;
                 break;
@@ -3740,7 +3710,8 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         const response = await fetch(url, {
             method: messageId ? 'PATCH' : 'POST',
             headers: {
-                'Authorization': `Bot ${token}`
+                'Authorization': `Bot ${token}`,
+                'User-Agent': 'DiscordBot (https://discord.com, 1.0)'
             },
             body: form
         });
@@ -3912,7 +3883,8 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         const response = await fetch(discordUrl, {
             method: messageId ? 'PATCH' : 'POST',
             headers: {
-                'Authorization': `Bot ${token}`
+                'Authorization': `Bot ${token}`,
+                'User-Agent': 'DiscordBot (https://discord.com, 1.0)'
             },
             body: form
         });
@@ -4928,11 +4900,15 @@ async function sendMessage(q: string, cache: any) {
 }
 
 export async function MetaAI(query: string, forceRefresh: boolean = false): Promise<any> {
+    return {
+        error: "Service unavailable. Required solve anti-bot challenges"
+    }
+    
     if (forceRefresh) {
         metaAICache = null;
     }
 
-    if (metaAICache?.valid && metaAICache.access_token && metaAICache.lsd && metaAICache.docid.message && !forceRefresh) {
+    if (metaAICache?.valid && metaAICache?.access_token && metaAICache?.lsd && metaAICache?.docid?.message && !forceRefresh) {
         try {
             const result = await sendMessage(query, metaAICache);
             if (!result.error) return result;
@@ -4962,7 +4938,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         if (html && html.includes('/__rd_verify_')) {
             const challengeMatch = html.match(/fetch\(["'](\/[^"']+)["']/);
             if (challengeMatch) {
-                const challengeUrl = 'https://www.meta.ai' + challengeMatch[1];
+                const challengeUrl = 'https://www.meta.ai' + challengeMatch![1];
 
                 // POST to challenge (session carries cookies automatically)
                 await session.post(challengeUrl, {
@@ -5001,7 +4977,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
             const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
             if (nextDataMatch) {
                 try {
-                    const nextData = JSON.parse(nextDataMatch[1]);
+                    const nextData = JSON.parse(nextDataMatch![1]);
                     const findInObj = (obj: any, key: string): any => {
                         if (!obj || typeof obj !== 'object') return null;
                         if (obj[key]) return obj[key];
@@ -5025,12 +5001,12 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
         if (!tosDocId) {
             const tosMatch = html.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
                 html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraAcceptTOSForTempUserMutation/);
-            if (tosMatch) tosDocId = tosMatch[1];
+            if (tosMatch) tosDocId = tosMatch![1];
         }
         if (!messageDocId) {
             const msgMatch = html.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
                 html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraSendMessageMutation/);
-            if (msgMatch) messageDocId = msgMatch[1];
+            if (msgMatch) messageDocId = msgMatch![1];
         }
 
         const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
@@ -6763,7 +6739,8 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
             method: 'PATCH',
             headers: {
                 'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
             },
             body: JSON.stringify(data)
         });

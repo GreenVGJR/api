@@ -170,8 +170,8 @@ app.get('/queue', async (c) => {
         const { player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
-        if (!queue) {
-            await log('No active queue found');
+        if (!queue || !queue.queue.current) {
+            await log('No active queue or current track found');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
             return;
         }
@@ -205,10 +205,10 @@ app.get('/queue', async (c) => {
                     label: formatDuration(totalQueueDuration),
                     value: String(totalQueueDuration)
                 },
-                progress: {
+                progress: currentTrack ? {
                     current: { label: formatDuration(queue.position), value: queue.position },
                     total: { label: formatDuration(currentTrack.info.duration), value: currentTrack.info.duration },
-                },
+                } : null,
             },
         })}}`);
     });

@@ -13,7 +13,7 @@ import {
     checkVoicePermissions,
     formatDuration,
 } from '../../functions/musicPlayer.js';
-import { SCMusic, SPMusic, YTMusic, YTVideo, request, commonHeaders } from '../../functions/request.js';
+import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 
 // ── Custom search result ──────────────────────────────────────────────────────
@@ -75,6 +75,26 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                     author: track.artistName,
                 };
             }
+            case 'deezer': {
+                const res   = await Deezer(query);
+                const track = res?.data?.[0];
+                if (!track?.link) return null;
+                return {
+                    url:    track.link,
+                    title:  track.title,
+                    author: track.artist?.name,
+                };
+            }
+            case 'tidal': {
+                const res   = await Tidal(query);
+                const track = res?.data?.[0];
+                if (!track?.url) return null;
+                return {
+                    url:    track.url,
+                    title:  track.title,
+                    author: track.artist?.name || track.artists?.[0]?.name,
+                };
+            }
             default:
                 return null;
         }
@@ -89,7 +109,7 @@ app.get('/play', async (c) => {
 
         const token      = c.req.query('token');
         const query      = c.req.query('q');
-        const platform   = (c.req.query('platform') || 'spotify').toLowerCase();
+        const platform   = (c.req.query('platform') || 'applemusic').toLowerCase();
         const voiceId    = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId   = c.req.query('authorId');
@@ -103,6 +123,14 @@ app.get('/play', async (c) => {
 
         const queryStr = query as string;
         const isUrl    = queryStr.startsWith('http://') || queryStr.startsWith('https://');
+
+        // Verify platform if not a URL
+        const supportedPlatforms = ['youtube', 'youtubemusic', 'soundcloud', 'spotify', 'applemusic', 'deezer', 'tidal'];
+        if (!isUrl && !supportedPlatforms.includes(platform)) {
+            await log(`Unsupported search platform: "${platform}"`);
+            await s.write(`],"error":${JSON.stringify({ message: `Search engine "${platform}" is not supported.`, list: supportedPlatforms.join(', ') })}}`);
+            return;
+        }
 
         // ── Client Setup ──────────────────────────────────────────────────
 
@@ -280,11 +308,24 @@ app.get('/play', async (c) => {
                 t.playlist = { name: playlistName, url: playlistUrl, tracks: playlistTracks };
             });
 
-            await log(`Playlist resolved: "${playlistName}" (${tracks.length} tracks)`);
-            await guildPlayer.queue.add(tracks);
+            // Filter out live tracks from the playlist
+            const filteredTracks = tracks.filter((t: any) => !t.info.isStream);
+            if (filteredTracks.length === 0) {
+                await log('No non-live tracks found in playlist');
+                await s.write(`],"error":${JSON.stringify({ message: 'Playlist contains only live tracks, which are not allowed' })}}`);
+                return;
+            }
+
+            await log(`Playlist resolved: "${playlistName}" (${filteredTracks.length} tracks, ${tracks.length - filteredTracks.length} live tracks removed)`);
+            await guildPlayer.queue.add(filteredTracks);
             await log('Playlist added to queue');
         } else {
             const track = tracks[0];
+            if (track.info.isStream) {
+                await log(`Live track blocked: "${track.info.title}"`);
+                await s.write(`],"error":${JSON.stringify({ message: 'Live tracks (streams) are not allowed' })}}`);
+                return;
+            }
             await log(`Track resolved: "${track.info.title}" by ${track.info.author}`);
             await guildPlayer.queue.add(track);
             await log('Track added to queue');
@@ -298,7 +339,7 @@ app.get('/play', async (c) => {
                 await Promise.race([
                     guildPlayer.play(),
                     new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Play request timed out')), 15_000)
+                        setTimeout(() => reject(new Error('Play request timed out after 30s')), 30_000)
                     ),
                 ]);
             } catch (err: any) {

@@ -12,6 +12,8 @@ import crypto from 'crypto';
 import config from './config.json' with { type: 'json' };
 import os from 'os';
 
+const honoVersion = (() => { try { return JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'node_modules/hono/package.json'), 'utf-8')).version; } catch { return '?'; } })();
+
 import reqs from './routes/search/index.js';
 import lyrics from './routes/lyrics/index.js';
 import tools from './routes/tools/index.js';
@@ -25,8 +27,8 @@ autoInit().catch(() => {});
 
 const API_ROUTES = {
     search: [
-        "/search/youtube/video?q=",
-        "/search/youtube/music?q=",
+        "/search/youtube/video?q=&mix=",
+        "/search/youtube/music?q=&mix=",
         "/search/youtube/channel?q=",
         "/search/youtube/playlist?q=",
         "/search/soundcloud?q=",
@@ -519,7 +521,7 @@ app.get('/', (c: Context) => {
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
-
+    
     return stream(c, async (stream) => {
         await stream.write('');
         const seconds = Math.floor((Date.now() - starttime) / 1000);
@@ -551,9 +553,9 @@ app.get('/', (c: Context) => {
             domRendering: typeRender,
             uptime: uptime,
             os_uptime: os_uptime,
-            service: "Hono",
-            runtime: typeof Bun !== "object" ? "Node.js" : "Bun",
-            fallback_runtime: typeof Bun === "object" ? "Node.js" : "Bun",
+            service: `Hono v${honoVersion}`,
+            runtime: (typeof Bun !== "object" ? "Node.js" : "Bun") + " v" + (typeof Bun !== "object" ? process.version.slice(1) : (Bun as any).version),
+            fallback_runtime: (typeof Bun === "object" ? "Node.js" : "Bun") + " v" + (typeof Bun === "object" ? process.version.slice(1) : (Bun as any).version),
             stats: {
                 cpu: cpu,
                 ram: ram

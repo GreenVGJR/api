@@ -488,11 +488,8 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const host = (c.req.header('host') || '').toLowerCase();
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
-    
-    const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'script') return;
 
-    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
     c.header('Content-Type', 'application/javascript');
     await s.write('');
 
@@ -504,10 +501,7 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    const secFetchDest = c.req.header('Sec-Fetch-Dest');
-    if(secFetchDest && secFetchDest !== 'style') return;
-    
-    c.header('Cache-Control', 'public, max-age=86400, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
     c.header('Content-Type', 'text/css');
     await s.write('');
     

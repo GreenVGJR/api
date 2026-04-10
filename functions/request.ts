@@ -1,19 +1,6 @@
 import { Session } from 'httpcloak';
 import { type Context } from 'hono';
 
-let session = new Session({ preferIpv4: true });
-let sessionH2 = new Session({ preferIpv4: true, httpVersion: 'h2' });
-let lastSessionResetTime = Date.now();
-const SESSION_ROTATION_MS = 6 * 60 * 60 * 1000;
-
-const resetSessions = () => {
-    try { session.close(); } catch { }
-    try { sessionH2.close(); } catch { }
-    session = new Session({ preferIpv4: true });
-    sessionH2 = new Session({ preferIpv4: true, httpVersion: 'h2' });
-    lastSessionResetTime = Date.now();
-};
-
 const DEFAULT_TIMEOUT_MS = 60000;
 
 export const request = async (url: string, options: {
@@ -23,9 +10,6 @@ export const request = async (url: string, options: {
     signal?: AbortSignal;
     useH2?: boolean;
 } = {}) => {
-    if (Date.now() - lastSessionResetTime > SESSION_ROTATION_MS) {
-        resetSessions();
-    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
 
@@ -34,9 +18,14 @@ export const request = async (url: string, options: {
         ? AbortSignal.any([controller.signal, parentSignal])
         : controller.signal;
 
+    const activeSession = new Session({
+        preferIpv4: true,
+        tlsOnly: false,
+        httpVersion: options.useH2 ? 'h2' : undefined
+    });
+
     try {
         const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
-        const activeSession = options.useH2 ? sessionH2 : session;
         const headers: any = { ...options.headers };
         if (url.includes('discord.com/api/')) {
             headers['User-Agent'] = headers['User-Agent'] || 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
@@ -48,6 +37,7 @@ export const request = async (url: string, options: {
         });
         return res;
     } finally {
+        try { activeSession.close(); } catch { }
         clearTimeout(timeoutId);
     }
 };
@@ -516,18 +506,19 @@ export const deezerKeys = async function deezerKeys() {
 
 export const twitterKey = async function twitterKey(typeName: string) {
     try {
-        const response = await request("https://x.com/", { headers: { ...commonHeaders } });
-        const html = await response.text;
+        const response = await fetch("https://x.com/", { headers: { ...commonHeaders } });
+        const html = await response.text();
         const { document } = parseHTML(html);
         twitterDocument = document;
 
         twitterTransaction = new ClientTransaction(twitterDocument);
         await twitterTransaction.initialize();
 
-        const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
+        const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
-        const res1 = await pul1.text;
-        twitterAuth = 'AAAAAAAAA' + res1.split('"AAAAAAAAA')[1].split('"')[0];
+        const res1 = await pul1.text();
+        twitterAuth = 'AAA' + res1.split('Bearer AAA')[1].split('"')[0];
+
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
             ?.split('"')[1];
@@ -584,7 +575,6 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
         });
         */
 
-        // might use httpcloak if youtube didnt throw captcha often
         const response = await request(`https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
@@ -603,7 +593,17 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
         const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
         const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
-        const mappedTasks = inrtubeContents.map(async (item: any) => {
+        const videoItems = inrtubeContents.flatMap((item: any) => {
+            if (item.shelfRenderer?.content?.verticalListRenderer?.items) {
+                return item.shelfRenderer.content.verticalListRenderer.items;
+            }
+            if (item.shelfRenderer?.content?.horizontalListRenderer?.items) {
+                return item.shelfRenderer.content.horizontalListRenderer.items;
+            }
+            return item;
+        });
+
+        const mappedTasks = videoItems.map(async (item: any) => {
             const a = item.videoRenderer;
             if (!a) return null;
             const checkmix = a?.navigationEndpoint?.watchEndpoint?.playlistId;
@@ -672,6 +672,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
                 const chnl = a.longBylineText?.runs?.[0];
                 const chnl2 = chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
                 const fom = {
+                    type: "videoRenderer",
                     videoId: a.videoId,
                     url: "https://www.youtube.com/watch?v=" + a.videoId,
                     altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
@@ -714,7 +715,33 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 
         alk = (await Promise.all(mappedTasks)).filter(Boolean);
 
-        return { searchParams: queryId, data: alk };
+        const mappedTasks2 = inrtubeContents.map((item: any) => {
+            const a = item.gridShelfViewModel;
+            if (!a) return null;
+            return a.contents.map((e: any) => ({
+                type: "shortsGrid",
+                videoId: e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+                url: "https://www.youtube.com/watch?v=" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+                altUrl: "https://www.youtube.com" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+                thumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
+                movingThumbnail: null,
+                previewThumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
+                title: e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content || null,
+                description: "",
+                owners: {},
+                timeChapters: null,
+                isLive: false,
+                isATV: false,
+                isMix: false,
+                isShorts: true,
+                mixPlaylist: null,
+                viewCount: parseAbbreviatedNumber(e?.shortsLockupViewModel?.overlayMetadata?.secondaryText?.content?.split(' ')?.[0]),
+                duration: null
+            }));
+        });
+        const finalTask2 = mappedTasks2.filter(Boolean).flat();
+
+        return { searchParams: queryId, data: alk?.concat(finalTask2) };
     } catch (e) { console.error("YTSearch Global Error:", e); return null; }
 }
 
@@ -740,7 +767,8 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                 'Content-Type': 'application/json'
             },
             body: bodyload,
-            method: "POST"
+            method: "POST",
+            useH2: true
         });
 
         const res: any = await response.json();
@@ -915,7 +943,8 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
                 'content-type': 'application/json'
             },
             body: bodyload,
-            method: "POST"
+            method: "POST",
+            useH2: true
         });
 
         const res: any = await response.json();
@@ -2714,7 +2743,6 @@ export const infoPinterest = async function infoPinterest(que: string) {
 
         return { data: data.length > 0 ? data.reverse() : null };
     } catch {
-        if (session) session.close();
         return null;
     }
 }
@@ -3898,8 +3926,9 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
 export const infoTwitterUser = async function infoTwitterUser(que: string, refresh_auth?: boolean): Promise<any> {
     if (!que) return null;
-    if (refresh_auth || !twitterAuth || !twitterObj?.UserByScreenName) {
+    if (refresh_auth || !twitterAuth || !twitterObj?.UserByScreenName || !twitterObj?.UserTweets) {
         await twitterKey("UserByScreenName");
+        await twitterKey("UserTweets");
     }
 
     try {
@@ -3908,7 +3937,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
         const variables = JSON.stringify({ screen_name: que, withGrokTranslatedBio: true });
         const fieldToggles = JSON.stringify({ withPayments: true, withAuxiliaryUserLabels: true });
 
-        const pul = await request(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
+        const pul = await fetch(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
             headers: {
                 ...commonHeaders,
                 'content-type': 'application/json',
@@ -3917,15 +3946,15 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
             }
         });
 
-        if (pul.statusCode === 403) {
+        if (pul.status === 403) {
             return {
                 "error": "Bad auth"
             }
         }
 
-        if (pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
+        if (pul.status === 401 || pul.status === 400) return await infoTwitterUser(que, true);
 
-        const responseText = await pul.text;
+        const responseText = await pul.text();
         let res;
         try {
             res = JSON.parse(responseText);
@@ -3933,23 +3962,56 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
             return null;
         }
         let pul2;
+        let pul3;
         let res2: any = {};
+        let res3: any = {};
         if (res?.data?.user?.result?.rest_id) {
-            pul2 = await request(`https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`, {
-                headers: {
-                    ...commonHeaders
-                }
-            });
+            const queryId2 = twitterObj?.UserTweets?.[0];
+            const features2 = JSON.stringify(twitterObj?.UserTweets?.[1]);
+            const variables2 = JSON.stringify({ "userId": res?.data?.user?.result?.rest_id, "includePromotedContent": true, "withQuickPromoteEligibilityTweetFields": true, "withVoice": true });
+            const fieldToggles2 = JSON.stringify({ "withArticlePlainText": true });
+            const [pul2, pul3] = await Promise.all([
+                fetch(`https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`, {
+                    headers: {
+                        ...commonHeaders
+                    }
+                }),
+                fetch(`https://api.x.com/graphql/${queryId2}/UserTweets?variables=${encodeURIComponent(variables2)}&features=${encodeURIComponent(features2)}&fieldToggles=${encodeURIComponent(fieldToggles2)}`, {
+                    headers: {
+                        ...commonHeaders,
+                        'content-type': 'application/json',
+                        'authorization': 'Bearer ' + twitterAuth,
+                        'x-client-transaction-id': twitterObj?.UserTweets?.[2],
+                    }
+                })
+            ]);
             try {
-                const body2 = await pul2.text;
-                res2 = JSON.parse(body2.split('type="application/json">')[1].split('</script>')[0]);
+                const body2 = await pul2.text();
+                if (body2 && body2.includes('type="application/json">')) {
+                    res2 = JSON.parse(body2.split('type="application/json">')[1].split('</script>')[0]);
+                }
             }
-            catch { }
+            catch (e) { console.error("Twitter Syndication Parse Error:", e) }
+
+            try {
+                if (pul3.status === 200) {
+                    const res3_raw: any = await pul3.json();
+                    res3 = res3_raw?.data?.user?.result?.timeline?.timeline?.instructions?.flatMap((f: any) => f?.entries || (f?.entry ? [f.entry] : []));
+                } else {
+                    res3 = {
+                        error: await pul3.text()
+                    }
+                }
+            }
+            catch (e) { console.error("Twitter API JSON Parse Error:", e) }
         }
 
         const finalres = {
             ...(res?.data?.user?.result || null),
-            timeline: res2?.props?.pageProps?.timeline?.entries?.[0] ? res2?.props?.pageProps?.timeline?.entries : null
+            timeline: {
+                page: res3?.[0] ? res3 : { error: "Not available / Geo-restrict" },
+                embed: res2?.props?.pageProps?.timeline?.entries?.[0] ? res2?.props?.pageProps?.timeline?.entries?.map((k: any) => k.content.tweet) : (res2?.props?.pageProps?.contextProvider?.hasResults ? { error: "Not available / Geo-restrict" } : null)
+            }
         }
 
         return { data: finalres?.rest_id ? finalres : null };
@@ -4096,7 +4158,8 @@ export const YTChannel = async function YTChannel(que: string) {
                 'content-type': 'application/json'
             },
             body: bodyload,
-            method: "POST"
+            method: "POST",
+            useH2: true
         });
 
         const res: any = await response.json();
@@ -4338,7 +4401,7 @@ export const instagramUser = async function instagramUser(que: string) {
             }
         });
 
-        if (testreq.statusCode === 302) {
+        if (!testreq.url.includes(`https://www.instagram.com/${encodeURIComponent(que)}`)) {
             return {
                 error: "Please sign in"
             }
@@ -4355,17 +4418,29 @@ export const instagramUser = async function instagramUser(que: string) {
 
         const bodyhttp = { "enable_integrity_filters": true, "id": profile_id, "render_surface": "PROFILE", "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": true, "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": false, "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": false };
 
-        const [req, req2] = await Promise.all([
-            request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
-                headers: {
-                    ...commonHeaders,
-                    'X-IG-App-ID': "936619743392459",
-                    'X-ASBD-ID': "198387",
-                    'X-IG-WWW-Claim': "0",
-                    'Origin': 'https://www.instagram.com'
-                }
-            }),
-            request(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
+        const req = await request(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
+            headers: {
+                ...commonHeaders,
+                'X-IG-App-ID': "936619743392459",
+                'X-ASBD-ID': "198387",
+                'X-IG-WWW-Claim': "0",
+                'Origin': 'https://www.instagram.com'
+            },
+            useH2: true
+        });
+
+        let a: any = null;
+        let b: any = null;
+        try {
+            const text = await req.text;
+            if (text && text.trim() !== "") {
+                const res = await req.json();
+                a = res?.data?.user;
+            }
+        } catch { }
+
+        if (!a) {
+            const req2 = await request(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
                 headers: {
                     ...commonHeaders,
                     'Origin': 'https://www.instagram.com',
@@ -4373,33 +4448,15 @@ export const instagramUser = async function instagramUser(que: string) {
                     'X-Asbd-Id': "198387",
                     'X-Ig-Www-Claim': "0"
                 }
-            })
-        ]);
-
-        let a: any = null;
-        let b: any = null;
-
-        const [res, res2]: any = await Promise.all([
-            (async () => {
-                try {
-                    const text = await req.text;
-                    if (!text || text.trim() === "") return null;
-                    return await req.json();
-                } catch { return null; }
-            })(),
-            (async () => {
-                try { return await req2.json(); } catch { return null; }
-            })()
-        ]);
-
-        a = res?.data?.user;
-        b = res2?.data?.user || res2?.data || res2;
-
-        if (!a && req.statusCode !== 200 && req.statusCode !== 404) {
-            try { a = await req.json(); } catch { a = { body: await req.text }; }
+            });
+            try {
+                const res2 = await req2.json();
+                b = res2?.data?.user || res2?.data || res2;
+                a = b?.user ? b.user : b;
+            } catch { }
         }
 
-        const source = (a && a.id) ? a : (b?.user ? b.user : b);
+        const source = a;
         const formatted = (source && source.id) ? {
             avatar_url: source.profile_pic_url_hd || source.profile_pic_url,
             userid: source.id,
@@ -4417,7 +4474,7 @@ export const instagramUser = async function instagramUser(que: string) {
             pronouns: source.pronouns?.[0] ? source.pronouns : null
         } : null;
 
-        return { data: [formatted || null, a || null, b || null] };
+        return { data: [formatted || null, a || (b || null)] };
     } catch (e) {
         console.error(e);
         return null;
@@ -4903,7 +4960,7 @@ export async function MetaAI(query: string, forceRefresh: boolean = false): Prom
     return {
         error: "Service unavailable. Required solve anti-bot challenges"
     }
-    
+
     if (forceRefresh) {
         metaAICache = null;
     }

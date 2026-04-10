@@ -98,10 +98,12 @@ app.get('/ffmpeg/interpolate', async (c) => {
 
         return stream(c, async (s) => {
             try {
+                await s.write(new Uint8Array());
+                const videoFilter = (height > 720 ? 'scale=-2:720:flags=lanczos,' : '') + `minterpolate=fps=${targetFps}:me=epzs:mi_mode=mci:mb_size=16`;
                 const ffmpeg = spawn('ffmpeg', [
                     '-i', inputPath,
                     '-filter_threads', '0',
-                    '-filter:v', `scale=-2:640:flags=lanczos,minterpolate=fps=${targetFps}:me=epzs:mi_mode=mci:mb_size=16`,
+                    '-filter:v', videoFilter,
                     '-movflags', 'frag_keyframe+empty_moov+faststart',
                     '-f', 'mp4',
                     'pipe:1'

@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, ChannelType, PermissionsBitField } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options } from 'discord.js';
 import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-client';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
@@ -162,13 +162,31 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         return { client: existing.client, player: existing.player };
     }
 
-    const client = new Client({
+    const client: Client = new Client({
         intents: [
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildVoiceStates,
-            GatewayIntentBits.GuildMembers,
         ],
         presence: { status: 'invisible' },
+        // Speed up loading by disabling caches we don't use
+        makeCache: Options.cacheWithLimits({
+            ...Options.DefaultMakeCacheSettings,
+            MessageManager: 0,
+            ThreadManager: 0,
+            PresenceManager: 0,
+            ReactionManager: 0,
+            GuildEmojiManager: 0,
+            GuildStickerManager: 0,
+            GuildScheduledEventManager: 0,
+            ApplicationCommandManager: 0,
+            BaseGuildEmojiManager: 0,
+            GuildInviteManager: 0,
+            // Keep a tiny member cache for the bot itself
+            GuildMemberManager: {
+                maxSize: 50,
+                keepOverLimit: (member: any): boolean => member.id === member.client.user?.id,
+            },
+        }),
     });
 
     // Placeholder until the client is ready (id filled in on clientReady)
@@ -200,7 +218,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     });
 
     // Forward Discord gateway events to Lavalink
-    client.on('raw', d => manager.sendRawData(d));
+    client.on('raw', (d: any) => manager.sendRawData(d));
 
     // ── Shared 24/7 Reconnect ──────────────────────────────────────────────
     const reconnecting247 = new Set<string>(); // dedup concurrent calls per guild
@@ -289,7 +307,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     });
 
     // ── Discord Events ─────────────────────────────────────────────────────
-    client.on('voiceStateUpdate', (oldState, newState) => {
+    client.on('voiceStateUpdate', (oldState: any, newState: any) => {
         if (oldState.member?.id !== client.user?.id) return;
         // Track last known VC whenever bot joins/moves
         if (newState.channelId) {
@@ -320,7 +338,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             30_000
         );
 
-        client.once('clientReady', async (readyClient) => {
+        client.once('clientReady', async (readyClient: any) => {
             console.log(`🎵 Music client ready: ${readyClient.user.tag}`);
             try {
                 // init() triggers node connections but does NOT wait for the
@@ -331,8 +349,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 manager.nodeManager.once('connect', async () => {
                     if (timeout) clearTimeout(timeout);
                     console.log(`🔗 Lavalink node connected (token: ...${token.slice(-6)})`);
-                    // Brief wait for the node to fully register as usable
-                    await new Promise(r => setTimeout(r, 500));
                     resolve();
                 });
 
@@ -346,7 +362,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             }
         });
 
-        client.once('error', err => {
+        client.once('error', (err: any) => {
             if (timeout) clearTimeout(timeout);
             reject(err);
         });
@@ -410,25 +426,17 @@ async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) =
     if (managed.contextCached) return;
     managed.contextCached = true;
 
-    const msg = 'Caching discord context for better performance (in background)';
-    if (log) log(msg).catch(() => {}); // fire-and-forget log
-
     // Fire and forget — caller doesn't wait for this
     (async () => {
         try {
+            // Only fetch guilds and basic channel info, skipping heavy roles and members
             const guilds = await managed.client.guilds.fetch();
-            await Promise.all(
+            await Promise.allSettled(
                 guilds.map(async (g) => {
                     try {
                         const guild = await g.fetch();
-                        await Promise.allSettled([
-                            guild.channels.fetch(),
-                            guild.roles.fetch(),
-                            guild.members.fetch(),
-                        ]);
-                    } catch {
-                        /* skip guild if fetch fails */
-                    }
+                        await guild.channels.fetch();
+                    } catch { }
                 })
             );
         } catch (err) {

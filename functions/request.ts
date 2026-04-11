@@ -1933,7 +1933,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
                 previewThumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxres1.jpg",
                 title: first?.title?.runs?.[0]?.text || null,
                 description: second?.attributedDescription?.content || null,
-                releaseDate: (first?.dateText?.simpleText?.split('streaming on ')?.[1] || first?.dateText?.simpleText?.split('live on ')?.[1] || first?.dateText?.simpleText) || null,
+                releaseDate: (first?.dateText?.simpleText?.split('streaming on ')?.[1] || first?.dateText?.simpleText?.split('live on ')?.[1] || first?.dateText?.simpleText?.split('started streaming on ')?.[1] || first?.dateText?.simpleText?.split('Started streaming on ')?.[1] || first?.dateText?.simpleText?.split('started streaming ')?.[1] || first?.dateText?.simpleText?.split('Started streaming ')?.[1] || first?.dateText?.simpleText?.split('Streamed live on ')?.[1] || first?.dateText?.simpleText?.split('streamed live on ')?.[1] || first?.dateText?.simpleText?.split('Premiered on ')?.[1] || first?.dateText?.simpleText?.split('Premiered ')?.[1] || first?.dateText?.simpleText?.split('Broadcast live on ')?.[1] || first?.dateText?.simpleText?.split('broadcast live on ')?.[1] || first?.dateText?.simpleText) || null,
                 viewCount: String(parseAbbreviatedNumber(first?.viewCount?.videoViewCountRenderer?.viewCount?.simpleText?.split(' ')?.[0]) || 0),
                 owners: {
                     name: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.text || second?.owner?.videoOwnerRenderer?.attributedTitle?.content) || null,

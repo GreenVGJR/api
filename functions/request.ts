@@ -6172,6 +6172,14 @@ function resolveFlags(flags: number | null | undefined): string[] {
     return badges;
 }
 
+const getSnowflakeDate = (id: string) => {
+    try {
+        return Math.floor(Number((BigInt(id) >> 22n) + 1420070400000n) / 1000);
+    } catch {
+        return null;
+    }
+}
+
 export const DiscordInfoMember = async (token: string, userId: string, guildId?: string) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!userId) return { error: 'Missing userId' };
@@ -6234,7 +6242,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
     }
 };
 
-export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: 'user' | 'bot' | 'all' = 'all') => {
+export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: string = 'all') => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!guildId) return { error: 'Missing guildId' };
 
@@ -6245,7 +6253,10 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
     };
 
     try {
-        const url = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${limit}`;
+        const types = type.split(',').map(t => t.trim());
+        const isSpecial = types.some(t => ['oldest', 'newest', 'no_role'].includes(t));
+        const fetchLimit = isSpecial ? 1000 : limit;
+        const url = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
         const req = await fetch(url, { method: 'GET', headers });
 
         let data: any = null;
@@ -6259,10 +6270,28 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         }
 
         if (Array.isArray(data)) {
-            if (type === 'user') {
-                data = data.filter((member: any) => !member.user?.bot);
-            } else if (type === 'bot') {
-                data = data.filter((member: any) => member.user?.bot);
+            data = data.map((member: any) => ({
+                ...member,
+                joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+                created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
+            }));
+
+            for (const t of types) {
+                if (t === 'user') {
+                    data = data.filter((member: any) => !member.user?.bot);
+                } else if (t === 'bot') {
+                    data = data.filter((member: any) => member.user?.bot);
+                } else if (t === 'no_role') {
+                    data = data.filter((member: any) => !member.roles || member.roles.length === 0);
+                } else if (t === 'oldest') {
+                    data.sort((a: any, b: any) => Number(a.joined_at || 0) - Number(b.joined_at || 0));
+                } else if (t === 'newest') {
+                    data.sort((a: any, b: any) => Number(b.joined_at || 0) - Number(a.joined_at || 0));
+                }
+            }
+
+            if (isSpecial) {
+                data = data.slice(0, limit);
             }
         }
 

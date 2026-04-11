@@ -22,8 +22,14 @@ app.get('/discord/listMember', async (c) => {
     const queryLimit = c.req.query('limit');
     const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : 10;
 
-    const queryType = c.req.query('type') as any;
-    const type = ['user', 'bot', 'all'].includes(queryType) ? queryType : 'all';
+    const validTypes = ['user', 'bot', 'all', 'oldest', 'newest', 'no_role'];
+    const queryType = c.req.query('type') || 'all';
+    const types = queryType.split(',').map(t => t.trim());
+    const invalidTypes = types.filter(t => !validTypes.includes(t));
+    if (invalidTypes.length > 0) {
+        return c.json({ error: `List types: ${validTypes.join(', ')}` }, 202);
+    }
+    const type = queryType;
 
     if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
     if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);

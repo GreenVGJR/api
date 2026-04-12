@@ -37,7 +37,9 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   c.header('Cache-Control', 'public, max-age=30, must-revalidate');
 
   return stream(c, async (s) => {
-    s.onAbort(() => { });
+    s.onAbort(() => {
+      return;
+    });
 
     await s.write(new Uint8Array());
 
@@ -146,21 +148,28 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
   c.header('X-Enc-Route', 'v4');
   c.header('Content-Type', 'application/json');
-  c.header('Cache-Control', requrl.pathname?.startsWith('/tools/discord/') ? 'public, max-age=0, must-revalidate' : 'public, max-age=5, must-revalidate');
+  c.header('Cache-Control', requrl.pathname?.startsWith('/tools/discord/') ? 'public, max-age=0, must-revalidate' : 'public, max-age=10, must-revalidate');
 
   return stream(c, async (stream) => {
     stream.onAbort(() => {
       return;
     });
 
-    await stream.write(new Uint8Array());
-
     if (c.req.raw.signal.aborted) return;
 
-    const data = await (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory).catch((e: any) => {
-      console.error('Promise error:', e);
-      return null;
-    });
+    const dataPromise = typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory;
+
+    const [dataResult] = await Promise.allSettled([
+      dataPromise,
+      stream.write(''),
+    ]);
+
+    let data = null;
+    if (dataResult.status === 'rejected') {
+      console.error('Promise error:', dataResult.reason);
+    } else {
+      data = dataResult.value;
+    }
 
     if (c.req.raw.signal.aborted) return;
 

@@ -91,7 +91,7 @@ app.get('/ffmpeg/interpolate', async (c) => {
         const targetFps = Math.round(inputFps * multi);
 
         c.header('Content-Type', 'video/mp4');
-        c.header('Cache-Control', 'public, no-transform, max-age=86400');
+        c.header('Cache-Control', 'public, max-age=86400');
         c.header('Transfer-Encoding', 'chunked');
         c.header('X-Warning', 'You are using experimental endpoint. Expect errors');
         c.header('X-Enc-Data', JSON.stringify(stream0));

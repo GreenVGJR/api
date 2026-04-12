@@ -2,5 +2,6 @@
 import deezer from './deezer.js';
 import shazam from './shazam.js';
 import youtube from './youtube.js';
+import tidal from './tidal.js';
 
-export default [deezer, shazam, youtube] as any[];
+export default [deezer, shazam, youtube, tidal] as any[];

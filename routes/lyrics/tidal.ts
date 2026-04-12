@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
 const app = new Hono();
-import { deezerLyrics } from '../../functions/request.js';
+import { tidalLyrics } from '../../functions/request.js';
 
-app.get('/deezer', async (c) => {
+app.get('/tidal', async (c) => {
     const query = c.req.query('q');
     if (query === undefined) {
         return c.json({ "error": "Missing parameter required" }, 202);
@@ -11,8 +11,8 @@ app.get('/deezer', async (c) => {
     else if (query === '') {
         return c.json({ "error": "Nothing to do" }, 202);
     }
-    c.header('X-Route', 'pipe.deezer.com');
-    return await dispatch(c, () => deezerLyrics(query!));
+    c.header('X-Route', 'openapi.tidal.com, api.tidal.com');
+    return await dispatch(c, () => tidalLyrics(query!));
 });
 
 export default app;

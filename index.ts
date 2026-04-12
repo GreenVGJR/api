@@ -37,10 +37,12 @@ const API_ROUTES = {
         "/search/shazam?q=",
         "/search/deezer?q=",
         "/search/tidal?q=",
+        "/search/tidal/v2?q=",
         "/search/genius?q=",
         "/search/pinterest?q=",
         "/search/imdb?q=",
         "/search/imgflip?q=",
+        "/search/flickr?q=",
         "/search/istockphoto?q=",
         "/search/imgur/posts?q=",
         "/search/unsplash?q=",
@@ -82,7 +84,8 @@ const API_ROUTES = {
     lyrics: [
         "/lyrics/youtube?q=",
         "/lyrics/deezer?q=",
-        "/lyrics/shazam?q="
+        "/lyrics/shazam?q=",
+        "/lyrics/tidal?q="
     ],
     tools: {
         ai: {
@@ -466,8 +469,7 @@ app.get('/playground', (c: Context) => {
     const host = (c.req.header('host') || '').toLowerCase();
 
     c.header('Content-Type', 'text/html');
-    c.header('Vary', 'Referer');
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
@@ -489,7 +491,7 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
 
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
     await s.write('');
 
@@ -501,7 +503,7 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
     
-    c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate, immutable');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'text/css');
     await s.write('');
     

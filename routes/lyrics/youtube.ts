@@ -16,6 +16,7 @@ app.get('/youtube', async (c) => {
     const task = async () => {
         let q = query;
         let isUrl = false;
+        let item: any = null;
         try {
             new URL(q!);
             isUrl = true;
@@ -24,16 +25,17 @@ app.get('/youtube', async (c) => {
         try {
             if (!isUrl) {
                 const tes = await YTMusic(q!);
-                const item = tes?.data?.[0];
+                item = tes?.data?.[0];
                 const videoId = item?.videoId;
 
                 if (videoId) {
                     q = "https://youtu.be/" + videoId;
                 }
             }
-            const a = await YTLyrics(q!);
+            const a = await YTLyrics(q!, item);
             return a;
         } catch (e) {
+            console.error(e);
             return null;
         }
     };

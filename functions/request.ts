@@ -385,7 +385,10 @@ const listcodes: { name: string, code: string }[] = [
 let keysc: string | undefined;
 let keysp: string | undefined;
 let keysptoken: string | undefined;
-let keytidal: string | undefined;
+let keytidal: string | undefined = "txNoH4kkV41MfH25";
+let keytidalopen: string = "txNoH4kkV41MfH25";
+let keyflickr: string | undefined;
+let keybearer: string | undefined;
 let keydeezer: string | undefined;
 let keyimgur: string | undefined;
 let saweriaBuildId: string | undefined;
@@ -418,6 +421,21 @@ function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] 
         .map(c => c.trim())
         .filter(c => allowedKeys.includes(c.split('=')[0]))
         .join('; ');
+}
+
+export const flickrKey = async function flickrKey() {
+    try {
+        const res = await request('https://flickr.com/photos/', {
+            method: 'GET',
+            headers: {
+                ...commonHeaders,
+            }
+        });
+        const text = await res.text;
+        return text.split('flickr.api.site_key =')[1].split('"')[1];
+    } catch {
+        return undefined;
+    }
 }
 
 export const soundcloudKey = async function soundcloudKey() {
@@ -491,6 +509,35 @@ export const tidalKeys = async function tidalKeys() {
     } catch { return undefined; }
 }
 
+export const tidalKeysToken = async function tidalKeysToken(refresh: boolean = false) {
+    try {
+        if (!keytidal || refresh) {
+            keytidal = await tidalKeys();
+        }
+
+        const rt = new URLSearchParams();
+        rt.append('client_id', 'txNoH4kkV41MfH25');
+        rt.append('client_secret', decodeURIComponent('dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98%3D'));
+        rt.append('grant_type', 'client_credentials');
+
+        const rest = await request(`https://auth.tidal.com/v1/oauth2/token`, {
+            method: "POST",
+            body: rt.toString(),
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        if (rest.statusCode === 400 || rest.statusCode === 401) {
+            return await tidalKeysToken(true);
+        }
+
+        const res: any = await rest.json();
+        return res.access_token;
+    } catch { return undefined; }
+}
+
 export const deezerKeys = async function deezerKeys() {
     try {
         const rest = await request("https://auth.deezer.com/login/anonymous?jo=p&rto=p", {
@@ -555,6 +602,93 @@ export const imgurKey = async function imgurKey() {
     catch (e) {
         console.error(e);
     }
+}
+
+export const Flickr = async function Flickr(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
+    if (!que) return null;
+
+    if (refresh_auth || !keyflickr) {
+        keyflickr = await flickrKey();
+    }
+
+    try {
+        const per = await request(`https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${que}&per_page=${limit_number}`, {
+            headers: commonHeaders,
+            useH2: true
+        });
+
+        if (per.statusCode === 403) {
+            return { "error": "Cloudflare Turnstile asking to verify you're not a bot" }
+        }
+
+        if (per.statusCode === 401) {
+            return await Flickr(que, true);
+        }
+
+        const pes = await per.json();
+
+        if (!pes?.photos?.photo?.[0]) {
+            return { data: null }
+        }
+
+        const listids: string[] = pes.photos.photo.map((a: any) => a.id);
+
+        // getInfo bulk + getSizes per-photo in parallel
+        const [per2, sizesResults] = await Promise.all([
+            request(`https://api.flickr.com/services/rest/?method=flickr.photos.getInfo&photo_ids=${listids}&api_key=${keyflickr}&format=json&nojsoncallback=1`, {
+                headers: commonHeaders,
+                useH2: true
+            }),
+            Promise.all(listids.map(id =>
+                request(`https://api.flickr.com/services/rest/?method=flickr.photos.getSizes&photo_id=${id}&api_key=${keyflickr}&format=json&nojsoncallback=1`, {
+                    headers: commonHeaders,
+                    useH2: true
+                }).then(r => r.json()).then(j => ({ id, sizes: j?.sizes?.size ?? [] }))
+            ))
+        ]);
+
+        if (per2.statusCode === 403) {
+            return { "error": "Cloudflare Turnstile asking to verify you're not a bot" }
+        }
+
+        const pes2 = await per2.json();
+
+        const sizesMap: Record<string, any[]> = {};
+        for (const { id, sizes } of sizesResults) {
+            sizesMap[id] = sizes;
+        }
+
+        const pulpes: any = pes2.photos.photo.map((a: any) => {
+            const sizes: any[] = sizesMap[a.id] ?? [];
+            const original = sizes.find((s: any) => s.label === 'Original');
+
+            const sizeMap = Object.fromEntries(
+                sizes.map((s: any) => [s.label, {
+                    url: s.source,
+                    width: Number(s.width),
+                    height: Number(s.height)
+                }])
+            );
+
+            const highest = sizes[sizes.length - (original ? 2 : 1)];
+
+            return {
+                ...a,
+                media: {
+                    type: a.media,
+                    canDownload: original != null,
+                    sizes: sizeMap,
+                    preview: sizeMap['Large']?.url ?? sizeMap['Medium 800']?.url ?? null,
+                    highest: highest?.source ?? null,
+                    original: original?.source ?? null,
+                    width: original ? Number(original.width) : Number(highest.width),
+                    height: original ? Number(original.height) : Number(highest.height),
+                }
+            };
+        });
+
+        return { data: pulpes };
+    } catch (e) { console.error(e); return null; }
 }
 
 export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
@@ -761,7 +895,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                 }
             }
         });
-        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.tabbedSearchResultsRenderer.tabs.tabRenderer.content.sectionListRenderer.contents.musicShelfRenderer.contents.musicResponsiveListItemRenderer', {
+        const response = await request('https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents', {
             headers: {
                 ...commonHeaders,
                 'Content-Type': 'application/json'
@@ -779,7 +913,9 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
             }
         }
 
-        const innerTubeResults = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer?.contents || [];
+        const sectionContents = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        const musicShelf = sectionContents.find((c: any) => c.musicShelfRenderer)?.musicShelfRenderer;
+        const innerTubeResults = musicShelf?.contents || [];
 
         const mappedTasks = innerTubeResults.map(async (item: any) => {
             const a = item.musicResponsiveListItemRenderer;
@@ -1068,7 +1204,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
     } catch (e) { console.error(e); return null; }
 }
 
-export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 20): Promise<any> {
     if (!que) return null;
 
     if (refresh_auth || !keysp || !keysptoken) {
@@ -1131,7 +1267,7 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
     } catch { return null; }
 }
 
-export const YTLyrics = async function YTLyrics(url: string) {
+export const YTLyrics = async function YTLyrics(url: string, container?: any) {
     let videoId = url.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
     videoId = videoId || undefined;
     if (!videoId) return null;
@@ -1187,18 +1323,24 @@ export const YTLyrics = async function YTLyrics(url: string) {
             method: "POST"
         });
 
-        const res2: any = await pull.json();
+        const [res2, otherinfo] = await Promise.all([
+            pull.json(),
+            infoYoutube(url)
+        ]);
+        const covermusic: any = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
 
-        responseBody['data'] = {
-            browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
-            url: url,
-            other: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer
-        };
-        responseBody['lyrics'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text;
-        responseBody['footer'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text;
+        responseBody['data'] = [
+            { ...(container || {}) },
+            { musicThumbnail: covermusic, ...(otherinfo?.data || {}) },
+        ];
+        responseBody['lyrics'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
+        responseBody['footer'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
 
         return responseBody;
-    } catch { return null; }
+    } catch (e) {
+        console.error("YTLyrics Error:", e);
+        return null;
+    }
 }
 
 export const Shazam = async function Shazam(que: string) {
@@ -1459,7 +1601,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
                 "query": que,
                 "firstList": 1
             },
-            "query": "query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title album { cover { thumbnail: urls(pictureRequest: {width: 500, height: 500}) } } } } } } } }"
+            "query": "query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title duration popularity isExplicit lyrics { id } media { id rights { ads { available availableAfter } sub { available availableAfter } } } album { id displayTitle releaseDate isExplicit tracksCount cover { large: urls(pictureRequest: {width: 500, height: 500}) } contributors { edges { roles node { ... on Artist { id name } } } } } contributors { edges { node { ... on Artist { id name } } } } credits: contributors(roles: [AUTHOR, COMPOSER]) { edges { roles node { ... on Artist { id name } } } } } } } } } }"
         };
 
         const responseBody: any = {
@@ -1480,6 +1622,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
         const res: any = await pull.json();
 
         if (res?.errors?.[0]) {
+            console.log(JSON.stringify(res?.errors));
             return await deezerLyrics(que, true);
         }
 
@@ -1491,6 +1634,8 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
         const trackNode = edges[0].node;
         responseBody['data'] = trackNode;
+
+        if(trackNode.lyrics?.id) {
 
         const body2 = {
             "operationName": "GetLyrics",
@@ -1518,12 +1663,55 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
         responseBody['lyrics'] = res2?.data?.track?.lyrics || null;
 
+        }
+
         return responseBody;
     } catch { return null; }
 }
 
 
-export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 10): Promise<any> {
+export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
+    if (!que) return null;
+
+    try {
+        if (refresh_auth || !keybearer) {
+            keybearer = await tidalKeysToken();
+        }
+
+        const findtrack: any = await Tidal(que, false, 1);
+        const trackid = findtrack.data?.[0]?.id;
+        if(!trackid) {
+            return { data: null }
+        }
+
+        const pull = await request(`https://openapi.tidal.com/v2/tracks/${trackid}?countryCode=US&include=lyrics`, {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/vnd.api+json',
+                'Origin': 'https://tidal.com',
+                'Authorization': 'Bearer ' + keybearer
+            }
+        });
+
+        if (pull.statusCode === 429) {
+            return { error: "Rate-limited" }
+        }
+
+        if (pull.statusCode === 400 || pull.statusCode === 401) {
+            return await tidalLyrics(que, true);
+        }
+
+        const res: any = await pull.json();
+        return {
+            data: [res?.data?.attributes || null, findtrack.data?.[0] || null],
+            lyrics: res?.included?.[0]?.attributes?.text || null,
+            syncLyrics: res?.included?.[0]?.attributes?.lrcText || null,
+            ...res?.included?.[0]?.attributes?.provider
+        };
+    } catch { return null; }
+}
+
+export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
     if (!que) return null;
     if (refresh) {
         keytidal = await tidalKeys();
@@ -1543,6 +1731,41 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean, limits
 
         const res: any = await pull.json();
         return { data: res?.items || null };
+    } catch { return null; }
+}
+
+export const TidalOpen = async function TidalOpen(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
+    if (!que) return null;
+
+    if (!keybearer || refresh) {
+        keybearer = await tidalKeysToken();
+    }
+
+    try {
+        const pull = await request(`https://tidal.com/v2/client-search/?includeContributors=true&includeDidYouMean=true&includeUserPlaylists=true&limit=${limits}&query=${encodeURIComponent(que)}&supportsUserData=true&countryCode=US&locale=en_US&deviceType=BROWSER`, {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/json',
+                'Authorization': 'Bearer ' + keybearer,
+                'x-tidal-token': keytidalopen
+            }
+        });
+
+        if (pull.statusCode === 429) {
+            return { error: "Rate-limited" }
+        }
+
+        if (pull.statusCode === 400 || pull.statusCode === 401) {
+            return await TidalOpen(que, true);
+        }
+
+        const res: any = await pull.json();
+        const data: any = {};
+        for (const key in res) {
+            if (['queryId', 'contentTypeFilters'].includes(key)) continue;
+            data[key] = res[key]?.items || res[key];
+        }
+        return { data };
     } catch { return null; }
 }
 
@@ -3525,18 +3748,18 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                     ((a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0))
                 );
 
-                const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
-                const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
-                const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('1988', '1233') || null;
+                const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
+                const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
+                const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
 
                 const extractRedirect = async (url: string) => {
                     try {
-                        const res = await request(url, {
+                        const res = await fetch(url, {
                             method: 'GET',
                             headers: headers,
-                            maxRedirections: 0
-                        } as any);
-                        return res.headers.location || url;
+                            redirect: 'manual'
+                        });
+                        return res.headers.get('location') || url;
                     } catch {
                         return url;
                     }
@@ -3596,7 +3819,7 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                         res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
                         format: br.Format,
                         codec: br.CodecType,
-                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('1988', '1233')
+                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('faid=1988', 'faid=0')
                     })),
                     cover: item.video?.cover,
                     origin_cover: item.video?.originCover,
@@ -6775,7 +6998,7 @@ export const OtoDB = async (query: string): Promise<any> => {
 
     try {
         const res = await request(
-            `https://otodb.net/work/search/__data.json?query=${encodeURIComponent(query)}`,
+            `https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`,
             {
                 headers: {
                     ...commonHeaders

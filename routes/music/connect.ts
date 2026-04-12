@@ -63,7 +63,7 @@ app.get('/connect', async (c) => {
         if (!force && existingPlayer && existingPlayer.voiceChannelId === vId && existingPlayer.connected) {
             await log('Already connected to this voice channel with an active player');
             await s.write(`],"data":${JSON.stringify({
-                status: true,
+                status: false,
                 message: 'Already connected',
                 data: { channelId: vId, guildId },
             })}}`);

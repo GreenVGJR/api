@@ -1333,8 +1333,8 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
             { ...(container || {}) },
             { musicThumbnail: covermusic, ...(otherinfo?.data || {}) },
         ];
-        responseBody['lyrics'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
-        responseBody['footer'] = res2?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
+        responseBody['lyrics'] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
+        responseBody['footer'] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
 
         return responseBody;
     } catch (e) {

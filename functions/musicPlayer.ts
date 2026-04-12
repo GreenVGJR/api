@@ -10,7 +10,7 @@ export function createMusicStream(
     c: any,
     callback: (log: (msg: string) => Promise<void>, s: any) => Promise<void>
 ) {
-    
+
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-cache, no-transform, no-store, max-age=0');
     c.header('X-Enc-Route', 'v3');
@@ -48,13 +48,15 @@ const sg = crypto.randomUUID();
 
 let LAVALINK_NODE: any;
 
-if(config.useLocalLavalink) {
+if (config.useLocalLavalink) {
     LAVALINK_NODE = {
         id: sg,
         host: process.env.LAVALINK_HOST || '',
         port: parseInt(process.env.LAVALINK_PORT || '2333'),
         authorization: process.env.LAVALINK_PASS || 'youshallnotpass',
         secure: process.env.LAVALINK_SSL === 'true',
+        retryAmount: 50,
+        retryDelay: 3000,
     };
 }
 else {
@@ -64,6 +66,8 @@ else {
         port: 443,
         authorization: 'https://seretia.link/discord',
         secure: true,
+        retryAmount: 50,
+        retryDelay: 3000,
     };
 }
 
@@ -105,14 +109,14 @@ function scheduleAutoDestroy(token: string) {
     // Never auto-destroy if any guild under this token has 24/7 active
     for (const [, p] of managed.player.players) {
         if (get247(token, p.guildId)) {
-            console.log(`⏭️  Auto-destroy skipped — 24/7 active for guild ${p.guildId} (token: ...${token.slice(-6)})`);
+            console.log(`⏭  Auto-destroy skipped — 24/7 active for guild ${p.guildId} (token: ...${token.slice(-6)})`);
             return;
         }
     }
     // Also check state247 map directly (player may already be destroyed)
     for (const [key] of state247) {
         if (key.startsWith(token + ':') && state247.get(key)) {
-            console.log(`⏭️  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`);
+            console.log(`⏭  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`);
             return;
         }
     }
@@ -126,7 +130,7 @@ function scheduleAutoDestroy(token: string) {
         // Re-check 24/7 at fire time too
         for (const [key] of state247) {
             if (key.startsWith(token + ':') && state247.get(key)) {
-                console.log(`⏭️  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`);
+                console.log(`⏭  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`);
                 return;
             }
         }
@@ -158,6 +162,33 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     if (existing) {
         await existing.ready;
         cancelAutoDestroy(token);
+
+        // Sanity check: Ensure nodes are connected
+        const disconnectedNodes = [...existing.player.nodeManager.nodes.values()].filter(n => !n.connected);
+        if (disconnectedNodes.length > 0) {
+            if (log) await log(`Reconnecting ${disconnectedNodes.length} disconnected Lavalink node(s)...`);
+            await Promise.allSettled(disconnectedNodes.map(node => {
+                return new Promise<void>((resolve) => {
+                    const onConnect = () => {
+                        (node as any).removeListener('connect', onConnect);
+                        (node as any).removeListener('error', onError);
+                        clearTimeout(timeout);
+                        resolve();
+                    };
+                    const onError = () => {
+                        (node as any).removeListener('connect', onConnect);
+                        (node as any).removeListener('error', onError);
+                        clearTimeout(timeout);
+                        resolve(); // Resolve anyway to not hang
+                    };
+                    const timeout = setTimeout(onError, 5000);
+                    (node as any).once('connect', onConnect);
+                    (node as any).once('error', onError);
+                    node.connect();
+                });
+            }));
+        }
+
         if (!existing.contextCached) ensureContextCached(existing, log);
         return { client: existing.client, player: existing.player };
     }
@@ -203,35 +234,38 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         playerOptions: {
             defaultSearchPlatform: 'ytmsearch',
             onDisconnect: {
-                autoReconnect: false,
-                destroyPlayer: true,
+                autoReconnect: true,
+                destroyPlayer: false,
             },
             onEmptyQueue: {
                 // undefined = never auto-destroy — we handle this entirely
                 // ourselves in the queueEnd event so 24/7 mode works.
                 destroyAfterMs: undefined,
+                autoPlayFunction: async (player, lastPlayedTrack) => {
+                    await fillAutoplay(player, lastPlayedTrack);
+                }
             },
         },
         queueOptions: {
-            maxPreviousTracks: 25,
+            maxPreviousTracks: 100,
         },
     });
 
     // Forward Discord gateway events to Lavalink
     client.on('raw', (d: any) => manager.sendRawData(d));
 
-    // ── Shared 24/7 Reconnect ──────────────────────────────────────────────
+    // ─ Shared 24/7 Reconnect ───────────────
     const reconnecting247 = new Set<string>(); // dedup concurrent calls per guild
 
     const reconnect247 = async (guildId: string, voiceChannelId: string, label: string) => {
         // Bail if this token's client was already destroyed
         if (!players.has(token)) {
-            console.log(`⚠️  24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`);
+            console.log(`⚠  24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`);
             return;
         }
         // Dedup: skip if a reconnect is already in-flight for this guild
         if (reconnecting247.has(guildId)) {
-            console.log(`⚠️  24/7 reconnect already in-flight for guild ${guildId}, skipping`);
+            console.log(`⚠  24/7 reconnect already in-flight for guild ${guildId}, skipping`);
             return;
         }
         reconnecting247.add(guildId);
@@ -240,7 +274,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         try {
             // Guard: client must still be alive and its shard ready
             if (!players.has(token) || client.ws.status !== 0) {
-                console.log(`⚠️  24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
+                console.log(`⚠  24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
                 return;
             }
             let p = manager.players.get(guildId);
@@ -266,18 +300,19 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         }
     };
 
-    // ── Manager Events ─────────────────────────────────────────────────────
-    manager.on('trackStart', () => {
+    // ─ Manager Events ───────────────────
+    manager.on('trackStart', (p, track) => {
         cancelAutoDestroy(token);
+        if (p.get('autoplay') && track) fillAutoplay(p, track);
     });
 
     manager.on('queueEnd', (p) => {
         if (get247(token, p.guildId)) {
-            console.log(`📭 Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
+            console.log(`📥 Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
             reconnect247(p.guildId, p.voiceChannelId!, 'queueEnd');
             return;
         }
-        console.log(`📭 Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`);
+        console.log(`📥 Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`);
         scheduleAutoDestroy(token);
     });
 
@@ -302,11 +337,24 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         console.error(`[Lavalink Node Error] ${node.id}: ${(err as Error).message}`);
     });
 
+    manager.nodeManager.on('connect', (node) => {
+        console.log(`🔗 Lavalink node connected: ${node.id}`);
+        // Auto-resume: Find any players that were on this node and should be playing
+        for (const player of manager.players.values()) {
+            if (player.node && player.node.id === node.id && player.queue.current) {
+                console.log(`📡 Auto-resuming playback for guild ${player.guildId} at ${player.position}ms`);
+                player.play({ position: player.position }).catch((err: any) => {
+                    console.error(`❌ Failed to auto-resume for guild ${player.guildId}:`, err.message);
+                });
+            }
+        }
+    });
+
     manager.nodeManager.on('disconnect', (node) => {
         console.warn(`[Lavalink] Node disconnected: ${node.id}`);
     });
 
-    // ── Discord Events ─────────────────────────────────────────────────────
+    // ─ Discord Events ───────────────────
     client.on('voiceStateUpdate', (oldState: any, newState: any) => {
         if (oldState.member?.id !== client.user?.id) return;
         // Track last known VC whenever bot joins/moves
@@ -328,7 +376,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         destroyPlayer(token);
     });
 
-    // ── Login & Init ───────────────────────────────────────────────────────
+    // ─ Login & Init ───────────────────
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
     const readyPromise = new Promise<void>((resolve, reject) => {
@@ -339,7 +387,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         );
 
         client.once('clientReady', async (readyClient: any) => {
-            console.log(`🎵 Music client ready: ${readyClient.user.tag}`);
+            console.log(`📋 Music client ready: ${readyClient.user.tag}`);
             try {
                 // init() triggers node connections but does NOT wait for the
                 // WebSocket handshake to complete — we must wait for 'connect'
@@ -411,13 +459,6 @@ export async function destroyPlayer(token: string): Promise<boolean> {
         managed.destroyTimer = null;
     }
 
-    /*
-    // Destroy all guild players
-    for (const [, p] of managed.player.players) {
-        await p.destroy().catch(() => { });
-    }
-    */
-
     managed.client.destroy();
     return true;
 }
@@ -445,7 +486,7 @@ async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) =
     })();
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// ── Utilities ────────────────────────
 
 export function checkVoicePermissions(channel: any, botUser: any) {
     const permissions = channel.permissionsFor(botUser);
@@ -523,7 +564,7 @@ export const PLATFORM_SEARCH: Record<string, string> = {
     tidal: 'tdsearch',
 };
 
-// ─── Auto-Init ────────────────────────────────────────────────────────────────
+// ── Auto-Init ────────────────────────
 // Reads DISCORD_TOKENS (comma-separated) from env and pre-warms each client so
 // the Lavalink node connection is ready before the first request arrives.
 //
@@ -535,7 +576,7 @@ export async function autoInit(): Promise<void> {
     const tokens = raw.split(',').map(t => t.trim()).filter(Boolean);
 
     if (tokens.length === 0) {
-        console.log('ℹ️  autoInit: No DISCORD_TOKENS set, skipping pre-warm');
+        console.log('ℹ  autoInit: No DISCORD_TOKENS set, skipping pre-warm');
         return;
     }
 
@@ -550,4 +591,75 @@ export async function autoInit(): Promise<void> {
             }
         })
     );
+}
+
+/**
+ * Fills the queue with recommended tracks if autoplay is enabled.
+ * Keeps at least 50 recommended tracks in the queue.
+ */
+export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
+    if (!player.get('autoplay')) return;
+
+    // Safety: don't start multiple fills at once
+    if (player.get('isFillingAutoplay')) return;
+    player.set('isFillingAutoplay', true);
+
+    try {
+        let currentAutoplayCount = player.queue.tracks.filter(t => (t.requester as any)?.isAutoplay).length;
+        let attempts = 0;
+        const TARGET = 50;
+
+        while (currentAutoplayCount < TARGET && attempts < 3) {
+            attempts++;
+            // Use the last track currently in the queue pool as the seed to keep progression going forward
+            const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
+            if (!track) break;
+
+            const previousTracks = player.queue.previous.map(t => t.info.identifier);
+            const queueTracks = player.queue.tracks.map(t => t.info.identifier);
+
+            const source = track.info.sourceName;
+            let searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
+
+            if (source === 'spotify') {
+                searchStr = `sprec:${track.info.identifier}`;
+            } else if (source === 'applemusic') {
+                searchStr = `amrec:${track.info.identifier}`;
+            } else if (source === 'deezer') {
+                searchStr = `dzrec:${track.info.identifier}`;
+            } else if (source === 'youtube' || source === 'youtubemusic') {
+                searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
+            }
+
+            const res = await player.search({ query: searchStr }, (track.requester as any)?.isAutoplay ? undefined : track.requester);
+            if (!res.tracks?.length) break;
+
+            const needed = TARGET - currentAutoplayCount;
+            const toAdd = res.tracks
+                .filter(t => {
+                    const id = t.info.identifier;
+                    if (!id) return false;
+                    const isDuplicate = previousTracks.includes(id) || queueTracks.includes(id);
+                    const titleA = t.info.title.toLowerCase();
+                    const titleB = track.info.title.toLowerCase();
+                    const isSimilarTitle = titleA.includes(titleB) || titleB.includes(titleA);
+                    return !isDuplicate && !isSimilarTitle;
+                })
+                .slice(0, needed);
+
+            if (toAdd.length === 0) break;
+
+            for (const t of toAdd) {
+                t.requester = track.requester ? { ...(track.requester as any), isAutoplay: true } : { id: 'api', username: 'API', isAutoplay: true };
+                await player.queue.add(t);
+            }
+
+            currentAutoplayCount = player.queue.tracks.filter(t => (t.requester as any)?.isAutoplay).length;
+            if (!player.playing && !player.paused) await player.play();
+        }
+    } catch (err) {
+        console.error('Autoplay error:', err);
+    } finally {
+        player.set('isFillingAutoplay', false);
+    }
 }

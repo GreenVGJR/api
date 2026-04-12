@@ -1,4 +1,4 @@
-Nothing special here. at least 75% are vibecoded.
+Nothing special here. At least 75% are vibecoded.
 
 Library: 
 - [@hono/node-server](https://www.npmjs.com/package/@hono/node-server)
@@ -13,11 +13,11 @@ Library:
 - [undici](https://www.npmjs.com/package/undici)
 - [x-client-transaction-id](https://www.npmjs.com/package/x-client-transaction-id)
 
-License: [Unlicense](LICENSE)
-
 Reference:
 - [AMC](https://github.com/GreenVGJR/amc-discord-bot)
 - [Yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Downr](https://downr.org)
-- [Chocomilk API](https://chocomilk.amira.us.kg)
+- [Chocomilk API](https://choco.amira.us.kg)
 - [Popcat API](https://popcat.xyz/api)
+
+License: [Unlicense](LICENSE)

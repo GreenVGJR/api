@@ -317,7 +317,16 @@ app.get('/play', async (c) => {
             }
 
             await log(`Playlist resolved: "${playlistName}" (${filteredTracks.length} tracks, ${tracks.length - filteredTracks.length} live tracks removed)`);
-            await guildPlayer.queue.add(filteredTracks);
+            if (guildPlayer.get('autoplay')) {
+                const autoplayIndex = guildPlayer.queue.tracks.findIndex(t => (t.requester as any)?.isAutoplay);
+                if (autoplayIndex !== -1) {
+                    await guildPlayer.queue.add(filteredTracks, autoplayIndex);
+                } else {
+                    await guildPlayer.queue.add(filteredTracks);
+                }
+            } else {
+                await guildPlayer.queue.add(filteredTracks);
+            }
             await log('Playlist added to queue');
         } else {
             const track = tracks[0];
@@ -327,7 +336,16 @@ app.get('/play', async (c) => {
                 return;
             }
             await log(`Track resolved: "${track.info.title}" by ${track.info.author}`);
-            await guildPlayer.queue.add(track);
+            if (guildPlayer.get('autoplay')) {
+                const autoplayIndex = guildPlayer.queue.tracks.findIndex(t => (t.requester as any)?.isAutoplay);
+                if (autoplayIndex !== -1) {
+                    await guildPlayer.queue.add(track, autoplayIndex);
+                } else {
+                    await guildPlayer.queue.add(track);
+                }
+            } else {
+                await guildPlayer.queue.add(track);
+            }
             await log('Track added to queue');
         }
 

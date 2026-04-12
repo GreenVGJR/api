@@ -58,7 +58,7 @@ app.get('/nowplaying', async (c) => {
                 playing: queue.playing,
                 paused: queue.paused,
                 volume: queue.volume,
-                loop: queue.repeatMode,
+                loop: queue.get('autoplay') ? 'autoplay' : queue.repeatMode,
                 filters: {
                     array: activeFilters.length > 0 ? activeFilters : [],
                     string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
@@ -69,8 +69,8 @@ app.get('/nowplaying', async (c) => {
                     value: String(totalQueueDuration)
                 },
                 progress: {
-                    current: { label: formatDuration(queue.position), value: queue.position },
-                    total: { label: formatDuration(current.info.duration), value: current.info.duration },
+                    current: { label: formatDuration(queue.position), value: String(queue.position) },
+                    total: { label: formatDuration(current.info.duration), value: String(current.info.duration) },
                 },
             },
         })}}`);
@@ -191,7 +191,7 @@ app.get('/queue', async (c) => {
                 playing: queue.playing,
                 paused: queue.paused,
                 volume: queue.volume,
-                loop: queue.repeatMode,
+                loop: queue.get('autoplay') ? 'autoplay' : queue.repeatMode,
                 filters: {
                     array: activeFilters.length > 0 ? activeFilters : [],
                     string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
@@ -206,8 +206,8 @@ app.get('/queue', async (c) => {
                     value: String(totalQueueDuration)
                 },
                 progress: currentTrack ? {
-                    current: { label: formatDuration(queue.position), value: queue.position },
-                    total: { label: formatDuration(currentTrack.info.duration), value: currentTrack.info.duration },
+                    current: { label: formatDuration(queue.position), value: String(queue.position) },
+                    total: { label: formatDuration(currentTrack.info.duration), value: String(currentTrack.info.duration) },
                 } : null,
             },
         })}}`);

@@ -12,6 +12,7 @@ import {
     createMusicStream,
     formatDuration,
     formatTrack,
+    fillAutoplay,
 } from '../../functions/musicPlayer.js';
 // lavalink-client setRepeatMode expects string literals
 type RMValue = 'off' | 'track' | 'queue';
@@ -172,11 +173,20 @@ app.get('/skip', async (c) => {
         if (indexStr !== '' && !isNaN(index)) {
             const tracks = queue.queue.tracks;
             if (index < 0 || index >= tracks.length) {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
-                return;
+                // If autoplay is on, we allow "skipping past the end" by just jumping to something new
+                if (queue.get('autoplay')) {
+                    await log(`Index ${index} is past the buffer, clearing and finding new recommendations...`);
+                    await queue.queue.splice(0, tracks.length);
+                    // Explicitly fill before continuing so the output matches
+                    await fillAutoplay(queue);
+                } else {
+                    await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})` })}}`);
+                    return;
+                }
+            } else {
+                nextTrack = tracks[index];
+                if (index > 0) await queue.queue.splice(0, index);
             }
-            nextTrack = tracks[index];
-            if (index > 0) await queue.queue.splice(0, index);
         }
 
         await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : 'Skipping: Unknown...');
@@ -367,7 +377,15 @@ app.get('/seek', async (c) => {
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'seek', time: String(seekTarget), formatTime: formatDuration(seekTarget) },
+            data: { 
+                action: 'seek', 
+                time: String(seekTarget), 
+                formatTime: formatDuration(seekTarget),  
+                progress: {
+                    current: { label: formatDuration(seekTarget), value: String(seekTarget) },
+                    total: { label: formatDuration(currentTrack.info.duration), value: String(currentTrack.info.duration) },
+                },
+            },
         })}}`);
     });
 });
@@ -414,16 +432,18 @@ app.get('/volume', async (c) => {
 });
 
 
-const LOOP_MODES: Record<string, RMValue> = {
+const LOOP_MODES: Record<string, RMValue | 'autoplay'> = {
     off:   RM.OFF,
     track: RM.TRACK,
     queue: RM.QUEUE,
+    autoplay: 'autoplay',
 };
 
-const LOOP_MODE_NAMES: Record<RMValue, string> = {
+const LOOP_MODE_NAMES: Record<RMValue | 'autoplay', string> = {
     'off':   'off',
     'track': 'track',
     'queue': 'queue',
+    'autoplay': 'autoplay',
 };
 
 app.get('/loop', async (c) => {
@@ -450,29 +470,50 @@ app.get('/loop', async (c) => {
             return;
         }
 
-        let repeatMode: RMValue;
+        let repeatMode: RMValue | 'autoplay';
 
         if (mode === '' || mode === 'toggle') {
             const current = queue.repeatMode as unknown as RMValue;
-            if (current === RM.OFF)        repeatMode = RM.TRACK;
+            const isAutoplay = queue.get('autoplay');
+            
+            if (isAutoplay)                repeatMode = RM.TRACK;
+            else if (current === RM.OFF)   repeatMode = 'autoplay';
             else if (current === RM.TRACK) repeatMode = RM.QUEUE;
             else                           repeatMode = RM.OFF;
         } else if (mode in LOOP_MODES) {
             repeatMode = LOOP_MODES[mode];
         } else {
-            // support numeric shortcuts: 0=off, 1=track, 2=queue
+            // support numeric shortcuts: 0=off, 1=track, 2=queue, 3=autoplay
             const num = parseInt(mode, 10);
-            const numMap: Record<number, RMValue> = { 0: 'off', 1: 'track', 2: 'queue' };
+            const numMap: Record<number, RMValue | 'autoplay'> = { 0: 'off', 1: 'track', 2: 'queue', 3: 'autoplay' };
             if (!isNaN(num) && num in numMap) {
                 repeatMode = numMap[num];
             } else {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: `Invalid loop mode: "${mode}". Use: off, track, queue (or 0-2)` })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: `Invalid loop mode: "${mode}". Use: off, track, queue, autoplay (or 0-3)` })}}`);
                 return;
             }
         }
 
         await log(`Setting loop mode to ${repeatMode}...`);
-        await queue.setRepeatMode(repeatMode as any);
+        
+        if (repeatMode === 'autoplay') {
+            queue.set('autoplay', true);
+            await queue.setRepeatMode(RM.OFF as any);
+            // Trigger initial fill so tracks appear immediately
+            fillAutoplay(queue);
+        } else {
+            queue.set('autoplay', false);
+            // Remove tracks added by autoplay
+            const tracks = queue.queue.tracks;
+            for (let i = tracks.length - 1; i >= 0; i--) {
+                const t = tracks[i];
+                if ((t.requester as any)?.isAutoplay) {
+                    await queue.queue.splice(i, 1);
+                }
+            }
+            await queue.setRepeatMode(repeatMode as any);
+        }
+        
         await log(`Loop mode set to ${repeatMode}`);
 
         await s.write(`],"data":${JSON.stringify({

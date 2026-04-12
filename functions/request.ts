@@ -1621,15 +1621,14 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
         const res: any = await pull.json();
 
-        if (res?.errors?.[0]) {
-            console.log(JSON.stringify(res?.errors));
+        if (res?.errors?.[0]?.message.includes('Given jwt')) {
             return await deezerLyrics(que, true);
         }
 
         const edges = res?.data?.instantSearch?.results?.tracks?.edges;
 
         if (!edges || edges.length === 0) {
-            return null;
+            return { data: null };
         }
 
         const trackNode = edges[0].node;

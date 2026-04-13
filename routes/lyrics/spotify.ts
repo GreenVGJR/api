@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
+import { dispatch } from '../../functions/httpRequest.js';
 const app = new Hono();
-
-import { SPMusic } from '../../functions/request.js';
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { SPLyrics } from '../../functions/request.js';
 
 app.get('/spotify', async (c) => {
     const query = c.req.query('q');
@@ -12,8 +11,9 @@ app.get('/spotify', async (c) => {
     else if (query === '') {
         return c.json({ "error": "Nothing to do" }, 202);
     }
-    c.header('X-Route', 'api.spotify.com, api-partner.spotify.com');
-    return await dispatch(c, () => SPMusic(query));
+    c.header('X-Route', 'spclient.wg.spotify.com');
+
+    return await dispatch(c, () => SPLyrics(query!));
 });
 
 export default app;

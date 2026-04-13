@@ -23,7 +23,7 @@ import download from './routes/download/index.js';
 import music from './routes/music/index.js';
 import { autoInit } from './functions/musicPlayer.js';
 
-autoInit().catch(() => {});
+autoInit().catch(() => { });
 
 const API_ROUTES = {
     search: [
@@ -85,18 +85,19 @@ const API_ROUTES = {
         "/lyrics/youtube?q=",
         "/lyrics/deezer?q=",
         "/lyrics/shazam?q=",
-        "/lyrics/tidal?q="
+        "/lyrics/tidal?q=",
+        "/lyrics/spotify?q="
     ],
     tools: {
         ai: {
-        chat: [
-            "/tools/chat/gemini?prompt=&conversation=",
-            "/tools/chat/meta?prompt=",
-            "/tools/chat/grok?prompt="
-        ],
-        image_generation: [
-            "/tools/ai-image/flux_schnell?prompt=",
-            "/tools/ai-image/magicstudio?prompt=",
+            chat: [
+                "/tools/chat/gemini?prompt=&conversation=",
+                "/tools/chat/meta?prompt=",
+                "/tools/chat/grok?prompt="
+            ],
+            image_generation: [
+                "/tools/ai-image/flux_schnell?prompt=",
+                "/tools/ai-image/magicstudio?prompt=",
             ],
         },
         misc: [
@@ -144,7 +145,7 @@ const API_ROUTES = {
                 "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=",
                 "/tools/discord/voice/list?token=&guildId=&channelId="
             ]
-        },        
+        },
     },
     info: [
         "/info/youtube/video?url=",
@@ -166,29 +167,29 @@ const API_ROUTES = {
     ],
     download: [],
     music: [
-    "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
-    "/music/disconnect?token=&guildId=",
-    "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
-    "/music/pause?token=&guildId=",
-    "/music/resume?token=&guildId=",
-    "/music/skip?token=&guildId=&index=",
-    "/music/stop?token=&guildId=",
-    "/music/seek?token=&guildId=&time=",
-    "/music/volume?token=&guildId=&value=",
-    "/music/loop?token=&guildId=&mode=",
-    "/music/shuffle?token=&guildId=",
-    "/music/remove?token=&guildId=&index=",
-    "/music/clear?token=&guildId=",
-    "/music/jump?token=&guildId=&index=",
-    "/music/move?token=&guildId=&from=&to=",
-    "/music/back?token=&guildId=",
-    "/music/247?token=&guildId=&value=",
-    "/music/where?token=&guildId=&authorId=",
-    "/music/nowplaying?token=&guildId=",
-    "/music/nowplaying/lyrics?token=&guildId=",
-    "/music/queue?token=&guildId=&limit=&offset=",
-    "/music/stats?token=",
-    "/music/filter?token=&guildId=&filter=",
+        "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
+        "/music/disconnect?token=&guildId=",
+        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
+        "/music/pause?token=&guildId=",
+        "/music/resume?token=&guildId=",
+        "/music/skip?token=&guildId=&index=",
+        "/music/stop?token=&guildId=",
+        "/music/seek?token=&guildId=&time=",
+        "/music/volume?token=&guildId=&value=",
+        "/music/loop?token=&guildId=&mode=",
+        "/music/shuffle?token=&guildId=",
+        "/music/remove?token=&guildId=&index=",
+        "/music/clear?token=&guildId=",
+        "/music/jump?token=&guildId=&index=",
+        "/music/move?token=&guildId=&from=&to=",
+        "/music/back?token=&guildId=",
+        "/music/247?token=&guildId=&value=",
+        "/music/where?token=&guildId=&authorId=",
+        "/music/nowplaying?token=&guildId=",
+        "/music/nowplaying/lyrics?token=&guildId=",
+        "/music/queue?token=&guildId=&limit=&offset=",
+        "/music/stats?token=",
+        "/music/filter?token=&guildId=&filter=",
     ]
 };
 
@@ -209,8 +210,8 @@ function flattenRoutes(obj: any): any[] {
         }).flat().filter(Boolean);
     } else if (typeof obj === 'object' && obj !== null) {
         for (const key in obj) {
-             const childResults = flattenRoutes(obj[key]);
-             flatResults = flatResults.concat(childResults);
+            const childResults = flattenRoutes(obj[key]);
+            flatResults = flatResults.concat(childResults);
         }
     }
     return flatResults;
@@ -264,16 +265,16 @@ const challengeHtml = (verifyUrl: string) => `
 const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Please wait</body></html>`;
 
 app.use('*', async (c: Context, next: Next) => {
-    if(restrictLocal) {
+    if (restrictLocal) {
         const host = c.req.header('host');
         const h = host?.split(':')[0];
-        const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || 
-                        h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
+        const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
+            h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
         const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
 
         if (!isAllowed && !isLocal) {
             const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
-            if(!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
+            if (!isMozilla || (c.req.header('Accept') === 'application/json')) return c.text('Forbidden', 403);
             const url = new URL(c.req.url);
             url.host = 'api.vgjr.top';
             url.protocol = 'https:';
@@ -283,7 +284,7 @@ app.use('*', async (c: Context, next: Next) => {
             return c.body('', 200, { 'Content-Type': 'application/json' });
         }
     }
-    if(getCookie(c, 'cf_clearance')) {
+    if (getCookie(c, 'cf_clearance')) {
         const expiry = 'Thu, 01 Jan 1970 00:00:00 GMT';
         const domain = '.vgjr.top';
         c.header('Set-Cookie', `cf_clearance=; Max-Age=0; Expires=${expiry}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
@@ -300,17 +301,17 @@ app.use('*', async (c: Context, next: Next) => {
             try {
                 const parsed = new URL(val);
                 if (
-                    parsed.host === currentHost || 
+                    parsed.host === currentHost ||
                     parsed.hostname === currentHostname ||
-                    parsed.hostname === 'api.vgjr.top' || 
-                    parsed.hostname === 'localhost' || 
+                    parsed.hostname === 'api.vgjr.top' ||
+                    parsed.hostname === 'localhost' ||
                     parsed.hostname === '127.0.0.1' ||
                     parsed.hostname === '[::1]' ||
                     parsed.hostname === 'vgjr.vercel.app'
                 ) {
                     return c.json({ error: "Query not allowed" });
                 }
-            } catch {}
+            } catch { }
         }
     }
 
@@ -344,9 +345,9 @@ const __dirname = path.dirname(__filename);
 const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8');
 const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
 const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground.html'), 'utf-8')
-    .replace(/<!--[\s\S]*?-->/g, '') 
-    .replace(/\s+/g, ' ') 
-    .replace(/>\s+</g, '><') 
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
     .trim();
 
 
@@ -379,7 +380,7 @@ function encryptPayload(data: string, secret: string): string {
 function decryptPayload(payload: string, secret: string): string {
     try {
         const data = Buffer.from(payload, 'base64url');
-        if (data.length < 28) return ""; 
+        if (data.length < 28) return "";
         const key = crypto.createHash('sha256').update(secret).digest();
         const iv = data.subarray(0, 12);
         const tag = data.subarray(data.length - 16);
@@ -395,7 +396,7 @@ function isLocalRequest(host: string | undefined): boolean {
     if (!host) return false;
     const h = host.split(':')[0];
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
-           h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
+        h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
 }
 
 app.use('*', cors({
@@ -473,11 +474,11 @@ app.get('/playground', (c: Context) => {
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
-        
+
         const isLocal = isLocalRequest(host);
         const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
         const secFetchDest = c.req.header('Sec-Fetch-Dest');
-        if(secFetchDest && secFetchDest !== 'document') return;
+        if (secFetchDest && secFetchDest !== 'document') return;
 
         let html = playgroundTemplate
             .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
@@ -502,11 +503,11 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const host = (c.req.header('host') || '').toLowerCase();
     const referer = c.req.header('referer') || '';
     const refPath = referer.split('?')[0].replace(/\/$/, '');
-    
+
     c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'text/css');
     await s.write('');
-    
+
     await s.write(mainCss);
 }));
 
@@ -517,7 +518,7 @@ app.get('/', (c: Context) => {
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
-    
+
     return stream(c, async (stream) => {
         await stream.write('');
         const seconds = Math.floor((Date.now() - starttime) / 1000);

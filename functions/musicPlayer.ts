@@ -3,6 +3,7 @@ import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-clien
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
+import { pullInfo, verifyChallenge } from './musicChallenges.ts';
 
 // ─── Streaming Helper ────────────────────────────────────────────────────────
 
@@ -16,6 +17,12 @@ export function createMusicStream(
     c.header('X-Enc-Route', 'v3');
     c.header('X-Route', 'LIVE');
     c.header('X-Player', "lavalink");
+
+    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
+    const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
+    if (["DE"].includes(lookExistChallengeC) === false && !verifyChallenge(c.req.header('x-challenge-codes'), ipLL)) {
+        return c.json(pullInfo(ipLL), 403);
+    }
 
     return stream(c, async (s: any) => {
         const startTime = Date.now();
@@ -157,6 +164,15 @@ function cancelAutoDestroy(token: string) {
     managed.destroyTimer = null;
 }
 
+// Handle potential library crashes from lavalink-client
+process.on('uncaughtException', (err) => {
+    if (err.message.includes("Argument 'data.encoded' must be present")) {
+        console.error('Caught and suppressed a crash in lavalink-client (trackStuck event):', err.message);
+        return;
+    }
+    console.error('Uncaught Exception:', err);
+});
+
 export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
     const existing = players.get(token);
     if (existing) {
@@ -234,7 +250,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         playerOptions: {
             defaultSearchPlatform: 'ytmsearch',
             onDisconnect: {
-                autoReconnect: true,
+                autoReconnect: false, // We handle this ourselves in the node connect event
                 destroyPlayer: false,
             },
             onEmptyQueue: {
@@ -260,21 +276,21 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     const reconnect247 = async (guildId: string, voiceChannelId: string, label: string) => {
         // Bail if this token's client was already destroyed
         if (!players.has(token)) {
-            console.log(`⚠  24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`);
+            console.log(`24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`);
             return;
         }
         // Dedup: skip if a reconnect is already in-flight for this guild
         if (reconnecting247.has(guildId)) {
-            console.log(`⚠  24/7 reconnect already in-flight for guild ${guildId}, skipping`);
+            console.log(`24/7 reconnect already in-flight for guild ${guildId}, skipping`);
             return;
         }
         reconnecting247.add(guildId);
-        console.log(`🔁 24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`);
+        console.log(`24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`);
         await new Promise(r => setTimeout(r, 1500));
         try {
             // Guard: client must still be alive and its shard ready
             if (!players.has(token) || client.ws.status !== 0) {
-                console.log(`⚠  24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
+                console.log(`24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
                 return;
             }
             let p = manager.players.get(guildId);
@@ -292,9 +308,9 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             }
             set247(token, guildId, true);
             lastVoiceChannel.set(`${token}:${guildId}`, voiceChannelId);
-            console.log(`✅ 24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
+            console.log(`24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
         } catch (err: any) {
-            console.error(`❌ 24/7 reconnect failed for guild ${guildId}: ${err.message}`);
+            console.error(`24/7 reconnect failed for guild ${guildId}: ${err.message}`);
         } finally {
             reconnecting247.delete(guildId);
         }
@@ -306,13 +322,15 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         if (p.get('autoplay') && track) fillAutoplay(p, track);
     });
 
+
+
     manager.on('queueEnd', (p) => {
         if (get247(token, p.guildId)) {
-            console.log(`📥 Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
+            console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
             reconnect247(p.guildId, p.voiceChannelId!, 'queueEnd');
             return;
         }
-        console.log(`📥 Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`);
+        console.log(`Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`);
         scheduleAutoDestroy(token);
     });
 
@@ -321,15 +339,15 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
         if (get247(token, p.guildId)) {
             if (voiceChannelId) {
-                console.log(`🔌 Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
+                console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
                 reconnect247(p.guildId, voiceChannelId, 'playerDestroy');
             } else {
-                console.log(`🔌 Player destroyed for guild ${p.guildId} in 24/7 mode — no voiceChannelId to reconnect`);
+                console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — no voiceChannelId to reconnect`);
             }
             return;
         }
         lastVoiceChannel.delete(`${token}:${p.guildId}`);
-        console.log(`🔌 Lavalink player destroyed for guild ${p.guildId}`);
+        console.log(`Lavalink player destroyed for guild ${p.guildId}`);
         scheduleAutoDestroy(token);
     });
 
@@ -338,14 +356,28 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     });
 
     manager.nodeManager.on('connect', (node) => {
-        console.log(`🔗 Lavalink node connected: ${node.id}`);
+        console.log(`Lavalink node connected: ${node.id}`);
         // Auto-resume: Find any players that were on this node and should be playing
         for (const player of manager.players.values()) {
-            if (player.node && player.node.id === node.id && player.queue.current) {
-                console.log(`📡 Auto-resuming playback for guild ${player.guildId} at ${player.position}ms`);
-                player.play({ position: player.position }).catch((err: any) => {
-                    console.error(`❌ Failed to auto-resume for guild ${player.guildId}:`, err.message);
-                });
+            if (player.node && player.node.id === node.id) {
+                // If the player was in a voice channel, we must re-connect to send the voice state 
+                // to the new Lavalink session. Otherwise, Lavalink will have the track but no 
+                // voice server details to stream to.
+                if (player.voiceChannelId) {
+                    player.connect().then(async () => {
+                        // Wait for voice state updates to reach the node before playing
+                        await new Promise(r => setTimeout(r, 2500));
+
+                        if (player.queue.current) {
+                            console.log(`Auto-resuming playback for guild ${player.guildId} at ${player.position}ms`);
+                            player.play({ position: player.position }).catch((err: any) => {
+                                console.error(`Failed to auto-resume for guild ${player.guildId}:`, err.message);
+                            });
+                        }
+                    }).catch(err => {
+                        console.error(`Failed to re-connect voice for guild ${player.guildId}:`, err.message);
+                    });
+                }
             }
         }
     });
@@ -366,13 +398,13 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 reconnect247(oldState.guild.id, oldState.channelId!, 'voiceStateUpdate');
                 return;
             }
-            console.log(`👢 Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`);
+            console.log(`Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`);
             scheduleAutoDestroy(token);
         }
     });
 
     client.on('shardDisconnect', () => {
-        console.log(`⚡ Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
+        console.log(`Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
         destroyPlayer(token);
     });
 
@@ -387,7 +419,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         );
 
         client.once('clientReady', async (readyClient: any) => {
-            console.log(`📋 Music client ready: ${readyClient.user.tag}`);
+            console.log(`Music client ready: ${readyClient.user.tag}`);
             try {
                 // init() triggers node connections but does NOT wait for the
                 // WebSocket handshake to complete — we must wait for 'connect'
@@ -396,7 +428,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 // Resolve only once at least one Lavalink node is ready
                 manager.nodeManager.once('connect', async () => {
                     if (timeout) clearTimeout(timeout);
-                    console.log(`🔗 Lavalink node connected (token: ...${token.slice(-6)})`);
+                    console.log(`Lavalink node connected (token: ...${token.slice(-6)})`);
                     resolve();
                 });
 
@@ -576,11 +608,11 @@ export async function autoInit(): Promise<void> {
     const tokens = raw.split(',').map(t => t.trim()).filter(Boolean);
 
     if (tokens.length === 0) {
-        console.log('ℹ  autoInit: No DISCORD_TOKENS set, skipping pre-warm');
+        console.log('autoInit: No DISCORD_TOKENS set, skipping pre-warm');
         return;
     }
 
-    console.log(`🚀 autoInit: Pre-warming ${tokens.length} Discord client(s)...`);
+    console.log(`autoInit: Pre-warming ${tokens.length} Discord client(s)...`);
 
     await Promise.allSettled(
         tokens.map(async (token) => {

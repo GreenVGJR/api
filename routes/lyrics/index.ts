@@ -3,5 +3,6 @@ import deezer from './deezer.js';
 import shazam from './shazam.js';
 import youtube from './youtube.js';
 import tidal from './tidal.js';
+import spotify from './spotify.js';
 
-export default [deezer, shazam, youtube, tidal] as any[];
+export default [deezer, shazam, youtube, tidal, spotify] as any[];

@@ -8,3 +8,4 @@ tsconfig.tsbuildinfo
 bun.lock
 vgjr-network.zip
 package-lock.json
+test

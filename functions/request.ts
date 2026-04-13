@@ -453,22 +453,162 @@ export const soundcloudKey = async function soundcloudKey() {
     }
 }
 
+function decodeSpotifySecret(encoded: string): Buffer {
+    const t = 33;
+    const n = 9;
+
+    const byteValues = encoded.split('').map((char, index) => {
+        return char.charCodeAt(0) ^ ((index % t) + n);
+    });
+
+    const joined = byteValues.join('');
+    const asciiBuffer = Buffer.from(joined, 'utf8');
+    const hexString = asciiBuffer.toString('hex');
+
+    return Buffer.from(hexString, 'hex');
+}
+
+function generateSpotifyTOTP(secretHex: string, timestampMs: number, step = 30): string {
+    const counter = Math.floor(timestampMs / 1000 / step);
+    const buf = Buffer.alloc(8);
+    buf.writeBigInt64BE(BigInt(counter));
+
+    const hmac = crypto.createHmac('sha1', Buffer.from(secretHex, 'hex'));
+    hmac.update(buf);
+    const digest = hmac.digest();
+
+    const offset = (digest[digest.length - 1] ?? 0) & 0xf;
+    const code = ((((digest[offset] ?? 0) & 0x7f) << 24) |
+        (((digest[offset + 1] ?? 0) & 0xff) << 16) |
+        (((digest[offset + 2] ?? 0) & 0xff) << 8) |
+        ((digest[offset + 3] ?? 0) & 0xff)) % 1000000;
+
+    return code.toString().padStart(6, '0');
+}
+
+let currentTotpSecret: string | null = null;
+let currentTotpVersion: string | null = null;
+let lastSecretFetchTime = 0;
+const SECRET_FETCH_INTERVAL = 60 * 60 * 1000;
+
+async function ensureTotpSecrets(): Promise<void> {
+    const now = Date.now();
+    if (currentTotpSecret && now - lastSecretFetchTime < SECRET_FETCH_INTERVAL) return;
+
+    try {
+        const res = await request('https://raw.githubusercontent.com/xyloflake/spot-secrets-go/refs/heads/main/secrets/secretDict.json', {
+            headers: { Accept: 'application/json' },
+            useH2: true
+        });
+        
+        if (res.statusCode !== 200) throw new Error('Failed to fetch secrets');
+        
+        const secrets: any = await res.json();
+        const versions = Object.keys(secrets).map(Number);
+        const newestVersion = Math.max(...versions).toString();
+        const secretData = secrets[newestVersion];
+        
+        if (!secretData) throw new Error('Missing newest secret entry');
+
+        const mappedData = secretData.map(
+            (value: number, index: number) => value ^ ((index % 33) + 9)
+        );
+
+        currentTotpSecret = Buffer.from(mappedData.join(''), 'utf8').toString('hex');
+        currentTotpVersion = newestVersion;
+        lastSecretFetchTime = now;
+    } catch {
+        if (!currentTotpSecret) {
+            const fallbackData = [
+                99, 111, 47, 88, 49, 56, 118, 65, 52, 67, 50, 104, 117, 101, 55, 94, 95,
+                75, 94, 49, 69, 36, 85, 64, 74, 60
+            ];
+            const mapped = fallbackData.map((value, index) => value ^ ((index % 33) + 9));
+            currentTotpSecret = Buffer.from(mapped.join(''), 'utf8').toString('hex');
+            currentTotpVersion = '19';
+        }
+    }
+}
+
+async function performSpotifyTokenRequest(secretHex: string, version: string) {
+    let serverTimeMs = Date.now();
+    try {
+        const timeRes = await request('https://open.spotify.com/api/server-time', { headers: { 'User-Agent': userAgent }, useH2: true });
+        if (timeRes.statusCode === 200) {
+            const timeData: any = await timeRes.json();
+            serverTimeMs = timeData.serverTime || Date.now();
+        }
+    } catch { }
+
+    const localTimeMs = Date.now();
+    const totpLocal = generateSpotifyTOTP(secretHex, localTimeMs, 30);
+    const totpServer = generateSpotifyTOTP(secretHex, serverTimeMs, 900);
+
+    const url = new URL('https://open.spotify.com/api/token');
+    url.searchParams.append('reason', 'init');
+    url.searchParams.append('productType', 'mobile-web-player');
+    url.searchParams.append('totp', totpLocal);
+    url.searchParams.append('totpServer', totpServer);
+    url.searchParams.append('totpVer', version);
+
+    const res = await request(url.toString(), {
+        method: 'GET',
+        headers: {
+            ...commonHeaders,
+            ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
+            'User-Agent': userAgent,
+            'Origin': 'https://open.spotify.com/',
+            'Referer': 'https://open.spotify.com/',
+            'Accept': 'application/json'
+        },
+        useH2: true
+    });
+
+    if (res.statusCode !== 200) throw new Error(`Spotify Auth Error: ${res.statusCode}`);
+
+    const data: any = await res.json();
+    const token = data.accessToken;
+    if (!token) throw new Error('Missing token');
+    
+    return data.accessToken;
+}
+
 export const spotifyKey = async function spotifyKey() {
     try {
-        const res = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
-            headers: {
-                ...commonHeaders,
-            }
-        });
-        const text = await res.text;
-        return text.split('"accessToken":"')[1].split('"')[0];
+        const primarySecret = { secret: ',7/*F("rLJ2oxaKL^f+E1xvP@N', version: 61 };
+        const secretHex = decodeSpotifySecret(primarySecret.secret).toString('hex');
+        const version = String(primarySecret.version);
+        
+        return await performSpotifyTokenRequest(secretHex, version);
     } catch {
-        return undefined;
+        try {
+            await ensureTotpSecrets();
+            if (currentTotpSecret && currentTotpVersion) {
+                return await performSpotifyTokenRequest(currentTotpSecret, currentTotpVersion);
+            }
+        } catch { }
+
+        // Final fallback to original embed scraping
+        try {
+            const res = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
+                headers: { ...commonHeaders, ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}), },
+                useH2: true
+            });
+            const text = await res.text;
+            return text.split('"accessToken":"')[1].split('"')[0];
+        } catch {
+            return undefined;
+        }
     }
 }
 
 export const spotifyKeyToken = async function spotifyKeyToken() {
-    const bodyhttp = { "client_data": { "client_version": "1.0", "client_id": "d8a5ed958d274c2e8ee717e6a4b0971d", "js_sdk_data": {} } };
+    const clientId = {
+        "web_player": "d8a5ed958d274c2e8ee717e6a4b0971d",
+        "mobile_web_player": "f6a40776580943a7bc5173125a1e8832"
+    };
+
+    const bodyhttp = { "client_data": { "client_version": "1.0", "client_id": clientId.mobile_web_player, "js_sdk_data": {} } };
 
     try {
         const req = await request(`https://clienttoken.spotify.com/v1/clienttoken`, {
@@ -476,6 +616,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
             body: JSON.stringify(bodyhttp),
             headers: {
                 ...commonHeaders,
+                ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}), // optional but whatever
                 'Origin': 'https://clienttoken.spotify.com',
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
@@ -1710,6 +1851,87 @@ export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth:
     } catch { return null; }
 }
 
+export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
+    if (!que) return null;
+
+    if (refresh_auth || !keysp || !keysptoken) {
+        const [a, b] = await Promise.all([
+            spotifyKeyToken(),
+            spotifyKey()
+        ]);
+        keysptoken = a;
+        keysp = b;
+    }
+
+    try {
+        let trackId = que;
+        let trackData: any = null;
+
+        if (que.includes('spotify.com/track/')) {
+            trackId = que.split('track/')[1].split('?')[0];
+        } else if (que.match(/^[a-zA-Z0-9]{22}$/)) {
+            trackId = que;
+        } else {
+            const searchResult = await SPMusic(que, false, 1);
+            const firstTrack = searchResult?.data?.tracks?.[0];
+            if (!firstTrack) return { data: null, lyrics: null };
+            trackId = firstTrack.id;
+        }
+
+        const l = await infoSpotify('https://open.spotify.com/track/' + trackId);
+        trackData = l?.data;
+
+        const pull = await request(`https://spclient.wg.spotify.com/color-lyrics/v2/track/${trackId}?format=json&vnext=true`, {
+            headers: {
+                ...commonHeaders,
+                'Authorization': 'Bearer ' + keysp,
+                'App-Platform': 'WebPlayer'
+            },
+            useH2: true
+        });
+
+        if (pull.statusCode === 401 && !refresh_auth) {
+            return await SPLyrics(que, true);
+        }
+
+        if(pull.statusCode === 400 && !process.env.SPOTIFY_COOKIES) {
+            return {
+                error: "Sign in to use this feature"
+            }
+        }
+        else if (pull.statusCode === 403 || pull.statusCode === 400) {
+            return {
+                error: "IP Blocked / Cookies no longer active"
+            }
+        }
+
+        let res: any = {};
+
+        try {
+            res = await pull.json();
+        } catch {}
+
+        if(!trackData) {
+            return { data: null }
+        }
+
+        const plainLyric = res?.lyrics?.lines?.map((a: any) => a.words)?.join('\n')?.replaceAll('♪', '');
+        const { lyrics, ...extraInfo } = res || {};
+        const { lines, ...extraInfo2 } = res?.lyrics || {};
+
+        return {
+            data: trackData,
+            lyrics: plainLyric || null,
+            syncLyrics: lines || null,
+            ...extraInfo2,
+            ...extraInfo,
+        };
+    } catch (e) {
+        console.error("SPLyrics Error:", e);
+        return null;
+    }
+}
+
 export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
     if (!que) return null;
     if (refresh) {
@@ -1811,7 +2033,7 @@ export const Genius = async function Genius(que: string) {
     }
 }
 
-function Number_random(min: number, max: number) {
+export function Number_random(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 

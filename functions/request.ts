@@ -620,7 +620,8 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
                 'Origin': 'https://clienttoken.spotify.com',
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-            }
+            },
+            useH2: true
         });
 
         const res: any = await req.json();
@@ -1369,7 +1370,8 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
                 'App-Platform': 'WebPlayer',
                 'Client-Token': keysptoken || '',
                 ...commonHeaders,
-            }
+            },
+            useH2: true
         });
 
         if (per2.statusCode === 403) {

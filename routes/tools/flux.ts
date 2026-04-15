@@ -62,8 +62,7 @@ return c.json({"error":"Nothing to do"}, 202);
         }
     }
 
-    // Fallback to Vercel version
-    return await blobDispatch(c, fetch(`https://fast-flux-demo.vercel.app/api/generate-image?text=${query}`, {
+    return await blobDispatch(c, fetch(`https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`, {
         method: "GET",
         headers: {
             ...commonHeaders

@@ -164,13 +164,34 @@ function cancelAutoDestroy(token: string) {
     managed.destroyTimer = null;
 }
 
-// Handle potential library crashes from lavalink-client
+// Handle potential library crashes from lavalink-client and discord.js
 process.on('uncaughtException', (err) => {
     if (err.message.includes("Argument 'data.encoded' must be present")) {
         console.error('Caught and suppressed a crash in lavalink-client (trackStuck event):', err.message);
         return;
     }
+    // Bun throws DOMException TimeoutError when discord.js tries to close a dead WebSocket
+    if (err.name === 'TimeoutError' || (err as any).code === 23) {
+        console.warn('Suppressed WebSocket TimeoutError during cleanup:', err.message);
+        return;
+    }
     console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+    // Suppress known non-fatal WebSocket/network errors from discord.js internals
+    const msg = reason?.message || String(reason);
+    if (
+        reason?.name === 'TimeoutError' ||
+        (reason as any)?.code === 23 ||
+        msg.includes('The operation timed out') ||
+        msg.includes('WebSocket was closed') ||
+        msg.includes('Cannot send data')
+    ) {
+        console.warn('Suppressed unhandled rejection (WebSocket cleanup):', msg);
+        return;
+    }
+    console.error('Unhandled Rejection:', reason);
 });
 
 export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
@@ -405,7 +426,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
     client.on('shardDisconnect', () => {
         console.log(`Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
-        destroyPlayer(token);
+        destroyPlayer(token).catch(() => { /* already cleaning up */ });
     });
 
     // ─ Login & Init ───────────────────
@@ -459,7 +480,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         const connectedNodes = [...managed.player.nodeManager.nodes.values()].filter(n => n.connected);
         if (connectedNodes.length === 0) {
             players.delete(token);
-            client.destroy();
+            try { client.destroy(); } catch { /* WebSocket may already be dead */ }
             throw new Error('No Lavalink nodes available after connection');
         }
 
@@ -491,7 +512,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
         managed.destroyTimer = null;
     }
 
-    managed.client.destroy();
+    try { managed.client.destroy(); } catch { /* WebSocket may already be dead */ }
     return true;
 }
 

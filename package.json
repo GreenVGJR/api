@@ -2,7 +2,7 @@
   "type": "module",
   "dependencies": {
     "@hono/node-server": "^1.19.14",
-    "discord.js": "^14.26.2",
+    "discord.js": "^14.26.3",
     "dotenv": "^17.4.2",
     "entities": "^8.0.0",
     "hono": "^4.12.12",

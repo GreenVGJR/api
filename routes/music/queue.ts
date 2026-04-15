@@ -10,7 +10,7 @@ import {
     get247,
     formatDuration,
 } from '../../functions/musicPlayer.js';
-import { YTMusic, YTLyrics } from '../../functions/request.js';
+import { YTMusic, YTLyrics, tidalLyrics, SPLyrics } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 
 
@@ -104,41 +104,114 @@ app.get('/nowplaying/lyrics', async (c) => {
         }
 
         const track = queue.queue.current;
+        const searchQuery = `${track.info.title} ${track.info.author}`;
+        const totalQueueDuration = queue.queue.tracks.reduce((acc, t) => acc + (t.info.duration ?? 0), 0);
+        const activeFilters = getActiveFilters(queue);
         await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
         try {
-            let trackUrl = track.info.uri;
-            const isYouTube = trackUrl.includes('youtube.com') || trackUrl.includes('youtu.be');
+            // ── Chain: YouTube Music → Tidal → Spotify ────────────────────
 
-            if (!isYouTube) {
-                await log('Track is not from YouTube, searching for YouTube version...');
-                const searchRes = await YTMusic(`${track.info.title} ${track.info.author}`);
-                const firstResult = searchRes?.data?.[0];
-                if (firstResult?.url) {
-                    trackUrl = firstResult.url;
-                    await log(`Found YouTube version: ${trackUrl}`);
-                } else {
-                    await log('Could not find YouTube version for lyrics');
+            // 1. YouTube Music
+            await log('[1/3] Trying YouTube Music lyrics...');
+            let lyrics: string | null = null;
+            let syncLyrics: any = null;
+            let source: string = '';
+            let footer: string | null = null;
+
+            try {
+                let trackUrl = track.info.uri;
+                const isYouTube = trackUrl?.includes('youtube.com') || trackUrl?.includes('youtu.be');
+
+                if (!isYouTube) {
+                    const searchRes = await YTMusic(searchQuery);
+                    const firstResult = searchRes?.data?.[0];
+                    if (firstResult?.url) {
+                        trackUrl = firstResult.url;
+                        await log(`Found YouTube version: ${trackUrl}`);
+                    }
+                }
+
+                if (trackUrl) {
+                    const ytData = await YTLyrics(trackUrl);
+                    if (ytData?.lyrics) {
+                        lyrics = ytData.lyrics;
+                        footer = ytData.footer || null;
+                        source = 'youtubemusic';
+                        await log('YouTube Music lyrics found');
+                    }
+                }
+            } catch (e: any) {
+                await log(`YouTube Music lyrics failed: ${e?.message || 'unknown'}`);
+            }
+
+            // 2. Tidal
+            if (!lyrics) {
+                await log('[2/3] Trying Tidal lyrics...');
+                try {
+                    const tidalData = await tidalLyrics(searchQuery);
+                    if (tidalData?.lyrics) {
+                        lyrics = tidalData.lyrics;
+                        syncLyrics = tidalData.syncLyrics || null;
+                        source = 'tidal';
+                        footer = tidalData.name ? `Source: ${tidalData.name}` : null;
+                        await log('Tidal lyrics found');
+                    }
+                } catch (e: any) {
+                    await log(`Tidal lyrics failed: ${e?.message || 'unknown'}`);
                 }
             }
 
-            await log('Fetching lyrics...');
-            const lyricsData = await YTLyrics(trackUrl);
+            // 3. Spotify
+            if (!lyrics) {
+                await log('[3/3] Trying Spotify lyrics...');
+                try {
+                    const spData = await SPLyrics(searchQuery);
+                    if (spData?.lyrics) {
+                        lyrics = spData.lyrics;
+                        syncLyrics = spData.syncLyrics || null;
+                        source = 'spotify';
+                        footer = spData.providerDisplayName ? `Source: ${spData.providerDisplayName}` : null;
+                        await log('Spotify lyrics found');
+                    }
+                } catch (e: any) {
+                    await log(`Spotify lyrics failed: ${e?.message || 'unknown'}`);
+                }
+            }
 
-            if (!lyricsData || !lyricsData.lyrics) {
-                await log('No lyrics found for this track');
+            if (!lyrics) {
+                await log('No lyrics found from any provider');
                 await s.write(`],"data":${JSON.stringify({ status: false, message: 'No lyrics found' })}}`);
                 return;
             }
 
-            await log('Lyrics retrieved successfully');
+            await log(`Lyrics retrieved successfully (source: ${source})`);
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: {
+                    lyrics,
+                    syncLyrics,
+                    source,
+                    footer,
                     track: formatTrack(track),
                     is247: get247(token!, guildId!),
-                    lyrics: lyricsData.lyrics,
-                    footer: lyricsData.footer,
+                    playing: queue.playing,
+                    paused: queue.paused,
+                    volume: queue.volume,
+                    loop: queue.get('autoplay') ? 'autoplay' : queue.repeatMode,
+                    filters: {
+                        array: activeFilters.length > 0 ? activeFilters : [],
+                        string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
+                    },
+                    queueSize: queue.queue.tracks.length,
+                    queueElapsedTime: {
+                        label: formatDuration(totalQueueDuration),
+                        value: String(totalQueueDuration)
+                    },
+                    progress: {
+                        current: { label: formatDuration(queue.position), value: String(queue.position) },
+                        total: { label: formatDuration(track.info.duration), value: String(track.info.duration) },
+                    },
                 },
             })}}`);
         } catch (err: any) {

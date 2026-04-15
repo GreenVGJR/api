@@ -16,8 +16,7 @@ import { getActiveFilters } from './filters.js';
 
 app.get('/nowplaying', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -80,8 +79,7 @@ app.get('/nowplaying', async (c) => {
 
 app.get('/nowplaying/lyrics', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -224,11 +222,10 @@ app.get('/nowplaying/lyrics', async (c) => {
 
 app.get('/queue', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const limit   = Math.max(1, parseInt(c.req.query('limit')  || '20', 10));
-        const offset  = Math.max(0, parseInt(c.req.query('offset') || '0',  10));
+        const limit = Math.max(1, parseInt(c.req.query('limit') || '20', 10));
+        const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);

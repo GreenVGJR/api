@@ -9,11 +9,10 @@ import {
 
 app.get('/stats', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted for node stats');
         const token = c.req.query('token');
 
         if (!token) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token' })}}`);
+            await s.write(`],"error":${JSON.stringify({ status: false, message: 'Missing required params: token' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {

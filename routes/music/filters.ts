@@ -238,7 +238,7 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.clearEQ();
             await p.filterManager.resetFilters();
         },
-        disable: async (p) => {},
+        disable: async (p) => { },
     },
 };
 
@@ -251,10 +251,9 @@ export function getActiveFilters(queue: any): string[] {
 
 app.get('/filter', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const filter  = (c.req.query('filter') || '').toLowerCase().trim();
+        const filter = (c.req.query('filter') || '').toLowerCase().trim();
 
         if (!token) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token' })}}`);

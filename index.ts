@@ -481,7 +481,7 @@ app.get('/playground', (c: Context) => {
         if (secFetchDest && secFetchDest !== 'document') return;
 
         let html = playgroundTemplate
-            .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};</script>`);
+            .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_ENDPOINTS = "${btoa(JSON.stringify(PLAYGROUND_ENDPOINTS))}";</script>`);
 
         await s.write(html);
     });

@@ -30,39 +30,39 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
     try {
         switch (platform) {
             case 'soundcloud': {
-                const res   = await SCMusic(query, undefined, 1);
+                const res = await SCMusic(query, undefined, 1);
                 const track = res?.data?.[0]?.[0];
                 if (!track?.permalink_url) return null;
                 return {
-                    url:    track.permalink_url,
-                    title:  track.title,
+                    url: track.permalink_url,
+                    title: track.title,
                     author: track.user?.username || track.publisher_metadata?.artist,
                 };
             }
             case 'spotify': {
-                const res   = await SPMusic(query, undefined, 1);
+                const res = await SPMusic(query, undefined, 1);
                 const track = res?.data?.tracks?.[0];
                 if (!track?.id) return null;
                 return {
-                    url:    `https://open.spotify.com/track/${track.id}`,
-                    title:  track.name,
+                    url: `https://open.spotify.com/track/${track.id}`,
+                    title: track.name,
                     author: track.artists?.items?.map((a: any) => a.profile?.name).join(', '),
                 };
             }
             case 'youtube': {
-                const res   = await YTVideo(query, false);
+                const res = await YTVideo(query, false);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
                 return { url: track.url, title: track.title, author: track.author };
             }
             case 'youtubemusic': {
-                const res   = await YTMusic(query, false);
+                const res = await YTMusic(query, false);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
                 return { url: track.url, title: track.title, author: track.author };
             }
             case 'applemusic': {
-                const amRes  = await request(
+                const amRes = await request(
                     `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
                     { method: 'GET', headers: commonHeaders }
                 );
@@ -70,28 +70,28 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 const track = parsed?.results?.[0];
                 if (!track) return null;
                 return {
-                    url:    track.trackViewUrl,
-                    title:  track.trackName,
+                    url: track.trackViewUrl,
+                    title: track.trackName,
                     author: track.artistName,
                 };
             }
             case 'deezer': {
-                const res   = await Deezer(query);
+                const res = await Deezer(query);
                 const track = res?.data?.[0];
                 if (!track?.link) return null;
                 return {
-                    url:    track.link,
-                    title:  track.title,
+                    url: track.link,
+                    title: track.title,
                     author: track.artist?.name,
                 };
             }
             case 'tidal': {
-                const res   = await Tidal(query);
+                const res = await Tidal(query);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
                 return {
-                    url:    track.url,
-                    title:  track.title,
+                    url: track.url,
+                    title: track.title,
                     author: track.artist?.name || track.artists?.[0]?.name,
                 };
             }
@@ -105,16 +105,15 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
 
 app.get('/play', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
 
-        const token      = c.req.query('token');
-        const query      = c.req.query('q');
-        const platform   = (c.req.query('platform') || 'applemusic').toLowerCase();
-        const voiceId    = c.req.query('voiceId');
+        const token = c.req.query('token');
+        const query = c.req.query('q');
+        const platform = (c.req.query('platform') || 'applemusic').toLowerCase();
+        const voiceId = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
-        const authorId   = c.req.query('authorId');
-        const isDeaf     = c.req.query('isDeaf') !== 'false';
-        const req247     = c.req.query('247');
+        const authorId = c.req.query('authorId');
+        const isDeaf = c.req.query('isDeaf') !== 'false';
+        const req247 = c.req.query('247');
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
@@ -122,7 +121,7 @@ app.get('/play', async (c) => {
         }
 
         const queryStr = query as string;
-        const isUrl    = queryStr.startsWith('http://') || queryStr.startsWith('https://');
+        const isUrl = queryStr.startsWith('http://') || queryStr.startsWith('https://');
 
         // Verify platform if not a URL
         const supportedPlatforms = ['youtube', 'youtubemusic', 'soundcloud', 'spotify', 'applemusic', 'deezer', 'tidal'];
@@ -269,13 +268,13 @@ app.get('/play', async (c) => {
             // has no SC source manager), try ytmsearch with that metadata first before falling
             // back to the platform's own search prefix.
             if (!searchResult) {
-                const hasMeta        = customResult?.title && customResult?.author;
-                const ytQuery        = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
+                const hasMeta = customResult?.title && customResult?.author;
+                const ytQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
                 const platformSearch = PLATFORM_SEARCH[platform] || 'ytmsearch';
 
                 const attempts: Array<{ label: string; q: string; src: string }> = [];
-                if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery,  src: 'ytmsearch' });
-                attempts.push(            { label: platformSearch,          q: queryStr, src: platformSearch });
+                if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery, src: 'ytmsearch' });
+                attempts.push({ label: platformSearch, q: queryStr, src: platformSearch });
 
                 for (const attempt of attempts) {
                     await log(`[Attempt 2] Lavalink search: "${attempt.src}:${attempt.q}"`);
@@ -297,11 +296,11 @@ app.get('/play', async (c) => {
         // ── Queue Tracks ──────────────────────────────────────────────────
 
         const isPlaylist = searchResult.loadType === 'playlist';
-        const tracks     = searchResult.tracks;
+        const tracks = searchResult.tracks;
 
         if (isPlaylist) {
-            const playlistName   = searchResult.playlist?.name || 'Unknown Playlist';
-            const playlistUrl    = searchResult.playlist?.uri || searchResult.playlist?.url || '';
+            const playlistName = searchResult.playlist?.name || 'Unknown Playlist';
+            const playlistUrl = searchResult.playlist?.uri || searchResult.playlist?.url || '';
             const playlistTracks = tracks.map((t: any) => ({ ...t.info }));
 
             tracks.forEach((t: any) => {
@@ -367,9 +366,9 @@ app.get('/play', async (c) => {
             }
         }
 
-        const queueTracks        = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
+        const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
         const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
-        const activeFilters      = getActiveFilters(guildPlayer);
+        const activeFilters = getActiveFilters(guildPlayer);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
@@ -380,9 +379,9 @@ app.get('/play', async (c) => {
                 platform,
                 is247,
                 isPlaying: guildPlayer.playing,
-                isPaused:  guildPlayer.paused,
+                isPaused: guildPlayer.paused,
                 filters: {
-                    array:  activeFilters.length > 0 ? activeFilters : [],
+                    array: activeFilters.length > 0 ? activeFilters : [],
                     string: activeFilters.length > 0 ? activeFilters.join(', ') : '',
                 },
                 queue: {

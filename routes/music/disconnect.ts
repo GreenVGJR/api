@@ -9,7 +9,7 @@ import {
 } from '../../functions/musicPlayer.js';
 
 app.get('/disconnect', async (c) => {
-    const token   = c.req.query('token');
+    const token = c.req.query('token');
     const guildId = c.req.query('guildId');
 
     return createMusicStream(c, async (log, s) => {
@@ -18,7 +18,6 @@ app.get('/disconnect', async (c) => {
             return;
         }
 
-        await log('Request accepted');
 
         if (!hasActivePlayer(token)) {
             await log('No active player found for this token');
@@ -72,7 +71,7 @@ app.get('/disconnect', async (c) => {
                 data: { action: 'disconnected', guildId, context_destroyed: killed },
             })}}`);
 
-        // ── Full destroy (no guildId) ─────────────────────────────────────
+            // ── Full destroy (no guildId) ─────────────────────────────────────
         } else {
             await log('No guildId specified, destroying entire player...');
             await destroyPlayer(token);

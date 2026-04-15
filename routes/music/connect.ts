@@ -11,13 +11,13 @@ import {
 } from '../../functions/musicPlayer.js';
 
 app.get('/connect', async (c) => {
-    const token   = c.req.query('token');
+    const token = c.req.query('token');
     let voiceId = c.req.query('voiceId');
     const reqGuildId = c.req.query('guildId');
     const authorId = c.req.query('authorId');
-    const isDeaf  = c.req.query('isDeaf') !== 'false';
-    const req247   = c.req.query('247');
-    const force   = c.req.query('force') === 'true';
+    const isDeaf = c.req.query('isDeaf') !== 'false';
+    const req247 = c.req.query('247');
+    const force = c.req.query('force') === 'true';
 
     return createMusicStream(c, async (log, s) => {
         if (!token || (!voiceId && !authorId)) {
@@ -25,7 +25,6 @@ app.get('/connect', async (c) => {
             return;
         }
 
-        await log('Request accepted');
 
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');

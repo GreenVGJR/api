@@ -28,7 +28,7 @@ function parseTimeMS(timeStr: string): number {
     if (/[hm]/.test(timeStr)) {
         const match = timeStr.match(hmsRegex);
         if (match) {
-            const hours   = parseInt(match[1] || '0', 10);
+            const hours = parseInt(match[1] || '0', 10);
             const minutes = parseInt(match[2] || '0', 10);
             const seconds = parseInt(match[3] || '0', 10);
             return (hours * 3600 + minutes * 60 + seconds) * 1000;
@@ -56,8 +56,7 @@ function isActive(p: any): boolean {
 
 app.get('/pause', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -97,8 +96,7 @@ app.get('/pause', async (c) => {
 
 app.get('/resume', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -138,11 +136,10 @@ app.get('/resume', async (c) => {
 
 app.get('/skip', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token    = c.req.query('token');
-        const guildId  = c.req.query('guildId');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
         const indexStr = c.req.query('index') || '';
-        const index    = parseInt(indexStr, 10);
+        const index = parseInt(indexStr, 10);
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
@@ -190,7 +187,7 @@ app.get('/skip', async (c) => {
         }
 
         await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : 'Skipping: Unknown...');
-        
+
         // Use skip(0, false) originally intended, but if it's a live track,
         // we use stopPlaying(false) to ensure it stops correctly then plays next.
         if (skippedTrack?.info.isStream) {
@@ -218,8 +215,7 @@ app.get('/skip', async (c) => {
 
 app.get('/stop', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -316,8 +312,7 @@ app.get('/stop', async (c) => {
 
 app.get('/seek', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const time = c.req.query('time');
 
@@ -354,7 +349,7 @@ app.get('/seek', async (c) => {
         const ms = parseTimeMS(time);
 
         if (ms > duration) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration/1000)}s)` })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration / 1000)}s)` })}}`);
             return;
         }
 
@@ -377,10 +372,10 @@ app.get('/seek', async (c) => {
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { 
-                action: 'seek', 
-                time: String(seekTarget), 
-                formatTime: formatDuration(seekTarget),  
+            data: {
+                action: 'seek',
+                time: String(seekTarget),
+                formatTime: formatDuration(seekTarget),
                 progress: {
                     current: { label: formatDuration(seekTarget), value: String(seekTarget) },
                     total: { label: formatDuration(currentTrack.info.duration), value: String(currentTrack.info.duration) },
@@ -393,8 +388,7 @@ app.get('/seek', async (c) => {
 
 app.get('/volume', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -433,14 +427,14 @@ app.get('/volume', async (c) => {
 
 
 const LOOP_MODES: Record<string, RMValue | 'autoplay'> = {
-    off:   RM.OFF,
+    off: RM.OFF,
     track: RM.TRACK,
     queue: RM.QUEUE,
     autoplay: 'autoplay',
 };
 
 const LOOP_MODE_NAMES: Record<RMValue | 'autoplay', string> = {
-    'off':   'off',
+    'off': 'off',
     'track': 'track',
     'queue': 'queue',
     'autoplay': 'autoplay',
@@ -448,10 +442,9 @@ const LOOP_MODE_NAMES: Record<RMValue | 'autoplay', string> = {
 
 app.get('/loop', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const mode    = (c.req.query('mode') || '').toLowerCase();
+        const mode = (c.req.query('mode') || '').toLowerCase();
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
@@ -475,11 +468,11 @@ app.get('/loop', async (c) => {
         if (mode === '' || mode === 'toggle') {
             const current = queue.repeatMode as unknown as RMValue;
             const isAutoplay = queue.get('autoplay');
-            
-            if (isAutoplay)                repeatMode = RM.TRACK;
-            else if (current === RM.OFF)   repeatMode = 'autoplay';
+
+            if (isAutoplay) repeatMode = RM.TRACK;
+            else if (current === RM.OFF) repeatMode = 'autoplay';
             else if (current === RM.TRACK) repeatMode = RM.QUEUE;
-            else                           repeatMode = RM.OFF;
+            else repeatMode = RM.OFF;
         } else if (mode in LOOP_MODES) {
             repeatMode = LOOP_MODES[mode];
         } else {
@@ -495,7 +488,7 @@ app.get('/loop', async (c) => {
         }
 
         await log(`Setting loop mode to ${repeatMode}...`);
-        
+
         if (repeatMode === 'autoplay') {
             queue.set('autoplay', true);
             await queue.setRepeatMode(RM.OFF as any);
@@ -513,7 +506,7 @@ app.get('/loop', async (c) => {
             }
             await queue.setRepeatMode(repeatMode as any);
         }
-        
+
         await log(`Loop mode set to ${repeatMode}`);
 
         await s.write(`],"data":${JSON.stringify({
@@ -526,8 +519,7 @@ app.get('/loop', async (c) => {
 
 app.get('/shuffle', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -576,11 +568,10 @@ app.get('/shuffle', async (c) => {
 
 app.get('/remove', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token    = c.req.query('token');
-        const guildId  = c.req.query('guildId');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
         const indexStr = c.req.query('index') || '';
-        const index    = parseInt(indexStr, 10);
+        const index = parseInt(indexStr, 10);
 
         if (!token || !guildId || indexStr === '' || isNaN(index)) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, index' })}}`);
@@ -616,8 +607,8 @@ app.get('/remove', async (c) => {
             status: true,
             data: {
                 action: 'removed',
-                removedTrack: { title: trackToRemove.info.title, author: trackToRemove.info.author, url: trackToRemove.info.uri },
-                currentTrack: current ? { title: current.info.title, author: current.info.author, url: current.info.uri } : null,
+                removedTrack: formatTrack(trackToRemove),
+                currentTrack: current ? formatTrack(current) : null,
             },
         })}}`);
     });
@@ -626,8 +617,7 @@ app.get('/remove', async (c) => {
 
 app.get('/clear', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -662,11 +652,10 @@ app.get('/clear', async (c) => {
 
 app.get('/jump', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token    = c.req.query('token');
-        const guildId  = c.req.query('guildId');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
         const indexStr = c.req.query('index') || '';
-        const index    = parseInt(indexStr, 10);
+        const index = parseInt(indexStr, 10);
 
         if (!token || !guildId || indexStr === '' || isNaN(index)) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, index' })}}`);
@@ -701,7 +690,11 @@ app.get('/jump', async (c) => {
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'jumped', targetTrack: { title: targetTrack.info.title, index } },
+            data: {
+                action: 'jumped',
+                track: formatTrack(targetTrack),
+                index
+            },
         })}}`);
     });
 });
@@ -709,13 +702,12 @@ app.get('/jump', async (c) => {
 
 app.get('/move', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const fromStr = c.req.query('from') || '';
-        const toStr   = c.req.query('to') || '';
-        const from    = parseInt(fromStr, 10);
-        const to      = parseInt(toStr, 10);
+        const toStr = c.req.query('to') || '';
+        const from = parseInt(fromStr, 10);
+        const to = parseInt(toStr, 10);
 
         if (!token || !guildId || fromStr === '' || toStr === '' || isNaN(from) || isNaN(to)) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing or invalid required params: token, guildId, from, to' })}}`);
@@ -736,21 +728,43 @@ app.get('/move', async (c) => {
 
         const tracks = queue.queue.tracks;
         if (from < 0 || from >= tracks.length || to < 0 || to >= tracks.length) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Index out of bounds' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Index out of bounds (0-${tracks.length - 1})` })}}`);
             return;
         }
 
-        const trackToMove = tracks[from];
-        await log(`Moving track "${trackToMove.info.title}" from ${from} to ${to}`);
+        const fromTrack = tracks[from];
+        const toTrack = tracks[to];
 
-        // Splice out from original position, then insert at target
-        const [removed] = await queue.queue.splice(from, 1);
-        await queue.queue.splice(to, 0, removed);
+        if (from === to) {
+            await s.write(`],"data":${JSON.stringify({
+                status: true,
+                data: {
+                    action: 'moved',
+                    fromTrack: formatTrack(fromTrack),
+                    toTrack: formatTrack(toTrack),
+                    from, to
+                }
+            })}}`);
+            return;
+        }
+
+        await log(`Moving track "${fromTrack.info.title}" from ${from} to ${to}`);
+
+        // Save reference before removing — queue.queue.splice() does NOT
+        // return removed items like Array.splice (it returns {})
+        await queue.queue.splice(from, 1);
+        // After removal, indices shift: if to > from, adjust down by 1
+        await queue.queue.splice(to > from ? to - 1 : to, 0, fromTrack);
         await log('Track moved');
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'moved', track: trackToMove.info.title, from, to },
+            data: {
+                action: 'moved',
+                fromTrack: formatTrack(fromTrack),
+                toTrack: formatTrack(toTrack),
+                from, to
+            },
         })}}`);
     });
 });
@@ -758,8 +772,7 @@ app.get('/move', async (c) => {
 
 app.get('/back', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -817,8 +830,7 @@ app.get('/back', async (c) => {
 
 app.get('/247', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token   = c.req.query('token');
+        const token = c.req.query('token');
         const guildId = c.req.query('guildId');
 
         if (!token || !guildId) {
@@ -861,9 +873,8 @@ export default app;
 
 app.get('/where', async (c) => {
     return createMusicStream(c, async (log, s) => {
-        await log('Request accepted');
-        const token    = c.req.query('token');
-        const guildId  = c.req.query('guildId');
+        const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
 
         if (!token) {

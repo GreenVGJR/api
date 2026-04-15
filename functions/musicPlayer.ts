@@ -577,7 +577,7 @@ export function formatDuration(ms: number): string {
     return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-export function formatTrack(track: Track) {
+export function formatTrack(track: Track | any) {
     const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
     return {
         id: track.info.identifier,

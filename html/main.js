@@ -17,7 +17,9 @@ let isCoolingDown = false;
 const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
 
 if (window.SERVER_ENDPOINTS) {
-    endpoints = window.SERVER_ENDPOINTS;
+    try {
+        endpoints = JSON.parse(atob(window.SERVER_ENDPOINTS));
+    } catch (e) { }
 }
 
 const urlInput = document.getElementById('urlInput');
@@ -90,33 +92,61 @@ function flattenRoutes(obj, parentPath = '') {
     return flatResults;
 }
 
-async function performRequest(targetUrl) {
-    if (isLoading || isCoolingDown) return null;
+async function solveChallenge(challenge) {
+    try {
+        const [base64xt, validType, [slicekf, ip], time, xtIndex] = challenge;
+        if (validType !== 10) return null;
 
-    isLoading = true;
-    sendBtn.innerHTML = '<span>Loading...</span>';
-    sendBtn.classList.add('opacity-70');
-    responseArea.classList.add('empty-state');
-    responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
+        const xt = JSON.parse(atob(base64xt));
+        const secretValue = xt[xtIndex];
 
-    statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
-    statusText.textContent = 'Fetching';
-    statusText.className = 'text-yellow-400';
+        const data = time + secretValue.toString() + ip;
+        const msgUint8 = new TextEncoder().encode(data);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+        const base64 = btoa(String.fromCharCode(...hashArray));
+        const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        return JSON.stringify([base64url, validType, [slicekf, ip], time, xtIndex]);
+    } catch (e) {
+        return null;
+    }
+}
+
+let solvedChallengeCode = null;
+
+async function performRequest(targetUrl, retryCount = 0) {
+    if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
+
+    if (retryCount === 0) {
+        isLoading = true;
+        sendBtn.innerHTML = '<span>Loading...</span>';
+        sendBtn.classList.add('opacity-70');
+        responseArea.classList.add('empty-state');
+        responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
+
+        statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
+        statusText.textContent = 'Fetching';
+        statusText.className = 'text-yellow-400';
+    }
 
     let resultData = null;
 
     try {
         const startTime = performance.now();
-        const response = await fetch(targetUrl, {
-            headers: { 'Accept': 'application/json' }
-        });
+        const headers = { 'Accept': 'application/json' };
+        if (solvedChallengeCode && targetUrl.includes('/music/')) {
+            headers['x-challenge-codes'] = solvedChallengeCode;
+        }
+
+        const response = await fetch(targetUrl, { headers });
 
         responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
 
         const contentType = response.headers.get('content-type') || '';
-        console.log(`${contentType} + ${contentType.startsWith('video/')}`);
         let duration;
 
         if (contentType.startsWith('image/')) {
@@ -152,6 +182,23 @@ async function performRequest(targetUrl) {
 
             const text = await response.text();
             duration = Math.round(performance.now() - startTime);
+
+            if (response.status === 403 && response.headers.get('x-player') === 'lavalink' && retryCount < 4) {
+                try {
+                    const data = JSON.parse(text);
+                    if (data && data.c && data._submit) {
+                        responseArea.innerHTML = '<span class="text-mint-400 loading flex h-full items-center justify-center">Solving challenge...</span>';
+                        const solved = await solveChallenge(data.c);
+                        if (solved) {
+                            solvedChallengeCode = solved;
+                            return performRequest(targetUrl, retryCount + 1);
+                        }
+                    }
+                } catch (e) { }
+            } else if (response.status === 403 && response.headers.get('x-player') === 'lavalink') {
+                solvedChallengeCode = null;
+            }
+
             updateStatusUI(response.ok, response.status, duration);
             let formatted = text;
             let isJson = false;
@@ -600,7 +647,6 @@ copyBtn.addEventListener('click', async () => {
             `;
         }, 1500);
     } catch (err) {
-        console.error('Failed to copy:', err);
     }
 });
 
@@ -618,7 +664,6 @@ copyResponseBtn.addEventListener('click', async () => {
             copyResponseBtn.classList.remove('text-mint-400');
         }, 1500);
     } catch (err) {
-        console.error('Failed to copy response:', err);
     }
 });
 

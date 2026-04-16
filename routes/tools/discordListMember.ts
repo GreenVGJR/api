@@ -22,7 +22,7 @@ app.get('/discord/listMember', async (c) => {
     const queryLimit = c.req.query('limit');
     const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : 10;
 
-    const validTypes = ['user', 'bot', 'all', 'oldest', 'newest', 'no_role'];
+    const validTypes = ['user', 'bot', 'all', 'oldest', 'newest', 'no_role', 'has_role'];
     const queryType = c.req.query('type') || 'all';
     const types = queryType.split(',').map(t => t.trim());
     const invalidTypes = types.filter(t => !validTypes.includes(t));

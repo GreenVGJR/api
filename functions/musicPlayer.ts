@@ -5,6 +5,52 @@ import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
 import { pullInfo, verifyChallenge } from './musicChallenges.ts';
 
+// ─── Voice Status API Helper ───────────────────────────────────────────────
+
+async function setVoiceStatus(channelId: string, token: string, content: string) {
+    try {
+        await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (1.0.0)'
+            },
+            body: JSON.stringify({ status: content.slice(0, 500) }) 
+        });
+    } catch (err) { console.error("Voice Status Error:", err); }
+}
+
+export async function updateVoiceStatus(player: LavalinkPlayer, token: string) {
+    const template = player.get('voiceStatusTemplate') as string | undefined;
+    const channelId = player.voiceChannelId;
+    if (template === undefined || !channelId) return;
+    
+    if (template.trim() === "" || !player.queue.current) {
+        return setVoiceStatus(channelId, token, "");
+    }
+
+    const track = player.queue.current;
+
+    // This dynamically replaces {key} with track.info[key] 
+    // or {requester.key} with track.requester[key]
+    const content = template.replace(/{([\w.]+)}/g, (match, path) => {
+        const parts = path.split('.');
+        
+        // 1. Try to get from track.info first (for {title}, {author}, etc.)
+        if (parts.length === 1 && (track.info as any)[parts[0]] !== undefined) {
+            return (track.info as any)[parts[0]];
+        }
+
+        // 2. Otherwise, drill into the track object (for {requester.globalName}, etc.)
+        const value = parts.reduce((obj: any, key: string) => obj?.[key], track);
+        
+        return value !== undefined ? String(value) : match;
+    });
+
+    await setVoiceStatus(channelId, token, content);
+}
+
 // ─── Streaming Helper ────────────────────────────────────────────────────────
 
 export function createMusicStream(
@@ -30,12 +76,16 @@ export function createMusicStream(
 
         await s.write('{"_logs":[');
 
-        const log = async (msg: string) => {
-            const elapsed = Date.now() - startTime;
-            const entry = `[${elapsed}ms] ${msg}`;
-            const prefix = logIndex > 0 ? ',' : '';
-            try { await s.write(`${prefix}${JSON.stringify(entry)}`); } catch { }
-            logIndex++;
+        let logPromise = Promise.resolve();
+        const log = (msg: string) => {
+            logPromise = logPromise.then(async () => {
+                const elapsed = Date.now() - startTime;
+                const entry = `[${elapsed}ms] ${msg}`;
+                const prefix = logIndex > 0 ? ',' : '';
+                try { await s.write(`${prefix}${JSON.stringify(entry)}`); } catch { }
+                logIndex++;
+            });
+            return logPromise;
         };
 
         try {
@@ -339,6 +389,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
     // ─ Manager Events ───────────────────
     manager.on('trackStart', (p, track) => {
+        updateVoiceStatus(p, token).catch(() => {});
         cancelAutoDestroy(token);
         if (p.get('autoplay') && track) fillAutoplay(p, track);
     });
@@ -346,6 +397,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
 
     manager.on('queueEnd', (p) => {
+        if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
         if (get247(token, p.guildId)) {
             console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
             reconnect247(p.guildId, p.voiceChannelId!, 'queueEnd');
@@ -358,6 +410,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     manager.on('playerDestroy', (p) => {
         // voiceChannelId may already be null by the time this fires, fall back to last known
         const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
+        if (voiceChannelId) setVoiceStatus(voiceChannelId, token, "").catch(() => {});
         if (get247(token, p.guildId)) {
             if (voiceChannelId) {
                 console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
@@ -415,6 +468,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             lastVoiceChannel.set(`${token}:${newState.guild.id}`, newState.channelId);
         }
         if (oldState.channel && !newState.channel) {
+            setVoiceStatus(oldState.channelId!, token, "").catch(() => {});
             if (get247(token, oldState.guild.id)) {
                 reconnect247(oldState.guild.id, oldState.channelId!, 'voiceStateUpdate');
                 return;

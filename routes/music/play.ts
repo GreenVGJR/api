@@ -12,6 +12,7 @@ import {
     createMusicStream,
     checkVoicePermissions,
     formatDuration,
+    updateVoiceStatus,
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
@@ -108,12 +109,13 @@ app.get('/play', async (c) => {
 
         const token = c.req.query('token');
         const query = c.req.query('q');
-        const platform = (c.req.query('platform') || 'applemusic').toLowerCase();
+        const platform = (c.req.query('platform') || 'youtubemusic').toLowerCase();
         const voiceId = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
         const isDeaf = c.req.query('isDeaf') !== 'false';
         const req247 = c.req.query('247');
+        const statusContent = c.req.query('statusContent');
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
@@ -131,183 +133,188 @@ app.get('/play', async (c) => {
             return;
         }
 
-        // ── Client Setup ──────────────────────────────────────────────────
+        // ── Parallel Setup ──────────────────────────────────────────────────
 
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
+        // Start tasks
+        const pCustom = !isUrl ? customSearch(platform, queryStr) : Promise.resolve(null);
         const { client, player: manager } = await getOrCreatePlayer(token, log);
+
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
         await log('Lavalink manager active');
 
-        // ── Resolve Voice Channel ─────────────────────────────────────────
-
-        let channel: any = null;
-        if (voiceId) {
-            await log(`Resolving voice channel: ${voiceId}`);
-            channel = await resolveVoiceChannel(client, voiceId);
-            await log('Voice channel resolved');
-        } else if (authorId && reqGuildId) {
-            await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
-            const guild = client.guilds.cache.get(reqGuildId as string);
-            if (guild) {
-                const voiceState = guild.voiceStates.cache.get(authorId as string);
-                if (voiceState?.channel) channel = voiceState.channel;
+        // Parallel tasks after client is ready
+        const pRequester = (async () => {
+            let requester: any = { id: authorId || 'api', username: 'API' };
+            if (authorId) {
+                await log(`Fetching user: ${authorId}`);
+                const fetched = await client.users.fetch(authorId as string).catch(() => null);
+                if (fetched) {
+                    requester = fetched;
+                    await log(`User found: ${fetched.tag}`);
+                } else {
+                    await log('User not found, using fallback requester');
+                }
             }
-            if (channel) {
-                await log(`Found target in voice channel: ${channel.name}`);
-                checkVoicePermissions(channel, client.user!);
-            }
-        }
+            return requester;
+        })();
 
-        if (!channel) {
-            await log('No voice channel found');
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Cant find a voice channel' })}}`);
+        const pVoice = (async () => {
+            let channel: any = null;
+            if (voiceId) {
+                await log(`Resolving voice channel: ${voiceId}`);
+                channel = await resolveVoiceChannel(client, voiceId);
+                await log('Voice channel resolved');
+            } else if (authorId && reqGuildId) {
+                await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
+                const guild = client.guilds.cache.get(reqGuildId as string);
+                if (guild) {
+                    const voiceState = guild.voiceStates.cache.get(authorId as string);
+                    if (voiceState?.channel) channel = voiceState.channel;
+                }
+                if (channel) {
+                    await log(`Found target in voice channel: ${channel.name}`);
+                    checkVoicePermissions(channel, client.user!);
+                }
+            }
+            return channel;
+        })();
+
+        const pGP = (async () => {
+            const channel = await pVoice;
+            if (!channel) return null;
+
+            const guildId = channel.guild.id;
+            let gp = manager.players.get(guildId);
+            const isNewGP = !gp || (
+                !gp.playing &&
+                !gp.paused &&
+                gp.queue.tracks.length === 0 &&
+                !gp.queue.current
+            );
+
+            if (!gp) {
+                await log('Creating Lavalink player...');
+                gp = await manager.createPlayer({
+                    guildId,
+                    voiceChannelId: channel.id,
+                    selfDeaf: isDeaf,
+                    selfMute: false
+                });
+            } else {
+                gp.options.selfDeaf = isDeaf;
+            }
+
+            if (statusContent !== undefined) {
+                gp.set('voiceStatusTemplate', statusContent);
+            }
+            return { gp, isNewGP };
+        })();
+
+        const pConnect = (async () => {
+            const setup = await pGP;
+            if (!setup) return;
+            const { gp } = setup;
+            if (!gp.connected) {
+                await log('Connecting to voice channel...');
+                await gp.connect();
+                await log('Connected');
+            }
+        })();
+
+        const pSearch = (async () => {
+            const [customResult, requester, setup] = await Promise.all([pCustom, pRequester, pGP]);
+            if (!setup) throw new Error('No voice channel found');
+            const { gp } = setup;
+
+            const doSearch = async (q: string, src: string) => {
+                const res = await gp.search(
+                    { query: q, source: (src === 'url' ? undefined : src) as any },
+                    requester
+                );
+                if (!res?.tracks?.length) throw new Error(`No results for "${q}"`);
+                return res;
+            };
+
+            let result: any = null;
+            if (isUrl) {
+                await log(`Loading URL directly: "${queryStr}"`);
+                result = await doSearch(queryStr, 'url');
+            } else {
+                await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
+                if (customResult) {
+                    await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
+                    try {
+                        result = await doSearch(customResult.url, 'url');
+                        await log('[Attempt 1] Direct URL load succeeded');
+                    } catch (e: any) {
+                        await log(`[Attempt 1] Direct URL load failed (${e?.message}) — falling back to Lavalink search`);
+                    }
+                } else {
+                    await log(`[Attempt 1] No URL returned — falling back to Lavalink search`);
+                }
+
+                if (!result) {
+                    const hasMeta = customResult?.title && customResult?.author;
+                    const ytQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
+                    const platformSearch = PLATFORM_SEARCH[platform] || 'ytmsearch';
+
+                    const attempts: Array<{ label: string; q: string; src: string }> = [];
+                    if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery, src: 'ytmsearch' });
+                    attempts.push({ label: platformSearch, q: queryStr, src: platformSearch });
+
+                    for (const attempt of attempts) {
+                        await log(`[Attempt 2] Lavalink search: "${attempt.src}:${attempt.q}"`);
+                        try {
+                            result = await doSearch(attempt.q, attempt.src);
+                            await log(`[Attempt 2] Lavalink search succeeded (${attempt.label})`);
+                            break;
+                        } catch (err: any) {
+                            await log(`[Attempt 2] "${attempt.label}" failed: ${err?.message}`);
+                        }
+                    }
+                }
+            }
+            if (!result) throw new Error('All search methods failed');
+            return result;
+        })();
+
+        // Join results
+        const [searchResult, setup, _] = await Promise.allSettled([pSearch, pGP, pConnect]);
+
+        if (searchResult.status === 'rejected') {
+            await s.write(`],"error":${JSON.stringify({ message: searchResult.reason?.message || 'Search failed' })}}`);
             return;
         }
 
-        const guildId = channel.guild.id;
-
-        // ── Requester ─────────────────────────────────────────────────────
-
-        let requester: any = { id: authorId || 'api', username: 'API' };
-        if (authorId) {
-            await log(`Fetching user: ${authorId}`);
-            const fetched = await client.users.fetch(authorId as string).catch(() => null);
-            if (fetched) {
-                requester = fetched;
-                await log(`User found: ${fetched.tag}`);
-            } else {
-                await log('User not found, using fallback requester');
-            }
+        if (setup.status === 'rejected' || !setup.value) {
+            await log(setup.status === 'rejected' ? `Voice setup failed: ${setup.reason?.message}` : 'No voice channel found');
+            await s.write(`],"data":${JSON.stringify({ status: false, message: setup.status === 'rejected' ? setup.reason?.message : 'Cant find a voice channel' })}}`);
+            return;
         }
 
-        // ── Create / Retrieve Lavalink Player ─────────────────────────────
+        const { gp: guildPlayer, isNewGP: isNewGuildPlayer } = setup.value;
+        const tracks = searchResult.value.tracks;
+        const isPlaylist = searchResult.value.loadType === 'playlist';
 
-        let guildPlayer = manager.players.get(guildId);
-        const isNewGuildPlayer = !guildPlayer || (
-            !guildPlayer.playing &&
-            !guildPlayer.paused &&
-            guildPlayer.queue.tracks.length === 0 &&
-            !guildPlayer.queue.current
-        );
-        if (!guildPlayer) {
-            await log('Creating Lavalink player...');
-            guildPlayer = await manager.createPlayer({
-                guildId,
-                voiceChannelId: channel.id,
-                selfDeaf: isDeaf,
-                selfMute: false
-            });
-        } else {
-            guildPlayer.options.selfDeaf = isDeaf;
-        }
-
+        const guildId = guildPlayer.guildId;
         let is247 = get247(token!, guildId);
         if (req247 !== undefined) {
             is247 = req247 === 'true';
             set247(token!, guildId, is247);
         }
 
-        if (!guildPlayer.connected) {
-            guildPlayer.options.selfDeaf = isDeaf;
-            await log('Connecting to voice channel...');
-            await guildPlayer.connect();
-            await log('Connected');
-        }
-
-        // ── Search ────────────────────────────────────────────────────────
-
-        const doSearch = async (q: string, src: string) => {
-            try {
-                const res = await guildPlayer!.search(
-                    { query: q, source: (src === 'url' ? undefined : src) as any },
-                    requester
-                );
-                if (!res?.tracks?.length) throw new Error(`No results for "${q}"`);
-                return res;
-            } catch (err: any) {
-                if (err?.message === 'Failed to parse JSON') {
-                    throw new Error("sourceManager disabled or lavalink don't support");
-                }
-                throw err;
-            }
-        };
-
-        let searchResult: any;
-
-        if (isUrl) {
-            // ── Direct URL ────────────────────────────────────────────────
-            await log(`Loading URL directly: "${queryStr}"`);
-            try {
-                searchResult = await doSearch(queryStr, 'url');
-            } catch (err: any) {
-                await log(`URL load failed: ${err?.message}`);
-                await s.write(`],"error":${JSON.stringify({ message: err?.message || 'Failed to load URL' })}}`);
-                return;
-            }
-        } else {
-            // ── Attempt 1: Custom search → direct URL ─────────────────────
-            await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
-            const customResult = await customSearch(platform, queryStr);
-
-            if (customResult) {
-                await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
-                try {
-                    searchResult = await doSearch(customResult.url, 'url');
-                    await log('[Attempt 1] Direct URL load succeeded');
-                } catch (e: any) {
-                    await log(`[Attempt 1] Direct URL load failed (${e?.message}) — falling back to Lavalink search`);
-                }
-            } else {
-                await log(`[Attempt 1] No URL returned — falling back to Lavalink search`);
-            }
-
-            // ── Attempt 2: Lavalink named search ──────────────────────────
-            // If custom search returned title+author (e.g. SCMusic found the track but the node
-            // has no SC source manager), try ytmsearch with that metadata first before falling
-            // back to the platform's own search prefix.
-            if (!searchResult) {
-                const hasMeta = customResult?.title && customResult?.author;
-                const ytQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
-                const platformSearch = PLATFORM_SEARCH[platform] || 'ytmsearch';
-
-                const attempts: Array<{ label: string; q: string; src: string }> = [];
-                if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery, src: 'ytmsearch' });
-                attempts.push({ label: platformSearch, q: queryStr, src: platformSearch });
-
-                for (const attempt of attempts) {
-                    await log(`[Attempt 2] Lavalink search: "${attempt.src}:${attempt.q}"`);
-                    try {
-                        searchResult = await doSearch(attempt.q, attempt.src);
-                        await log(`[Attempt 2] Lavalink search succeeded (${attempt.label})`);
-                        break;
-                    } catch (err: any) {
-                        await log(`[Attempt 2] "${attempt.label}" failed: ${err?.message}`);
-                        if (attempt === attempts[attempts.length - 1]) {
-                            await s.write(`],"error":${JSON.stringify({ message: err?.message || 'All search methods failed' })}}`);
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── Queue Tracks ──────────────────────────────────────────────────
-
-        const isPlaylist = searchResult.loadType === 'playlist';
-        const tracks = searchResult.tracks;
-
         if (isPlaylist) {
-            const playlistName = searchResult.playlist?.name || 'Unknown Playlist';
-            const playlistUrl = searchResult.playlist?.uri || searchResult.playlist?.url || '';
+            const playlistName = searchResult.value.playlist?.name || 'Unknown Playlist';
+            const playlistUrl = searchResult.value.playlist?.uri || searchResult.value.playlist?.url || '';
             const playlistTracks = tracks.map((t: any) => ({ ...t.info }));
 
             tracks.forEach((t: any) => {
                 t.playlist = { name: playlistName, url: playlistUrl, tracks: playlistTracks };
             });
 
-            // Filter out live tracks from the playlist
             const filteredTracks = tracks.filter((t: any) => !t.info.isStream);
             if (filteredTracks.length === 0) {
                 await log('No non-live tracks found in playlist');

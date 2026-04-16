@@ -39,6 +39,7 @@ const API_ROUTES = {
         "/search/tidal?q=",
         "/search/tidal/v2?q=",
         "/search/genius?q=",
+        "/search/audiomack?q=",
         "/search/pinterest?q=",
         "/search/imdb?q=",
         "/search/imgflip?q=",
@@ -143,7 +144,8 @@ const API_ROUTES = {
                 "/tools/discord/voice/undeafall?token=&guildId=&channelId=&authorId=",
                 "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
                 "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=",
-                "/tools/discord/voice/list?token=&guildId=&channelId="
+                "/tools/discord/voice/list?token=&guildId=&channelId=",
+                "/tools/discord/voice/setStatus?token=&channelId=&content="
             ]
         },
     },
@@ -169,7 +171,7 @@ const API_ROUTES = {
     music: [
         "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
         "/music/disconnect?token=&guildId=",
-        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
+        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&statusContent=",
         "/music/pause?token=&guildId=",
         "/music/resume?token=&guildId=",
         "/music/skip?token=&guildId=&index=",
@@ -625,7 +627,7 @@ app.use('*', async (c: Context, next: Next) => {
     const checkexists = c.notFound();
 
     if (checkexists) {
-        return c.text('Not Found.\nIf you looking specific route, you might typo to it.', 404);
+        return c.body(null, 404);
     }
     await next();
 });

@@ -42,5 +42,6 @@ import otodb from './otodb.js';
 import youtubePlaylist from './youtubePlaylist.js';
 import tidalOpen from './tidalOpen.js';
 import flickr from './flickr.js';
+import audiomack from './audiomack.js';
 
-export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, otodb, youtubePlaylist, tidalOpen, flickr] as any[];
+export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, instagramUsers, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, otodb, youtubePlaylist, tidalOpen, flickr, audiomack] as any[];

@@ -95,7 +95,7 @@ function flattenRoutes(obj, parentPath = '') {
 async function solveChallenge(challenge) {
     try {
         const [base64xt, validType, [slicekf, ip], time, xtIndex] = challenge;
-        if (validType !== 10) return null;
+        if (validType !== 100) return null;
 
         const xt = JSON.parse(atob(base64xt));
         const secretValue = xt[xtIndex];
@@ -137,7 +137,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         const startTime = performance.now();
         const headers = { 'Accept': 'application/json' };
         if (solvedChallengeCode && targetUrl.includes('/music/')) {
-            headers['x-challenge-codes'] = solvedChallengeCode;
+            headers['x-challenge-codes'] = encodeURIComponent(solvedChallengeCode);
         }
 
         const response = await fetch(targetUrl, { headers });
@@ -191,7 +191,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                         const solved = await solveChallenge(data.c);
                         if (solved) {
                             solvedChallengeCode = solved;
-                            return performRequest(targetUrl, retryCount + 1);
+                            return await performRequest(targetUrl, retryCount + 1);
                         }
                     }
                 } catch (e) { }
@@ -257,23 +257,25 @@ async function performRequest(targetUrl, retryCount = 0) {
         statusText.textContent = 'Failed';
         statusText.className = 'text-red-400';
     } finally {
-        isLoading = false;
-        sendBtn.innerHTML = 'Send';
+        if (retryCount === 0) {
+            isLoading = false;
+            sendBtn.innerHTML = 'Send';
 
-        isCoolingDown = true;
-        sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        let timeLeft = 0.5;
+            isCoolingDown = true;
+            sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            let timeLeft = 0.5;
 
-        const cooldownInterval = setInterval(() => {
-            timeLeft -= 0.1;
-            if (timeLeft <= 0) {
-                clearInterval(cooldownInterval);
-                isCoolingDown = false;
-                sendBtn.innerHTML = '<span>Send</span><span>➜</span>';
-                sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                sendBtn.classList.remove('opacity-70');
-            }
-        }, 100);
+            const cooldownInterval = setInterval(() => {
+                timeLeft -= 0.1;
+                if (timeLeft <= 0) {
+                    clearInterval(cooldownInterval);
+                    isCoolingDown = false;
+                    sendBtn.innerHTML = '<span>Send</span><span>➜</span>';
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    sendBtn.classList.remove('opacity-70');
+                }
+            }, 100);
+        }
     }
 
     return resultData;

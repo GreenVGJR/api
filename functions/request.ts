@@ -500,14 +500,14 @@ async function ensureTotpSecrets(): Promise<void> {
             headers: { Accept: 'application/json' },
             useH2: true
         });
-        
+
         if (res.statusCode !== 200) throw new Error('Failed to fetch secrets');
-        
+
         const secrets: any = await res.json();
         const versions = Object.keys(secrets).map(Number);
         const newestVersion = Math.max(...versions).toString();
         const secretData = secrets[newestVersion];
-        
+
         if (!secretData) throw new Error('Missing newest secret entry');
 
         const mappedData = secretData.map(
@@ -569,8 +569,50 @@ async function performSpotifyTokenRequest(secretHex: string, version: string) {
     const data: any = await res.json();
     const token = data.accessToken;
     if (!token) throw new Error('Missing token');
-    
+
     return data.accessToken;
+}
+
+const CONSUMER_KEY_MACK = 'audiomack-web';
+const CONSUMER_SECRET_MACK = 'bd8a07e9f23fbe9d808646b730f89b8e';
+const STRICT_URI_RE = /[!'()*]/g;
+
+type OAuthParamValue = string | number | boolean;
+
+function strictEncodeURIComponent(value: OAuthParamValue): string {
+    return encodeURIComponent(String(value)).replace(
+        STRICT_URI_RE,
+        (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+    )
+}
+
+function buildParamString(params: Record<string, OAuthParamValue>): string {
+    return Object.keys(params)
+        .sort()
+        .map((key) => `${strictEncodeURIComponent(key)}=${strictEncodeURIComponent(params[key] ?? '')}`)
+        .join('&')
+}
+
+export const mackOauth = async function mackOauth(
+    method: string,
+    url: string,
+    additionalParams: Record<string, OAuthParamValue> = {}
+): Promise<{ signature: string; params: Record<string, OAuthParamValue> }> {
+    const params: Record<string, OAuthParamValue> = {
+        ...additionalParams,
+        oauth_consumer_key: CONSUMER_KEY_MACK,
+        oauth_nonce: crypto.randomBytes(16).toString('hex'),
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: Math.floor(Date.now() / 1000),
+        oauth_version: '1.0'
+    }
+
+    const paramString = buildParamString(params)
+    const signatureBase = `${method.toUpperCase()}&${strictEncodeURIComponent(url)}&${strictEncodeURIComponent(paramString)}`
+    const signingKey = `${strictEncodeURIComponent(CONSUMER_SECRET_MACK)}&`
+    const signature = crypto.createHmac('sha1', signingKey).update(signatureBase).digest('base64')
+
+    return { signature, params }
 }
 
 export const spotifyKey = async function spotifyKey() {
@@ -578,7 +620,7 @@ export const spotifyKey = async function spotifyKey() {
         const primarySecret = { secret: ',7/*F("rLJ2oxaKL^f+E1xvP@N', version: 61 };
         const secretHex = decodeSpotifySecret(primarySecret.secret).toString('hex');
         const version = String(primarySecret.version);
-        
+
         return await performSpotifyTokenRequest(secretHex, version);
     } catch {
         try {
@@ -1777,33 +1819,33 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
         const trackNode = edges[0].node;
         responseBody['data'] = trackNode;
 
-        if(trackNode.lyrics?.id) {
+        if (trackNode.lyrics?.id) {
 
-        const body2 = {
-            "operationName": "GetLyrics",
-            "variables": {
-                "trackId": trackNode.id
-            },
-            "query": "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }"
-        };
+            const body2 = {
+                "operationName": "GetLyrics",
+                "variables": {
+                    "trackId": trackNode.id
+                },
+                "query": "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }"
+            };
 
-        const pull2 = await request(`https://pipe.deezer.com/api`, {
-            method: "POST",
-            headers: {
-                ...commonHeaders,
-                'Authorization': 'Bearer ' + keydeezer,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body2)
-        });
+            const pull2 = await request(`https://pipe.deezer.com/api`, {
+                method: "POST",
+                headers: {
+                    ...commonHeaders,
+                    'Authorization': 'Bearer ' + keydeezer,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body2)
+            });
 
-        const res2: any = await pull2.json();
+            const res2: any = await pull2.json();
 
-        if (res2?.errors?.[0]?.message.includes('Given jwt')) {
-            return await deezerLyrics(que, true);
-        }
+            if (res2?.errors?.[0]?.message.includes('Given jwt')) {
+                return await deezerLyrics(que, true);
+            }
 
-        responseBody['lyrics'] = res2?.data?.track?.lyrics || null;
+            responseBody['lyrics'] = res2?.data?.track?.lyrics || null;
 
         }
 
@@ -1822,7 +1864,7 @@ export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth:
 
         const findtrack: any = await Tidal(que, false, 1);
         const trackid = findtrack.data?.[0]?.id;
-        if(!trackid) {
+        if (!trackid) {
             return { data: null }
         }
 
@@ -1896,7 +1938,7 @@ export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boole
             return await SPLyrics(que, true);
         }
 
-        if(pull.statusCode === 400 && !process.env.SPOTIFY_COOKIES) {
+        if (pull.statusCode === 400 && !process.env.SPOTIFY_COOKIES) {
             return {
                 error: "Sign in to use this feature"
             }
@@ -1911,9 +1953,9 @@ export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boole
 
         try {
             res = await pull.json();
-        } catch {}
+        } catch { }
 
-        if(!trackData) {
+        if (!trackData) {
             return { data: null }
         }
 
@@ -6700,7 +6742,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 
     try {
         const types = type.split(',').map(t => t.trim());
-        const isSpecial = types.some(t => ['oldest', 'newest', 'no_role'].includes(t));
+        const isSpecial = types.some(t => ['oldest', 'newest', 'no_role', 'has_role'].includes(t));
         const fetchLimit = isSpecial ? 1000 : limit;
         const url = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
         const req = await fetch(url, { method: 'GET', headers });
@@ -6729,6 +6771,8 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
                     data = data.filter((member: any) => member.user?.bot);
                 } else if (t === 'no_role') {
                     data = data.filter((member: any) => !member.roles || member.roles.length === 0);
+                } else if (t === 'has_role') {
+                    data = data.filter((member: any) => member.roles && member.roles.length > 0);
                 } else if (t === 'oldest') {
                     data.sort((a: any, b: any) => Number(a.joined_at || 0) - Number(b.joined_at || 0));
                 } else if (t === 'newest') {
@@ -7264,6 +7308,34 @@ export const OtoDB = async (query: string): Promise<any> => {
 };
 
 export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
+
+    if (action === 'setstatus') {
+        const { channelId, content } = payload;
+        const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+            },
+            body: JSON.stringify({ status: content || '' })
+        });
+
+        if (!res.ok) {
+            const body = await res.text();
+            let parsed: any;
+            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
+            return { error: parsed };
+        }
+
+        return {
+            data: {
+                channelId: channelId || null,
+                content: content || null
+            }
+        };
+    }
+
     if (!token || !guildId || !action) return { error: 'Missing required parameters' };
 
     const modifyMember = async (userId: string, data: any) => {
@@ -7459,3 +7531,36 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         return { error: e.json ?? { message: e.message } };
     }
 };
+
+export const Audiomack = async function Audiomack(que: string, limits: number = 30): Promise<any> {
+    if (!que) return null;
+
+    try {
+        const { signature, params } = await mackOauth('GET', 'https://api.audiomack.com/v1/search', {
+            q: que,
+            type: "songs",
+            sort: 'popular',
+            limit: limits,
+            page: 1
+        });
+
+        const searchParams = new URLSearchParams(
+            Object.entries({ ...params, oauth_signature: signature })
+                .map(([k, v]): [string, string] => [k, String(v)])
+        );
+
+        const pull = await request(`https://api.audiomack.com/v1/search?${searchParams}`, {
+            headers: { ...commonHeaders },
+            useH2: true
+        });
+
+        if (pull.statusCode !== 200) {
+            return {
+                error: `${pull.statusCode} - Can't process this`
+            }
+        }
+
+        const res: any = await pull.json();
+        return { signature: signature, data: res?.results || null }
+    } catch (e) { console.error(e); return null }
+}

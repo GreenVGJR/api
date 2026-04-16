@@ -1,26 +1,27 @@
 import { Number_random } from './request.ts';
 import crypto from 'crypto';
 
-const smellyFeel = "8f3a1b2c5d9e4f0a7b6c5d4e3f2a1b0c";
+const smellyFeel = "fda0bd57ec7312592992772bdb8780cadbcb884d59b4ca79b5ed45a680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 10 }, (_, i) => {
+export const xt = Array.from({ length: 100 }, (_, i) => {
     return (hash[i % hash.length] * (i + 1) + 123) % 1000;
 });
 
 export function pullInfo(r: string) {
     const ip = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
     const time = Date.now().toString();
-    const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '').slice(0, 18);
+    const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
     const xtIndex = Number_random(0, xt.length - 1);
-    
+
     return {
         _message: "Germany (DE) only. Outside that, you need to solve this challenge.",
         _submit: {
             name: "x-challenge-codes",
             type: "header",
             challengeTarget: "c",
+            challengeExpire: 7200000
         },
-        c: [btoa(JSON.stringify(xt)), 10, [slicekf, ip], time, xtIndex]
+        c: [btoa(JSON.stringify(xt)), 100, [slicekf, ip], time, xtIndex]
     }
 }
 
@@ -31,7 +32,7 @@ export function verifyChallenge(responseStr: string | undefined | null, r: strin
 
     let response: ChallengeResponse;
     try {
-        response = JSON.parse(responseStr);
+        response = JSON.parse(decodeURIComponent(responseStr));
     } catch (e) {
         return false;
     }
@@ -42,7 +43,7 @@ export function verifyChallenge(responseStr: string | undefined | null, r: strin
 
     const [receivedHash, validType, [slicekf, ip], time, xtIndex] = response;
 
-    if(validType !== 10) return false;
+    if (validType !== 100) return false;
 
     const timeNum = parseInt(time);
     if (isNaN(timeNum) || Date.now() - timeNum > 2 * 60 * 60 * 1000) {
@@ -50,7 +51,7 @@ export function verifyChallenge(responseStr: string | undefined | null, r: strin
     }
 
     const expectedIp = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
-    const expectedSlice = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '').slice(0, 18);
+    const expectedSlice = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
 
     if (ip !== expectedIp) {
         return false;

@@ -3803,33 +3803,6 @@ export const Twitch = async function Twitch(que: string) {
     }
 }
 
-export const InstagramUser = async function InstagramUser(que: string) {
-    if (!que) return null;
-
-    try {
-        const bodyhttp = { "data": { "include_reel": "true", "query": que }, "hasQuery": true };
-        const per = await request(`https://i.instagram.com/graphql/query/?doc_id=24146980661639222&variables=${JSON.stringify(bodyhttp)}`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
-        const res: any = await per.json();
-
-        if (res?.errors) {
-            return {
-                error: "Service unavailable. Sign in required"
-            }
-        }
-
-        return { data: res?.data?.xdt_api__v1__fbsearch__topsearch_connection?.users || null }
-    }
-    catch (e) {
-        console.error(e);
-        return null;
-    }
-}
-
 export const ThreadUser = async function ThreadUser(que: string) {
     if (!que) return null;
 

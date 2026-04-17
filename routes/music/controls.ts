@@ -238,33 +238,24 @@ app.get('/stop', async (c) => {
         const is247 = get247(token!, guildId!);
 
         if (is247) {
-            // 24/7 mode: let the player destroy normally, then immediately
-            // recreate it and reconnect to the same voice channel.
-            // Unset _247 BEFORE destroying so playerDestroy event doesn't
-            // also trigger a competing reconnect247 call.
-            const voiceChannelId = queue.voiceChannelId;
-            await log(`24/7 mode — stopping and reconnecting to VC: ${voiceChannelId}`);
-            clear247(token!, guildId!);
+            await log(`24/7 mode — stopping playback and clearing queue`);
+
             if (queue.queue.previous.length > 0) {
                 await log('Clearing queue history...');
                 queue.queue.previous.splice(0, queue.queue.previous.length);
             }
-            await queue.destroy();
-            await log('Player destroyed');
 
-            try {
-                const newPlayer = await manager.createPlayer({
-                    guildId,
-                    voiceChannelId: voiceChannelId!,
-                    selfDeaf: true,
-                    selfMute: false
-                });
-                set247(token!, guildId!, true);
-                await newPlayer.connect();
-                await log('Reconnected to voice channel in 24/7 mode');
-            } catch (err: any) {
-                await log(`Reconnect failed: ${err.message}`);
+            if (queue.queue.tracks.length > 0) {
+                queue.queue.splice(0, queue.queue.tracks.length);
             }
+
+            if (queue.queue.current) {
+                await log('Stopping current track...');
+                await (queue as any).stopPlaying(false);
+            }
+
+            // Since we didn't clear247 or destroy, playerDestroy won't fire.
+            // queueEnd will fire and naturally apply the queueEnd status.
 
             await s.write(`],"data":${JSON.stringify({
                 status: true,

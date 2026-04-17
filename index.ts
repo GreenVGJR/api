@@ -54,7 +54,6 @@ const API_ROUTES = {
         "/search/bilibili?q=",
         "/search/jiosaavn?q=",
         "/search/twitch?q=",
-        "/search/instagram/users?q=",
         "/search/threads/users?q=",
         "/search/pexels?q=",
         "/search/tiktok/video?q=",
@@ -171,7 +170,7 @@ const API_ROUTES = {
     music: [
         "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
         "/music/disconnect?token=&guildId=",
-        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&statusContent=",
+        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
         "/music/pause?token=&guildId=",
         "/music/resume?token=&guildId=",
         "/music/skip?token=&guildId=&index=",
@@ -192,6 +191,7 @@ const API_ROUTES = {
         "/music/queue?token=&guildId=&limit=&offset=",
         "/music/stats?token=",
         "/music/filter?token=&guildId=&filter=",
+        "/music/voiceStatus?token=&guildId=&type=&status=&content=",
     ]
 };
 

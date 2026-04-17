@@ -7,48 +7,64 @@ import { pullInfo, verifyChallenge } from './musicChallenges.ts';
 
 // ─── Voice Status API Helper ───────────────────────────────────────────────
 
-async function setVoiceStatus(channelId: string, token: string, content: string) {
-    try {
-        await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'DiscordBot (1.0.0)'
-            },
-            body: JSON.stringify({ status: content.slice(0, 500) }) 
-        });
-    } catch (err) { console.error("Voice Status Error:", err); }
+export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bot ${token}`,
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'DiscordBot (1.0.0)'
+                },
+                body: JSON.stringify({ status: content.slice(0, 500) })
+            });
+
+            if (res.status === 429) {
+                const retryAfter = Number(res.headers.get('Retry-After')) || 5;
+                console.warn(`Voice Status Rate Limited (Attempt ${i + 1}/${retries}). Retrying after ${retryAfter}s...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                continue;
+            }
+
+            if (res.ok) return;
+
+            // Log other errors but maybe retry if it's a 5xx
+            if (res.status >= 500 && i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+            }
+
+            return; // Give up on 4xx other than 429
+        } catch (err) {
+            console.error("Voice Status Fetch Error:", err);
+            if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
 }
 
-export async function updateVoiceStatus(player: LavalinkPlayer, token: string) {
-    const template = player.get('voiceStatusTemplate') as string | undefined;
-    const channelId = player.voiceChannelId;
-    if (template === undefined || !channelId) return;
-    
-    if (template.trim() === "" || !player.queue.current) {
-        return setVoiceStatus(channelId, token, "");
+
+
+export async function updateVoiceStatus(player: LavalinkPlayer, token: string, track?: any) {
+    const settings = getVoiceStatusSettings(token, player.guildId);
+    const isActive = settings.trackStart.status;
+    const template = settings.trackStart.content;
+    const channelId = player.voiceChannelId || lastVoiceChannel.get(`${token}:${player.guildId}`);
+
+    if (isActive === false || template === undefined || !channelId) return;
+
+    const currentTrack = track || player.queue.current;
+
+    if (template.trim() === "" || !currentTrack) {
+        return setVoiceStatus(channelId, token, "").catch(() => { });
     }
 
-    const track = player.queue.current;
-
-    // This dynamically replaces {key} with track.info[key] 
-    // or {requester.key} with track.requester[key]
-    const content = template.replace(/{([\w.]+)}/g, (match, path) => {
-        const parts = path.split('.');
-        
-        // 1. Try to get from track.info first (for {title}, {author}, etc.)
-        if (parts.length === 1 && (track.info as any)[parts[0]] !== undefined) {
-            return (track.info as any)[parts[0]];
-        }
-
-        // 2. Otherwise, drill into the track object (for {requester.globalName}, etc.)
-        const value = parts.reduce((obj: any, key: string) => obj?.[key], track);
-        
-        return value !== undefined ? String(value) : match;
-    });
-
-    await setVoiceStatus(channelId, token, content);
+    try {
+        const content = applyTemplate(template, currentTrack);
+        await setVoiceStatus(channelId, token, content);
+    } catch (err) {
+        console.error(`[VoiceStatus] Failed to update for guild ${player.guildId}:`, err);
+    }
 }
 
 // ─── Streaming Helper ────────────────────────────────────────────────────────
@@ -149,6 +165,25 @@ const state247 = new Map<string, boolean>();
 // Last known voice channel per guild: "token:guildId" → voiceChannelId
 // Used as fallback when playerDestroy fires after voiceChannelId is already null
 const lastVoiceChannel = new Map<string, string>();
+
+// Persistent voice status settings: "token:guildId" → { trackStart: { status, content }, ... }
+export const voiceStatusStore = new Map<string, any>();
+
+export function getVoiceStatusSettings(token: string, guildId: string) {
+    const key = `${token}:${guildId}`;
+    return voiceStatusStore.get(key) || {
+        trackStart: { status: false, content: "" },
+        queueEnd: { status: false, content: "" }
+    };
+}
+
+export function setVoiceStatusSetting(token: string, guildId: string, type: string, status: boolean, content: string) {
+    const key = `${token}:${guildId}`;
+    const current = getVoiceStatusSettings(token, guildId);
+    if (type === 'trackStart') current.trackStart = { status, content };
+    else if (type === 'queueEnd') current.queueEnd = { status, content };
+    voiceStatusStore.set(key, current);
+}
 
 export function get247Key(token: string, guildId: string) { return `${token}:${guildId}`; }
 export function set247(token: string, guildId: string, value: boolean) { state247.set(get247Key(token, guildId), value); }
@@ -380,6 +415,18 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             set247(token, guildId, true);
             lastVoiceChannel.set(`${token}:${guildId}`, voiceChannelId);
             console.log(`24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
+
+            // Re-apply voice status in case it was cleared or reset during the transition
+            const settings = getVoiceStatusSettings(token, guildId);
+            const currentTrack = p.queue.current;
+            const useTrackStart = !!currentTrack;
+            const setting = useTrackStart ? settings.trackStart : settings.queueEnd;
+            const trackToUse = currentTrack || p.queue.previous[p.queue.previous.length - 1];
+
+            if (setting.status && setting.content && setting.content.trim() !== "") {
+                const content = trackToUse ? applyTemplate(setting.content, trackToUse) : setting.content;
+                setVoiceStatus(voiceChannelId, token, content).catch(() => { });
+            }
         } catch (err: any) {
             console.error(`24/7 reconnect failed for guild ${guildId}: ${err.message}`);
         } finally {
@@ -389,7 +436,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
     // ─ Manager Events ───────────────────
     manager.on('trackStart', (p, track) => {
-        updateVoiceStatus(p, token).catch(() => {});
+        updateVoiceStatus(p, token, track).catch(() => { });
         cancelAutoDestroy(token);
         if (p.get('autoplay') && track) fillAutoplay(p, track);
     });
@@ -397,7 +444,16 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 
 
     manager.on('queueEnd', (p) => {
-        if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
+        const settings = getVoiceStatusSettings(token, p.guildId);
+        const isActive = settings.queueEnd.status;
+        const template = settings.queueEnd.content;
+        if (isActive !== false && template && template.trim() !== "") {
+            const lastTrack = p.queue.previous[p.queue.previous.length - 1];
+            const content = lastTrack ? applyTemplate(template, lastTrack) : template;
+            if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, content).catch(() => { });
+        } else {
+            if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => { });
+        }
         if (get247(token, p.guildId)) {
             console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
             reconnect247(p.guildId, p.voiceChannelId!, 'queueEnd');
@@ -410,8 +466,11 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
     manager.on('playerDestroy', (p) => {
         // voiceChannelId may already be null by the time this fires, fall back to last known
         const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
-        if (voiceChannelId) setVoiceStatus(voiceChannelId, token, "").catch(() => {});
+        const settings = getVoiceStatusSettings(token, p.guildId);
+
         if (get247(token, p.guildId)) {
+            // Do not update voice status here. We keep the current status (trackStart or queueEnd)
+            // so it persists smoothly through the reconnection.
             if (voiceChannelId) {
                 console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
                 reconnect247(p.guildId, voiceChannelId, 'playerDestroy');
@@ -420,6 +479,11 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             }
             return;
         }
+
+        // Not 24/7 - Clear status and reset configs
+        if (voiceChannelId) setVoiceStatus(voiceChannelId, token, "").catch(() => { });
+        voiceStatusStore.delete(`${token}:${p.guildId}`);
+
         lastVoiceChannel.delete(`${token}:${p.guildId}`);
         console.log(`Lavalink player destroyed for guild ${p.guildId}`);
         scheduleAutoDestroy(token);
@@ -468,11 +532,20 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             lastVoiceChannel.set(`${token}:${newState.guild.id}`, newState.channelId);
         }
         if (oldState.channel && !newState.channel) {
-            setVoiceStatus(oldState.channelId!, token, "").catch(() => {});
-            if (get247(token, oldState.guild.id)) {
+            const settings = getVoiceStatusSettings(token, oldState.guild.id);
+            const is247 = get247(token, oldState.guild.id);
+
+            if (is247) {
+                // Do not update voice status here. We keep the current status (trackStart or queueEnd)
+                // so it persists smoothly through the reconnection.
                 reconnect247(oldState.guild.id, oldState.channelId!, 'voiceStateUpdate');
                 return;
             }
+
+            // Not 24/7 - Clear status and reset configs
+            setVoiceStatus(oldState.channelId!, token, "").catch(() => { });
+            voiceStatusStore.delete(`${token}:${oldState.guild.id}`);
+
             console.log(`Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`);
             scheduleAutoDestroy(token);
         }
@@ -556,14 +629,33 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     // Remove from map first to prevent 24/7 reconnect from re-creating
     players.delete(token);
 
-    // Clean up last known voice channels for this token
+    // Clean up last known voice channels and voice status settings for this token
     for (const [key] of lastVoiceChannel) {
         if (key.startsWith(token + ':')) lastVoiceChannel.delete(key);
+    }
+    for (const [key] of voiceStatusStore) {
+        if (key.startsWith(token + ':')) voiceStatusStore.delete(key);
     }
 
     if (managed.destroyTimer) {
         clearTimeout(managed.destroyTimer);
         managed.destroyTimer = null;
+    }
+
+    // Clear voice status for all active players before destroying the client
+    try {
+        const statusClears: Promise<void>[] = [];
+        for (const p of managed.player.players.values()) {
+            const voiceChannelId = p.voiceChannelId || lastVoiceChannel.get(`${token}:${p.guildId}`);
+            if (voiceChannelId) {
+                statusClears.push(setVoiceStatus(voiceChannelId, token, ""));
+            }
+        }
+        if (statusClears.length > 0) {
+            await Promise.all(statusClears).catch(() => { });
+        }
+    } catch (err) {
+        console.error("Error clearing voice status during destroy:", err);
     }
 
     try { managed.client.destroy(); } catch { /* WebSocket may already be dead */ }
@@ -658,6 +750,15 @@ export function formatTrack(track: Track | any) {
             }
         } : null,
     };
+}
+
+function applyTemplate(template: string, track: any): string {
+    const data = formatTrack(track);
+    return template.replace(/{([\w.]+)}/g, (match, path) => {
+        const parts = path.split('.');
+        const value = parts.reduce((obj: any, key: string) => obj?.[key], data);
+        return value !== undefined ? String(value) : match;
+    });
 }
 
 /** Maps platform names → Lavalink search prefixes. */

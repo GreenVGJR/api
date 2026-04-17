@@ -7,7 +7,7 @@
     "entities": "^8.0.0",
     "hono": "^4.12.14",
     "httpcloak": "^1.6.1",
-    "lavalink-client": "^2.10.0",
+    "lavalink-client": "^2.10.1",
     "linkedom": "^0.18.12",
     "tslib": "^2.8.1",
     "undici": "^8.1.0",
@@ -25,6 +25,6 @@
     "@types/node": "^25.6.0",
     "bun-types": "^1.3.12",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   }
 }

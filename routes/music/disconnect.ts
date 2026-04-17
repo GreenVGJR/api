@@ -6,6 +6,9 @@ import {
     destroyPlayer,
     hasActivePlayer,
     createMusicStream,
+    clear247,
+    setVoiceStatus,
+    voiceStatusStore,
 } from '../../functions/musicPlayer.js';
 
 app.get('/disconnect', async (c) => {
@@ -45,6 +48,15 @@ app.get('/disconnect', async (c) => {
                 await log('Clearing queue history...');
                 guildPlayer.queue.previous.splice(0, guildPlayer.queue.previous.length);
             }
+
+            // Explicitly clear 24/7 and wipe voice status/configs for this guild
+            clear247(token, guildId);
+            const voiceChannelId = guildPlayer.voiceChannelId;
+            if (voiceChannelId) {
+                await setVoiceStatus(voiceChannelId, token, "").catch(() => { });
+            }
+            voiceStatusStore.delete(`${token}:${guildId}`);
+
             await guildPlayer.destroy();
             await log('Lavalink player destroyed');
 

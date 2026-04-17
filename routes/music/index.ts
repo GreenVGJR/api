@@ -6,5 +6,6 @@ import filters from './filters.js';
 import play from './play.js';
 import queue from './queue.js';
 import stats from './stats.js';
+import voiceStatus from './voiceStatus.js';
 
-export default [connect, controls, disconnect, filters, play, queue, stats] as any[];
+export default [connect, controls, disconnect, filters, play, queue, stats, voiceStatus] as any[];

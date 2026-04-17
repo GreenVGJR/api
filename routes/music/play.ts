@@ -115,7 +115,6 @@ app.get('/play', async (c) => {
         const authorId = c.req.query('authorId');
         const isDeaf = c.req.query('isDeaf') !== 'false';
         const req247 = c.req.query('247');
-        const statusContent = c.req.query('statusContent');
 
         if (!token || !query) {
             await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
@@ -207,9 +206,6 @@ app.get('/play', async (c) => {
                 gp.options.selfDeaf = isDeaf;
             }
 
-            if (statusContent !== undefined) {
-                gp.set('voiceStatusTemplate', statusContent);
-            }
             return { gp, isNewGP };
         })();
 
@@ -397,8 +393,7 @@ app.get('/play', async (c) => {
                     elapsedTime: {
                         label: formatDuration(totalQueueDuration),
                         value: String(totalQueueDuration),
-                    },
-                    currentTrack: guildPlayer.queue.current ? formatTrack(guildPlayer.queue.current) : null,
+                    }
                 },
             },
         })}}`);

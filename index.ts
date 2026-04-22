@@ -31,6 +31,7 @@ const API_ROUTES = {
         "/search/youtube/music?q=&mix=",
         "/search/youtube/channel?q=",
         "/search/youtube/playlist?q=",
+        "/search/crunchyroll?q=",
         "/search/soundcloud?q=",
         "/search/spotify?q=",
         "/search/applemusic?q=",
@@ -41,6 +42,8 @@ const API_ROUTES = {
         "/search/genius?q=",
         "/search/audiomack?q=",
         "/search/pinterest?q=",
+        "/search/safebooru?q=",
+        "/search/konachan?q=",
         "/search/imdb?q=",
         "/search/imgflip?q=",
         "/search/flickr?q=",
@@ -92,8 +95,9 @@ const API_ROUTES = {
         ai: {
             chat: [
                 "/tools/chat/gemini?prompt=&conversation=",
-                "/tools/chat/meta?prompt=",
-                "/tools/chat/grok?prompt="
+                "/tools/chat/meta?prompt=&conversation=",
+                "/tools/chat/grok?prompt=",
+                "/tools/chat/gpt?prompt=&conversation="
             ],
             image_generation: [
                 "/tools/ai-image/flux_schnell?prompt=",
@@ -119,6 +123,9 @@ const API_ROUTES = {
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
                 "/tools/discord/infoMember?token=&userId=&guildId=",
                 "/tools/discord/listMember?token=&guildId=&limit=&type=",
+            ],
+            channel: [
+                "/tools/discord/listChannel?token=&guildId=&limit=&type=",
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
@@ -520,59 +527,53 @@ app.get('/', (c: Context) => {
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+    c.header('Location', '/playground');
 
-    return stream(c, async (stream) => {
-        await stream.write('');
-        const seconds = Math.floor((Date.now() - starttime) / 1000);
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        const uptime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
-        const os_seconds = Math.floor(os.uptime());
-        const os_h = Math.floor(os_seconds / 3600);
-        const os_m = Math.floor((os_seconds % 3600) / 60);
-        const os_s = os_seconds % 60;
-        const os_uptime = [os_h, os_m, os_s].map(v => v.toString().padStart(2, '0')).join(':');
+    const seconds = Math.floor((Date.now() - starttime) / 1000);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const uptime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+    const os_seconds = Math.floor(os.uptime());
+    const os_h = Math.floor(os_seconds / 3600);
+    const os_m = Math.floor((os_seconds % 3600) / 60);
+    const os_s = os_seconds % 60;
+    const os_uptime = [os_h, os_m, os_s].map(v => v.toString().padStart(2, '0')).join(':');
 
-        const cpuUsage = os.loadavg()[0] / os.cpus().length;
-        const cpu = `${(cpuUsage * 100).toFixed(1)}%`;
-        const usedRam = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));
-        const totalRam = Math.round(os.totalmem() / (1024 * 1024));
-        const ram = `${usedRam.toLocaleString()}MB / ${totalRam.toLocaleString()}MB`;
+    const cpuUsage = os.loadavg()[0] / os.cpus().length;
+    const cpu = `${(cpuUsage * 100).toFixed(1)}%`;
+    const usedRam = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));
+    const totalRam = Math.round(os.totalmem() / (1024 * 1024));
+    const ram = `${usedRam.toLocaleString()}MB / ${totalRam.toLocaleString()}MB`;
 
-        const listapi = [{
-            source: [{
-                title: "Source Code",
-                url: "https://github.com/GreenVGJR/api"
-            },
-            {
-                title: "Playground",
-                url: "https://api.vgjr.top/playground"
-            }],
-            domRendering: typeRender,
-            uptime: uptime,
-            os_uptime: os_uptime,
-            service: `Hono v${honoVersion}`,
-            runtime: (typeof Bun !== "object" ? "Node.js" : "Bun") + " v" + (typeof Bun !== "object" ? process.version.slice(1) : (Bun as any).version),
-            fallback_runtime: (typeof Bun === "object" ? "Node.js" : "Bun") + " v" + (typeof Bun === "object" ? process.version.slice(1) : (Bun as any).version),
-            stats: {
-                cpu: cpu,
-                ram: ram
-            }
+    const listapi = [{
+        source: [{
+            title: "Source Code",
+            url: "https://github.com/GreenVGJR/api"
         },
         {
-            routes: API_ROUTES,
-            _visitor: {
-                ...c.req.header()
-            }
-        }];
+            title: "Playground",
+            url: "https://api.vgjr.top/playground"
+        }],
+        domRendering: typeRender,
+        uptime: uptime,
+        os_uptime: os_uptime,
+        service: `Hono v${honoVersion}`,
+        runtime: (typeof Bun !== "object" ? "Node.js" : "Bun") + " v" + (typeof Bun !== "object" ? process.version.slice(1) : (Bun as any).version),
+        fallback_runtime: (typeof Bun === "object" ? "Node.js" : "Bun") + " v" + (typeof Bun === "object" ? process.version.slice(1) : (Bun as any).version),
+        stats: {
+            cpu: cpu,
+            ram: ram
+        }
+    },
+    {
+        routes: API_ROUTES,
+        _visitor: {
+            ...c.req.header()
+        }
+    }];
 
-        stream.onAbort(() => {
-            return;
-        });
-
-        await stream.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
-    });
+    return c.body(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2), renderJson ? 200 : 302);
 });
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';

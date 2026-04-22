@@ -105,7 +105,7 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
 }
 
 app.get('/play', async (c) => {
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
 
         const token = c.req.query('token');
         const query = c.req.query('q');
@@ -117,7 +117,7 @@ app.get('/play', async (c) => {
         const req247 = c.req.query('247');
 
         if (!token || !query) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required params: token, q' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -128,7 +128,7 @@ app.get('/play', async (c) => {
         const supportedPlatforms = ['youtube', 'youtubemusic', 'soundcloud', 'spotify', 'applemusic', 'deezer', 'tidal'];
         if (!isUrl && !supportedPlatforms.includes(platform)) {
             await log(`Unsupported search platform: "${platform}"`);
-            await s.write(`],"error":${JSON.stringify({ message: `Search engine "${platform}" is not supported.`, list: supportedPlatforms.join(', ') })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Search engine "${platform}" is not supported.`, list: supportedPlatforms.join(', '), type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -281,13 +281,13 @@ app.get('/play', async (c) => {
         const [searchResult, setup, _] = await Promise.allSettled([pSearch, pGP, pConnect]);
 
         if (searchResult.status === 'rejected') {
-            await s.write(`],"error":${JSON.stringify({ message: searchResult.reason?.message || 'Search failed' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: searchResult.reason?.message || 'Search failed', type: { primary: "error", alt: "critical" } })}}`);
             return;
         }
 
         if (setup.status === 'rejected' || !setup.value) {
             await log(setup.status === 'rejected' ? `Voice setup failed: ${setup.reason?.message}` : 'No voice channel found');
-            await s.write(`],"data":${JSON.stringify({ status: false, message: setup.status === 'rejected' ? setup.reason?.message : 'Cant find a voice channel' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: setup.status === 'rejected' ? setup.reason?.message : 'Cant find a voice channel', type: { primary: "error", alt: "unknown_voice" } })}}`);
             return;
         }
 
@@ -314,7 +314,7 @@ app.get('/play', async (c) => {
             const filteredTracks = tracks.filter((t: any) => !t.info.isStream);
             if (filteredTracks.length === 0) {
                 await log('No non-live tracks found in playlist');
-                await s.write(`],"error":${JSON.stringify({ message: 'Playlist contains only live tracks, which are not allowed' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Playlist contains only live tracks, which are not allowed', type: { primary: "error", alt: "invalid_query" } })}}`);
                 return;
             }
 
@@ -334,7 +334,7 @@ app.get('/play', async (c) => {
             const track = tracks[0];
             if (track.info.isStream) {
                 await log(`Live track blocked: "${track.info.title}"`);
-                await s.write(`],"error":${JSON.stringify({ message: 'Live tracks (streams) are not allowed' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Live tracks (streams) are not allowed', type: { primary: "error", alt: "invalid_query" } })}}`);
                 return;
             }
             await log(`Track resolved: "${track.info.title}" by ${track.info.author}`);
@@ -364,7 +364,7 @@ app.get('/play', async (c) => {
                 ]);
             } catch (err: any) {
                 await log(`Play failed: ${err?.message || err}`);
-                await s.write(`],"error":${JSON.stringify({ message: err?.message || 'Failed to play track' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to play track', type: { primary: "error", alt: "critical" } })}}`);
                 return;
             }
         }
@@ -378,6 +378,7 @@ app.get('/play', async (c) => {
             nodeId: guildPlayer.node?.id ?? null,
             data: {
                 isNewPlayer: isNewGuildPlayer,
+                client: guildPlayer?.options || null,
                 track: formatTrack(tracks[0]),
                 platform,
                 is247,
@@ -389,6 +390,7 @@ app.get('/play', async (c) => {
                 },
                 queue: {
                     size: guildPlayer.queue.tracks.length,
+                    limit_size: 3,
                     tracks: queueTracks,
                     elapsedTime: {
                         label: formatDuration(totalQueueDuration),
@@ -396,6 +398,7 @@ app.get('/play', async (c) => {
                     }
                 },
             },
+            type: { primary: "final", alt: "success" }
         })}}`);
     });
 });

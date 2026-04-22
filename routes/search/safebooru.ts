@@ -1,0 +1,19 @@
+import { Hono } from 'hono';
+const app = new Hono();
+
+import { SafeBooru } from '../../functions/request.js';
+import { dispatch } from '../../functions/httpRequest.js';
+
+app.get('/safebooru', async (c) => {
+    const query = c.req.query('q');
+    if (query === undefined) {
+        return c.json({ "error": "Missing parameter required" }, 202);
+    }
+    else if (query === '') {
+        return c.json({ "error": "Nothing to do" }, 202);
+    }
+    c.header('X-Route', 'safebooru.org');
+    return await dispatch(c, () => SafeBooru(query));
+});
+
+export default app;

@@ -95,12 +95,12 @@ function flattenRoutes(obj, parentPath = '') {
 async function solveChallenge(challenge) {
     try {
         const [base64xt, validType, [slicekf, ip], time, xtIndex] = challenge;
-        if (validType !== 100) return null;
+        if (validType !== 1000) return null;
 
         const xt = JSON.parse(atob(base64xt));
         const secretValue = xt[xtIndex];
 
-        const data = time + secretValue.toString() + ip;
+        const data = atob(time) + secretValue.toString() + ip;
         const msgUint8 = new TextEncoder().encode(data);
         const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -110,6 +110,7 @@ async function solveChallenge(challenge) {
 
         return JSON.stringify([base64url, validType, [slicekf, ip], time, xtIndex]);
     } catch (e) {
+        console.error(e);
         return null;
     }
 }
@@ -263,7 +264,7 @@ async function performRequest(targetUrl, retryCount = 0) {
 
             isCoolingDown = true;
             sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            let timeLeft = 0.5;
+            let timeLeft = 0.3;
 
             const cooldownInterval = setInterval(() => {
                 timeLeft -= 0.1;
@@ -672,7 +673,7 @@ copyResponseBtn.addEventListener('click', async () => {
 clearResponseBtn.addEventListener('click', () => {
     lastRawResponse = '';
     responseArea.classList.add('empty-state');
-    responseArea.innerHTML = '<span class="text-gray-600">Nothing to do.</span>';
+    responseArea.innerHTML = '<span class="text-white-600">What you gonna try?</span>';
     statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-gray-500';
     statusText.textContent = 'Ready';
     statusText.className = 'text-gray-500';

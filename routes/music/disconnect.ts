@@ -15,16 +15,16 @@ app.get('/disconnect', async (c) => {
     const token = c.req.query('token');
     const guildId = c.req.query('guildId');
 
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
         if (!token) {
-            await s.write(`],"error":${JSON.stringify({ message: 'Missing required param: token' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
 
         if (!hasActivePlayer(token)) {
             await log('No active player found for this token');
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found', type: { primary: "error", alt: "inactive_player" } })}}`);
             return;
         }
 
@@ -40,6 +40,7 @@ app.get('/disconnect', async (c) => {
                 await s.write(`],"data":${JSON.stringify({
                     status: false,
                     message: 'Not connected to this guild',
+                    type: { primary: "error", alt: "inactive_player" }
                 })}}`);
                 return;
             }
@@ -81,6 +82,7 @@ app.get('/disconnect', async (c) => {
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: { action: 'disconnected', guildId, context_destroyed: killed },
+                type: { primary: "final", alt: "success" }
             })}}`);
 
             // ── Full destroy (no guildId) ─────────────────────────────────────
@@ -92,6 +94,7 @@ app.get('/disconnect', async (c) => {
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: { action: 'disconnected', context_destroyed: true },
+                type: { primary: "final", alt: "success" }
             })}}`);
         }
     });

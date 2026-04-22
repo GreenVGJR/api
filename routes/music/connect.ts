@@ -19,9 +19,9 @@ app.get('/connect', async (c) => {
     const req247 = c.req.query('247');
     const force = c.req.query('force') === 'true';
 
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
         if (!token || (!voiceId && !authorId)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, voiceId (or authorId)' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, voiceId (or authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -45,7 +45,7 @@ app.get('/connect', async (c) => {
 
         if (!voiceId) {
             await log('No voice channel found');
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Please join a voice channel' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Please join a voice channel', type: { primary: "error", alt: "unknown_voice" } })}}`);
             return;
         }
 
@@ -65,6 +65,7 @@ app.get('/connect', async (c) => {
                 status: false,
                 message: 'Already connected',
                 data: { channelId: vId, guildId },
+                type: { primary: "error", alt: "existed_voice" }
             })}}`);
             return;
         }
@@ -118,6 +119,7 @@ app.get('/connect', async (c) => {
                 selfDeaf: isDeaf,
                 nodeId: guildPlayer.node?.id ?? null,
             },
+            type: { primary: "final", alt: "success" }
         })}}`);
     });
 });

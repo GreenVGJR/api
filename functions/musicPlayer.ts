@@ -69,22 +69,28 @@ export async function updateVoiceStatus(player: LavalinkPlayer, token: string, t
 
 // ─── Streaming Helper ────────────────────────────────────────────────────────
 
-export function createMusicStream(
+export async function createMusicStream(
     c: any,
     callback: (log: (msg: string) => Promise<void>, s: any) => Promise<void>
 ) {
 
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-cache, no-transform, no-store, max-age=0');
-    c.header('X-Enc-Route', 'v3');
-    c.header('X-Route', 'LIVE');
-    c.header('X-Player', "lavalink");
 
     const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
-    if (["DE"].includes(lookExistChallengeC) === false && !verifyChallenge(c.req.header('x-challenge-codes'), ipLL)) {
-        return c.json(pullInfo(ipLL), 403);
+    if (["DE"].includes(lookExistChallengeC) === false && !(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL))) {
+        if (c.req.header('accept') === 'application/json') {
+            c.header('X-Player', "lavalink");
+            return c.json(pullInfo(ipLL), 403);
+        }
+        else {
+            return c.body(null, 403);
+        }
     }
+
+    c.header('X-Enc-Route', 'v3');
+    c.header('X-Route', 'LIVE');
 
     return stream(c, async (s: any) => {
         const startTime = Date.now();
@@ -109,7 +115,7 @@ export function createMusicStream(
         } catch (err: any) {
             await log(`Error: ${err?.message || 'Failed to process stream'}`);
             try {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to process stream' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to process stream', type: { primary: "error", alt: "critical" } })}}`);
             } catch { }
         }
     });

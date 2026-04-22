@@ -12,7 +12,7 @@ import {
 const app = new Hono();
 
 app.get('/voiceStatus', async (c) => {
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const type = c.req.query('type');
@@ -20,7 +20,7 @@ app.get('/voiceStatus', async (c) => {
         const content = c.req.query('content');
 
         if (!token || !guildId) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -32,7 +32,7 @@ app.get('/voiceStatus', async (c) => {
             const guild = await client.guilds.fetch(guildId).catch(() => null);
             if (!guild) {
                 await log('Guild not found or bot not in guild');
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Guild not found or bot not in guild', data: getVoiceStatusSettings(token, "unknown") })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'Guild not found or bot not in guild', data: getVoiceStatusSettings(token, "unknown"), type: { primary: "error", alt: "invalid_query" } })}}`);
                 return;
             }
 
@@ -48,7 +48,8 @@ app.get('/voiceStatus', async (c) => {
                     await s.write(`],"data":${JSON.stringify({
                         status: false,
                         message: `Invalid type "${type}". Allowed: ${validTypes.join(', ')}`,
-                        data: getVoiceStatusSettings(token, guildId)
+                        data: getVoiceStatusSettings(token, guildId),
+                        type: { primary: "error", alt: "invalid_query" }
                     })}}`);
                     return;
                 }
@@ -94,11 +95,12 @@ app.get('/voiceStatus', async (c) => {
                         "{duration}", "{durationMS}", "{isSeekable}", "{isStream}", "{requestedBy}",
                         "{requester.id}", "{requester.username}", "{requester.globalName}", "{requester.tag}"
                     ]
-                }
+                },
+                type: { primary: "final", alt: "success" }
             })}}`);
         } catch (err: any) {
             await log(`Error: ${err?.message}`);
-            await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to update voice status configuration' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to update voice status configuration', type: { primary: "error", alt: "critical" } })}}`);
         }
     });
 });

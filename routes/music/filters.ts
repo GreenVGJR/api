@@ -250,25 +250,25 @@ export function getActiveFilters(queue: any): string[] {
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 app.get('/filter', async (c) => {
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const filter = (c.req.query('filter') || '').toLowerCase().trim();
 
         if (!token) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
         if (!guildId) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: guildId' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
         // ── No filter param → list available filters from node info ───────
         if (!filter) {
             if (!hasActivePlayer(token)) {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found', type: { primary: "error", alt: "inactive_player" } })}}`);
                 return;
             }
 
@@ -276,7 +276,7 @@ app.get('/filter', async (c) => {
             const nodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected);
 
             if (nodes.length === 0) {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No connected Lavalink nodes' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No connected Lavalink nodes', type: { primary: "error", alt: "critical" } })}}`);
                 return;
             }
 
@@ -305,6 +305,7 @@ app.get('/filter', async (c) => {
                         string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
                     }
                 },
+                type: { primary: "final", alt: "success" }
             })}}`);
             return;
         }
@@ -314,12 +315,12 @@ app.get('/filter', async (c) => {
 
         if (!preset) {
             const availableFallback = Object.keys(FILTER_PRESETS).join(', ');
-            await s.write(`],"data":${JSON.stringify({ status: false, message: `Unknown filter: "${filter}". Available: ${availableFallback}` })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Unknown filter: "${filter}". Available: ${availableFallback}`, type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
         if (!hasActivePlayer(token)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found', type: { primary: "error", alt: "inactive_player" } })}}`);
             return;
         }
 
@@ -330,7 +331,7 @@ app.get('/filter', async (c) => {
             const nodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected);
 
             if (nodes.length === 0) {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No connected Lavalink nodes' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No connected Lavalink nodes', type: { primary: "error", alt: "critical" } })}}`);
                 return;
             }
 
@@ -340,6 +341,7 @@ app.get('/filter', async (c) => {
                 await s.write(`],"data":${JSON.stringify({
                     status: false,
                     message: `Filter "${filter}" is not supported by the Lavalink node (requires: ${preset.requires})`,
+                    type: { primary: "error", alt: "invalid_query" }
                 })}}`);
                 return;
             }
@@ -350,12 +352,12 @@ app.get('/filter', async (c) => {
         const queue = getQueue(manager, guildId);
 
         if (!queue) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found for this guild' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found for this guild', type: { primary: "error", alt: "inactive_queue" } })}}`);
             return;
         }
 
         if (!queue.playing && !queue.paused) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No track is currently playing' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'No track is currently playing', type: { primary: "error", alt: "inactive_player" } })}}`);
             return;
         }
 
@@ -365,7 +367,7 @@ app.get('/filter', async (c) => {
             const hasRawEQ = queue.filterManager.equalizerBands?.some((b: any) => b.gain !== 0) ?? false;
 
             if (!isAnyPresetActive && !hasRawEQ) {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No filters enabled' })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: 'No filters enabled', type: { primary: "error", alt: "invalid_query" } })}}`);
                 return;
             }
 
@@ -378,7 +380,7 @@ app.get('/filter', async (c) => {
                 await log('All filters reset successfully');
             } catch (err: any) {
                 await log(`Filter reset failed: ${err?.message || err}`);
-                await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to reset filters: ${err?.message || 'Unknown error'}` })}}`);
+                await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to reset filters: ${err?.message || 'Unknown error'}`, type: { primary: "error", alt: "critical" } })}}`);
                 return;
             }
 
@@ -389,6 +391,7 @@ app.get('/filter', async (c) => {
                     filter: 'reset',
                     description: preset.description,
                 },
+                type: { primary: "final", alt: "success" }
             })}}`);
             return;
         }
@@ -411,7 +414,7 @@ app.get('/filter', async (c) => {
             await log(`Filter "${filter}" ${currentlyActive ? 'disabled' : 'applied'} successfully`);
         } catch (err: any) {
             await log(`Filter failed: ${err?.message || err}`);
-            await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to modify filter: ${err?.message || 'Unknown error'}` })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to modify filter: ${err?.message || 'Unknown error'}`, type: { primary: "error", alt: "critical" } })}}`);
             return;
         }
 
@@ -422,6 +425,7 @@ app.get('/filter', async (c) => {
                 filter,
                 description: preset.description,
             },
+            type: { primary: "final", alt: "success" }
         })}}`);
     });
 });

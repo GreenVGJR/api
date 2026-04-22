@@ -8,11 +8,11 @@ import {
 } from '../../functions/musicPlayer.js';
 
 app.get('/stats', async (c) => {
-    return createMusicStream(c, async (log, s) => {
+    return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
 
         if (!token) {
-            await s.write(`],"error":${JSON.stringify({ status: false, message: 'Missing required params: token' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token' })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {

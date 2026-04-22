@@ -51,7 +51,7 @@ import { resolve6 } from 'dns';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/149.0';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
 
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -391,14 +391,13 @@ let keyflickr: string | undefined;
 let keybearer: string | undefined;
 let keydeezer: string | undefined;
 let keyimgur: string | undefined;
+let keycrunchy: string | undefined;
 let saweriaBuildId: string | undefined;
-
-
-
 let twitterDocument: any;
 let twitterTransaction: any;
 let twitterAuth: string | undefined;
 let twitterObj: any = {};
+let konaSummary: any;
 
 function filterCookies(cookie: string | string[]) {
     if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
@@ -748,7 +747,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
         const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
         const res1 = await pul1.text();
-        twitterAuth = 'AAA' + res1.split('Bearer AAA')[1].split('"')[0];
+        twitterAuth = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
@@ -787,6 +786,32 @@ export const imgurKey = async function imgurKey() {
         console.error(e);
     }
 }
+
+export const crunchyKey = async function crunchyKey() {
+    try {
+        const req = await request(atob("aHR0cHM6Ly93d3cuY3J1bmNoeXJvbGwuY29tL2F1dGgvdjEvdG9rZW4="), {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/json',
+                'Authorization': 'Basic Y3Jfd2ViOg==',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Cookie': `device_id=${crypto.randomUUID()}; c_locale=en`,
+                'Origin': 'https://www.crunchyroll.com'
+            },
+            method: "POST",
+            body: "grant_type=client_id",
+            useH2: true
+        });
+        if (req.statusCode !== 200) return;
+        const res = await req.json();
+        return res.access_token;
+    }
+    catch (e) {
+        console.error(e);
+    }
+}
+
+crunchyKey()
 
 export const Flickr = async function Flickr(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
     if (!que) return null;
@@ -854,19 +879,21 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
                 }])
             );
 
-            const highest = sizes[sizes.length - (original ? 2 : 1)];
+            const highest = sizes.length > 0 ? (original && sizes.length > 1 ? sizes[sizes.length - 2] : sizes[sizes.length - 1]) : null;
+
+            const originalUrl = original?.source ?? (a.originalsecret && a.originalformat ? `https://live.staticflickr.com/${a.server}/${a.id}_${a.originalsecret}_o.${a.originalformat}` : null);
 
             return {
                 ...a,
                 media: {
                     type: a.media,
-                    canDownload: original != null,
+                    canDownload: originalUrl != null,
                     sizes: sizeMap,
                     preview: sizeMap['Large']?.url ?? sizeMap['Medium 800']?.url ?? null,
                     highest: highest?.source ?? null,
-                    original: original?.source ?? null,
-                    width: original ? Number(original.width) : Number(highest.width),
-                    height: original ? Number(original.height) : Number(highest.height),
+                    original: originalUrl,
+                    width: original ? Number(original.width) : (a.originalwidth ? Number(a.originalwidth) : (highest ? Number(highest.width) : 0)),
+                    height: original ? Number(original.height) : (a.originalheight ? Number(a.originalheight) : (highest ? Number(highest.height) : 0)),
                 }
             };
         });
@@ -5266,401 +5293,72 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 
 export const setKeys = (sc: string, sp: string, tidal: string, deezer: string) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };
 
-// Meta AI Token Cache
-let metaAICache: {
-    valid: boolean;
-    access_token: string;
-    lsd: string;
-    cookies: string;
-    docid: { tos: string; message: string };
-} | null = null;
+export async function MetaAI(query: string, convo: any = null): Promise<any> {
+    if (!query) return null;
 
-async function fetchWithRetry(url: string, options: any, retries = 5): Promise<any> {
-    for (let i = 0; i < retries; i++) {
+    let messages: any[] = [];
+
+    if (convo) {
         try {
-            const res = await request(url, {
-                method: options.method || 'GET',
-                headers: options.headers,
-                body: options.body,
-            });
-            const body = await res.text;
-            const setCookies = res.headers['set-cookie'];
-            return {
-                status: res.statusCode,
-                text: () => Promise.resolve(body),
-                headers: {
-                    get: (key: string) => {
-                        if (key.toLowerCase() === 'set-cookie') {
-                            if (Array.isArray(setCookies)) return setCookies.join(', ');
-                            return setCookies || null;
-                        }
-                        const val = res.headers[key.toLowerCase()];
-                        return Array.isArray(val) ? val.join(', ') : (val || null);
-                    },
-                    getSetCookie: () => {
-                        if (!setCookies) return [];
-                        return Array.isArray(setCookies) ? setCookies : [setCookies];
-                    }
-                }
-            };
-        } catch (e: any) {
-            const isSocketError = e.message?.includes('socket')
-                || e.message?.includes('closed')
-                || e.message?.includes('connection error')
-                || e.code === 'ECONNRESET'
-                || e.code === 'UND_ERR_SOCKET';
-
-            console.log(`[MetaAI] Retry ${i + 1}/${retries} for ${url} due to: ${e.message}`);
-
-            if (i < retries - 1 && isSocketError) {
-                await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-                continue;
-            }
-            throw e;
-        }
-    }
-    throw new Error('Network error');
-}
-
-async function sendMessage(q: string, cache: any) {
-    const threadId = ((BigInt(Date.now()) << 22n) | (BigInt('0x' + crypto.randomBytes(8).toString('hex')) & ((1n << 22n) - 1n)) & ((1n << 64n) - 1n)).toString();
-    const conversationId = crypto.randomUUID();
-
-    const variables = {
-        "message": { "sensitive_string_value": q },
-        "externalConversationId": conversationId,
-        "offlineThreadingId": threadId,
-        "suggestedPromptIndex": null,
-        "flashVideoRecapInput": { "images": [] },
-        "flashPreviewInput": null,
-        "promptPrefix": null,
-        "entrypoint": "ABRA__CHAT__TEXT",
-        "icebreaker_type": "TEXT",
-        "__relay_internal__pv__WebPixelRatiorelayprovider": 1
-    };
-
-    const msgBody = new URLSearchParams({
-        'av': '0',
-        '__user': '0',
-        '__a': '1',
-        'dpr': '1',
-        'lsd': cache.lsd,
-        'access_token': cache.access_token,
-        'fb_api_caller_class': 'RelayModern',
-        'fb_api_req_friendly_name': 'useKadabraSendMessageMutation',
-        'variables': JSON.stringify(variables),
-        'server_timestamps': 'true',
-        'doc_id': cache.docid.message
-    }).toString();
-
-    const msgRes = await fetchWithRetry('https://graph.meta.ai/graphql?locale=user', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cache.cookies,
-            'Origin': 'https://www.meta.ai',
-            'Referer': 'https://www.meta.ai',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Site': 'same-site',
-            'User-Agent': userAgent,
-            'x-fb-friendly-name': 'useKadabraSendMessageMutation'
-        },
-        body: msgBody
-    });
-
-    const msgText = await msgRes.text();
-
-    if (msgRes.status === 403 || msgRes.status === 401) {
-        return { error: `Meta AI blocked the request (Status ${msgRes.status})` };
-    }
-
-    if (!msgText.trim()) {
-        return { error: 'Empty response text from Meta AI' };
-    }
-
-    const lines = msgText.split('\n').filter((l: string) => l.trim());
-
-    // Attempt to parse any line that might contain the response
-    for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-            const data = JSON.parse(lines[i]);
-
-            // Check for bot_response_message in different possible paths
-            const botResponse = data?.data?.node?.bot_response_message ||
-                data?.data?.xab_abra_send_message?.message ||
-                data?.data?.node?.message;
-
-            const snippet = botResponse?.snippet;
-            const composedText = botResponse?.content?.agent_steps?.[0]?.composed_text?.content?.[0]?.text;
-            const response = snippet || composedText || botResponse?.text?.content || null;
-
-            if (response) {
-                return { response: response, data: { model: "llama-4-70b" } };
-            }
-
-            // Check for error messages in the JSON
-            if (data?.errors) {
-                return { error: data.errors[0]?.message || 'GraphQL Error' };
-            }
-        } catch {
-            // Not a valid JSON line, skip
-            continue;
+            const parsed = JSON.parse(
+                Buffer.from(convo.split('').reverse().join(''), 'base64url').toString('utf-8')
+            );
+            if (Array.isArray(parsed)) messages = parsed;
+        } catch (e) {
+            console.error("[MetaAI] Convo parse error:", e);
         }
     }
 
-    return {
-        error: 'Failed to find a valid response in Meta AI output',
-        debug: {
-            status: msgRes.status,
-            preview: msgText.substring(0, 200)
-        }
-    };
-}
+    messages.push({ role: "user", content: query });
 
-export async function MetaAI(query: string, forceRefresh: boolean = false): Promise<any> {
-    return {
-        error: "Service unavailable. Required solve anti-bot challenges"
-    }
-
-    if (forceRefresh) {
-        metaAICache = null;
-    }
-
-    if (metaAICache?.valid && metaAICache?.access_token && metaAICache?.lsd && metaAICache?.docid?.message && !forceRefresh) {
-        try {
-            const result = await sendMessage(query, metaAICache);
-            if (!result.error) return result;
-            metaAICache = null;
-        } catch {
-            metaAICache = null;
-        }
-    }
-
-    const session = new Session({ preset: 'chrome-145', httpVersion: 'h3' });
     try {
-        const extractBetween = (text: string, start: string, end: string): string => {
-            const startIdx = text.indexOf(start);
-            if (startIdx === -1) return '';
-            const valueStart = startIdx + start.length;
-            const endIdx = text.indexOf(end, valueStart);
-            if (endIdx === -1) return '';
-            return text.substring(valueStart, endIdx);
-        };
+        const body = JSON.stringify({
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "messages": messages
+        });
 
-        // Step 1: GET meta.ai (session auto-manages cookies)
-        let res1 = await session.get('https://www.meta.ai');
 
-        let html = res1.text;
-
-        // Step 2: Handle bot challenge if present
-        if (html && html.includes('/__rd_verify_')) {
-            const challengeMatch = html.match(/fetch\(["'](\/[^"']+)["']/);
-            if (challengeMatch) {
-                const challengeUrl = 'https://www.meta.ai' + challengeMatch![1];
-
-                // POST to challenge (session carries cookies automatically)
-                await session.post(challengeUrl, {
-                    headers: {
-                        'Origin': 'https://www.meta.ai',
-                        'Referer': 'https://www.meta.ai/'
-                    }
-                });
-
-                // Retry GET (session now has rd_challenge cookie)
-                const res2 = await session.get('https://www.meta.ai');
-                html = res2.text;
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            body: body,
+            headers: {
+                "Authorization": `Bearer ${process.env.OPEN}`,
+                "Content-Type": "application/json"
             }
-        }
+        });
 
-        const geoBlocked = html.includes('KadabraGeoBlockedError');
-        if (geoBlocked) {
-            session.close();
-            return { error: "Meta AI isn't available in your region" };
-        }
-
-        let lsd = extractBetween(html, '"LSD",[],{"token":"', '"') ||
-            html.match(/["']lsd["']\s*:\s*["']([^"']+)["']/)?.[1] ||
-            html.match(/["']LSD["'],\s*\[\s*\],\s*\{\s*["']token["']\s*:\s*["']([^"']+)["']\s*\}/)?.[1] ||
-            '';
-
-        let access_token = extractBetween(html, '"accessToken":"', '"') ||
-            html.match(/["']accessToken["']\s*:\s*["']([^"']+)["']/)?.[1] ||
-            '';
-
-        let tosDocId = '';
-        let messageDocId = '';
-
-        // Check __NEXT_DATA__ for tokens
-        if (!lsd || !access_token) {
-            const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-            if (nextDataMatch) {
-                try {
-                    const nextData = JSON.parse(nextDataMatch![1]);
-                    const findInObj = (obj: any, key: string): any => {
-                        if (!obj || typeof obj !== 'object') return null;
-                        if (obj[key]) return obj[key];
-                        for (const k in obj) {
-                            const res = findInObj(obj[k], key);
-                            if (res) return res;
-                        }
-                        return null;
-                    };
-                    if (!lsd) lsd = findInObj(nextData, 'lsd') || '';
-                    if (!access_token) access_token = findInObj(nextData, 'accessToken') || '';
-
-                    // Also try to find doc_ids in nextData if they are there
-                    if (!tosDocId) tosDocId = findInObj(nextData, 'tosDocId') || '';
-                    if (!messageDocId) messageDocId = findInObj(nextData, 'messageDocId') || '';
-                } catch { }
-            }
-        }
-
-        // Fallback search in HTML for doc_ids
-        if (!tosDocId) {
-            const tosMatch = html.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraAcceptTOSForTempUserMutation/);
-            if (tosMatch) tosDocId = tosMatch![1];
-        }
-        if (!messageDocId) {
-            const msgMatch = html.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                html.match(/["']?id["']?\s*:\s*["']?(\d+)["']?.*?useKadabraSendMessageMutation/);
-            if (msgMatch) messageDocId = msgMatch![1];
-        }
-
-        const abra_csrf = extractBetween(html, 'abra_csrf" value="', '"');
-
-        const scriptUrls: string[] = [];
-        const scriptRegex = /<script\b[^>]*?\bsrc=["']([^"']+)["']/g;
-        let match;
-        while ((match = scriptRegex.exec(html)) !== null) {
-            let url = match[1].replace(/\\\/|\\\//g, '/');
-            if (url.startsWith('//')) url = 'https:' + url;
-            else if (url.startsWith('/')) url = 'https://www.meta.ai' + url;
-            if (url.startsWith('http') && !scriptUrls.includes(url)) {
-                scriptUrls.push(url);
-            }
-        }
-
-        const allFbcdnMatches = html.matchAll(/https?:\\?\/\\?\/static\.xx\.fbcdn\.net\\?\/rsrc\.php\\?\/[a-zA-Z0-9_\-\/\\.]+\.js/g);
-        for (const m of allFbcdnMatches) {
-            const cleanUrl = m[0].replace(/\\\//g, '/');
-            if (!scriptUrls.includes(cleanUrl)) {
-                scriptUrls.push(cleanUrl);
-            }
-        }
-
-        // Extract cookies from session immediately before looping to avoid QUIC idle timeout hangs
-        const cookies = Object.entries(session.cookies || {}).map(([k, v]) => `${k}=${v}`).join('; ');
-        session.close();
-
-        // Fetch scripts using fetchWithRetry
-        const BATCH_SIZE = 10;
-        const targetUrls = scriptUrls.slice(0, 100);
-        for (let i = 0; i < targetUrls.length; i += BATCH_SIZE) {
-            if (tosDocId && messageDocId) break;
-
-            const batch = targetUrls.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(async (url) => {
-                if (tosDocId && messageDocId) return;
-                try {
-                    const scriptRes = await fetchWithRetry(url, { headers: { 'User-Agent': userAgent } });
-                    const scriptText = await scriptRes.text();
-
-                    if (!tosDocId) {
-                        const tosMatch = scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                            scriptText.match(/useKadabraAcceptTOSForTempUserMutation.*?exports\s*=\s*["']?(\d+)["']?/);
-                        if (tosMatch) tosDocId = tosMatch[1];
-                    }
-                    if (!messageDocId) {
-                        const msgMatch = scriptText.match(/useKadabraSendMessageMutation.*?["']?id["']?\s*:\s*["']?(\d+)["']?/) ||
-                            scriptText.match(/useKadabraSendMessageMutation.*?exports\s*=\s*["']?(\d+)["']?/);
-                        if (msgMatch) messageDocId = msgMatch[1];
-                    }
-                } catch { }
-            }));
-        }
-
-        // Accept TOS if needed
-        if (!access_token && tosDocId) {
-            const tosBody = new URLSearchParams({
-                'av': '0',
-                '__user': '0',
-                '__a': '1',
-                'dpr': '1',
-                'lsd': lsd,
-                'fb_api_caller_class': 'RelayModern',
-                'fb_api_req_friendly_name': 'useKadabraAcceptTOSForTempUserMutation',
-                'server_timestamps': 'true',
-                'doc_id': tosDocId,
-                'variables': JSON.stringify({
-                    "dob": "2000-01-01",
-                    "__relay_internal__pv__AbraQPDocUploadNuxTriggerNamerelayprovider": "meta_dot_ai_abra_web_doc_upload_nux_tour",
-                    "__relay_internal__pv__AbraSurfaceNuxIDrelayprovider": "0"
-                })
-            }).toString();
-
-            try {
-                const tosRes = await fetchWithRetry('https://www.meta.ai/api/graphql/', {
-                    method: 'POST',
-                    headers: {
-                        'User-Agent': userAgent,
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': '*/*',
-                        'Accept-Language': 'en',
-                        'Referer': 'https://www.meta.ai',
-                        'Origin': 'https://www.meta.ai',
-                        'Sec-Fetch-Site': 'same-origin',
-                        'Cookie': cookies,
-                        'x-asbd-id': '359341',
-                        'x-fb-friendly-name': 'useKadabraAcceptTOSForTempUserMutation',
-                        'x-fb-lsd': lsd
-                    },
-                    body: tosBody
-                });
-
-                const tosData = JSON.parse(await tosRes.text());
-                access_token = tosData?.data?.xab_abra_accept_terms_of_service?.new_temp_user_auth?.access_token || '';
-            } catch { }
-        }
-
-        if (!access_token) {
-
+        if (res.status === 429) {
             return {
-                error: 'Failed to get access token',
-                debug: {
-                    htmlLength: html?.length || 0,
-                    hasLsd: !!lsd,
-                    hasTosDocId: !!tosDocId,
-                    hasMessageDocId: !!messageDocId,
-                    scriptUrlsFound: scriptUrls.length,
-                    firstScripts: scriptUrls.slice(0, 5),
-                    hasChallenge: html?.includes?.('/__rd_verify_') || false,
-                    htmlPreview: html?.substring?.(0, 500) || 'empty'
-                }
-            };
+                error: "Rate-limited"
+            }
         }
 
-        if (!messageDocId) {
-
-            return { error: 'Could not find message doc_id' };
+        if (!res.ok) {
+            return {
+                error: "Service unavailable"
+            }
         }
 
+        const data: any = await res.json();
+        const response = data.choices?.[0]?.message?.content;
 
+        if (response) {
+            messages.push({ role: "assistant", content: response });
+        }
 
-        // Store cache
-        metaAICache = {
-            valid: true,
-            access_token,
-            lsd,
-            cookies,
-            docid: { tos: tosDocId, message: messageDocId }
-        };
+        if (messages.length > 20) {
+            messages = messages.slice(-20);
+        }
 
-        // Send message
-        return await sendMessage(query, metaAICache);
+        return {
+            response: response || null,
+            data: {
+                conversation: Buffer.from(JSON.stringify(messages)).toString('base64url').split('').reverse().join(''),
+                model: "llama-3.3-70b-instruct"
+            }
+        }
     } catch (e: any) {
-        try { session.close(); } catch { }
-        return { error: e.message || 'Unknown error' };
+        return { error: e.message || null };
     }
 }
 
@@ -5759,6 +5457,76 @@ export async function GrokAI(query: string): Promise<any> {
             response: response || null,
             data: {
                 model: "grok-4.1-fast-preview"
+            }
+        }
+    }
+    catch {
+        return null;
+    }
+}
+
+export async function OpenRouterGPT(query: string, convo: any = null): Promise<any> {
+    if (!query) return null;
+
+    let messages: any[] = [];
+
+    if (convo) {
+        try {
+            const parsed = JSON.parse(
+                Buffer.from(convo.split('').reverse().join(''), 'base64url').toString('utf-8')
+            );
+            if (Array.isArray(parsed)) messages = parsed;
+        } catch {
+            messages = [];
+        }
+    }
+
+    messages.push({ role: "user", content: query });
+
+    try {
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            body: JSON.stringify({
+                "model": "openai/gpt-oss-120b:free",
+                "messages": messages,
+                "reasoning": { "enabled": true }
+            }),
+            headers: {
+                "Authorization": `Bearer ${process.env.OPEN}`,
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (res.status === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        if (!res.ok) {
+            return {
+                error: "Service unavailable"
+            }
+        }
+
+        const data: any = await res.json();
+        const response = data.choices?.[0]?.message?.content;
+        const reasoning = data.choices?.[0]?.message?.reasoning;
+
+        if (response) {
+            messages.push({ role: "assistant", content: response });
+        }
+
+        if (messages.length > 20) {
+            messages = messages.slice(-20);
+        }
+
+        return {
+            reasoning: reasoning || null,
+            response: response || null,
+            data: {
+                conversation: Buffer.from(JSON.stringify(messages)).toString('base64url').split('').reverse().join(''),
+                model: "gpt-oss-120b"
             }
         }
     }
@@ -6763,6 +6531,108 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         return { error: e.message || 'Something just happened' };
     }
 };
+export const DiscordListChannel = async (token: string, guildId: string, limit: number = 10, type: string = 'all') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
+        const urlThreads = `https://discord.com/api/v10/guilds/${guildId}/threads/active`;
+
+        const [reqChannels, reqThreads] = await Promise.all([
+            fetch(urlChannels, { method: 'GET', headers }),
+            fetch(urlThreads, { method: 'GET', headers })
+        ]);
+
+        let channelsData: any = [];
+        let threadsData: any = { threads: [] };
+
+        if (reqChannels.status === 200) {
+            try { channelsData = await reqChannels.json(); } catch { }
+        }
+        if (reqThreads.status === 200) {
+            try { threadsData = await reqThreads.json(); } catch { }
+        }
+
+        let data = [...(Array.isArray(channelsData) ? channelsData : []), ...(Array.isArray(threadsData.threads) ? threadsData.threads : [])];
+
+        if (data.length === 0 && reqChannels.status !== 200) {
+            return {
+                data: null,
+                error: channelsData || { status: reqChannels.status, statusText: reqChannels.statusText }
+            };
+        }
+
+        const types = type.split(',').map(t => t.trim().toLowerCase());
+
+        const channelTypeMap: Record<number, string> = {
+            0: 'text',
+            2: 'voice',
+            4: 'category',
+            5: 'announcement',
+            10: 'announcement_thread',
+            11: 'public_thread',
+            12: 'private_thread',
+            13: 'stage',
+            14: 'directory',
+            15: 'forum',
+            16: 'media'
+        };
+
+        const totalChannel: any = {
+            text: 0,
+            voice: 0,
+            category: 0,
+            announcement: 0,
+            announcement_thread: 0,
+            public_thread: 0,
+            private_thread: 0,
+            stage: 0,
+            directory: 0,
+            forum: 0,
+            media: 0,
+            all: data.length
+        };
+
+        data.forEach((channel: any) => {
+            const typeName = channelTypeMap[channel.type];
+            if (typeName) {
+                totalChannel[typeName]++;
+            }
+        });
+
+        if (!types.includes('all')) {
+            data = data.filter((channel: any) => {
+                const typeName = channelTypeMap[channel.type];
+                if (typeName && types.includes(typeName)) return true;
+                if (types.includes('threads') && [10, 11, 12].includes(channel.type)) return true;
+                return false;
+            });
+        }
+
+        const sliceLimit = limit === -1 ? data.length : limit;
+        data = data.slice(0, sliceLimit).map((channel: any) => ({
+            ...channel,
+            created_at: channel.id ? String(getSnowflakeDate(channel.id)) : null
+        }));
+
+        return {
+            data,
+            totalChannel
+        };
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
 
 export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit?: number) => {
     if (!token || token === 'null') return { error: 'Missing token' };
@@ -7536,4 +7406,159 @@ export const Audiomack = async function Audiomack(que: string, limits: number = 
         const res: any = await pull.json();
         return { signature: signature, data: res?.results || null }
     } catch (e) { console.error(e); return null }
+}
+
+export const CrunchySearch = async function CrunchySearch(que: string, refresh_auth: boolean = false) {
+    if (!que) return null;
+
+    try {
+        if (refresh_auth || !keycrunchy) {
+            keycrunchy = await crunchyKey();
+        }
+
+        const per = await request(`https://beta-api.crunchyroll.com/content/v2/discover/search?q=${que}&n=20&type=series,episode,top_results&ratings=true&locale=en`, {
+            headers: {
+                ...commonHeaders,
+                'Accept': 'application/json',
+                'Authorization': 'Bearer ' + keycrunchy,
+            },
+            useH2: true
+        });
+
+        if (per.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        if (per.statusCode === 400 || per.statusCode === 401) {
+            return await CrunchySearch(que, true);
+        }
+
+        const res: any = await per.json();
+        const finalres: any = {
+            episode: res?.data?.find((a: any) => a.type == 'episode')?.items,
+            series: res?.data?.find((a: any) => a.type == 'series')?.items,
+            topResults: res?.data?.find((a: any) => a.type == 'top_results')?.items
+        };
+        return { data: finalres || null }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const SafeBooru = async function SafeBooru(que: string) {
+    if (!que) return null;
+
+    try {
+        const per = await request(`https://safebooru.org/autocomplete.php?q=${que}`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        if (per.statusCode === 403) {
+            return {
+                "error": "Cloudflare Turnstile asking to verify you're not a bot"
+            }
+        }
+
+        const res: any = await per.text;
+        let parseres: any = {};
+        try {
+            parseres = JSON.parse(res);
+        }
+        catch { }
+
+        if (!parseres?.[0]) {
+            return {
+                data: null
+            }
+        }
+
+        const finalres = await Promise.allSettled(
+            parseres.map(async (e: any) => {
+                const req2 = await request(`https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(e.value)}&limit=100`, {
+                    headers: {
+                        ...commonHeaders
+                    },
+                    useH2: true
+                });
+
+                const res2: any = await req2.json();
+
+                // Safebooru labels are usually "tag_name (count)"
+                // We extract the count inside the parentheses
+                const totalMatch = e.label.match(/\((\d+)\)/);
+                const total = totalMatch ? totalMatch[1] : "0";
+
+                return {
+                    title: e.value,
+                    total: total,
+                    data: res2
+                }
+            })
+        );
+
+        return { data: finalres.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean) }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const Konachan = async function Konachan(que: string) {
+    if (!que) return null;
+
+    try {
+        if (!konaSummary || konaSummary.length === 0) {
+            const pullinfo = await request(`https://konachan.net/tag/summary.json`, {
+                headers: {
+                    ...commonHeaders
+                },
+                useH2: true
+            });
+
+            const lookinfo: any = await pullinfo.json();
+            const data = lookinfo.data || "";
+            // Konachan summary format: "category`tag1`tag2` category`tag3`..."
+            konaSummary = data.split(' ').flatMap((group: string) => group.split('`').slice(1, -1));
+        }
+
+        const specificTags = konaSummary.filter((tag: string) => tag.includes(que.toLowerCase())).slice(0, 5);
+
+        if (specificTags.length === 0) {
+            return {
+                data: null
+            }
+        }
+
+        const finalres = await Promise.allSettled(
+            specificTags.map(async (tag: string) => {
+                const req2 = await request(`https://konachan.net/post.json?limit=20&tags=${encodeURIComponent(tag)}`, {
+                    headers: {
+                        ...commonHeaders
+                    },
+                    useH2: true
+                });
+
+                const res2: any = await req2.json();
+
+                return {
+                    title: tag,
+                    data: res2 || []
+                }
+            })
+        );
+
+        return { data: finalres.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean) }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
 }

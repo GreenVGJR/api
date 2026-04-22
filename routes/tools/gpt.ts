@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { MetaAI } from '../../functions/request.js';
+import { OpenRouterGPT } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-app.get('/chat/meta', async (c) => {
+app.get('/chat/gpt', async (c) => {
     const query = c.req.query('prompt');
     if (query === undefined) { 
         return c.json({ "error": "Missing parameter required" }, 202);
@@ -13,7 +13,7 @@ app.get('/chat/meta', async (c) => {
     }
     const conversation = c.req.query('conversation');
     c.header('X-Route', 'openrouter.ai');
-    return await dispatch(c, () => MetaAI(query, conversation));
+    return await dispatch(c, () => OpenRouterGPT(query, conversation));
 });
 
 export default app;

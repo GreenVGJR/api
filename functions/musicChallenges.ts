@@ -82,7 +82,5 @@ export async function verifyChallenge(responseStr: string | undefined | null, r:
         return false;
     }
 
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     return true;
 }

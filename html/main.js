@@ -92,28 +92,7 @@ function flattenRoutes(obj, parentPath = '') {
     return flatResults;
 }
 
-async function solveChallenge(challenge) {
-    try {
-        const [base64xt, validType, [slicekf, ip], time, xtIndex] = challenge;
-        if (validType !== 1000) return null;
 
-        const xt = JSON.parse(atob(base64xt));
-        const secretValue = xt[xtIndex];
-
-        const data = atob(time) + secretValue.toString() + ip;
-        const msgUint8 = new TextEncoder().encode(data);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-
-        const base64 = btoa(String.fromCharCode(...hashArray));
-        const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-        return JSON.stringify([base64url, validType, [slicekf, ip], time, xtIndex]);
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
-}
 
 let solvedChallengeCode = null;
 
@@ -136,9 +115,10 @@ async function performRequest(targetUrl, retryCount = 0) {
 
     try {
         const startTime = performance.now();
+        const parseUrl = new URL(targetUrl);
         const headers = { 'Accept': 'application/json' };
-        if (solvedChallengeCode && targetUrl.includes('/music/')) {
-            headers['x-challenge-codes'] = encodeURIComponent(solvedChallengeCode);
+        if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
+            headers['X-Challenge-Codes'] = btoa(encodeURIComponent(solvedChallengeCode));
         }
 
         const response = await fetch(targetUrl, { headers });
@@ -164,7 +144,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                     <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
                 </div>
             `;
-        } else if (contentType.startsWith('video/') || contentType === 'application/octet-stream') {
+        } else if ((contentType.startsWith('video/') || contentType === 'application/octet-stream') && response.headers.get('x-player') !== 'lavalink') {
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
             updateStatusUI(response.ok, response.status, duration);
@@ -184,7 +164,8 @@ async function performRequest(targetUrl, retryCount = 0) {
             const text = await response.text();
             duration = Math.round(performance.now() - startTime);
 
-            if (response.status === 403 && response.headers.get('x-player') === 'lavalink' && retryCount < 4) {
+            const isLavalink = response.headers.get('x-player') === 'lavalink';
+            if (response.status === 403 && isLavalink && retryCount < 4) {
                 try {
                     const data = JSON.parse(text);
                     if (data && data.c && data._submit) {
@@ -196,7 +177,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                         }
                     }
                 } catch (e) { }
-            } else if (response.status === 403 && response.headers.get('x-player') === 'lavalink') {
+            } else if (response.status === 403 && isLavalink) {
                 solvedChallengeCode = null;
             }
 

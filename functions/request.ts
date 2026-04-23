@@ -391,6 +391,7 @@ let keyflickr: string | undefined;
 let keybearer: string | undefined;
 let keydeezer: string | undefined;
 let keyimgur: string | undefined;
+let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
 let saweriaBuildId: string | undefined;
 let twitterDocument: any;
@@ -398,6 +399,24 @@ let twitterTransaction: any;
 let twitterAuth: string | undefined;
 let twitterObj: any = {};
 let konaSummary: any;
+
+function deepFind(obj: unknown, key: string): unknown | null {
+    if (!obj || typeof obj !== 'object') return null;
+    if (Array.isArray(obj)) {
+        for (const item of obj) {
+            const result = deepFind(item, key);
+            if (result != null) return result;
+        }
+        return null;
+    }
+    const record = obj as Record<string, unknown>;
+    if (key in record) return record[key];
+    for (const val of Object.values(record)) {
+        const result = deepFind(val, key);
+        if (result != null) return result;
+    }
+    return null;
+}
 
 function filterCookies(cookie: string | string[]) {
     if (typeof cookie !== 'string' && !Array.isArray(cookie)) return '';
@@ -422,10 +441,33 @@ function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] 
         .join('; ');
 }
 
+export const giphyKey = async function giphyKey() {
+    try {
+        const res = await request('https://giphy.com/', {
+            headers: {
+                ...commonHeaders,
+            },
+            useH2: true
+        });
+        const text = await res.text;
+        const extractHash = text?.split('app/layout-')?.[1]?.split('"')?.[0];
+        if (!extractHash) return undefined;
+        const res2 = await request(`https://giphy.com/_next/static/chunks/app/layout-${extractHash}`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+        const text2 = await res2.text;
+        return text2.split('mobileApiKey:"')[1].split('"')[0];
+    } catch {
+        return undefined;
+    }
+}
+
 export const flickrKey = async function flickrKey() {
     try {
         const res = await request('https://flickr.com/photos/', {
-            method: 'GET',
             headers: {
                 ...commonHeaders,
             }
@@ -5084,7 +5126,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
     };
 
     try {
-        const [apiRes, apiRes2] = await Promise.all([
+        const [apiRes, apiRes2, apiRes3] = await Promise.all([
             request(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
                 headers: {
                     ...commonHeaders,
@@ -5100,15 +5142,25 @@ export const Tenor = async function Tenor(que: string, type?: string) {
                     'Origin': 'https://tenor.com',
                     'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
                 }
+            }),
+            request(`https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`, {
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://tenor.com',
+                    'Origin': 'https://tenor.com',
+                    'X-Goog-Api-Key': process.env.GOOG_TENOR || ''
+                }
             })
         ]);
 
         if (apiRes.statusCode === 200) {
             const apiData: any = await apiRes.json();
             const apiData2: any = await apiRes2.json();
+            const apiData3: any = await apiRes3.json();
             return {
                 data: {
-                    suggestion: apiData2?.results,
+                    suggestion: apiData3?.results || [],
+                    autocomplete: apiData2?.results || [],
                     data: apiData?.results || []
                 }
             };
@@ -5145,12 +5197,13 @@ export const Tenor = async function Tenor(que: string, type?: string) {
         return {
             data: {
                 suggestion: suggestionKeys.length > 0 ? storeData.searchSuggestions[suggestionKeys[0]]?.results : null,
+                autocomplete: null,
                 data: searchKeys.length > 0 ? storeData.universal.search[searchKeys[0]]?.results : []
             }
         };
     } catch (e) {
         console.error(e);
-        return { error: 'Failed to fetch Tenor data' };
+        return null;
     }
 }
 
@@ -5192,7 +5245,7 @@ export const infoTenor = async function infoTenor(url: string) {
         return { data: gifData };
     } catch (e) {
         console.error(e);
-        return { error: 'Failed to fetch Tenor info' };
+        return null;
     }
 }
 
@@ -5208,7 +5261,8 @@ export const infoGiphy = async function infoGiphy(url: string) {
         const res = await request(url, {
             headers: {
                 ...commonHeaders
-            }
+            },
+            useH2: true
         });
 
         if (res.statusCode !== 200) {
@@ -5216,38 +5270,64 @@ export const infoGiphy = async function infoGiphy(url: string) {
         }
 
         const html = await res.text;
+
+        // Extract keywords from meta tag
+        const keywordsMatch = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i);
+        const keywords = keywordsMatch?.[1]?.split(',').map((k: string) => k.trim()).filter(Boolean) || null;
+
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
-        const ldJsonChunk = chunks.find((chunk: string) => chunk.includes('application/ld+json'));
-        if (!ldJsonChunk) {
-            return { error: 'Failed to parse Giphy data' };
+        let gifData: unknown = null;
+        let userData: unknown = null;
+        let relatedData: unknown = null;
+
+        for (const chunk of chunks) {
+            if (!chunk.includes('gif')) continue;
+
+            try {
+                let end = chunk.indexOf(')</script>');
+                if (end === -1) end = chunk.indexOf(')\n');
+                if (end === -1) end = chunk.lastIndexOf(')');
+
+                const parsed = JSON.parse(chunk.substring(0, end));
+
+                let innerData: unknown = parsed[1];
+                if (typeof innerData === 'string') {
+                    const colonIdx = innerData.indexOf(':');
+                    if (colonIdx !== -1) {
+                        try {
+                            innerData = JSON.parse(innerData.substring(colonIdx + 1));
+                        } catch { }
+                    }
+                }
+
+                if (!gifData) gifData = deepFind(innerData, 'gif');
+                if (!relatedData) relatedData = deepFind(innerData, 'initialGifs');
+                if (!userData) {
+                    const found = deepFind(innerData, 'user');
+                    if (found && typeof found === 'object') userData = found;
+                }
+
+                if (gifData) break;
+            } catch {
+                continue;
+            }
         }
-
-        const scriptEnd = ldJsonChunk.indexOf(')</script>');
-        const jsonStr = ldJsonChunk.substring(0, scriptEnd);
-        const parsed = JSON.parse(jsonStr);
-
-        const firstPart = parsed[1];
-        if (!firstPart) return { error: 'Invalid Giphy data structure' };
-
-        const colonIndex = firstPart.indexOf(':');
-        const dataStr = firstPart.substring(colonIndex + 1);
-        const c = JSON.parse(dataStr);
 
         return {
             data: {
-                suggestion: c?.[1]?.[3]?.geoTargetedRequest?.keywords,
-                data: c?.[1]?.[3]?.children?.[1]?.[3]?.children?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.gif,
-                user: c?.[1]?.[3]?.children?.[1]?.[3]?.children?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.children?.[0]?.[3]?.user
+                suggestion: keywords,
+                data: gifData,
+                user: userData,
+                related: relatedData,
             }
         };
     } catch (e) {
         console.error(e);
-        return { error: 'Failed to fetch Giphy info' };
+        return null;
     }
 }
-
 
 export const Giphy = async function Giphy(que: string, type?: string) {
     if (!que) return null;
@@ -5260,9 +5340,8 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 
     try {
         const res = await request(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
-            headers: {
-                ...commonHeaders
-            }
+            headers: { ...commonHeaders },
+            useH2: true
         });
 
         if (res.statusCode !== 200) {
@@ -5273,23 +5352,104 @@ export const Giphy = async function Giphy(que: string, type?: string) {
         const chunks = html.split('self.__next_f.push(');
         chunks.shift();
 
-        const ldJsonChunk = chunks.find((chunk: string) => chunk.includes('application/ld+json'));
-        if (!ldJsonChunk) {
-            return { error: 'Failed to parse Giphy data' };
+        for (const chunk of chunks) {
+            if (!chunk.includes('initialGifs')) continue;
+
+            try {
+                let end = chunk.indexOf(')</script>');
+                if (end === -1) end = chunk.indexOf(')\n');
+                if (end === -1) end = chunk.lastIndexOf(')');
+
+                const parsed = JSON.parse(chunk.substring(0, end));
+
+                let innerData: unknown = parsed[1];
+                if (typeof innerData === 'string') {
+                    const colonIdx = innerData.indexOf(':');
+                    if (colonIdx !== -1) {
+                        try {
+                            innerData = JSON.parse(innerData.substring(colonIdx + 1));
+                        } catch { }
+                    }
+                }
+
+                const gifs = deepFind(innerData, 'initialGifs');
+                if (gifs) return { data: gifs };
+            } catch {
+                continue;
+            }
         }
 
-        const scriptEnd = ldJsonChunk.indexOf(')</script>');
-        const jsonStr = ldJsonChunk.substring(0, scriptEnd);
-        const parsed = JSON.parse(jsonStr);
-        const innerData = JSON.parse(parsed[1].substring(parsed[1].indexOf(':') + 1));
-        const initialGifs = innerData?.[1]?.[3]?.children?.[1]?.[3]?.children?.[1]?.[3]?.initialGifs;
-
-        return { data: initialGifs || [] };
+        return { data: null };
     } catch (e) {
         console.error(e);
-        return { error: 'Failed to fetch Giphy data' };
+        return null;
     }
-}
+};
+
+export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refresh_auth: boolean = false) {
+    if (!que) return null;
+
+    const getTypeQuery = (t?: string) => {
+        if (t === 'sticker') return 'stickers';
+        if (t === 'clip') return 'clips';
+        if (t === 'gif' || !t) return 'gifs';
+        return '';
+    };
+
+    try {
+        if (refresh_auth || !keygiphy) {
+            keygiphy = await giphyKey();
+        }
+
+        const [res, res2, res3] = await Promise.all([
+            request(`https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+                headers: { ...commonHeaders },
+                useH2: true
+            }),
+            request(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+                headers: { ...commonHeaders },
+                useH2: true
+            }),
+            request(`https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+                headers: { ...commonHeaders },
+                useH2: true
+            })
+        ]);
+
+        if (res.statusCode === 401) {
+            return await GiphyAPI(que, type, true);
+        }
+
+        let jl: any = {};
+        let jl2: any = {};
+        let jl3: any = {};
+        let jl4: any = {};
+        try { jl = await res.json(); } catch { }
+        try { jl2 = await res2.json(); } catch { }
+        try {
+            if (jl.data?.[0]?.id) {
+                const fetchRelated = await request(`https://api.giphy.com/v1/${getTypeQuery(type)}/related?gif_id=${jl.data[0].id}&limit=25&api_key=${keygiphy}`, {
+                    headers: { ...commonHeaders },
+                    useH2: true
+                });
+                jl3 = await fetchRelated.json();
+            }
+        }
+        catch { }
+        try { jl4 = await res3.json(); } catch { }
+
+        return {
+            suggestion: jl2?.data?.map((b: any) => b.name) || null,
+            data: jl?.data || null,
+            related: jl3?.data || null,
+            channel: jl4?.data || null,
+            ...jl?.pagination
+        };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+};
 
 export const setKeys = (sc: string, sp: string, tidal: string, deezer: string) => { keysc = sc; keysp = sp; keytidal = tidal; keydeezer = deezer; };
 
@@ -5538,7 +5698,7 @@ export async function OpenRouterGPT(query: string, convo: any = null): Promise<a
 export async function DriftProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join', 'auth', 'media'].includes(username.toLowerCase())) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join', 'auth', 'media', 'go'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
     let session: any;
     let res: any;
@@ -6703,17 +6863,51 @@ export const Klipy = async function Klipy(que: string, type?: string) {
 
     try {
         const queryType = getQueryType(type);
-        const req = await request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=50`, {
-            headers: {
-                ...commonHeaders,
-                'Referer': 'https://klipy.com',
-                'Origin': 'https://klipy.com'
-            }
-        });
+        const [req, req2, req3] = await Promise.all([
+            request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`, {
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://klipy.com',
+                    'Origin': 'https://klipy.com'
+                },
+                useH2: true
+            }),
+            request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`, {
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://klipy.com',
+                    'Origin': 'https://klipy.com'
+                },
+                useH2: true
+            }),
+            request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`, {
+                headers: {
+                    ...commonHeaders,
+                    'Referer': 'https://klipy.com',
+                    'Origin': 'https://klipy.com'
+                },
+                useH2: true
+            })
+        ]);
+
+        let res2: any;
+        let res3: any;
+        try {
+            res2 = await req2.json();
+        }
+        catch { }
+        try {
+            res3 = await req3.json();
+        }
+        catch { }
 
         if (req.statusCode === 200) {
             const res: any = await req.json();
-            return { data: res?.data?.data || null };
+            return {
+                suggestion: res2?.data || null,
+                autocomplete: res3?.data || null,
+                data: res?.data?.data || null
+            };
         }
 
         return { error: `${req.statusCode} - Can't process this` };
@@ -6740,7 +6934,8 @@ export const infoKlipy = async function infoKlipy(url: string) {
         const req = await request(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`, {
             headers: {
                 ...commonHeaders
-            }
+            },
+            useH2: true
         });
 
         if (req.statusCode === 404) {

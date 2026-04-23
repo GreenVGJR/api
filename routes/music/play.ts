@@ -369,7 +369,7 @@ app.get('/play', async (c) => {
             }
         }
 
-        const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any));
+        const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map(t => formatTrack(t as any, client, guildPlayer));
         const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
         const activeFilters = getActiveFilters(guildPlayer);
 
@@ -379,7 +379,7 @@ app.get('/play', async (c) => {
             data: {
                 isNewPlayer: isNewGuildPlayer,
                 client: guildPlayer?.options || null,
-                track: formatTrack(tracks[0]),
+                track: formatTrack(tracks[0], client, guildPlayer),
                 platform,
                 is247,
                 isPlaying: guildPlayer.playing,

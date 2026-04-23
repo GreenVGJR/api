@@ -70,6 +70,7 @@ const API_ROUTES = {
         "/search/capcut/templates?q=",
         "/search/tenor?q=&type=",
         "/search/giphy?q=&type=",
+        "/search/giphy/v2?q=&type=",
         "/search/klipy?q=&type=",
         "/search/patreon?q=",
         "/search/trakteer?q="
@@ -361,6 +362,7 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
 
 
 const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
+const cfJs = fs.readFileSync(path.join(__dirname, 'html/cf.js'), 'utf-8');
 
 
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
@@ -496,17 +498,47 @@ app.get('/playground', (c: Context) => {
     });
 });
 
-app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
-    const host = (c.req.header('host') || '').toLowerCase();
-    const referer = c.req.header('referer') || '';
-    const refPath = referer.split('?')[0].replace(/\/$/, '');
+app.get('/playground/main.js', (c: Context) => {
+    const v = c.req.query('v');
+    const destSecret = c.req.header('Sec-Fetch-Dest');
+    if (destSecret !== 'script') return c.body(null, 403);
 
-    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
+    const clientSecret = c.req.header('X-Client-Secret') || "0";
+    const expectedHash = crypto.createHash('md5').update(clientSecret).update(destSecret).digest('hex');
+
+    if (!v) {
+        return c.redirect('/playground/main.js?v=' + expectedHash, 302);
+    }
+
+    if (v !== expectedHash) {
+        return c.body(null, 403);
+    }
+
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
     c.header('Content-Type', 'application/javascript');
-    await s.write('');
+    return c.body(mainJs);
+});
 
-    await s.write(mainJs);
-}));
+app.get('/playground/cf.js', (c: Context) => {
+    const v = c.req.query('v');
+    const destSecret = c.req.header('Sec-Fetch-Dest');
+    if (destSecret !== 'script') return c.body(null, 403);
+
+    const clientSecret = c.req.header('X-Client-Secret') || "0";
+    const expectedHash = crypto.createHash('md5').update(clientSecret).update(destSecret).digest('hex');
+
+    if (!v) {
+        return c.redirect('/playground/cf.js?v=' + expectedHash, 302);
+    }
+
+    if (v !== expectedHash) {
+        return c.body(null, 403);
+    }
+
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+    c.header('Content-Type', 'application/javascript');
+    return c.body(cfJs);
+});
 
 app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     const host = (c.req.header('host') || '').toLowerCase();
@@ -545,6 +577,8 @@ app.get('/', (c: Context) => {
     const usedRam = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));
     const totalRam = Math.round(os.totalmem() / (1024 * 1024));
     const ram = `${usedRam.toLocaleString()}MB / ${totalRam.toLocaleString()}MB`;
+    let clientHeaders = c.req.header();
+    delete clientHeaders?.['x-client-secret'];
 
     const listapi = [{
         source: [{
@@ -568,9 +602,7 @@ app.get('/', (c: Context) => {
     },
     {
         routes: API_ROUTES,
-        _visitor: {
-            ...c.req.header()
-        }
+        _visitor: clientHeaders
     }];
 
     return c.body(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2), renderJson ? 200 : 302);

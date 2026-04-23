@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options, VoiceChannel } from 'discord.js';
 import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-client';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
@@ -75,20 +75,25 @@ export async function createMusicStream(
 ) {
 
     c.header('Content-Type', 'application/json');
-    c.header('Cache-Control', 'public, no-cache, no-transform, no-store, max-age=0');
+    c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
     const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
-    if (["DE"].includes(lookExistChallengeC) === false && !(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL))) {
-        if (c.req.header('accept') === 'application/json') {
+    const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
+    if (["DE"].includes(lookExistChallengeC) === false) {
+        if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc))) {
             c.header('X-Player', "lavalink");
-            return c.json(pullInfo(ipLL), 403);
-        }
-        else {
-            return c.body(null, 403);
+            c.header('Content-Type', 'video/mpeg');
+            c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+            c.status(403);
+            return stream(c, async (s: any) => {
+                await s.write('');
+                await s.write(JSON.stringify(pullInfo(ipLL, rrmc)));
+            });
         }
     }
 
+    c.header('X-Player', "lavalink");
     c.header('X-Enc-Route', 'v3');
     c.header('X-Route', 'LIVE');
 
@@ -729,8 +734,13 @@ export function formatDuration(ms: number): string {
     return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-export function formatTrack(track: Track | any) {
+export function formatTrack(track: Track | any, client?: any, guildPlayer?: any) {
     const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
+    const requestedId = (track.requester as any).id;
+    let isInVC: boolean | null = null;
+    if (!isNaN(requestedId)) {
+        isInVC = (client?.channels?.cache?.get(guildPlayer?.voiceChannelId) as VoiceChannel | null)?.members.has(requestedId) ?? null;
+    }
     return {
         id: track.info.identifier,
         title: track.info.title,
@@ -742,10 +752,8 @@ export function formatTrack(track: Track | any) {
         durationMS: String(track.info.duration),
         isSeekable: track.info.isSeekable,
         isStream: track.info.isStream,
-        requestedBy: track.requester
-            ? String((track.requester as any).id ?? track.requester)
-            : null,
-        requester: track.requester || null,
+        requestedBy: track.requester ? String(requestedId) : null,
+        requester: { ...(isInVC !== null ? { isInVoice: isInVC } : {}), ...(track.requester || {}) },
         playlist: (track as any).playlist ? {
             name: (track as any).playlist.name,
             size: (track as any).playlist.tracks?.length,

@@ -7,42 +7,68 @@ export const xt = Array.from({ length: 1000 }, (_, i) => {
     return (hash[i % hash.length] * (i + 1) + 123) % 1000;
 });
 
-export function pullInfo(r: string) {
+function xorEncrypt(text: string, key: string): string {
+    const mask = crypto.createHash('sha256').update(key).digest();
+    const data = Buffer.from(text);
+    for (let i = 0; i < data.length; i++) {
+        data[i] ^= mask[i % mask.length];
+    }
+    return data.toString('hex');
+}
+
+function xorDecrypt(hex: string, key: string): string {
+    const mask = crypto.createHash('sha256').update(key).digest();
+    const data = Buffer.from(hex, 'hex');
+    for (let i = 0; i < data.length; i++) {
+        data[i] ^= mask[i % mask.length];
+    }
+    return data.toString();
+}
+
+export function pullInfo(r: string, q: string) {
     const ip = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
     const time = Date.now().toString();
     const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
+
     const xtIndex = Number_random(0, xt.length - 1);
+    let keyIndex: number;
+    do {
+        keyIndex = Number_random(0, xt.length - 1);
+    } while (keyIndex === xtIndex);
+
+    const obfuscatedXt = xt.map((val, i) => i === keyIndex ? q : xorEncrypt(val.toString(), q));
+    const mx = btoa(JSON.stringify(obfuscatedXt, null, 10));
 
     return {
         _message: "Germany (DE) only. Outside that, you need to solve this challenge.",
         _submit: {
             name: "x-challenge-codes",
-            type: "header",
+            type: ["GET", "header", 1],
             challengeTarget: "c",
             challengeExpire: 7200000
         },
-        type: { primary: "error", alt: "challenge" },
-        c: [btoa(JSON.stringify(xt)), 1000, [slicekf, ip], btoa(time), xtIndex]
+        data: { type: { primary: "error", alt: "challenge" } },
+        c: btoa(JSON.stringify([mx, 1000, [slicekf, ip], btoa(time), xtIndex, keyIndex]))
     }
 }
 
-type ChallengeResponse = [string, number, [string, string], string, number];
+type ChallengeResponse = [string, number, [string, string], string, number, number];
 
-export async function verifyChallenge(responseStr: string | undefined | null, r: string): Promise<boolean> {
+export async function verifyChallenge(responseStr: string | undefined | null, r: string, q: string): Promise<boolean> {
     if (!responseStr) return false;
 
     let response: ChallengeResponse;
     try {
-        response = JSON.parse(decodeURIComponent(responseStr));
+        response = JSON.parse(decodeURIComponent(atob(responseStr)));
     } catch (e) {
         return false;
     }
 
-    if (!Array.isArray(response) || response.length < 5) {
+    if (!Array.isArray(response) || response.length < 6) {
         return false;
     }
 
-    const [receivedHash, validType, [slicekf, ip], time, xtIndex] = response;
+    const [receivedHash, validType, [slicekf, ip], time, xtIndex, keyIndex] = response;
 
     if (validType !== 1000) return false;
 

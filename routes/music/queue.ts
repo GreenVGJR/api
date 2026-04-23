@@ -29,7 +29,7 @@ app.get('/nowplaying', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !queue.queue.current) {
@@ -51,9 +51,9 @@ app.get('/nowplaying', async (c) => {
             nodeId: queue.node?.id ?? null,
             data: {
                 client: queue?.options || null,
-                previous: previous ? formatTrack(previous) : null,
-                current: formatTrack(current),
-                next: next ? formatTrack(next) : null,
+                 previous: previous ? formatTrack(previous, client, queue) : null,
+                 current: formatTrack(current, client, queue),
+                 next: next ? formatTrack(next, client, queue) : null,
                 is247: get247(token!, guildId!),
                 playing: queue.playing,
                 paused: queue.paused,
@@ -94,7 +94,7 @@ app.get('/nowplaying/lyrics', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !queue.queue.current) {
@@ -194,8 +194,8 @@ app.get('/nowplaying/lyrics', async (c) => {
                     source,
                     footer,
                     client: queue?.options || null,
-                    track: formatTrack(track),
-                    is247: get247(token!, guildId!),
+                  track: formatTrack(track, client, queue),
+                 is247: get247(token!, guildId!),
                     playing: queue.playing,
                     paused: queue.paused,
                     volume: queue.volume,
@@ -241,7 +241,7 @@ app.get('/queue', async (c) => {
         }
 
         await log('Retrieving player...');
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !queue.queue.current) {
@@ -261,7 +261,7 @@ app.get('/queue', async (c) => {
             nodeId: queue.node?.id ?? null,
             data: {
                 client: queue?.options || null,
-                current: queue.queue.current ? formatTrack(queue.queue.current) : null,
+                current: queue.queue.current ? formatTrack(queue.queue.current, client, queue) : null,
                 is247: get247(token!, guildId!),
                 playing: queue.playing,
                 paused: queue.paused,
@@ -271,8 +271,8 @@ app.get('/queue', async (c) => {
                     array: activeFilters.length > 0 ? activeFilters : [],
                     string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
                 },
-                tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
-                previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map(t => formatTrack(t as any)) : null,
+                tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map(t => formatTrack(t as any, client, queue)) : null,
+                previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map(t => formatTrack(t as any, client, queue)) : null,
                 total: allTracks.length,
                 limit,
                 offset,

@@ -154,7 +154,7 @@ app.get('/skip', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -205,12 +205,12 @@ app.get('/skip', async (c) => {
             status: true,
             data: {
                 action: 'skipped',
-                skippedTrack: skippedTrack
-                    ? formatTrack(skippedTrack)
-                    : null,
-                currentTrack: nextTrack
-                    ? formatTrack(nextTrack)
-                    : null,
+                 skippedTrack: skippedTrack
+                     ? formatTrack(skippedTrack, client, queue)
+                     : null,
+                 currentTrack: nextTrack
+                     ? formatTrack(nextTrack, client, queue)
+                     : null,
             },
             type: { primary: "final", alt: "success" }
         })}}`);
@@ -584,7 +584,7 @@ app.get('/remove', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -609,14 +609,13 @@ app.get('/remove', async (c) => {
             status: true,
             data: {
                 action: 'removed',
-                removedTrack: formatTrack(trackToRemove),
-                currentTrack: current ? formatTrack(current) : null,
+                 removedTrack: formatTrack(trackToRemove, client, queue),
+                 currentTrack: current ? formatTrack(current, client, queue) : null,
             },
             type: { primary: "final", alt: "success" }
         })}}`);
     });
 });
-
 
 app.get('/clear', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -670,7 +669,7 @@ app.get('/jump', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue || !isActive(queue)) {
@@ -696,8 +695,8 @@ app.get('/jump', async (c) => {
             status: true,
             data: {
                 action: 'jumped',
-                track: formatTrack(targetTrack),
-                index
+                 track: formatTrack(targetTrack, client, queue),
+                 index
             },
             type: { primary: "final", alt: "success" }
         })}}`);
@@ -723,7 +722,7 @@ app.get('/move', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -745,8 +744,8 @@ app.get('/move', async (c) => {
                 status: true,
                 data: {
                     action: 'moved',
-                    fromTrack: formatTrack(fromTrack),
-                    toTrack: formatTrack(toTrack),
+                    fromTrack: formatTrack(fromTrack, client, queue),
+                    toTrack: formatTrack(toTrack, client, queue),
                     from, to
                 },
                 type: { primary: "final", alt: "success" }
@@ -767,8 +766,8 @@ app.get('/move', async (c) => {
             status: true,
             data: {
                 action: 'moved',
-                fromTrack: formatTrack(fromTrack),
-                toTrack: formatTrack(toTrack),
+                fromTrack: formatTrack(fromTrack, client, queue),
+                toTrack: formatTrack(toTrack, client, queue),
                 from, to
             },
             type: { primary: "final", alt: "success" }
@@ -791,7 +790,7 @@ app.get('/back', async (c) => {
             return;
         }
 
-        const { player } = await getOrCreatePlayer(token, log);
+        const { client, player } = await getOrCreatePlayer(token, log);
         const queue = getQueue(player, guildId);
 
         if (!queue) {
@@ -825,10 +824,10 @@ app.get('/back', async (c) => {
             data: {
                 action: 'back',
                 skippedTrack: skipped
-                    ? formatTrack(skipped)
+                    ? formatTrack(skipped, client, queue)
                     : null,
                 currentTrack: prevTrack
-                    ? formatTrack(prevTrack)
+                    ? formatTrack(prevTrack, client, queue)
                     : null,
             },
             type: { primary: "final", alt: "success" }

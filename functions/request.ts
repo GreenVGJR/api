@@ -6561,6 +6561,148 @@ function resolveFlags(flags: number | null | undefined): string[] {
     return badges;
 }
 
+const DISCORD_PERMISSIONS: Record<string, bigint> = {
+    "Create Instant Invite": 1n << 0n,
+    "Kick Members": 1n << 1n,
+    "Ban Members": 1n << 2n,
+    "Administrator": 1n << 3n,
+    "Manage Channels": 1n << 4n,
+    "Manage Guild": 1n << 5n,
+    "Add Reactions": 1n << 6n,
+    "View Audit Log": 1n << 7n,
+    "Priority Speaker": 1n << 8n,
+    "Stream": 1n << 9n,
+    "View Channel": 1n << 10n,
+    "Send Messages": 1n << 11n,
+    "Send TTS Messages": 1n << 12n,
+    "Manage Messages": 1n << 13n,
+    "Embed Links": 1n << 14n,
+    "Attach Files": 1n << 15n,
+    "Read Message History": 1n << 16n,
+    "Mention Everyone": 1n << 17n,
+    "Use External Emojis": 1n << 18n,
+    "View Guild Insights": 1n << 19n,
+    "Connect": 1n << 20n,
+    "Speak": 1n << 21n,
+    "Mute Members": 1n << 22n,
+    "Deafen Members": 1n << 23n,
+    "Move Members": 1n << 24n,
+    "Use VAD": 1n << 25n,
+    "Change Nickname": 1n << 26n,
+    "Manage Nicknames": 1n << 27n,
+    "Manage Roles": 1n << 28n,
+    "Manage Webhooks": 1n << 29n,
+    "Manage Guild Expressions": 1n << 30n,
+    "Use Application Commands": 1n << 31n,
+    "Request to Speak": 1n << 32n,
+    "Manage Events": 1n << 33n,
+    "Manage Threads": 1n << 34n,
+    "Create Public Threads": 1n << 35n,
+    "Create Private Threads": 1n << 36n,
+    "Use External Stickers": 1n << 37n,
+    "Send Messages in Threads": 1n << 38n,
+    "Use Embedded Activities": 1n << 39n,
+    "Moderate Members": 1n << 40n,
+    "View Creator Monetization Analytics": 1n << 41n,
+    "Use Soundboard": 1n << 42n,
+    "Create Guild Expressions": 1n << 43n,
+    "Use External Sounds": 1n << 44n,
+    "Send Voice Messages": 1n << 45n,
+    "Use Clyde AI": 1n << 47n,
+    "Set Voice Channel Status": 1n << 48n,
+    "Send Polls": 1n << 49n,
+    "Use External Apps": 1n << 50n,
+};
+
+export const PERMISSION_KEYS: Record<string, bigint> = {
+    addreactions: 1n << 6n,
+    admin: 1n << 3n,
+    attachfiles: 1n << 15n,
+    ban: 1n << 2n,
+    changenicknames: 1n << 26n,
+    connect: 1n << 20n,
+    createinstantinvite: 1n << 0n,
+    createprivatethreads: 1n << 36n,
+    createpublicthreads: 1n << 35n,
+    embedlinks: 1n << 14n,
+    externalemojis: 1n << 18n,
+    externalstickers: 1n << 37n,
+    kick: 1n << 1n,
+    managechannels: 1n << 4n,
+    manageemojis: 1n << 30n,
+    manageevents: 1n << 33n,
+    managemessages: 1n << 13n,
+    managenicknames: 1n << 27n,
+    manageroles: 1n << 28n,
+    manageserver: 1n << 5n,
+    managethreads: 1n << 34n,
+    managewebhooks: 1n << 29n,
+    mentioneveryone: 1n << 17n,
+    moderatemembers: 1n << 40n,
+    movemembers: 1n << 24n,
+    priorityspeaker: 1n << 8n,
+    readmessagehistory: 1n << 16n,
+    readmessages: 1n << 10n,
+    requesttospeak: 1n << 32n,
+    sendmessages: 1n << 11n,
+    sendmessagesinthreads: 1n << 38n,
+    sendvoicemessages: 1n << 45n,
+    slashcommands: 1n << 31n,
+    speak: 1n << 21n,
+    stream: 1n << 9n,
+    tts: 1n << 12n,
+    usesoundboard: 1n << 42n,
+    usevad: 1n << 25n,
+    viewauditlog: 1n << 7n,
+    viewguildinsights: 1n << 19n,
+    voicedeafen: 1n << 23n,
+    voicemute: 1n << 22n,
+};
+
+function resolvePermissions(permissions: string | bigint | null | undefined): string[] {
+    if (!permissions) return [];
+    const p = typeof permissions === 'string' ? BigInt(permissions) : permissions;
+    const resolved: string[] = [];
+
+    if ((p & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) {
+        return ["Administrator"];
+    }
+
+    for (const [name, bit] of Object.entries(DISCORD_PERMISSIONS)) {
+        if ((p & bit) === bit) {
+            resolved.push(name);
+        }
+    }
+    return resolved;
+}
+
+function getMemberPermissions(member: any, rolesData: any[], guildData: any, guildId: string): { permissions: string, permissions_resolved: string[] } {
+    const ownerId = guildData?.owner_id;
+    const everyoneRole = rolesData.find((r: any) => r.id === guildId);
+    let permissions = BigInt(everyoneRole?.permissions || '0');
+
+    const userId = member.user?.id || member.id;
+
+    if (userId === ownerId) {
+        permissions = 0x7FFFFFFFFFFFFFn;
+    } else if (member.roles) {
+        for (const roleId of member.roles) {
+            const role = rolesData.find((r: any) => r.id === roleId);
+            if (role) {
+                permissions |= BigInt(role.permissions);
+            }
+        }
+        if ((permissions & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) {
+            permissions = 0x7FFFFFFFFFFFFFn;
+        }
+    }
+
+    return {
+        permissions: permissions.toString(),
+        permissions_resolved: resolvePermissions(permissions)
+    };
+}
+
 const getSnowflakeDate = (id: string) => {
     try {
         return Math.floor(Number((BigInt(id) >> 22n) + 1420070400000n) / 1000);
@@ -6585,10 +6727,22 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
             ? `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`
             : `https://discord.com/api/v10/users/${userId}`;
 
-        const req = await fetch(url, { method: 'GET', headers });
+        const urlRoles = guildId ? `https://discord.com/api/v10/guilds/${guildId}/roles` : null;
+        const urlGuild = guildId ? `https://discord.com/api/v10/guilds/${guildId}` : null;
+
+        const [req, rolesReq, guildReq] = await Promise.all([
+            fetch(url, { method: 'GET', headers }),
+            urlRoles ? fetch(urlRoles, { method: 'GET', headers }) : Promise.resolve(null),
+            urlGuild ? fetch(urlGuild, { method: 'GET', headers }) : Promise.resolve(null)
+        ]);
 
         let data: any = null;
+        let rolesData: any = [];
+        let guildData: any = null;
+
         try { data = await req.json(); } catch { }
+        try { if (rolesReq && rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
+        try { if (guildReq && guildReq.status === 200) guildData = await guildReq.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -6617,8 +6771,11 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
             ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${data.avatar}.${data.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
             : null;
 
+        const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
+
         const result: any = {
             ...data,
+            ...perms,
             avatar_url: guildAvatarUrl || avatarUrl,
             banner_url: bannerUrl,
             badges: publicFlagsBadges,
@@ -6631,7 +6788,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
     }
 };
 
-export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: string = 'all') => {
+export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: string = 'all', permission: string = 'all') => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!guildId) return { error: 'Missing guildId' };
 
@@ -6645,11 +6802,23 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         const types = type.split(',').map(t => t.trim());
         const isSpecial = types.some(t => ['oldest', 'newest', 'no_role', 'has_role'].includes(t));
         const fetchLimit = isSpecial ? 1000 : limit;
-        const url = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
-        const req = await fetch(url, { method: 'GET', headers });
+        const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
+        const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
+        const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
+
+        const [req, rolesReq, guildReq] = await Promise.all([
+            fetch(urlMembers, { method: 'GET', headers }),
+            fetch(urlRoles, { method: 'GET', headers }),
+            fetch(urlGuild, { method: 'GET', headers })
+        ]);
 
         let data: any = null;
+        let rolesData: any = [];
+        let guildData: any = null;
+
         try { data = await req.json(); } catch { }
+        try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
+        try { if (guildReq.status === 200) guildData = await guildReq.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -6659,11 +6828,31 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         }
 
         if (Array.isArray(data)) {
-            data = data.map((member: any) => ({
-                ...member,
-                joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
-                created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
-            }));
+            data = data.map((member: any) => {
+                const perms = getMemberPermissions(member, rolesData, guildData, guildId);
+                return {
+                    ...member,
+                    ...perms,
+                    joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+                    created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
+                };
+            });
+
+            if (permission !== 'all') {
+                const requestedPerms = permission.split(',').map(p => p.trim().toLowerCase());
+                const permBits = requestedPerms.map(p => PERMISSION_KEYS[p]).filter(b => b !== undefined) as bigint[];
+                
+                if (permBits.length > 0) {
+                    data = data.filter((member: any) => {
+                        const memberPerms = BigInt(member.permissions);
+                        // Administrator matches everything
+                        if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
+                        
+                        // Check if member has ALL requested permissions
+                        return permBits.every(bit => (memberPerms & bit) === bit);
+                    });
+                }
+            }
 
             for (const t of types) {
                 if (t === 'user') {

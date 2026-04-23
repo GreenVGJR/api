@@ -6697,9 +6697,13 @@ function getMemberPermissions(member: any, rolesData: any[], guildData: any, gui
         }
     }
 
+    const resolvedArray = resolvePermissions(permissions);
     return {
         permissions: permissions.toString(),
-        permissions_resolved: resolvePermissions(permissions)
+        permissions_resolved: {
+            array: resolvedArray,
+            string: resolvedArray.join(', ')
+        }
     };
 }
 

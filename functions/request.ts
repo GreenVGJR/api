@@ -7763,13 +7763,20 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
     }
 };
 
-export const Audiomack = async function Audiomack(que: string, limits: number = 30): Promise<any> {
+export const Audiomack = async function Audiomack(que: string, type: string = 'songs', limits: number = 30): Promise<any> {
     if (!que) return null;
+
+    let searchType = type.toLowerCase();
+    if (searchType === 'song' || searchType === 'songs') searchType = 'songs';
+    else if (searchType === 'album' || searchType === 'albums') searchType = 'albums';
+    else if (searchType === 'playlist' || searchType === 'playlists') searchType = 'playlists';
+    else if (searchType === 'artist' || searchType === 'artists') searchType = 'artists';
+    else searchType = 'songs';
 
     try {
         const { signature, params } = await mackOauth('GET', 'https://api.audiomack.com/v1/search', {
             q: que,
-            type: "songs",
+            show: searchType,
             sort: 'popular',
             limit: limits,
             page: 1

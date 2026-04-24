@@ -40,7 +40,7 @@ const API_ROUTES = {
         "/search/tidal?q=",
         "/search/tidal/v2?q=",
         "/search/genius?q=",
-        "/search/audiomack?q=",
+        "/search/audiomack?q=&type=",
         "/search/pinterest?q=",
         "/search/safebooru?q=",
         "/search/konachan?q=",

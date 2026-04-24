@@ -637,7 +637,7 @@ app.use('*', async (c: Context, next: Next) => {
 
 export default {
     port: port,
-    hostname: "0.0.0.0",
+    hostname: "127.0.0.1",
     fetch: app.fetch,
     idleTimeout: 255
 };

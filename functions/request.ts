@@ -393,6 +393,7 @@ let keydeezer: string | undefined;
 let keyimgur: string | undefined;
 let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
+let keytumblr: string | undefined = "aIcXSOoTtqrzR8L8YEIOmBeW94c3FmbSNSWAUbxsny9KKx5VFh";
 let saweriaBuildId: string | undefined;
 let twitterDocument: any;
 let twitterTransaction: any;
@@ -7947,6 +7948,39 @@ export const Konachan = async function Konachan(que: string) {
     }
     catch (e) {
         console.error(e);
+        return null;
+    }
+}
+
+export const Tumblr = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const res = await request(`https://api.tumblr.com/v2/timeline/search?limit=40&query=${query}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`, {
+            headers: {
+                ...commonHeaders,
+                'Authorization': 'Bearer ' + keytumblr
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        const response = await res.json();
+
+        if (!response?.response?.timeline?.elements?.[0]) {
+            return { data: null }
+        }
+
+        return {
+            data: response?.response?.timeline?.elements?.map((a: any) => a.object_type === 'post' ? a : null).filter(Boolean)
+        }
+    }
+    catch {
         return null;
     }
 }

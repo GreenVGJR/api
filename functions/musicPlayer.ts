@@ -84,8 +84,7 @@ export async function createMusicStream(
     if (["DE"].includes(lookExistChallengeC) === false) {
         if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc))) {
             c.header('X-Player', "lavalink");
-            c.header('Content-Type', 'text/plain');
-            if (!checkAccept) c.header('Content-Encoding', 'br');
+            c.header('Content-Type', 'video/mpeg');
             c.header('Cache-Control', 'public, max-age=0, must-revalidate');
             c.status(403);
             return stream(c, async (s: any) => {

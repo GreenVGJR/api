@@ -397,7 +397,7 @@ let keytumblr: string | undefined = "aIcXSOoTtqrzR8L8YEIOmBeW94c3FmbSNSWAUbxsny9
 let saweriaBuildId: string | undefined;
 let twitterDocument: any;
 let twitterTransaction: any;
-let twitterAuth: string | undefined;
+let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 let twitterObj: any = {};
 let konaSummary: any;
 
@@ -790,8 +790,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
         const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
         const res1 = await pul1.text();
-        twitterAuth = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
-
+        
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
             ?.split('"')[1];

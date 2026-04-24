@@ -78,12 +78,14 @@ export async function createMusicStream(
     c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
     const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
+    const checkAccept = c.req.header('accept') === 'application/json';
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
     const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
     if (["DE"].includes(lookExistChallengeC) === false) {
         if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc))) {
             c.header('X-Player', "lavalink");
-            c.header('Content-Type', 'video/mpeg');
+            c.header('Content-Type', 'text/plain');
+            if (!checkAccept) c.header('Content-Encoding', 'br');
             c.header('Cache-Control', 'public, max-age=0, must-revalidate');
             c.status(403);
             return stream(c, async (s: any) => {

@@ -240,14 +240,10 @@ import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
 
 const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 
-
 const app = new Hono({ strict: false });
 
 app.use('*', (c: Context, next: Next) => {
-    if (c.req.header('user-agent')?.startsWith('Mozilla/5.0')) {
-        return compress({ encoding: 'gzip', threshold: 0 })(c, next);
-    }
-    return compress()(c, next);
+    return compress({ encoding: 'gzip', threshold: 0 })(c, next);
 });
 
 const challengeHtml = (verifyUrl: string) => `
@@ -448,13 +444,14 @@ if (BUILD_ID) {
 }
 
 app.get('/favicon.ico', (c: Context) => {
-    c.header('Cache-Control', 'public, max-age=60');
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'image/x-icon');
     return c.body(favicon);
 });
 
 app.get('/robots.txt', (c: Context) => {
-    c.header('Cache-Control', 'public, max-age=60');
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    c.header('Content-Type', 'text/plain');
     return c.text(robots, 200);
 });
 
@@ -481,7 +478,7 @@ app.get('/playground', (c: Context) => {
     const host = (c.req.header('host') || '').toLowerCase();
 
     c.header('Content-Type', 'text/html');
-    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
 
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
@@ -498,61 +495,31 @@ app.get('/playground', (c: Context) => {
     });
 });
 
-app.get('/playground/main.js', (c: Context) => {
-    const v = c.req.query('v');
-    const destSecret = c.req.header('Sec-Fetch-Dest');
-    if (destSecret !== 'script') return c.body(null, 403);
-
-    const clientSecret = c.req.header('X-Client-Secret') || "0";
-    const expectedHash = crypto.createHash('md5').update(clientSecret).update(destSecret).digest('hex');
-
-    if (!v) {
-        return c.redirect('/playground/main.js?v=' + expectedHash, 302);
-    }
-
-    if (v !== expectedHash) {
-        return c.body(null, 403);
-    }
-
-    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    return c.body(mainJs);
-});
+    await s.write('');
 
-app.get('/playground/cf.js', (c: Context) => {
-    const v = c.req.query('v');
-    const destSecret = c.req.header('Sec-Fetch-Dest');
-    if (destSecret !== 'script') return c.body(null, 403);
+    await s.write(mainJs);
+}));
 
-    const clientSecret = c.req.header('X-Client-Secret') || "0";
-    const expectedHash = crypto.createHash('md5').update(clientSecret).update(destSecret).digest('hex');
-
-    if (!v) {
-        return c.redirect('/playground/cf.js?v=' + expectedHash, 302);
-    }
-
-    if (v !== expectedHash) {
-        return c.body(null, 403);
-    }
-
-    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+app.get('/playground/cf.js', (c: Context) => stream(c, async (s) => {
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    return c.body(cfJs);
-});
+    await s.write('');
+
+    await s.write(cfJs);
+}));
 
 app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
-    const host = (c.req.header('host') || '').toLowerCase();
-    const referer = c.req.header('referer') || '';
-    const refPath = referer.split('?')[0].replace(/\/$/, '');
-
-    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'text/css');
     await s.write('');
 
     await s.write(mainCss);
 }));
 
-app.get('/', (c: Context) => {
+app.get('/', (c: Context) => stream(c, async (l) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
     c.header('X-Net', isMozilla ? 'true' : 'false');
     const renderJson = c.req.query('json') !== undefined || c.req.header('accept')?.includes('application/json');
@@ -560,6 +527,9 @@ app.get('/', (c: Context) => {
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
     c.header('Location', '/playground');
+
+    c.status(renderJson ? 200 : 302);
+    await l.write('');
 
     const seconds = Math.floor((Date.now() - starttime) / 1000);
     const h = Math.floor(seconds / 3600);
@@ -605,8 +575,8 @@ app.get('/', (c: Context) => {
         _visitor: clientHeaders
     }];
 
-    return c.body(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2), renderJson ? 200 : 302);
-});
+    await l.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
+}));
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : '';
 const apiPrefixesRoute = ['/search', '/lyrics', '/tools', '/info', '/profile', '/music'];
@@ -667,7 +637,7 @@ app.use('*', async (c: Context, next: Next) => {
 
 export default {
     port: port,
-    hostname: "127.0.0.1",
+    hostname: "0.0.0.0",
     fetch: app.fetch,
-    idleTimeout: 0
+    idleTimeout: 255
 };

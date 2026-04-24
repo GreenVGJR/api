@@ -116,7 +116,9 @@ async function performRequest(targetUrl, retryCount = 0) {
     try {
         const startTime = performance.now();
         const parseUrl = new URL(targetUrl);
-        const headers = { 'Accept': 'application/json' };
+        const headers = {
+            'Accept': 'application/json'
+        };
         if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
             headers['X-Challenge-Codes'] = btoa(encodeURIComponent(solvedChallengeCode));
         }

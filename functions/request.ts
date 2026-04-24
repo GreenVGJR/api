@@ -6676,7 +6676,7 @@ function resolvePermissions(permissions: string | bigint | null | undefined): st
     return resolved;
 }
 
-function getMemberPermissions(member: any, rolesData: any[], guildData: any, guildId: string): { permissions: string, permissions_resolved: string[] } {
+function getMemberPermissions(member: any, rolesData: any[], guildData: any, guildId: string): { permissions: string; permissions_resolved: { array: string[]; string: string } } {
     const ownerId = guildData?.owner_id;
     const everyoneRole = rolesData.find((r: any) => r.id === guildId);
     let permissions = BigInt(everyoneRole?.permissions || '0');

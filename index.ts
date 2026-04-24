@@ -45,6 +45,7 @@ const API_ROUTES = {
         "/search/safebooru?q=",
         "/search/konachan?q=",
         "/search/imdb?q=",
+        "/search/tumblr?q=",
         "/search/imgflip?q=",
         "/search/flickr?q=",
         "/search/istockphoto?q=",

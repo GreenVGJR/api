@@ -171,18 +171,20 @@ interface ManagedPlayer {
     contextCached?: boolean;
 }
 
-const players = new Map<string, ManagedPlayer>();
+const g = globalThis as any;
+
+const players: Map<string, ManagedPlayer> = g.__vgjr_players || (g.__vgjr_players = new Map<string, ManagedPlayer>());
 
 // Persistent 24/7 state: "token:guildId" → true/false
 // Stored separately so it survives Lavalink player object recreation
-const state247 = new Map<string, boolean>();
+const state247: Map<string, boolean> = g.__vgjr_state247 || (g.__vgjr_state247 = new Map<string, boolean>());
 
 // Last known voice channel per guild: "token:guildId" → voiceChannelId
 // Used as fallback when playerDestroy fires after voiceChannelId is already null
-const lastVoiceChannel = new Map<string, string>();
+const lastVoiceChannel: Map<string, string> = g.__vgjr_lastVoiceChannel || (g.__vgjr_lastVoiceChannel = new Map<string, string>());
 
 // Persistent voice status settings: "token:guildId" → { trackStart: { status, content }, ... }
-export const voiceStatusStore = new Map<string, any>();
+export const voiceStatusStore: Map<string, any> = g.__vgjr_voiceStatusStore || (g.__vgjr_voiceStatusStore = new Map<string, any>());
 
 export function getVoiceStatusSettings(token: string, guildId: string) {
     const key = `${token}:${guildId}`;

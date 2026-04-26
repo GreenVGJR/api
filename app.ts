@@ -478,24 +478,18 @@ app.get('/playground', (c: Context) => {
 app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    await s.write('');
-
     await s.write(mainJs);
 }));
 
 app.get('/playground/cf.js', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    await s.write('');
-
     await s.write(cfJs);
 }));
 
 app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'text/css');
-    await s.write('');
-
     await s.write(mainCss);
 }));
 

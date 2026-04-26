@@ -78,7 +78,7 @@ export async function createMusicStream(
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
-    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DEA";
+    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     const checkAccept = c.req.header('accept') === 'application/json';
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
     const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject

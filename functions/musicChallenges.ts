@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 const smellyFeel = "fda0bd57ec7312592992772bdb8780cadbcb884d59b4ca79b5ed45a680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 1000 }, (_, i) => {
+export const xt = Array.from({ length: 500 }, (_, i) => {
     return (hash[i % hash.length] * (i + 1) + 123) % 1000;
 });
 
@@ -13,19 +13,19 @@ function xorEncrypt(text: string, key: string): string {
     for (let i = 0; i < data.length; i++) {
         data[i] ^= mask[i % mask.length];
     }
-    return data.toString('hex');
+    return data.toString('base64url');
 }
 
-function xorDecrypt(hex: string, key: string): string {
+function xorDecrypt(base64: string, key: string): string {
     const mask = crypto.createHash('sha256').update(key).digest();
-    const data = Buffer.from(hex, 'hex');
+    const data = Buffer.from(base64, 'base64url');
     for (let i = 0; i < data.length; i++) {
         data[i] ^= mask[i % mask.length];
     }
     return data.toString();
 }
 
-export function pullInfo(r: string, q: string) {
+export function pullInfo(r: string, q: string, s: string) {
     const ip = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
     const time = Date.now().toString();
     const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
@@ -37,10 +37,10 @@ export function pullInfo(r: string, q: string) {
     } while (keyIndex === xtIndex);
 
     const obfuscatedXt = xt.map((val, i) => i === keyIndex ? q : xorEncrypt(val.toString(), q));
-    const mx = btoa(JSON.stringify(obfuscatedXt, null, 10));
+    const mx = btoa(JSON.stringify(obfuscatedXt));
+    const cPayload = JSON.stringify([mx, 1000, [slicekf, ip], btoa(time), xtIndex, keyIndex]);
 
-    return {
-        _message: "Germany (DE) only. Outside that, you need to solve this challenge.",
+    const fullResponse = {
         _submit: {
             name: "x-challenge-codes",
             type: ["GET", "header", 1],
@@ -48,8 +48,10 @@ export function pullInfo(r: string, q: string) {
             challengeExpire: 7200000
         },
         data: { type: { primary: "error", alt: "challenge" } },
-        c: btoa(JSON.stringify([mx, 1000, [slicekf, ip], btoa(time), xtIndex, keyIndex]))
-    }
+        c: btoa(cPayload)
+    };
+    
+    return xorEncrypt(JSON.stringify(fullResponse), s);
 }
 
 type ChallengeResponse = [string, number, [string, string], string, number, number];
@@ -59,7 +61,9 @@ export async function verifyChallenge(responseStr: string | undefined | null, r:
 
     let response: ChallengeResponse;
     try {
-        response = JSON.parse(decodeURIComponent(atob(responseStr)));
+        let decoded = decodeURIComponent(atob(responseStr));
+        decoded = xorDecrypt(decoded, q);
+        response = JSON.parse(decoded);
     } catch (e) {
         return false;
     }

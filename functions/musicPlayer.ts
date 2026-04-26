@@ -4,6 +4,7 @@ import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
 import { pullInfo, verifyChallenge } from './musicChallenges.ts';
+import { Number_random } from './request.ts';
 
 // ─── Voice Status API Helper ───────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export async function createMusicStream(
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
-    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
+    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DEA";
     const checkAccept = c.req.header('accept') === 'application/json';
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
     const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
@@ -86,10 +87,12 @@ export async function createMusicStream(
             c.header('X-Player', "lavalink");
             c.header('Content-Type', 'video/mpeg');
             c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+            const rrkc = String(Number_random(1000000, 9999999));
+            c.header('Enc-Data', rrkc);
             c.status(403);
             return stream(c, async (s: any) => {
                 await s.write('');
-                await s.write(JSON.stringify(pullInfo(ipLL, rrmc)));
+                await s.write(pullInfo(ipLL, rrmc, rrkc));
             });
         }
     }

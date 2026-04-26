@@ -163,13 +163,28 @@ async function performRequest(targetUrl, retryCount = 0) {
         } else {
             responseArea.classList.remove('empty-state');
 
-            const text = await response.text();
+            let text = await response.text();
             duration = Math.round(performance.now() - startTime);
+
+            let decryptedText = text;
+            const encKey = response.headers.get('enc-data');
+            if (encKey) {
+                // Remove potential quotes and trim
+                let cleanText = text.trim();
+                if (cleanText.startsWith('"') && cleanText.endsWith('"')) {
+                    cleanText = cleanText.substring(1, cleanText.length - 1);
+                }
+                try {
+                    decryptedText = await xorDecrypt(cleanText, encKey);
+                } catch (e) {
+                    console.error("Decryption failed:", e);
+                }
+            }
 
             const isLavalink = response.headers.get('x-player') === 'lavalink';
             if (response.status === 403 && isLavalink && retryCount < 4) {
                 try {
-                    const data = JSON.parse(text);
+                    const data = JSON.parse(decryptedText);
                     if (data && data.c && data._submit) {
                         responseArea.innerHTML = '<span class="text-mint-400 loading flex h-full items-center justify-center">Solving challenge...</span>';
                         const solved = await solveChallenge(data.c);
@@ -188,14 +203,16 @@ async function performRequest(targetUrl, retryCount = 0) {
             let isJson = false;
 
             try {
-                const data = JSON.parse(text);
-                formatted = JSON.stringify(data, null, 2);
-                isJson = true;
+                const data = JSON.parse(decryptedText);
+                if (decryptedText === text) {
+                    formatted = JSON.stringify(data, null, 2);
+                    isJson = true;
+                }
                 resultData = data;
             } catch {
             }
 
-            lastRawResponse = text;
+            lastRawResponse = decryptedText;
 
             responseArea.innerHTML = '<pre style=\"white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere;\"></pre>';
             const preElement = responseArea.querySelector('pre');

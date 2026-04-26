@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 const smellyFeel = "fda0bd57ec7312592992772bdb8780cadbcb884d59b4ca79b5ed45a680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 500 }, (_, i) => {
+export const xt = Array.from({ length: 250 }, (_, i) => {
     return (hash[i % hash.length] * (i + 1) + 123) % 1000;
 });
 

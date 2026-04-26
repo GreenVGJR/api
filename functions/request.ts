@@ -6784,6 +6784,9 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
             banner_url: bannerUrl,
             badges: publicFlagsBadges,
             badges_raw: flagsBadges,
+            joined_at: data.joined_at ? String(Math.floor(new Date(data.joined_at).getTime() / 1000)) : null,
+            premium_since: data.premium_since ? String(Math.floor(new Date(data.premium_since).getTime() / 1000)) : null,
+            created_at: userData?.id ? String(getSnowflakeDate(userData.id)) : null
         };
 
         return { data: result };

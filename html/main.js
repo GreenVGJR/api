@@ -690,4 +690,20 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
+function updateUptime() {
+    const uptimeDisplay = document.getElementById('uptimeDisplay');
+    if (!uptimeDisplay || !window.SERVER_STARTTIME) return;
+
+    const diff = Math.floor((Date.now() - window.SERVER_STARTTIME) / 1000);
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+    
+    uptimeDisplay.textContent = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+}
+
+setInterval(updateUptime, 1000);
+updateUptime();
+
 fetchInitialEndpoints();

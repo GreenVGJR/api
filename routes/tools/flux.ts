@@ -26,7 +26,7 @@ return c.json({"error":"Nothing to do"}, 202);
     const CF_AID = process.env.CF_AID;
     const CF_TOKEN = process.env.CF_TOKEN;
 
-    c.header('X-Route', 'api.cloudflare.com, fast-flux-demo.vercel.app');
+    c.header('X-Route', 'api.cloudflare.com, fast-flux-demo.replicate.workers.dev');
 
     if (CF_AID && CF_TOKEN) {
         try {

@@ -56,8 +56,12 @@ export function pullInfo(r: string, q: string, s: string) {
 
 type ChallengeResponse = [string, number, [string, string], string, number, number];
 
-export async function verifyChallenge(responseStr: string | undefined | null, r: string, q: string): Promise<boolean> {
+export async function verifyChallenge(responseStr: string | undefined | null, r: string, q: string, ouuid: string): Promise<boolean> {
     if (!responseStr) return false;
+
+    if (!ouuid || !ouuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        return false;
+    }
 
     let response: ChallengeResponse;
     try {

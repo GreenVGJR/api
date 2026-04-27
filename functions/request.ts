@@ -401,6 +401,8 @@ let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejR
 let twitterObj: any = {};
 let konaSummary: any;
 
+let googleImgSpAuth: any = {};
+
 function deepFind(obj: unknown, key: string): unknown | null {
     if (!obj || typeof obj !== 'object') return null;
     if (Array.isArray(obj)) {
@@ -440,6 +442,23 @@ function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] 
         .map(c => c.trim())
         .filter(c => allowedKeys.includes(c.split('=')[0]))
         .join('; ');
+}
+
+export const googleAuthKey = async function googleAuthKey() {
+    try {
+        const res = await request(`https://cse.google.com/cse.js?hpg=1&cx=${process.env.GOOG_CX}`, {
+            headers: {
+                ...commonHeaders,
+            },
+            useH2: true
+        });
+        if (res.statusCode !== 200) return undefined;
+        const text = await res.text;
+        const extractObject = text?.split('})(')?.[1]?.slice(0, -2);
+        return JSON.parse(extractObject);
+    } catch {
+        return undefined;
+    }
 }
 
 export const giphyKey = async function giphyKey() {
@@ -790,7 +809,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
         const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
 
         const res1 = await pul1.text();
-        
+
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
             ?.split('"')[1];
@@ -863,7 +882,7 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
     }
 
     try {
-        const per = await request(`https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${que}&per_page=${limit_number}`, {
+        const per = await request(`https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${encodeURIComponent(que)}&per_page=${limit_number}`, {
             headers: commonHeaders,
             useH2: true
         });
@@ -5526,7 +5545,7 @@ export async function googleWeather(query: string): Promise<any> {
     if (!query) return null;
 
     try {
-        const l = await request(`https://www.bing.com/api/v6/Places/AutoSuggest?q=${query}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`, {
+        const l = await request(`https://www.bing.com/api/v6/Places/AutoSuggest?q=${encodeURIComponent(query)}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`, {
             headers: { ...commonHeaders }
         });
 
@@ -6848,13 +6867,13 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             if (permission !== 'all') {
                 const requestedPerms = permission.split(',').map(p => p.trim().toLowerCase());
                 const permBits = requestedPerms.map(p => PERMISSION_KEYS[p]).filter(b => b !== undefined) as bigint[];
-                
+
                 if (permBits.length > 0) {
                     data = data.filter((member: any) => {
                         const memberPerms = BigInt(member.permissions);
                         // Administrator matches everything
                         if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
-                        
+
                         // Check if member has ALL requested permissions
                         return permBits.every(bit => (memberPerms & bit) === bit);
                     });
@@ -7036,7 +7055,7 @@ export const ImgurPost = async (query: string, refresh_auth: boolean = false): P
     }
 
     try {
-        const req = await request(`https://api.imgur.com/post/v1/posts/t/${query}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
+        const req = await request(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
         if (req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
         const res: any = await req.json();
         return { data: res?.posts || null };
@@ -7281,7 +7300,7 @@ export const PatreonSearch = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const res = await request(`https://www.patreon.com/api/search?q=${query}`, {
+        const res = await request(`https://www.patreon.com/api/search?q=${encodeURIComponent(query)}`, {
             headers: {
                 ...commonHeaders
             }
@@ -7306,7 +7325,7 @@ export const Trakteer = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const res = await request(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${query}`, {
+        const res = await request(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${encodeURIComponent(query)}`, {
             headers: {
                 ...commonHeaders
             }
@@ -7814,7 +7833,7 @@ export const CrunchySearch = async function CrunchySearch(que: string, refresh_a
             keycrunchy = await crunchyKey();
         }
 
-        const per = await request(`https://beta-api.crunchyroll.com/content/v2/discover/search?q=${que}&n=20&type=series,episode,top_results&ratings=true&locale=en`, {
+        const per = await request(`https://beta-api.crunchyroll.com/content/v2/discover/search?q=${encodeURIComponent(que)}&n=20&type=series,episode,top_results&ratings=true&locale=en`, {
             headers: {
                 ...commonHeaders,
                 'Accept': 'application/json',
@@ -7851,7 +7870,7 @@ export const SafeBooru = async function SafeBooru(que: string) {
     if (!que) return null;
 
     try {
-        const per = await request(`https://safebooru.org/autocomplete.php?q=${que}`, {
+        const per = await request(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
             },
@@ -7965,7 +7984,7 @@ export const Tumblr = async (query: string): Promise<any> => {
     if (!query) return null;
 
     try {
-        const res = await request(`https://api.tumblr.com/v2/timeline/search?limit=40&query=${query}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`, {
+        const res = await request(`https://api.tumblr.com/v2/timeline/search?limit=40&query=${encodeURIComponent(query)}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`, {
             headers: {
                 ...commonHeaders,
                 'Authorization': 'Bearer ' + keytumblr
@@ -7990,6 +8009,248 @@ export const Tumblr = async (query: string): Promise<any> => {
         }
     }
     catch {
+        return null;
+    }
+}
+
+export const googleImgSearch = async (query: string, sort: string = 'relevance'): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const dateRestrictParam = sort === 'latest' ? '&dateRestrict=d1' : '';
+
+        const fetchPage = (start: number) => {
+            return request(`https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&prettyPrint=false&searchType=image&num=10&start=${start}${dateRestrictParam}&cx=${process.env.GOOG_CX}`, {
+                headers: {
+                    ...commonHeaders,
+                    'Referer': process.env.GOOG_RX || '',
+                    'X-Goog-Api-Key': process.env.GOOG_EX || ''
+                },
+                useH2: true
+            });
+        };
+
+        const [res1, res2] = await Promise.all([
+            fetchPage(1).catch(() => ({ statusCode: 500, json: async () => ({}) } as any)),
+            fetchPage(11).catch(() => ({ statusCode: 500, json: async () => ({}) } as any))
+        ]);
+
+        const isOk1 = res1.statusCode === 200;
+        const isOk2 = res2.statusCode === 200;
+
+        if (!isOk1 && !isOk2) {
+            if (res1.statusCode === 503) return { error: "Service unavailable" };
+            if (res1.statusCode === 429) return { error: "Rate-limited" };
+            return null;
+        }
+
+        const response1 = isOk1 ? await res1.json() : {};
+        const response2 = isOk2 ? await res2.json() : {};
+
+        const res = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        const resText = res.text;
+        let suggestions: string[] = [];
+        try {
+            const jsonString = resText.replace(/^window\.google\.ac\.h\(/, '').replace(/\)$/, '');
+            const parsed = JSON.parse(jsonString);
+            if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+                suggestions = parsed[0].map((item: any) => {
+                    return typeof item[0] === 'string' ? item[0].replace(/<\/?b>/g, '') : '';
+                }).filter(Boolean);
+            }
+        } catch (e) {
+            // Ignore parse errors
+        }
+
+        const combinedItems = [...(response1.items || []), ...(response2.items || [])];
+        const validResponse = response1.queries ? response1 : response2;
+
+        let filterResponse = {};
+        if (validResponse.queries?.request?.[0]) {
+            const { cx, count, startIndex, ...rest } = validResponse.queries.request[0];
+            filterResponse = rest;
+        }
+
+        return {
+            data: {
+                autocomplete: suggestions,
+                ...filterResponse,
+                sort: sort,
+                items: combinedItems,
+            }
+        }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = false): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        if (refresh_auth || !googleImgSpAuth?.cx) {
+            googleImgSpAuth = await googleAuthKey();
+        }
+
+        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth.uiOptions.resultSetSize}&hl=${googleImgSpAuth.language}&source=gcsc&cselibv=${googleImgSpAuth.cselibVersion}&searchtype=image&cx=${googleImgSpAuth.cx}&${googleImgSpAuth.uiOptions.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth.exp.join(','))}&fexp=${encodeURIComponent(googleImgSpAuth.fexp.join(','))}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth.uiOptions.resultsUrl)}`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 403) {
+            return {
+                error: "Google asking to verify you're not a bot"
+            }
+        }
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        let raw = res.text;
+
+        if (!raw) {
+            return { data: null }
+        }
+
+        const jsonpMatch = raw.match(/^\/\*.*?\*\/\s*\w[\w.]*\(([\s\S]+)\);?\s*$/);
+        if (jsonpMatch) {
+            raw = jsonpMatch[1];
+        }
+
+        if (raw.trim().startsWith('<')) {
+            return { error: "Google asking to verify you're not a bot" };
+        }
+
+                const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        const resText = res2.text;
+        let suggestions: string[] = [];
+        try {
+            const jsonString = resText.replace(/^window\.google\.ac\.h\(/, '').replace(/\)$/, '');
+            const parsed = JSON.parse(jsonString);
+            if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+                suggestions = parsed[0].map((item: any) => {
+                    return typeof item[0] === 'string' ? item[0].replace(/<\/?b>/g, '') : '';
+                }).filter(Boolean);
+            }
+        } catch (e) {
+            // Ignore parse errors
+        }
+
+        const response = JSON.parse(raw);
+
+        return {
+            data: {
+                autocomplete: suggestions,
+                estimatedResultCount: response.cursor?.estimatedResultCount || "0",
+                searchResultTime: response.cursor?.searchResultTime || "0",
+                items: response.results || []
+            }
+        }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const googleSearch = async (query: string, refresh_auth: boolean = false): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        if (refresh_auth || !googleImgSpAuth?.cx) {
+            googleImgSpAuth = await googleAuthKey();
+        }
+
+        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth.uiOptions.resultSetSize}&hl=${googleImgSpAuth.language}&source=gcsc&cselibv=${googleImgSpAuth.cselibVersion}&cx=${googleImgSpAuth.cx}&${googleImgSpAuth.uiOptions.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth.exp.join(','))}&fexp=${encodeURIComponent(googleImgSpAuth.fexp.join(','))}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth.uiOptions.resultsUrl)}`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 403) {
+            return {
+                error: "Google asking to verify you're not a bot"
+            }
+        }
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        let raw = res.text;
+
+        if (!raw) {
+            return { data: null }
+        }
+
+        const jsonpMatch = raw.match(/^\/\*.*?\*\/\s*\w[\w.]*\(([\s\S]+)\);?\s*$/);
+        if (jsonpMatch) {
+            raw = jsonpMatch[1];
+        }
+
+        if (raw.trim().startsWith('<')) {
+            return { error: "Google asking to verify you're not a bot" };
+        }
+
+        const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        const resText = res2.text;
+        let suggestions: string[] = [];
+        try {
+            const jsonString = resText.replace(/^window\.google\.ac\.h\(/, '').replace(/\)$/, '');
+            const parsed = JSON.parse(jsonString);
+            if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+                suggestions = parsed[0].map((item: any) => {
+                    return typeof item[0] === 'string' ? item[0].replace(/<\/?b>/g, '') : '';
+                }).filter(Boolean);
+            }
+        } catch (e) {
+            // Ignore parse errors
+        }
+
+        const response = JSON.parse(raw);
+
+        return {
+            data: {
+                autocomplete: suggestions,
+                estimatedResultCount: response.cursor?.estimatedResultCount || "0",
+                searchResultTime: response.cursor?.searchResultTime || "0",
+                items: response.results?.map((a: any) => {
+                    const { clicktrackUrl, ...c } = a;
+                    return c;
+                }) || []
+            }
+        }
+    }
+    catch (e) {
+        console.error(e);
         return null;
     }
 }

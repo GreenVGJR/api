@@ -37,6 +37,9 @@ const API_ROUTES = {
         "/search/genius?q=",
         "/search/audiomack?q=&type=",
         "/search/pinterest?q=",
+        "/search/google?q=",
+        "/search/googleImage?q=&sort=",
+        "/search/googleImage/cse?q=",
         "/search/safebooru?q=",
         "/search/konachan?q=",
         "/search/imdb?q=",
@@ -103,8 +106,7 @@ const API_ROUTES = {
         },
         misc: [
             "/tools/translate?q=&from=&to=",
-            "/tools/timezone?q=",
-            "/tools/ffmpeg/interpolate?videoUrl=&multi="
+            "/tools/timezone?q="
         ],
         discord: {
             stream: [

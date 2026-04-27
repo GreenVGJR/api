@@ -1,3 +1,5 @@
+// Discontinue
+
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { spawn } from 'child_process';
@@ -8,6 +10,7 @@ import crypto from 'crypto';
 
 const app = new Hono();
 
+/*
 app.get('/ffmpeg/interpolate', async (c) => {
     const videoUrl = c.req.query('videoUrl');
     const multi = parseFloat(c.req.query('multi') || '2');
@@ -133,5 +136,6 @@ app.get('/ffmpeg/interpolate', async (c) => {
         return c.json({ error: "Failed to process video" }, 500);
     }
 });
+*/
 
 export default app;

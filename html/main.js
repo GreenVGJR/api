@@ -1,3 +1,7 @@
+if (document.referrer && new URL(document.referrer).origin !== window.location.origin) {
+    window.location.replace(window.location.href);
+}
+
 let endpoints = {
     search: [],
     profile: [],
@@ -95,6 +99,7 @@ function flattenRoutes(obj, parentPath = '') {
 
 
 let solvedChallengeCode = null;
+let knownDeviceID = null;
 
 async function performRequest(targetUrl, retryCount = 0) {
     if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
@@ -121,6 +126,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         };
         if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
             headers['X-Challenge-Codes'] = btoa(encodeURIComponent(solvedChallengeCode));
+            headers['X-HS-PlaygroundID'] = knownDeviceID;
         }
 
         const response = await fetch(targetUrl, { headers });
@@ -167,7 +173,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             duration = Math.round(performance.now() - startTime);
 
             let decryptedText = text;
-            const encKey = response.headers.get('enc-data');
+            const encKey = response.headers.get('enc-data')?.slice(0, 10);
             if (encKey) {
                 // Remove potential quotes and trim
                 let cleanText = text.trim();
@@ -176,9 +182,8 @@ async function performRequest(targetUrl, retryCount = 0) {
                 }
                 try {
                     decryptedText = await xorDecrypt(cleanText, encKey);
-                } catch (e) {
-                    console.error("Decryption failed:", e);
-                }
+                    knownDeviceID = JSON.parse(atob(response.headers.get('enc-data')?.slice(10))).join('-');
+                } catch { }
             }
 
             const isLavalink = response.headers.get('x-player') === 'lavalink';
@@ -716,7 +721,7 @@ function updateUptime() {
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
     const s = diff % 60;
-    
+
     uptimeDisplay.textContent = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
 }
 

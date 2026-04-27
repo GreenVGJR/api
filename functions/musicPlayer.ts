@@ -80,15 +80,18 @@ export async function createMusicStream(
 
     const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     const checkAccept = c.req.header('accept') === 'application/json';
+    const checkReferer = c.req.header('referer')?.endsWith('/playground');
     const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
     const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
+    const rrmi = c.req.header('x-hs-playgroundid');
     if (["DE"].includes(lookExistChallengeC) === false) {
-        if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc))) {
+        if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc, rrmi))) {
             c.header('X-Player', "lavalink");
-            c.header('Content-Type', 'video/mpeg');
-            c.header('Cache-Control', 'public, max-age=0, must-revalidate');
-            const rrkc = String(Number_random(1000000, 9999999));
-            c.header('Enc-Data', rrkc);
+            c.header('Content-Type', checkAccept && checkReferer ? 'text/event-stream' : 'video/mpeg');
+            c.header('Cache-Control', 'public, no-store, max-age=0, must-revalidate');
+            const rrkc = String(Number_random(1000000000, 9999999999));
+            const rakc = crypto.randomUUID().split('-');
+            c.header('Enc-Data', rrkc + btoa(JSON.stringify(rakc)));
             c.status(403);
             return stream(c, async (s: any) => {
                 await s.write('');

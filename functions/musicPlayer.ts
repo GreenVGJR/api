@@ -78,7 +78,7 @@ export async function createMusicStream(
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
-    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DEA";
+    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     if (["DE"].includes(lookExistChallengeC) === false) {
         const checkAccept = c.req.header('accept') === 'application/json';
         const checkReferer = c.req.header('referer')?.endsWith('/playground');

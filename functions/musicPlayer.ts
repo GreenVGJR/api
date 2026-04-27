@@ -78,7 +78,7 @@ export async function createMusicStream(
     c.header('Content-Type', 'application/json');
     c.header('Cache-Control', 'public, no-transform, max-age=0, must-revalidate');
 
-    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
+    const lookExistChallengeC = c.req.header('cf-ipcountry') || "DEA";
     if (["DE"].includes(lookExistChallengeC) === false) {
         const checkAccept = c.req.header('accept') === 'application/json';
         const checkReferer = c.req.header('referer')?.endsWith('/playground');
@@ -92,12 +92,17 @@ export async function createMusicStream(
             const rrkc = String(Number_random(1000000000, 9999999999));
             const rakc = crypto.randomUUID().split('-');
             if (checkAccept && checkReferer) c.header('Enc-Data', rrkc + btoa(JSON.stringify(rakc)));
-            c.status(checkAccept && checkReferer ? 302 : 304);
+            c.status(302);
             c.header('Access-Control-Allow-Origin', new URL(c.req.url).origin);
-            return stream(c, async (s: any) => {
-                await s.write('');
-                await s.write(pullInfo(ipLL, rrmc, rrkc));
-            });
+            if (checkAccept && checkReferer) {
+                return stream(c, async (s: any) => {
+                    await s.write('');
+                    await s.write(pullInfo(ipLL, rrmc, rrkc));
+                });
+            }
+            else {
+                return c.body(null);
+            }
         }
     }
 

@@ -129,7 +129,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             headers['X-HS-PlaygroundID'] = knownDeviceID;
         }
 
-        const response = await fetch(targetUrl, { headers });
+        const response = await fetch(targetUrl, { headers, cache: "reload" });
 
         responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';

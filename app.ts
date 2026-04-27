@@ -40,6 +40,7 @@ const API_ROUTES = {
         "/search/google?q=",
         "/search/googleImage?q=&sort=",
         "/search/googleImage/cse?q=",
+        "/search/duckduckgo?q=",
         "/search/safebooru?q=",
         "/search/konachan?q=",
         "/search/imdb?q=",

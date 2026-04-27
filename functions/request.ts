@@ -8134,7 +8134,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
             return { error: "Google asking to verify you're not a bot" };
         }
 
-                const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+        const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
             headers: {
                 ...commonHeaders
             },
@@ -8248,6 +8248,138 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
                 }) || []
             }
         }
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const duckSearch = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const res = await request(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
+            headers: {
+                ...commonHeaders,
+                'Cookie': 'p=-2'
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        const linkstarget = res.text.split("initialize('")?.[1]?.split("',")?.[0];
+
+        const res2 = await request(`https://links.duckduckgo.com${linkstarget}`, {
+            headers: {
+                ...commonHeaders,
+                'Sec-Fetch-Dest': 'script',
+                'Sec-Fetch-Mode': 'no-cors',
+                'Sec-Fetch-Site': 'same-site'
+            },
+            useH2: true
+        });
+
+        if (res2.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res2.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        const final = res2.text;
+
+        // Extract instant answers from the leading JSON before the first semicolon
+        let instantAnswers: any = null;
+        try {
+            const iaMatch = final.match(/^(\{.*?\});/);
+            if (iaMatch) {
+                const iaJson = JSON.parse(iaMatch[1]);
+                instantAnswers = iaJson?.instantAnswers?.[0]?.data || null;
+            }
+        } catch { }
+
+        // Extract organic results from DDG.pageLayout.load('d', [...])
+        let organicResults: any[] = [];
+        try {
+            const organicMatch = final.match(/DDG\.pageLayout\) DDG\.pageLayout\.load\('d',\s*(\[[\s\S]*?\])\);/);
+            if (organicMatch) {
+                const parsed = JSON.parse(organicMatch[1]);
+                organicResults = parsed
+                    .filter((r: any) => r.u) // filter out pagination objects (they have 'n' key only)
+                    .map((r: any) => ({
+                        title: r.t || null,
+                        url: r.u || null,
+                        snippet: (r.a || '').replace(/<\/?b>/g, ''),
+                        domain: r.d || null,
+                        siteName: r.sn || null,
+                        icon: r.i ? `https://external-content.duckduckgo.com/ip3/${r.i}.ico` : null,
+                        siteLinks: r.l?.map((sl: any) => ({
+                            text: sl.text,
+                            url: sl.targetUrl,
+                            snippet: sl.snippet
+                        })) || [],
+                        date: r.e || null
+                    }));
+            }
+        } catch { }
+
+        // Extract related searches from DDG.duckbar.loadModule('related_searches', {...})
+        let relatedSearches: any[] = [];
+        try {
+            const relatedMatch = final.match(/DDG\.duckbar\.loadModule\('related_searches',\s*(\{[\s\S]*?\})\);/);
+            if (relatedMatch) {
+                const parsed = JSON.parse(relatedMatch[1]);
+                relatedSearches = parsed.results?.map((r: any) => ({
+                    text: r.text,
+                    displayText: (r.display_text || '').replace(/<\/?b>/g, '')
+                })) || [];
+            }
+        } catch { }
+
+        const res3 = await request(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        let autotext: any = {};
+
+        try {
+            autotext = JSON.parse(res3.text);
+        }
+        catch { }
+
+        return {
+            data: {
+                autocomplete: autotext?.map((a: any) => a.phrase) || [],
+                instantAnswer: instantAnswers ? {
+                    answer: instantAnswers.answer || null,
+                    expandedAnswer: instantAnswers.expanded_answer || null,
+                    sources: instantAnswers.sources || [],
+                    query: instantAnswers.query || query
+                } : null,
+                relatedSearches,
+                items: organicResults
+            }
+        };
     }
     catch (e) {
         console.error(e);

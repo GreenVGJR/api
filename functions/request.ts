@@ -3919,10 +3919,12 @@ export const Pexels = async function Pexels(que: string) {
     if (!que) return null;
 
     try {
-        const response = await request(`https://www.pexels.com/search/${encodeURIComponent(que)}`, {
+        const response = await request(`https://api.pexels.com/en-us/api/v2/search?per_page=20&query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
-            }
+                'Secret-Key': process.env.PEXELS
+            },
+            useH2: true
         });
 
         if (response.statusCode === 403) {
@@ -3930,13 +3932,20 @@ export const Pexels = async function Pexels(que: string) {
                 "error": "Cloudflare Turnstile asking to verify you're not a bot"
             };
         }
+
+        if (response.statusCode === 429) {
+            return {
+                "error": "Rate-limited"
+            };
+        }
+
         const html = await response.text;
         let pull = null;
         try {
-            pull = JSON.parse(html.split('"application/json">')?.[1]?.split('</script>')?.[0]);
+            pull = JSON.parse(html);
         }
         catch { }
-        return { data: pull?.props?.pageProps?.initialData || null };
+        return { data: pull || null };
     }
     catch (e) {
         console.error(e);

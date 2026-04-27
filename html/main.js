@@ -187,7 +187,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             }
 
             const isLavalink = response.headers.get('x-player') === 'lavalink';
-            if (response.status === 403 && isLavalink && retryCount < 4) {
+            if (response.status === 302 && isLavalink && retryCount < 4) {
                 try {
                     const data = JSON.parse(decryptedText);
                     if (data && data.c && data._submit) {
@@ -199,7 +199,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                         }
                     }
                 } catch (e) { }
-            } else if (response.status === 403 && isLavalink) {
+            } else if (response.status === 302 && isLavalink) {
                 solvedChallengeCode = null;
             }
 

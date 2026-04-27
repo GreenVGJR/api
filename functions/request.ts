@@ -3922,7 +3922,7 @@ export const Pexels = async function Pexels(que: string) {
         const response = await request(`https://api.pexels.com/en-us/api/v2/search?per_page=20&query=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders,
-                'Secret-Key': process.env.PEXELS
+                'Secret-Key': process.env.PEXELS || ''
             },
             useH2: true
         });

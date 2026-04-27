@@ -392,7 +392,8 @@ function isLocalRequest(host: string | undefined): boolean {
 app.use('*', cors({
     credentials: true,
     origin: '*',
-    exposeHeaders: ['X-Route']
+    exposeHeaders: ['X-Route'],
+    allowMethods: ['GET'],
 }));
 
 if (BUILD_ID) {

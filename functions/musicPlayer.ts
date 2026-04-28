@@ -3,7 +3,7 @@ import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-clien
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
-import { pullInfo, verifyChallenge } from './musicChallenges.ts';
+import { pullInfo, verifyChallenge, ipToNumber } from './musicChallenges.ts';
 import { Number_random } from './request.ts';
 
 // ─── Voice Status API Helper ───────────────────────────────────────────────
@@ -81,8 +81,16 @@ export async function createMusicStream(
     const lookExistChallengeC = c.req.header('cf-ipcountry') || "DE";
     if (["DE"].includes(lookExistChallengeC) === false) {
         const checkAccept = c.req.header('accept') === 'application/json';
-        const checkReferer = c.req.header('referer')?.endsWith('/playground');
-        const ipLL = c.req.header('cf-connecting-ip') || "127.0.0.1";
+        let checkReferer = false;
+        try {
+            const referer = c.req.header('referer');
+            if (referer) {
+                const refUrl = new URL(referer);
+                const reqUrl = new URL(c.req.url);
+                checkReferer = refUrl.host === reqUrl.host && referer.endsWith('/playground');
+            }
+        } catch { }
+        const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
         const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
         const rrmi = c.req.header('x-hs-playgroundid');
         if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc, rrmi))) {
@@ -92,7 +100,7 @@ export async function createMusicStream(
             const rrkc = String(Number_random(1000000000, 9999999999));
             const rakc = crypto.randomUUID().split('-');
             if (checkAccept && checkReferer) c.header('Enc-Data', rrkc + btoa(JSON.stringify(rakc)));
-            c.status(302);
+            c.status(checkAccept && checkReferer ? 302 : 403);
             c.header('Access-Control-Allow-Origin', new URL(c.req.url).origin);
             if (checkAccept && checkReferer) {
                 return stream(c, async (s: any) => {

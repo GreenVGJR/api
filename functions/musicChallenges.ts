@@ -1,9 +1,9 @@
 import { Number_random } from './request.ts';
 import crypto from 'crypto';
 
-const smellyFeel = "fda0bd57ec7312592992772bdb8780cadbcb884d59b4ca79b5ed45a680cc06b2";
+const smellyFeel = "fda0bd57ec7312592292772bdb8780cadbcb884d59b4cc79b5ed45f680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 250 }, (_, i) => {
+export const xt = Array.from({ length: 2000 }, (_, i) => {
     return (hash[i % hash.length] * (i + 1) + 123) % 1000;
 });
 
@@ -25,8 +25,16 @@ function xorDecrypt(base64: string, key: string): string {
     return data.toString();
 }
 
-export function pullInfo(r: string, q: string, s: string) {
-    const ip = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
+export function ipToNumber(ip: string): number | string {
+    if (ip.includes(':')) return ip;
+    const octets = ip.split('.');
+    if (octets.length !== 4) return ip;
+    return octets.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+export function pullInfo(r: string | number, q: string, s: string) {
+    const formattedIp = String(typeof r === 'number' ? r : ipToNumber(r));
+    const ip = crypto.createHash('md5').update(formattedIp).digest('hex');
     const time = Date.now().toString();
     const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
 
@@ -56,7 +64,7 @@ export function pullInfo(r: string, q: string, s: string) {
 
 type ChallengeResponse = [string, number, [string, string], string, number, number];
 
-export async function verifyChallenge(responseStr: string | undefined | null, r: string, q: string, ouuid: string): Promise<boolean> {
+export async function verifyChallenge(responseStr: string | undefined | null, r: string | number, q: string, ouuid: string): Promise<boolean> {
     if (!responseStr) return false;
 
     if (!ouuid || !ouuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
@@ -88,7 +96,8 @@ export async function verifyChallenge(responseStr: string | undefined | null, r:
             return false;
         }
 
-        expectedIp = crypto.createHash('md5').update(r.replaceAll('.', '-')).digest('hex');
+        const formattedIp = String(typeof r === 'number' ? r : ipToNumber(r));
+        expectedIp = crypto.createHash('md5').update(formattedIp).digest('hex');
         expectedSlice = crypto.createHash('md5').update(atob(time).slice(-4)).digest('hex').replace(/[^0-9]/g, '');
     }
     catch {

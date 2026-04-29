@@ -32,7 +32,7 @@ export function ipToNumber(ip: string): number | string {
     return octets.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
-export function pullInfo(r: string | number, q: string, s: string) {
+export function pullInfo(r: string | number, q: string, s: string, u?: string[]) {
     const formattedIp = String(typeof r === 'number' ? r : ipToNumber(r));
     const ip = crypto.createHash('md5').update(formattedIp).digest('hex');
     const time = Date.now().toString();

@@ -92,7 +92,7 @@ export async function createMusicStream(
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
         const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
-        const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v, i) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
+        const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v: string, i: number) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
         if (!(await verifyChallenge(rrma, ipLL, rrmc, rrmi))) {
             c.header('X-Player', "lavalink");
             c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');

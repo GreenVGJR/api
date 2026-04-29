@@ -467,22 +467,25 @@ app.get('/playground', (c: Context) => {
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
 
-        const isLocal = isLocalRequest(host);
-        const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
         const secFetchDest = c.req.header('Sec-Fetch-Dest');
         if (secFetchDest && secFetchDest !== 'document') return;
 
-        let html = playgroundTemplate
-            .replace('{{SSR_STATE}}', () => `<script>window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = "${btoa(JSON.stringify(PLAYGROUND_ENDPOINTS))}";</script>`);
-
-        await s.write(html);
+        await s.write(playgroundTemplate);
     });
 });
 
 app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    await s.write(mainJs);
+    
+    const host = (c.req.header('host') || '').toLowerCase();
+    const isLocal = isLocalRequest(host);
+    const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
+    
+    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = "${btoa(JSON.stringify(PLAYGROUND_ENDPOINTS))}";`;
+    const finalJs = mainJs.replace('{{SSR_STATE}}', stateJs);
+    
+    await s.write(finalJs);
 }));
 
 app.get('/playground/cf.js', (c: Context) => stream(c, async (s) => {

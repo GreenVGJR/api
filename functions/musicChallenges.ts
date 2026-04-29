@@ -3,8 +3,8 @@ import crypto from 'crypto';
 
 const smellyFeel = "fda0bd57ec7312592292772bdb8780cadbcb884d59b4cc79b5ed45f680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 2000 }, (_, i) => {
-    return (hash[i % hash.length] * (i + 1) + 123) % 1000;
+export const xt = Array.from({ length: 1000 }, (_, i) => {
+    return crypto.createHash('sha256').update(hash).update(i.toString()).digest('base64url');
 });
 
 function xorEncrypt(text: string, key: string): string {
@@ -51,14 +51,12 @@ export function pullInfo(r: string | number, q: string, s: string) {
     const fullResponse = {
         _submit: {
             name: "x-challenge-codes",
-            type: ["GET", "header", 1],
             challengeTarget: "c",
             challengeExpire: 7200000
         },
-        data: { type: { primary: "error", alt: "challenge" } },
         c: btoa(cPayload)
     };
-    
+
     return xorEncrypt(JSON.stringify(fullResponse), s);
 }
 
@@ -73,8 +71,14 @@ export async function verifyChallenge(responseStr: string | undefined | null, r:
 
     let response: ChallengeResponse;
     try {
-        let decoded = decodeURIComponent(atob(responseStr));
+        let decoded = decodeURIComponent(xorDecrypt(responseStr, ouuid));
         decoded = xorDecrypt(decoded, q);
+
+        const lastBracket = decoded.lastIndexOf(']');
+        if (lastBracket !== -1) {
+            decoded = decoded.slice(0, lastBracket + 1);
+        }
+
         response = JSON.parse(decoded);
     } catch (e) {
         return false;
@@ -119,6 +123,7 @@ export async function verifyChallenge(responseStr: string | undefined | null, r:
         .update(atob(time))
         .update(secretValue.toString())
         .update(ip)
+        .update(ouuid.replaceAll('-', ''))
         .digest('base64url');
 
     if (receivedHash !== expectedHash) {

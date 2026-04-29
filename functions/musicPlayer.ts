@@ -92,20 +92,22 @@ export async function createMusicStream(
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
         const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
-        const rrmi = c.req.header('x-hs-playgroundid');
-        if (!(await verifyChallenge(c.req.header('x-challenge-codes'), ipLL, rrmc, rrmi))) {
+        const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v, i) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
+        if (!(await verifyChallenge(rrma, ipLL, rrmc, rrmi))) {
             c.header('X-Player', "lavalink");
+            c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');
             c.header('Content-Type', checkAccept && checkReferer ? 'text/event-stream' : 'video/mpeg');
-            c.header('Cache-Control', 'public, no-store, max-age=0, must-revalidate');
+            c.header('Cache-Control', 'public, no-cache, no-store, max-age=0, must-revalidate');
             const rrkc = String(Number_random(1000000000, 9999999999));
-            const rakc = crypto.randomUUID().split('-');
+            const cryUID = crypto.randomUUID();
+            const rakc = cryUID.split('-');
             if (checkAccept && checkReferer) c.header('Enc-Data', rrkc + btoa(JSON.stringify(rakc)));
             c.status(checkAccept && checkReferer ? 302 : 403);
             c.header('Access-Control-Allow-Origin', new URL(c.req.url).origin);
             if (checkAccept && checkReferer) {
                 return stream(c, async (s: any) => {
                     await s.write('');
-                    await s.write(pullInfo(ipLL, rrmc, rrkc));
+                    await s.write(pullInfo(ipLL, rrmc, rrkc, rakc));
                 });
             }
             else {

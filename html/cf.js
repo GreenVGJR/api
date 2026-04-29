@@ -27,7 +27,7 @@ async function xorEncrypt(text, key) {
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function solveChallenge(challenge) {
+async function solveChallenge(challenge, ouuid) {
     try {
         const [base64xt, validType, [slicekf, ip], time, xtIndex, keyIndex] = JSON.parse(atob(challenge));
         if (validType !== 1000) return null;
@@ -37,7 +37,7 @@ async function solveChallenge(challenge) {
         const encryptedValue = xt[xtIndex];
         const secretValue = await xorDecrypt(encryptedValue, key);
 
-        const data = atob(time) + secretValue.toString() + ip;
+        const data = atob(time) + secretValue.toString() + ip + (ouuid ? ouuid.replaceAll('-', '') : '');
         const msgUint8 = new TextEncoder().encode(data);
         const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -48,7 +48,6 @@ async function solveChallenge(challenge) {
         const solution = JSON.stringify([base64url, validType, [slicekf, ip], time, xtIndex, keyIndex]);
         return await xorEncrypt(solution, key);
     } catch (e) {
-        console.error(e);
         return null;
     }
 }

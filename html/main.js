@@ -254,7 +254,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             headers[`x-challenge-codes-${knownDeviceID}`] = await xorEncrypt(encodeURIComponent(solvedChallengeCode), knownDeviceID);
         }
 
-        const response = await fetch(targetUrl, { headers, cache: "default" });
+        const response = await fetch(targetUrl, { headers });
 
         responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';

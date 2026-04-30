@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 const smellyFeel = "fda0bd57ec7312592292772bdb8780cadbcb884d59b4cc79b5ed45f680cc06b2";
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 1000 }, (_, i) => {
+export const xt = Array.from({ length: 100 }, (_, i) => {
     return crypto.createHash('sha256').update(hash).update(i.toString()).digest('base64url');
 });
 

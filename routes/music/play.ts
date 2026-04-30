@@ -5,7 +5,6 @@ import {
     getOrCreatePlayer,
     resolveVoiceChannel,
     formatTrack,
-    PLATFORM_SEARCH,
     hasActivePlayer,
     set247,
     get247,
@@ -20,47 +19,80 @@ import { getActiveFilters } from './filters.js';
 // ── Custom search result ──────────────────────────────────────────────────────
 
 interface CustomSearchResult {
+    id?: string;
     url: string;
     // Title + author are used to build a ytsearch fallback when the URL itself
     // can't be loaded by Lavalink (e.g. no SC source manager on the node).
     title?: string;
     author?: string;
+    thumbnail?: string;
+    sourceName?: string;
+    duration?: number;
+}
+
+function getPlatformFromUrl(url: string): string | null {
+    if (url.includes('spotify.com')) return 'spotify';
+    if (url.includes('soundcloud.com')) return 'soundcloud';
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtubemusic';
+    if (url.includes('apple.com')) return 'applemusic';
+    if (url.includes('deezer.com')) return 'deezer';
+    if (url.includes('tidal.com')) return 'tidal';
+    return null;
 }
 
 async function customSearch(platform: string, query: string): Promise<CustomSearchResult | null> {
     try {
+        const isUrl = query.startsWith('http://') || query.startsWith('https://');
         switch (platform) {
             case 'soundcloud': {
                 const res = await SCMusic(query, undefined, 1);
                 const track = res?.data?.[0]?.[0];
                 if (!track?.permalink_url) return null;
                 return {
+                    id: String(track.id),
                     url: track.permalink_url,
                     title: track.title,
                     author: track.user?.username || track.publisher_metadata?.artist,
+                    thumbnail: track.artwork_url?.replace('-large', '-t500x500') || track.user?.avatar_url,
+                    sourceName: 'soundcloud',
+                    duration: track.duration,
                 };
             }
             case 'spotify': {
+                // If it's a URL, we can try to extract the ID directly
+                let trackId = null;
+                if (isUrl && query.includes('/track/')) {
+                    trackId = query.split('/track/')[1]?.split('?')[0];
+                }
+
+                if (trackId) {
+                    // We could do a direct lookup here, but for now let's just search
+                }
+
                 const res = await SPMusic(query, undefined, 1);
                 const track = res?.data?.tracks?.[0];
                 if (!track?.id) return null;
                 return {
+                    id: track.id,
                     url: `https://open.spotify.com/track/${track.id}`,
                     title: track.name,
                     author: track.artists?.items?.map((a: any) => a.profile?.name).join(', '),
+                    thumbnail: track.albumOfTrack?.coverArt?.sources?.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))?.[0]?.url,
+                    sourceName: 'spotify',
+                    duration: track.duration?.totalMilliseconds,
                 };
             }
             case 'youtube': {
                 const res = await YTVideo(query, false);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
-                return { url: track.url, title: track.title, author: track.author };
+                return { id: track.videoId, url: track.url, title: track.title, author: track.author, thumbnail: track.thumbnail, sourceName: 'youtube' };
             }
             case 'youtubemusic': {
                 const res = await YTMusic(query, false);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
-                return { url: track.url, title: track.title, author: track.author };
+                return { id: track.videoId, url: track.url, title: track.title, author: track.author, thumbnail: track.thumbnail, sourceName: 'youtube' };
             }
             case 'applemusic': {
                 const amRes = await request(
@@ -71,9 +103,13 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 const track = parsed?.results?.[0];
                 if (!track) return null;
                 return {
+                    id: String(track.trackId),
                     url: track.trackViewUrl,
                     title: track.trackName,
                     author: track.artistName,
+                    thumbnail: track.artworkUrl100?.replace('100x100', '600x600'),
+                    sourceName: 'applemusic',
+                    duration: track.trackTimeMillis,
                 };
             }
             case 'deezer': {
@@ -81,9 +117,13 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 const track = res?.data?.[0];
                 if (!track?.link) return null;
                 return {
+                    id: String(track.id),
                     url: track.link,
                     title: track.title,
                     author: track.artist?.name,
+                    thumbnail: track.album?.cover_big || track.album?.cover_medium,
+                    sourceName: 'deezer',
+                    duration: track.duration ? track.duration * 1000 : undefined,
                 };
             }
             case 'tidal': {
@@ -91,9 +131,13 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
                 return {
+                    id: String(track.id),
                     url: track.url,
                     title: track.title,
                     author: track.artist?.name || track.artists?.[0]?.name,
+                    thumbnail: track.album?.cover ? `https://resources.tidal.com/images/${track.album.cover.replace(/-/g, '/')}/640x640.jpg` : undefined,
+                    sourceName: 'tidal',
+                    duration: track.duration ? track.duration * 1000 : undefined,
                 };
             }
             default:
@@ -137,12 +181,31 @@ app.get('/play', async (c) => {
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
+        // Detect effective platform for metadata lookup
+        const effectivePlatform = isUrl ? (getPlatformFromUrl(queryStr) || platform) : platform;
+
         // Start tasks
-        const pCustom = !isUrl ? customSearch(platform, queryStr) : Promise.resolve(null);
+        const pCustom = customSearch(effectivePlatform, queryStr);
         const { client, player: manager } = await getOrCreatePlayer(token, log);
 
         await log(isNew ? 'Discord.js client ready' : 'Client retrieved');
         await log('Lavalink manager active');
+
+        const applyOverlay = (result: any, customResult: CustomSearchResult | null) => {
+            if (result?.tracks?.[0] && customResult) {
+                const t = result.tracks[0];
+                t.info = {
+                    ...t.info,
+                    ...(customResult.id ? { identifier: customResult.id } : {}),
+                    ...(customResult.title ? { title: customResult.title } : {}),
+                    ...(customResult.author ? { author: customResult.author } : {}),
+                    ...(customResult.url ? { uri: customResult.url } : {}),
+                    ...(customResult.thumbnail ? { artworkUrl: customResult.thumbnail } : {}),
+                    ...(customResult.sourceName ? { sourceName: customResult.sourceName } : {}),
+                    ...(customResult.duration ? { duration: customResult.duration } : {}),
+                };
+            }
+        };
 
         // Parallel tasks after client is ready
         const pRequester = (async () => {
@@ -238,12 +301,14 @@ app.get('/play', async (c) => {
             if (isUrl) {
                 await log(`Loading URL directly: "${queryStr}"`);
                 result = await doSearch(queryStr, 'url');
+                applyOverlay(result, customResult);
             } else {
                 await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
                 if (customResult) {
                     await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
                     try {
                         result = await doSearch(customResult.url, 'url');
+                        applyOverlay(result, customResult);
                         await log('[Attempt 1] Direct URL load succeeded');
                     } catch (e: any) {
                         await log(`[Attempt 1] Direct URL load failed (${e?.message}) — falling back to Lavalink search`);
@@ -254,18 +319,58 @@ app.get('/play', async (c) => {
 
                 if (!result) {
                     const hasMeta = customResult?.title && customResult?.author;
-                    const ytQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
-                    const platformSearch = PLATFORM_SEARCH[platform] || 'ytmsearch';
+                    const metaQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
 
-                    const attempts: Array<{ label: string; q: string; src: string }> = [];
-                    if (ytQuery) attempts.push({ label: 'ytmsearch (metadata)', q: ytQuery, src: 'ytmsearch' });
-                    attempts.push({ label: platformSearch, q: queryStr, src: platformSearch });
+                    // Build fallback attempts using custom search functions (not Lavalink search prefixes)
+                    const fallbacks: Array<{ label: string; searchPlatform: string; query: string }> = [];
 
-                    for (const attempt of attempts) {
-                        await log(`[Attempt 2] Lavalink search: "${attempt.src}:${attempt.q}"`);
+                    // If we have metadata from Attempt 1, try YouTube Music with enriched query
+                    if (metaQuery) {
+                        fallbacks.push({ label: 'YouTube Music (metadata)', searchPlatform: 'youtubemusic', query: metaQuery });
+                    }
+
+                    // Try YouTube Music with the original query (skip if already queued above with same query)
+                    if (!metaQuery && platform !== 'youtubemusic') {
+                        fallbacks.push({ label: 'YouTube Music', searchPlatform: 'youtubemusic', query: queryStr });
+                    }
+
+                    // Try Spotify with the original query (skip if that was the initial platform — already tried)
+                    if (platform !== 'spotify') {
+                        fallbacks.push({ label: 'Spotify', searchPlatform: 'spotify', query: queryStr });
+                    }
+
+                    // Try Apple Music with the original query (skip if that was the initial platform — already tried)
+                    if (platform !== 'applemusic') {
+                        fallbacks.push({ label: 'Apple Music', searchPlatform: 'applemusic', query: queryStr });
+                    }
+
+                    // Try SoundCloud with the original query (skip if that was the initial platform — already tried)
+                    if (platform !== 'soundcloud') {
+                        fallbacks.push({ label: 'SoundCloud', searchPlatform: 'soundcloud', query: queryStr });
+                    }
+
+                    // Try Deezer with the original query (skip if that was the initial platform — already tried)
+                    if (platform !== 'deezer') {
+                        fallbacks.push({ label: 'Deezer', searchPlatform: 'deezer', query: queryStr });
+                    }
+
+                    // Try Tidal with the original query (skip if that was the initial platform — already tried)
+                    if (platform !== 'tidal') {
+                        fallbacks.push({ label: 'Tidal', searchPlatform: 'tidal', query: queryStr });
+                    }
+
+                    for (const attempt of fallbacks) {
+                        await log(`[Attempt 2] Custom ${attempt.label} search: "${attempt.query}"`);
                         try {
-                            result = await doSearch(attempt.q, attempt.src);
-                            await log(`[Attempt 2] Lavalink search succeeded (${attempt.label})`);
+                            const fallbackResult = await customSearch(attempt.searchPlatform, attempt.query);
+                            if (!fallbackResult?.url) {
+                                await log(`[Attempt 2] "${attempt.label}" returned no results`);
+                                continue;
+                            }
+                            await log(`[Attempt 2] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
+                            result = await doSearch(fallbackResult.url, 'url');
+                            applyOverlay(result, customResult);
+                            await log(`[Attempt 2] "${attempt.label}" succeeded`);
                             break;
                         } catch (err: any) {
                             await log(`[Attempt 2] "${attempt.label}" failed: ${err?.message}`);

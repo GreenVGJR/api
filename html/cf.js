@@ -2,10 +2,10 @@ async function xorDecrypt(base64, key) {
     const msgUint8 = new TextEncoder().encode(key);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
     const mask = new Uint8Array(hashBuffer);
-    
+
     let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
     while (standardBase64.length % 4) standardBase64 += '=';
-    
+
     const binaryString = atob(standardBase64);
     const data = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {

@@ -507,7 +507,7 @@ app.get('/', (c: Context) => stream(c, async (l) => {
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
-    c.header('Location', '/playground');
+    if(!renderJson) c.header('Location', '/playground');
 
     c.status(renderJson ? 200 : 302);
     await l.write('');

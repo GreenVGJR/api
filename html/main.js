@@ -1,3 +1,5 @@
+document.title = "Playground | VGJR";
+
 {{SSR_STATE}}
 // Initialize layout and Tailwind config dynamically
 const initSPA = () => {
@@ -529,7 +531,7 @@ function syncParamsToUrl() {
     const cleanBase = apiBaseUrl.replace(/\/$/, '');
     const path = currentEndpoint ? currentEndpoint.path : '/';
     const cleanPath = path.startsWith('/') ? path : '/' + path;
-    
+
     urlInput.value = cleanBase + cleanPath + queryString;
     adjustHeight();
 }
@@ -578,16 +580,16 @@ async function fetchInitialEndpoints() {
 
     if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
         currentEndpoint = endpoints[currentCategory][0];
-        
+
         const cleanBase = apiBaseUrl.replace(/\/$/, '');
         const cleanPath = currentEndpoint.path.startsWith('/') ? currentEndpoint.path : '/' + currentEndpoint.path;
-        
+
         urlInput.value = cleanBase + cleanPath + (currentEndpoint.query || '');
         adjustHeight();
-        
+
         renderEndpoints();
         renderParams();
-        
+
         // Deep sync to ensure the bar and panel match
         syncUrlToParams();
         syncParamsToUrl();
@@ -804,16 +806,16 @@ function updateParamHighlight() {
     const val = urlInput.value;
     const pos = urlInput.selectionStart;
     const qIdx = val.indexOf('?');
-    
+
     // Clear all highlights first
     document.querySelectorAll('.param-input').forEach(el => el.classList.remove('highlight-active'));
-    
+
     if (qIdx === -1 || pos <= qIdx) return;
-    
+
     const query = val.substring(qIdx + 1);
     const posInQuery = pos - (qIdx + 1);
     const parts = query.split('&');
-    
+
     let currentLen = 0;
     for (let i = 0; i < parts.length; i++) {
         const partLen = parts[i].length;
@@ -844,11 +846,11 @@ urlInput.addEventListener('blur', () => {
     const val = urlInput.value;
     const queryIdx = val.indexOf('?');
     if (queryIdx === -1) return;
-    
+
     const base = val.substring(0, queryIdx + 1);
     const query = val.substring(queryIdx + 1);
     const parts = query.split('&');
-    
+
     const washedQuery = parts.map(part => {
         const eqIdx = part.indexOf('=');
         if (eqIdx === -1) return part;
@@ -856,7 +858,7 @@ urlInput.addEventListener('blur', () => {
         const rawVal = part.substring(eqIdx + 1);
         return key + '=' + encodeURIComponent(decodeURIComponent(rawVal));
     }).join('&');
-    
+
     urlInput.value = base + washedQuery;
     adjustHeight();
 });
@@ -978,7 +980,7 @@ updateUptime();
 fetchInitialEndpoints().then(() => {
     // Final height adjustment after everything is loaded and rendered
     setTimeout(adjustHeight, 0);
-    
+
     // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
     if (document.fonts) {
         document.fonts.ready.then(() => {

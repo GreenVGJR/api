@@ -477,14 +477,14 @@ app.get('/playground', (c: Context) => {
 app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
-    
+
     const host = (c.req.header('host') || '').toLowerCase();
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
-    
+
     const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = "${btoa(JSON.stringify(PLAYGROUND_ENDPOINTS))}";`;
     const finalJs = mainJs.replace('{{SSR_STATE}}', stateJs);
-    
+
     await s.write(finalJs);
 }));
 
@@ -507,7 +507,7 @@ app.get('/', (c: Context) => stream(c, async (l) => {
     const typeRender = renderJson ? 'application/json' : 'text/plain';
     c.header('Content-Type', typeRender);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
-    if(!renderJson) c.header('Location', '/playground');
+    if (!renderJson) c.header('Location', '/playground');
 
     c.status(renderJson ? 200 : 302);
     await l.write('');

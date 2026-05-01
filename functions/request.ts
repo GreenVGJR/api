@@ -1,7 +1,15 @@
-import { Session } from 'httpcloak';
+import httpcloak from 'httpcloak';
 import { type Context } from 'hono';
+import dns from 'dns';
+import { promises as dnsPromises } from 'dns';
+import net from 'net';
+
+dns.setServers(['1.1.1.1', '1.0.0.1']);
 
 const DEFAULT_TIMEOUT_MS = 60000;
+
+const FIREFOX_150_JA3 = process.env.TLS_JA3;
+const FIREFOX_150_AKAMAI = process.env.TLS_AKAMAI;
 
 export const request = async (url: string, options: {
     method?: string;
@@ -9,6 +17,10 @@ export const request = async (url: string, options: {
     body?: string | Buffer;
     signal?: AbortSignal;
     useH2?: boolean;
+    useH3?: boolean;
+    echConfigDomain?: string;
+    tlsOnly?: boolean;
+    allowRedirects?: boolean;
 } = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
@@ -18,10 +30,29 @@ export const request = async (url: string, options: {
         ? AbortSignal.any([controller.signal, parentSignal])
         : controller.signal;
 
-    const activeSession = new Session({
+    let connectTo: Record<string, string> | undefined;
+    try {
+        const urlObj = new URL(url);
+        if (!net.isIP(urlObj.hostname)) {
+            const [resolvedIp] = await dnsPromises.resolve4(urlObj.hostname);
+            if (resolvedIp) {
+                connectTo = { [urlObj.hostname]: resolvedIp };
+            }
+        }
+    } catch {
+        // Ignored, falls back to normal routing if resolution fails
+    }
+
+    const activeSession = new httpcloak.Session({
+        preset: "firefox-133-linux",
+        ja3: FIREFOX_150_JA3,
+        akamai: FIREFOX_150_AKAMAI,
         preferIpv4: true,
-        tlsOnly: false,
-        httpVersion: options.useH2 ? 'h2' : undefined
+        tlsOnly: options.tlsOnly ?? false,
+        httpVersion: options.useH3 ? "h3" : (options.useH2 ? "h2" : undefined),
+        echConfigDomain: options.echConfigDomain,
+        allowRedirects: options.allowRedirects ?? true,
+        connectTo,
     });
 
     try {
@@ -55,10 +86,13 @@ const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Fire
 
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en',
+    'Accept-Encoding': 'identity',
+    'Accept-Language': 'en-US,en;q=0.9',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': "?1",
+    'Upgrade-Insecure-Requests': "1",
     'User-Agent': userAgent
 }
 
@@ -393,7 +427,7 @@ let keydeezer: string | undefined;
 let keyimgur: string | undefined;
 let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
-let keytumblr: string | undefined = "aIcXSOoTtqrzR8L8YEIOmBeW94c3FmbSNSWAUbxsny9KKx5VFh";
+let keytumblr: string | undefined = process.env.TUMBLR;
 let saweriaBuildId: string | undefined;
 let twitterDocument: any;
 let twitterTransaction: any;
@@ -4633,7 +4667,7 @@ export const redditMedia = async function redditMedia(que: string) {
         const req = await request(`https://old.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
             }
         });
 
@@ -4921,12 +4955,18 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
     if (!que) return null;
 
     try {
-        const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/.json`, {
+        const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/new.json`, {
             headers: {
                 ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.1; +https://discordapp.com)'
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
             }
         });
+
+        if (req.statusCode === 451) {
+            return {
+                "error": "This subreddit is not available in your country"
+            }
+        }
 
         if (req.statusCode === 403) {
             return {
@@ -4941,7 +4981,8 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
         }
 
         const res: any = await req.json();
-        return { data: res?.data?.children?.map((a: any) => a?.data) || null }
+        const finalres: any = res?.data?.children?.map((a: any) => a?.data);
+        return { data: finalres?.[0] ? finalres : null }
     }
     catch {
         return null;
@@ -5555,7 +5596,8 @@ export async function googleWeather(query: string): Promise<any> {
 
     try {
         const l = await request(`https://www.bing.com/api/v6/Places/AutoSuggest?q=${encodeURIComponent(query)}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`, {
-            headers: { ...commonHeaders }
+            headers: { ...commonHeaders },
+            useH2: true
         });
 
         let ls: any = await l.text;
@@ -5577,7 +5619,8 @@ export async function googleWeather(query: string): Promise<any> {
                 ...commonHeaders,
                 'Referer': 'https://storage.googleapis.com/',
                 'X-Goog-Api-Key': process.env.GOOG_WEATHER || ''
-            }
+            },
+            useH2: true
         });
 
         if (k.statusCode !== 200) return { data: null }
@@ -5728,13 +5771,14 @@ export async function DriftProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'message', 'cdn-cgi', 'customize', 'login', 'join', 'auth', 'media', 'go'].includes(username.toLowerCase())) return null;
     const filterurl = new URL("https://drift.rip/" + username);
-    let session: any;
     let res: any;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
-            res = await session.get(filterurl.toString(), {
+            res = await request(filterurl.toString(), {
+                useH2: true,
+                echConfigDomain: "cloudflare-ech.com",
+                tlsOnly: false,
                 headers: {
                     ...commonHeaders
                 }
@@ -5745,7 +5789,6 @@ export async function DriftProfile(query: string): Promise<any> {
             }
 
             // It's a 403, we need to try again with a new session
-            if (session) session.close();
 
             if (attempts === 2) { // Last attempt still gave 403
                 return {
@@ -5753,14 +5796,12 @@ export async function DriftProfile(query: string): Promise<any> {
                 };
             }
         } catch (e) {
-            if (session) session.close();
             if (attempts === 2) throw e;
         }
     }
 
     try {
         const test = res.text;
-        if (session) session.close();
         if (res.url?.includes('/message')) {
             return {
                 data: null
@@ -5953,7 +5994,6 @@ export async function DriftProfile(query: string): Promise<any> {
         };
     }
     catch (e) {
-        if (session) session.close();
         console.error(e);
         return null;
     }
@@ -5965,15 +6005,12 @@ export async function PatreonProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username) return null;
 
-    let session: any;
     try {
-        session = new Session({ httpVersion: 'h2' });
-
-        const res = await session.get(`https://www.patreon.com/cw/${username}`, {
+        const res = await request(`https://www.patreon.com/cw/${username}`, {
+            useH2: true,
             headers: { ...commonHeaders }
         });
 
-        if (session) session.close();
 
         if (res.statusCode === 404) {
             return { error: "User not found" };
@@ -6047,7 +6084,6 @@ export async function PatreonProfile(query: string): Promise<any> {
             }
         };
     } catch (e) {
-        if (session) session.close();
         console.error("PatreonProfile Error:", e);
         return null;
     }
@@ -6058,13 +6094,11 @@ export async function SaweriaProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username) return null;
 
-    let session: any;
     try {
-        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
-
         let dataRes: any;
         if (saweriaBuildId) {
-            dataRes = await session.get(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+            dataRes = await request(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+                useH2: true, echConfigDomain: "cloudflare-ech.com", tlsOnly: false,
                 headers: { ...commonHeaders }
             });
 
@@ -6078,19 +6112,20 @@ export async function SaweriaProfile(query: string): Promise<any> {
         }
 
         if (!saweriaBuildId) {
-            const mainRes = await session.get('https://saweria.co', {
+            const mainRes = await request('https://saweria.co', {
+                useH2: true, echConfigDomain: "cloudflare-ech.com", tlsOnly: false,
                 headers: { ...commonHeaders }
             });
 
             if (mainRes.statusCode === 403) {
-                if (session) session.close();
                 return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
             }
 
             const mainText = mainRes.text;
             saweriaBuildId = mainText.split('"buildId":"')[1].split('"')[0];
 
-            dataRes = await session.get(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+            dataRes = await request(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+                useH2: true, echConfigDomain: "cloudflare-ech.com", tlsOnly: false,
                 headers: { ...commonHeaders }
             });
 
@@ -6099,7 +6134,6 @@ export async function SaweriaProfile(query: string): Promise<any> {
             }
         }
 
-        if (session) session.close();
 
         if (dataRes.statusCode !== 200) {
             return { data: null };
@@ -6114,7 +6148,6 @@ export async function SaweriaProfile(query: string): Promise<any> {
 
         return { data: dataJson?.pageProps?.data || null };
     } catch (e) {
-        if (session) session.close();
         console.error("SaweriaProfile Error:", e);
         return null;
     }
@@ -6125,16 +6158,16 @@ export async function TrakteerProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'forgot-password', 'cdn-cgi', 'terms', 'privacy-policy', 'auth', 'search', 'explore', 'feed', 'feature-and-pricing', 'career'].includes(username.toLowerCase())) return null;
 
-    let session: any;
     try {
-        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
-        const res = await session.get(`https://trakteer.id/${username}`, {
+        const res = await request(`https://trakteer.id/${username}`, {
+            useH2: true,
+            echConfigDomain: "cloudflare-ech.com",
+            tlsOnly: false,
             headers: {
                 ...commonHeaders,
             }
         });
 
-        if (session) session.close();
 
         if (res.statusCode === 403) {
             return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
@@ -6162,7 +6195,6 @@ export async function TrakteerProfile(query: string): Promise<any> {
         const extraCreator = dataJson?.props;
         return { data: creator ? { ...creator.data, ...creator.meta, ...extraCreator.extraCreatorData, ...extraCreator.payload } : null };
     } catch (e) {
-        if (session) session.close();
         console.error("TrakteerProfile Error:", e);
         return null;
     }
@@ -6173,16 +6205,17 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username) return null;
 
-    let session: any;
     try {
-        session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false, allowRedirects: false });
-        const res = await session.get(`https://sociabuzz.com/${username}/tribe`, {
+        const res = await request(`https://sociabuzz.com/${username}/tribe`, {
+            useH2: true,
+            echConfigDomain: "cloudflare-ech.com",
+            tlsOnly: false,
+            allowRedirects: false,
             headers: {
                 ...commonHeaders,
             }
         });
 
-        if (session) session.close();
 
         if (res.statusCode === 403) {
             return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
@@ -6204,7 +6237,6 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
         const dataJson = JSON.parse(userDataStr);
         return { data: dataJson || null };
     } catch (e) {
-        if (session) session.close();
         console.error("SociaBuzzProfile Error:", e);
         return null;
     }
@@ -6219,36 +6251,33 @@ export async function GunsProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard', 'leaderboard', 'de', 'fr', 'es', 'tr', 'ru', 'pt', 'ar'].includes(username.toLowerCase())) return null;
 
-    let session: any;
     let res: any;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h3', echConfigDomain: "cloudflare-ech.com", tlsOnly: true });
-            res = await session.get(`https://guns.lol/${username}`, {
+            res = await request(`https://guns.lol/${username}`, {
+                useH2: true,
+                echConfigDomain: "cloudflare-ech.com",
+                tlsOnly: true,
                 headers: {
                     ...commonHeaders
                 }
             });
 
-            if (res.statusCode !== 401 || res.statusCode !== 403 || res.statusCode !== 429) {
+            if (res.statusCode !== 401 && res.statusCode !== 403 && res.statusCode !== 429) {
                 break;
             }
-
-            if (session) session.close();
 
             if (attempts === 2) {
                 return { error: "Guns.lol asking to verify you're not a bot" };
             }
         } catch (e) {
-            if (session) session.close();
             if (attempts === 2) throw e;
         }
     }
 
     try {
         const html = res.text;
-        if (session) session.close();
         if (res.statusCode !== 200) {
             return { data: null };
         }
@@ -6333,7 +6362,6 @@ export async function GunsProfile(query: string): Promise<any> {
         return { data: secfinal };
     }
     catch (e) {
-        if (session) session.close();
         console.error(e);
         return null;
     }
@@ -6344,13 +6372,14 @@ export async function RageProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'leaderboards', 'pricing', 'docs', 'auth', 'cdn-cgi', 'terms', 'privacy', 'copyright', 'docs', 'dashboard', 'main_og.png', 'extra.css'].includes(username.toLowerCase())) return null;
 
-    let session: any;
     let res: any;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
-            res = await session.get(`https://rage.wtf/${username}`, {
+            res = await request(`https://rage.wtf/${username}`, {
+                useH2: true,
+                echConfigDomain: "cloudflare-ech.com",
+                tlsOnly: false,
                 headers: {
                     ...commonHeaders
                 }
@@ -6360,20 +6389,16 @@ export async function RageProfile(query: string): Promise<any> {
                 break;
             }
 
-            if (session) session.close();
-
             if (attempts === 2) {
                 return { error: "Rage.wtf asking to verify you're not a bot" };
             }
         } catch (e) {
-            if (session) session.close();
             if (attempts === 2) throw e;
         }
     }
 
     try {
         const html = res.text;
-        if (session) session.close();
         if (res.statusCode !== 200) {
             return { data: null };
         }
@@ -6440,7 +6465,6 @@ export async function RageProfile(query: string): Promise<any> {
         return { data: dataResults[0] };
     }
     catch (e) {
-        if (session) session.close();
         console.error(e);
         return null;
     }
@@ -6451,13 +6475,14 @@ export async function HauntProfile(query: string): Promise<any> {
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
     if (!username || ['robots.txt', 'favicon.ico', 'login', 'register', 'pricing', 'cdn-cgi', 'terms', 'privacy', 'dashboard', 'settings', 'api'].includes(username.toLowerCase())) return null;
 
-    let session: any;
     let res: any;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            session = new Session({ httpVersion: 'h2', echConfigDomain: "cloudflare-ech.com", tlsOnly: false });
-            res = await session.get(`https://haunt.gg/${username}`, {
+            res = await request(`https://haunt.gg/${username}`, {
+                useH2: true,
+                echConfigDomain: "cloudflare-ech.com",
+                tlsOnly: false,
                 headers: {
                     ...commonHeaders
                 }
@@ -6467,20 +6492,16 @@ export async function HauntProfile(query: string): Promise<any> {
                 break;
             }
 
-            if (session) session.close();
-
             if (attempts === 2) {
                 return { error: "Haunt.gg asking to verify you're not a bot" };
             }
         } catch (e) {
-            if (session) session.close();
             if (attempts === 2) throw e;
         }
     }
 
     try {
         const html = res.text;
-        if (session) session.close();
         if (res.statusCode !== 200) {
             return { data: null };
         }
@@ -6553,7 +6574,6 @@ export async function HauntProfile(query: string): Promise<any> {
         return { data: rest?.user || null };
     }
     catch (e) {
-        if (session) session.close();
         console.error(e);
         return null;
     }
@@ -7064,7 +7084,7 @@ export const ImgurPost = async (query: string, refresh_auth: boolean = false): P
     }
 
     try {
-        const req = await request(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-viral`, { headers: { ...commonHeaders } });
+        const req = await request(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: { ...commonHeaders } });
         if (req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
         const res: any = await req.json();
         return { data: res?.posts || null };

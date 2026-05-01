@@ -224,10 +224,9 @@ function flattenRoutes(obj, parentPath = '') {
     return flatResults;
 }
 
-
-
 let solvedChallengeCode = null;
 let knownDeviceID = null;
+let clientSecretKey = null;
 
 async function performRequest(targetUrl, retryCount = 0) {
     if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
@@ -319,7 +318,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                     const data = JSON.parse(decryptedText);
                     if (data && data.c && data._submit) {
                         responseArea.innerHTML = '<span class="text-mint-400 loading flex h-full items-center justify-center">Solving challenge...</span>';
-                        const solved = await solveChallenge(data.c, knownDeviceID);
+                        const solved = await solveChallenge(data.c, knownDeviceID, clientSecretKey);
                         if (solved) {
                             solvedChallengeCode = solved;
                             return await performRequest(targetUrl, retryCount + 1);

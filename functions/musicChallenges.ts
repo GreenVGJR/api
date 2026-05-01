@@ -54,7 +54,7 @@ export function pullInfo(r: string | number, q: string, s: string, u?: string[])
             challengeTarget: "c",
             challengeExpire: 7200000
         },
-        c: btoa(cPayload)
+        c: xorEncrypt(cPayload, "b1100934ca2fa3d0")
     };
 
     return xorEncrypt(JSON.stringify(fullResponse), s);

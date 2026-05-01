@@ -266,3 +266,7 @@ body {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
 }
+
+:root {
+    --x-silent-verify-static: "b1100934ca2fa3d0";
+}

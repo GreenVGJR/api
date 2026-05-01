@@ -27,9 +27,9 @@ async function xorEncrypt(text, key) {
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function solveChallenge(challenge, ouuid) {
+async function solveChallenge(challenge, ouuid, ssk) {
     try {
-        const [base64xt, validType, [slicekf, ip], time, xtIndex, keyIndex] = JSON.parse(atob(challenge));
+        const [base64xt, validType, [slicekf, ip], time, xtIndex, keyIndex] = JSON.parse(await xorDecrypt(challenge, ssk));
         if (validType !== 1000) return null;
 
         const xt = JSON.parse(atob(base64xt));
@@ -48,6 +48,10 @@ async function solveChallenge(challenge, ouuid) {
         const solution = JSON.stringify([base64url, validType, [slicekf, ip], time, xtIndex, keyIndex]);
         return await xorEncrypt(solution, key);
     } catch (e) {
+        console.error(e);
         return null;
     }
 }
+
+clientSecretKey = getComputedStyle(document.documentElement).getPropertyValue(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj')).trim().replace(/"/g, '');
+document.documentElement.style.setProperty(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj'), '');

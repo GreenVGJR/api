@@ -21,56 +21,74 @@ export const request = async (url: string, options: {
     echConfigDomain?: string;
     tlsOnly?: boolean;
     allowRedirects?: boolean;
+    retries?: number;
+    timeout?: number;
+    useOwnTLS?: boolean;
 } = {}) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const maxRetries = options.retries ?? 2;
+    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+    let lastError: any;
 
-    const parentSignal = options.signal;
-    const signal = parentSignal
-        ? AbortSignal.any([controller.signal, parentSignal])
-        : controller.signal;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    let connectTo: Record<string, string> | undefined;
-    try {
-        const urlObj = new URL(url);
-        if (!net.isIP(urlObj.hostname)) {
-            const [resolvedIp] = await dnsPromises.resolve4(urlObj.hostname);
-            if (resolvedIp) {
-                connectTo = { [urlObj.hostname]: resolvedIp };
-            }
+        const parentSignal = options.signal;
+        const signal = parentSignal
+            ? AbortSignal.any([controller.signal, parentSignal])
+            : controller.signal;
+
+        let connectTo: Record<string, string> | undefined;
+        // Alternate between pinned IP and standard routing on retries
+        if (attempt % 2 === 0) {
+            try {
+                const urlObj = new URL(url);
+                if (!net.isIP(urlObj.hostname)) {
+                    const ips = await dnsPromises.resolve4(urlObj.hostname);
+                    if (ips && ips.length > 0) {
+                        const resolvedIp = ips[Math.floor(Math.random() * ips.length)];
+                        if (resolvedIp) {
+                            connectTo = { [urlObj.hostname]: resolvedIp };
+                        }
+                    }
+                }
+            } catch { }
         }
-    } catch {
-        // Ignored, falls back to normal routing if resolution fails
-    }
 
-    const activeSession = new httpcloak.Session({
-        preset: "firefox-133-linux",
-        ja3: FIREFOX_150_JA3,
-        akamai: FIREFOX_150_AKAMAI,
-        preferIpv4: true,
-        tlsOnly: options.tlsOnly ?? false,
-        httpVersion: options.useH3 ? "h3" : (options.useH2 ? "h2" : undefined),
-        echConfigDomain: options.echConfigDomain,
-        allowRedirects: options.allowRedirects ?? true,
-        connectTo,
-    });
-
-    try {
-        const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
-        const headers: any = { ...options.headers };
-        if (url.includes('discord.com/api/')) {
-            headers['User-Agent'] = headers['User-Agent'] || 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
-        }
-        const res = await activeSession[method](url, {
-            headers: headers,
-            body: options.body,
-            timeout: DEFAULT_TIMEOUT_MS / 1000
+        const activeSession = new httpcloak.Session({
+            preset: options.useOwnTLS ? "firefox-133" : undefined,
+            ja3: options.useOwnTLS ? FIREFOX_150_JA3 : undefined,
+            akamai: options.useOwnTLS ? FIREFOX_150_AKAMAI : undefined,
+            preferIpv4: true,
+            tlsOnly: options.tlsOnly ?? false,
+            httpVersion: options.useH3 ? "h3" : (options.useH2 ? "h2" : undefined),
+            echConfigDomain: options.echConfigDomain,
+            allowRedirects: options.allowRedirects ?? true,
+            connectTo,
         });
-        return res;
-    } finally {
-        try { activeSession.close(); } catch { }
-        clearTimeout(timeoutId);
+
+        try {
+            const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
+            const headers: any = { ...options.headers };
+            if (url.includes('discord.com/api/')) {
+                headers['User-Agent'] = headers['User-Agent'] || 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+            }
+            const res = await activeSession[method](url, {
+                headers: headers,
+                body: options.body,
+                timeout: timeoutMs / 1000
+            });
+            return res;
+        } catch (e: any) {
+            lastError = e;
+            if (attempt === maxRetries) break;
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        } finally {
+            try { activeSession.close(); } catch { }
+            clearTimeout(timeoutId);
+        }
     }
+    throw lastError;
 };
 
 import { ClientTransaction } from "x-client-transaction-id";
@@ -742,7 +760,8 @@ export const spotifyKey = async function spotifyKey() {
 export const spotifyKeyToken = async function spotifyKeyToken() {
     const clientId = {
         "web_player": "d8a5ed958d274c2e8ee717e6a4b0971d",
-        "mobile_web_player": "f6a40776580943a7bc5173125a1e8832"
+        "mobile_web_player": "f6a40776580943a7bc5173125a1e8832",
+        "embeds": "ab9ad0d96a624805a7d51e8868df1f97"
     };
 
     const bodyhttp = { "client_data": { "client_version": "1.0", "client_id": clientId.mobile_web_player, "js_sdk_data": {} } };
@@ -832,17 +851,17 @@ export const deezerKeys = async function deezerKeys() {
 
 export const twitterKey = async function twitterKey(typeName: string) {
     try {
-        const response = await fetch("https://x.com/", { headers: { ...commonHeaders } });
-        const html = await response.text();
+        const response = await request("https://x.com/", { headers: { ...commonHeaders }, useH2: true });
+        const html = await response.text;
         const { document } = parseHTML(html);
         twitterDocument = document;
 
         twitterTransaction = new ClientTransaction(twitterDocument);
         await twitterTransaction.initialize();
 
-        const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders } });
+        const pul1 = await request("https://abs.twimg.com/responsive-web/client-web/main" + html.split('client-web/main')[1].split('"')[0], { headers: { ...commonHeaders }, useH2: true });
 
-        const res1 = await pul1.text();
+        const res1 = await pul1.text;
 
         const queryId_user = res1.split('e.exports={queryId:')
             .find((e: any) => e.includes(`operationName:"${typeName}"`))
@@ -870,15 +889,18 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
 export const imgurKey = async function imgurKey() {
     try {
-        const req = await request('https://imgur.com', { headers: { ...commonHeaders } });
+        const req = await request('https://imgur.com', { headers: { ...commonHeaders }, useH2: true });
         const res = await req.text;
 
-        const req2 = await request('https://s.imgur.com/desktop-assets/js/main' + res.split("desktop-assets/js/main")[1].split('>')[0], { headers: { ...commonHeaders } });
+        const mainAssetPath = res.split("desktop-assets/js/main")[1]?.split('>')[0];
+        if (!mainAssetPath) return undefined;
+
+        const req2 = await request('https://s.imgur.com/desktop-assets/js/main' + mainAssetPath, { headers: { ...commonHeaders }, useH2: true });
         const res2 = await req2.text;
-        return res2.split('apiClientId:"')[1].split('"')[0];
+        return res2.split('apiClientId:"')[1]?.split('"')[0];
     }
     catch (e) {
-        console.error(e);
+        console.error("Imgur Key Error:", e);
     }
 }
 
@@ -905,8 +927,6 @@ export const crunchyKey = async function crunchyKey() {
         console.error(e);
     }
 }
-
-crunchyKey()
 
 export const Flickr = async function Flickr(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
     if (!que) return null;
@@ -1653,11 +1673,11 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 export const Shazam = async function Shazam(que: string) {
     if (!que) return null;
     try {
-        // always return 304 using httpcloak
-        const pull = await fetch(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
+        const pull = await request(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
             headers: {
                 ...commonHeaders
-            }
+            },
+            useH2: true
         });
         const res: any = await pull.json();
         return { data: res?.results?.songs?.data || null };
@@ -2160,26 +2180,27 @@ export const Genius = async function Genius(que: string) {
     if (!que) return null;
     try {
 
-        // always return 304 using httpcloak
         const [per, per2] = await Promise.all([
-            fetch(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
+            request(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders
-                }
+                },
+                useH2: true
             }),
-            fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
+            request(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
                 headers: {
                     ...commonHeaders
-                }
+                },
+                useH2: true
             })
         ]);
 
         const [data, data2] = await Promise.all([
-            per.status === 200 ? per.json() : Promise.resolve(null),
-            per2.status === 200 ? per2.json() : Promise.resolve(null)
+            per.statusCode === 200 ? per.json() : Promise.resolve(null),
+            per2.statusCode === 200 ? per2.json() : Promise.resolve(null)
         ]);
 
-        const hits = (data as any)?.response?.hits || [];
+        const hits = (data as any)?.response?.hits || (data as any)?.response?.sections?.[0]?.hits || [];
         const sections = (data2 as any)?.response?.sections || [];
 
         const results = hits.map((hit: any) => ({
@@ -3748,9 +3769,9 @@ export const Unsplash = async function Unsplash(que: string) {
     try {
         const pull = await request(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`, {
             headers: {
-                ...commonHeaders,
-                'client-geo-region': 'global'
-            }
+                ...commonHeaders
+            },
+            useH2: true
         });
 
         if (pull.statusCode === 403) {
@@ -4082,7 +4103,7 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
 
     for (let i = 0; i < 3; i++) {
         try {
-            const pul = await request(url, { headers });
+            const pul = await request(url, { headers, useH2: true, useOwnTLS: true });
             const res = await pul.text;
 
             if (res === '' || pul.statusCode !== 200) {
@@ -4529,24 +4550,25 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
         const variables = JSON.stringify({ screen_name: que, withGrokTranslatedBio: true });
         const fieldToggles = JSON.stringify({ withPayments: true, withAuxiliaryUserLabels: true });
 
-        const pul = await fetch(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
+        const pul = await request(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
             headers: {
                 ...commonHeaders,
                 'content-type': 'application/json',
                 'authorization': 'Bearer ' + twitterAuth,
                 'x-client-transaction-id': twitterObj?.UserByScreenName?.[2],
-            }
+            },
+            useH2: true
         });
 
-        if (pul.status === 403) {
+        if (pul.statusCode === 403) {
             return {
                 "error": "Bad auth"
             }
         }
 
-        if (pul.status === 401 || pul.status === 400) return await infoTwitterUser(que, true);
+        if (pul.statusCode === 401 || pul.statusCode === 400) return await infoTwitterUser(que, true);
 
-        const responseText = await pul.text();
+        const responseText = await pul.text;
         let res;
         try {
             res = JSON.parse(responseText);
@@ -5778,10 +5800,10 @@ export async function DriftProfile(query: string): Promise<any> {
             res = await request(filterurl.toString(), {
                 useH2: true,
                 echConfigDomain: "cloudflare-ech.com",
-                tlsOnly: false,
+                tlsOnly: true,
                 headers: {
                     ...commonHeaders
-                }
+                },
             });
 
             if (res.statusCode !== 403) {
@@ -6379,7 +6401,7 @@ export async function RageProfile(query: string): Promise<any> {
             res = await request(`https://rage.wtf/${username}`, {
                 useH2: true,
                 echConfigDomain: "cloudflare-ech.com",
-                tlsOnly: false,
+                tlsOnly: true,
                 headers: {
                     ...commonHeaders
                 }
@@ -6482,7 +6504,7 @@ export async function HauntProfile(query: string): Promise<any> {
             res = await request(`https://haunt.gg/${username}`, {
                 useH2: true,
                 echConfigDomain: "cloudflare-ech.com",
-                tlsOnly: false,
+                tlsOnly: true,
                 headers: {
                     ...commonHeaders
                 }
@@ -7084,7 +7106,7 @@ export const ImgurPost = async (query: string, refresh_auth: boolean = false): P
     }
 
     try {
-        const req = await request(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: { ...commonHeaders } });
+        const req = await request(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: { ...commonHeaders }, timeout: 90000 });
         if (req.statusCode === 401 || req.statusCode === 400) return await ImgurPost(query, true);
         const res: any = await req.json();
         return { data: res?.posts || null };

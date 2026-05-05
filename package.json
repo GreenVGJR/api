@@ -5,7 +5,7 @@
     "discord.js": "^14.26.4",
     "dotenv": "^17.4.2",
     "entities": "^8.0.0",
-    "hono": "^4.12.16",
+    "hono": "^4.12.17",
     "httpcloak": "^1.6.5",
     "lavalink-client": "^2.10.1",
     "linkedom": "^0.18.12",

@@ -18,6 +18,7 @@ app.get('/nowplaying', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -83,6 +84,7 @@ app.get('/nowplaying/lyrics', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -228,6 +230,7 @@ app.get('/queue', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const limit = Math.max(1, parseInt(c.req.query('limit') || '20', 10));
         const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
 

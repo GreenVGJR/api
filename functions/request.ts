@@ -6877,36 +6877,78 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 
     try {
         const types = type.split(',').map(t => t.trim());
+        const isBannedRequested = types.includes('banned');
         const isSpecial = types.some(t => ['oldest', 'newest', 'no_role', 'has_role'].includes(t));
         const fetchLimit = isSpecial ? 1000 : limit;
+
         const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
         const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
         const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
+        const urlBans = `https://discord.com/api/v10/guilds/${guildId}/bans?limit=${fetchLimit}`;
 
-        const [req, rolesReq, guildReq] = await Promise.all([
+        const [req, rolesReq, guildReq, bansReq] = await Promise.all([
             fetch(urlMembers, { method: 'GET', headers }),
             fetch(urlRoles, { method: 'GET', headers }),
-            fetch(urlGuild, { method: 'GET', headers })
+            fetch(urlGuild, { method: 'GET', headers }),
+            isBannedRequested ? fetch(urlBans, { method: 'GET', headers }) : Promise.resolve(null)
         ]);
 
         let data: any = null;
         let rolesData: any = [];
         let guildData: any = null;
+        let bansData: any = [];
 
         try { data = await req.json(); } catch { }
         try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
         try { if (guildReq.status === 200) guildData = await guildReq.json(); } catch { }
 
-        if (req.status !== 200) {
+        if (isBannedRequested && bansReq) {
+            try {
+                const banJson = await bansReq.json();
+                if (bansReq.status === 200) {
+                    bansData = banJson;
+                } else if (types.length === 1 && types[0] === 'banned') {
+                    // Only return hard error if 'banned' was the only type requested
+                    return {
+                        data: null,
+                        error: banJson || { status: bansReq.status, message: 'Failed to fetch bans' }
+                    };
+                }
+            } catch { }
+        }
+
+        if (req.status !== 200 && !isBannedRequested) {
             return {
                 data: null,
-                error: data || { status: req.status, statusText: req.statusText }
+                error: data || { status: req.status, message: 'Failed to fetch members' }
             };
+        }
+
+        if (!Array.isArray(data)) data = [];
+        if (!Array.isArray(bansData)) bansData = [];
+
+        // Map bans to member-like structure
+        const mappedBans = bansData.map((ban: any) => ({
+            ...ban.user,
+            roles: [],
+            joined_at: null,
+            premium_since: null,
+            is_banned: true,
+            ban_reason: ban.reason,
+            created_at: ban.user?.id ? String(getSnowflakeDate(ban.user.id)) : null
+        }));
+
+        // Merge data based on types
+        if (types.length === 1 && types[0] === 'banned') {
+            data = mappedBans;
+        } else if (isBannedRequested) {
+            data = [...data, ...mappedBans];
         }
 
         if (Array.isArray(data)) {
             data = data.map((member: any) => {
-                const perms = getMemberPermissions(member, rolesData, guildData, guildId);
+                // Skip permission check for banned users who aren't members
+                const perms = member.is_banned ? { permissions: "0" } : getMemberPermissions(member, rolesData, guildData, guildId);
                 return {
                     ...member,
                     ...perms,
@@ -6957,6 +6999,94 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         return { error: e.message || 'Something just happened' };
     }
 };
+
+export const DiscordListRole = async (token: string, guildId: string, limit: number = 10, type: string = 'all', permission: string = 'all') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
+        const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`;
+
+        const [rolesReq, membersReq] = await Promise.all([
+            fetch(urlRoles, { method: 'GET', headers }),
+            fetch(urlMembers, { method: 'GET', headers })
+        ]);
+
+        let rolesData: any = [];
+        let membersData: any = [];
+
+        try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
+        try { if (membersReq.status === 200) membersData = await membersReq.json(); } catch { }
+
+        if (rolesReq.status !== 200) {
+            return {
+                data: null,
+                error: rolesData || { status: rolesReq.status, statusText: rolesReq.statusText }
+            };
+        }
+
+        if (Array.isArray(rolesData)) {
+            const totalRoles = rolesData.length;
+
+            // Map members to roles
+            rolesData = rolesData.map((role: any) => {
+                const members = membersData
+                    .filter((m: any) => m.roles.includes(role.id))
+                    .map((m: any) => m.user?.id);
+
+                return {
+                    ...role,
+                    membersCount: members.length,
+                    members,
+                    created_at: role.id ? String(getSnowflakeDate(role.id)) : null
+                };
+            });
+
+            // Filtering by permission
+            if (permission !== 'all') {
+                const requestedPerms = permission.split(',').map(p => p.trim().toLowerCase());
+                const permBits = requestedPerms.map(p => PERMISSION_KEYS[p]).filter(b => b !== undefined) as bigint[];
+
+                if (permBits.length > 0) {
+                    rolesData = rolesData.filter((role: any) => {
+                        const rolePerms = BigInt(role.permissions);
+                        if ((rolePerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
+                        return permBits.every(bit => (rolePerms & bit) === bit);
+                    });
+                }
+            }
+
+            // Sorting by type
+            const types = type.split(',').map(t => t.trim());
+            for (const t of types) {
+                if (t === 'oldest') {
+                    rolesData.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
+                } else if (t === 'newest') {
+                    rolesData.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
+                }
+            }
+
+            rolesData = rolesData.slice(0, limit);
+
+            return {
+                rolesCount: totalRoles,
+                data: rolesData
+            };
+        }
+
+        return { data: rolesData };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
 export const DiscordListChannel = async (token: string, guildId: string, limit: number = 10, type: string = 'all') => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!guildId) return { error: 'Missing guildId' };
@@ -7052,6 +7182,51 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
             data,
             totalChannel
         };
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordInfoServer = async (token: string, guildId: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/guilds/${guildId}?with_counts=true`;
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (data.icon) {
+            data.icon_url = `https://cdn.discordapp.com/icons/${data.id}/${data.icon}.${data.icon.startsWith('a_') ? 'gif' : 'png'}?size=4096`;
+        }
+        if (data.banner) {
+            data.banner_url = `https://cdn.discordapp.com/banners/${data.id}/${data.banner}.${data.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096`;
+        }
+        if (data.discovery_splash) {
+            data.discovery_splash_url = `https://cdn.discordapp.com/discovery-splashes/${data.id}/${data.discovery_splash}.png?size=4096`;
+        }
+        if (data.splash) {
+            data.splash_url = `https://cdn.discordapp.com/splashes/${data.id}/${data.splash}.png?size=4096`;
+        }
+
+        data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
 
         return { data };
     } catch (e: any) {
@@ -8151,7 +8326,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
             googleImgSpAuth = await googleAuthKey();
         }
 
-        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth.uiOptions.resultSetSize}&hl=${googleImgSpAuth.language}&source=gcsc&cselibv=${googleImgSpAuth.cselibVersion}&searchtype=image&cx=${googleImgSpAuth.cx}&${googleImgSpAuth.uiOptions.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth.exp.join(','))}&fexp=${encodeURIComponent(googleImgSpAuth.fexp.join(','))}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth.uiOptions.resultsUrl)}`, {
+        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&searchtype=image&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(',') || '')}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(',') || '')}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || '')}`, {
             headers: {
                 ...commonHeaders
             },
@@ -8185,6 +8360,12 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
             return { error: "Google asking to verify you're not a bot" };
         }
 
+        const response = JSON.parse(raw);
+
+        if (response?.error?.code === 400 || response?.error?.code === 401 || res.statusCode === 400 || res.statusCode === 401) {
+            return await googleSearch(query, true);
+        }
+
         const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
             headers: {
                 ...commonHeaders
@@ -8205,8 +8386,6 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
         } catch (e) {
             // Ignore parse errors
         }
-
-        const response = JSON.parse(raw);
 
         return {
             data: {
@@ -8231,7 +8410,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
             googleImgSpAuth = await googleAuthKey();
         }
 
-        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth.uiOptions.resultSetSize}&hl=${googleImgSpAuth.language}&source=gcsc&cselibv=${googleImgSpAuth.cselibVersion}&cx=${googleImgSpAuth.cx}&${googleImgSpAuth.uiOptions.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth.exp.join(','))}&fexp=${encodeURIComponent(googleImgSpAuth.fexp.join(','))}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth.uiOptions.resultsUrl)}`, {
+        const res = await request(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(',') || '')}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(',') || '')}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || '')}`, {
             headers: {
                 ...commonHeaders
             },
@@ -8265,6 +8444,12 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
             return { error: "Google asking to verify you're not a bot" };
         }
 
+        const response = JSON.parse(raw);
+
+        if (response?.error?.code === 400 || response?.error?.code === 401 || res.statusCode === 400 || res.statusCode === 401) {
+            return await googleSearch(query, true);
+        }
+
         const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
             headers: {
                 ...commonHeaders
@@ -8285,8 +8470,6 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
         } catch (e) {
             // Ignore parse errors
         }
-
-        const response = JSON.parse(raw);
 
         return {
             data: {

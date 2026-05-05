@@ -18,5 +18,7 @@ import ffmpegInterpolate from './ffmpegInterpolate.js';
 import discordVoice from './discordVoice.js';
 import gpt from './gpt.js';
 import discordListChannel from './discordListChannel.js';
+import discordInfoServer from './discordInfoServer.js';
+import discordListRole from './discordListRole.js';
 
-export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice, gpt, discordListChannel] as any[];
+export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole] as any[];

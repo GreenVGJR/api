@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { DiscordListMember, PERMISSION_KEYS } from '../../functions/request.js';
+import { DiscordListRole, PERMISSION_KEYS } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-app.get('/discord/listMember', async (c) => {
+app.get('/discord/listRoles', async (c) => {
     let token: string | null = null;
     try {
         const queryToken = c.req.query('token');
@@ -22,7 +22,7 @@ app.get('/discord/listMember', async (c) => {
     const queryLimit = c.req.query('limit');
     const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : 10;
 
-    const validTypes = ['user', 'bot', 'all', 'oldest', 'newest', 'no_role', 'has_role', 'banned'];
+    const validTypes = ['all', 'oldest', 'newest'];
     const queryType = c.req.query('type') || 'all';
     const types = queryType.split(',').map(t => t.trim());
     const invalidTypes = types.filter(t => !validTypes.includes(t));
@@ -43,7 +43,7 @@ app.get('/discord/listMember', async (c) => {
     if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
     c.header('X-Route', 'discord.com');
-    return await dispatch(c, () => DiscordListMember(token!, guildId!, limit, type, permission));
+    return await dispatch(c, () => DiscordListRole(token!, guildId!, limit, type, permission));
 });
 
 export default app;

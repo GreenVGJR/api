@@ -253,15 +253,11 @@ app.get('/filter', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const filter = (c.req.query('filter') || '').toLowerCase().trim();
 
-        if (!token) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: token', type: { primary: "error", alt: "invalid_query" } })}}`);
-            return;
-        }
-
-        if (!guildId) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required param: guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
+        if (!token || !guildId) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 

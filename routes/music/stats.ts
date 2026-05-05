@@ -10,9 +10,11 @@ import {
 app.get('/stats', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
+        const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token' })}}`);
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
         if (!hasActivePlayer(token)) {

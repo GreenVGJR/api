@@ -20,8 +20,8 @@ app.get('/connect', async (c) => {
     const force = c.req.query('force') === 'true';
 
     return await createMusicStream(c, async (log, s) => {
-        if (!token || (!voiceId && !authorId)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, voiceId (or authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
+        if (!token || (!reqGuildId && !voiceId && !authorId)) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId, voiceId (or authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 

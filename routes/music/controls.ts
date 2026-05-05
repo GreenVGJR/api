@@ -58,6 +58,7 @@ app.get('/pause', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -100,6 +101,7 @@ app.get('/resume', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -142,6 +144,7 @@ app.get('/skip', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const indexStr = c.req.query('index') || '';
         const index = parseInt(indexStr, 10);
 
@@ -222,6 +225,7 @@ app.get('/stop', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -389,6 +393,7 @@ app.get('/volume', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -444,6 +449,7 @@ app.get('/loop', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const mode = (c.req.query('mode') || '').toLowerCase();
 
         if (!token || !guildId) {
@@ -522,6 +528,7 @@ app.get('/shuffle', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -572,6 +579,7 @@ app.get('/remove', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const indexStr = c.req.query('index') || '';
         const index = parseInt(indexStr, 10);
 
@@ -621,6 +629,7 @@ app.get('/clear', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -657,6 +666,7 @@ app.get('/jump', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const indexStr = c.req.query('index') || '';
         const index = parseInt(indexStr, 10);
 
@@ -708,6 +718,7 @@ app.get('/move', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const fromStr = c.req.query('from') || '';
         const toStr = c.req.query('to') || '';
         const from = parseInt(fromStr, 10);
@@ -780,6 +791,7 @@ app.get('/back', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -839,6 +851,7 @@ app.get('/247', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);

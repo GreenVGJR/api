@@ -153,15 +153,15 @@ app.get('/play', async (c) => {
 
         const token = c.req.query('token');
         const query = c.req.query('q');
-        const platform = (c.req.query('platform') || 'youtubemusic').toLowerCase();
+        const platform = (c.req.query('platform') || 'spotify').toLowerCase();
         const voiceId = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
         const isDeaf = c.req.query('isDeaf') !== 'false';
         const req247 = c.req.query('247');
 
-        if (!token || !query) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q', type: { primary: "error", alt: "invalid_query" } })}}`);
+        if (!token || !query || (!reqGuildId && !voiceId && !authorId)) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q, guildId, voiceId', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -201,6 +201,7 @@ app.get('/play', async (c) => {
                     ...(customResult.author ? { author: customResult.author } : {}),
                     ...(customResult.url ? { uri: customResult.url } : {}),
                     ...(customResult.thumbnail ? { artworkUrl: customResult.thumbnail } : {}),
+                    actualSourceName: t.info.sourceName,
                     ...(customResult.sourceName ? { sourceName: customResult.sourceName } : {}),
                     ...(customResult.duration ? { duration: customResult.duration } : {}),
                 };
@@ -359,22 +360,25 @@ app.get('/play', async (c) => {
                         fallbacks.push({ label: 'Tidal', searchPlatform: 'tidal', query: queryStr });
                     }
 
+                    let currentAttempt = 2;
                     for (const attempt of fallbacks) {
-                        await log(`[Attempt 2] Custom ${attempt.label} search: "${attempt.query}"`);
+                        await log(`[Attempt ${currentAttempt}] Custom ${attempt.label} search: "${attempt.query}"`);
                         try {
                             const fallbackResult = await customSearch(attempt.searchPlatform, attempt.query);
                             if (!fallbackResult?.url) {
-                                await log(`[Attempt 2] "${attempt.label}" returned no results`);
+                                await log(`[Attempt ${currentAttempt}] "${attempt.label}" returned no results`);
+                                currentAttempt++;
                                 continue;
                             }
-                            await log(`[Attempt 2] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
+                            await log(`[Attempt ${currentAttempt}] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
                             result = await doSearch(fallbackResult.url, 'url');
                             applyOverlay(result, customResult);
-                            await log(`[Attempt 2] "${attempt.label}" succeeded`);
+                            await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
                             break;
                         } catch (err: any) {
-                            await log(`[Attempt 2] "${attempt.label}" failed: ${err?.message}`);
+                            await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
                         }
+                        currentAttempt++;
                     }
                 }
             }

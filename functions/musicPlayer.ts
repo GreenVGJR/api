@@ -98,12 +98,13 @@ export async function createMusicStream(
             c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');
             c.header('Content-Type', checkAccept && checkReferer ? 'text/event-stream' : 'video/mpeg');
             c.header('Cache-Control', 'public, no-cache, no-store, max-age=0, must-revalidate');
+            if (!(checkAccept && checkReferer)) {
+                c.header('Location', c.req.path + new URL(c.req.url).search);
+            }
             const rrkc = String(Number_random(1000000000, 9999999999));
             const cryUID = crypto.randomUUID();
             const rakc = cryUID.split('-');
-            if (checkAccept && checkReferer) c.header('Enc-Data', rrkc + btoa(JSON.stringify(rakc)));
-            c.status(checkAccept && checkReferer ? 302 : 403);
-            c.header('Access-Control-Allow-Origin', new URL(c.req.url).origin);
+            c.status(302);
             if (checkAccept && checkReferer) {
                 return stream(c, async (s: any) => {
                     await s.write('');
@@ -905,6 +906,7 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any)
         author: track.info.author,
         url: track.info.uri,
         source: (track.info as any).sourceName || '',
+        actualSource: (track.info as any).actualSourceName || (track.info as any).sourceName || '',
         thumbnail: track.info.artworkUrl ?? '',
         duration: formatDuration(track.info.duration),
         durationMS: String(track.info.duration),

@@ -47,17 +47,18 @@ export function pullInfo(r: string | number, q: string, s: string, u?: string[])
     const obfuscatedXt = xt.map((val, i) => i === keyIndex ? q : xorEncrypt(val.toString(), q));
     const mx = btoa(JSON.stringify(obfuscatedXt));
     const cPayload = JSON.stringify([mx, 1000, [slicekf, ip], btoa(time), xtIndex, keyIndex]);
-
+    const cKey = s + btoa(JSON.stringify(u));
+    
     const fullResponse = {
         _submit: {
             name: "x-challenge-codes",
             challengeTarget: "c",
             challengeExpire: 7200000
         },
-        c: xorEncrypt(cPayload, "b1100934ca2fa3d0")
+        c: xorEncrypt(cPayload, "cc1772647f01f4b5")
     };
 
-    return xorEncrypt(JSON.stringify(fullResponse), s);
+    return xorEncrypt(JSON.stringify(fullResponse), s) + '\n' + cKey;
 }
 
 type ChallengeResponse = [string, number, [string, string], string, number, number];

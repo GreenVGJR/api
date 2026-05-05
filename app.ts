@@ -118,14 +118,18 @@ const API_ROUTES = {
             ],
             server: [
                 "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+                "/tools/discord/infoServer?token=&guildId=",
             ],
             member: [
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
                 "/tools/discord/infoMember?token=&userId=&guildId=",
-                "/tools/discord/listMember?token=&guildId=&limit=&type=",
+                "/tools/discord/listMember?token=&guildId=&limit=&type=&permission=",
             ],
             channel: [
                 "/tools/discord/listChannel?token=&guildId=&limit=&type=",
+            ],
+            role: [
+                "/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=",
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
@@ -390,10 +394,11 @@ function isLocalRequest(host: string | undefined): boolean {
 }
 
 app.use('*', cors({
+    origin: (origin) => origin,
     credentials: true,
-    origin: '*',
     exposeHeaders: ['X-Route'],
-    allowMethods: ['GET'],
+    allowMethods: ['GET', 'OPTIONS'],
+    allowHeaders: ['*'],
 }));
 
 if (BUILD_ID) {

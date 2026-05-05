@@ -151,7 +151,7 @@ const apiBaseUrl = window.API_BASE_URL || 'https://api.vgjr.top';
 if (window.SERVER_ENDPOINTS) {
     try {
         endpoints = JSON.parse(atob(window.SERVER_ENDPOINTS));
-    } catch (e) { }
+    } catch { }
 }
 
 const urlInput = document.getElementById('urlInput');
@@ -255,7 +255,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             headers[`x-challenge-codes-${knownDeviceID}`] = await xorEncrypt(encodeURIComponent(solvedChallengeCode), knownDeviceID);
         }
 
-        const response = await fetch(targetUrl, { headers });
+        const response = await fetch(targetUrl, { headers, mode: "same-origin" });
 
         responseArea.classList.add('empty-state');
         responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
@@ -298,17 +298,19 @@ async function performRequest(targetUrl, retryCount = 0) {
             let text = await response.text();
             duration = Math.round(performance.now() - startTime);
 
-            let decryptedText = text;
-            const encKey = response.headers.get('enc-data')?.slice(0, 10);
+            let cleanText = text.trim();
+            if (cleanText.startsWith('"') && cleanText.endsWith('"')) {
+                cleanText = cleanText.substring(1, cleanText.length - 1).replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            }
+
+            const parts = cleanText.split('\n');
+            let decryptedText = parts[0];
+            const encKey = parts[1];
+
             if (encKey) {
-                // Remove potential quotes and trim
-                let cleanText = text.trim();
-                if (cleanText.startsWith('"') && cleanText.endsWith('"')) {
-                    cleanText = cleanText.substring(1, cleanText.length - 1);
-                }
                 try {
-                    decryptedText = await xorDecrypt(cleanText, encKey);
-                    knownDeviceID = JSON.parse(atob(response.headers.get('enc-data')?.slice(10))).join('-');
+                    decryptedText = await xorDecrypt(decryptedText.trim(), encKey.slice(0, 10));
+                    knownDeviceID = JSON.parse(atob(encKey.slice(10))).join('-');
                 } catch { }
             }
 
@@ -324,7 +326,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                             return await performRequest(targetUrl, retryCount + 1);
                         }
                     }
-                } catch (e) { }
+                } catch { }
             } else if (response.status === 302 && isLavalink) {
                 solvedChallengeCode = null;
             }
@@ -468,7 +470,7 @@ function renderParams() {
                     }
                 }
             }
-        } catch (e) { }
+        } catch { }
 
         paramsContainer.innerHTML = currentParams.map((p, i) => `
             <div class="param-row">
@@ -559,7 +561,7 @@ function syncUrlToParams() {
                 }
             });
         }
-    } catch (e) { }
+    } catch { }
 }
 
 paramsToggle.addEventListener('click', () => {

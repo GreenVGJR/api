@@ -15,6 +15,7 @@ app.get('/voiceStatus', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
+        const voiceId = c.req.query('voiceId');
         const type = c.req.query('type');
         const statusStr = c.req.query('status');
         const content = c.req.query('content');
@@ -91,7 +92,7 @@ app.get('/voiceStatus', async (c) => {
                 data: {
                     ...getVoiceStatusSettings(token, guildId),
                     tags: [
-                        "{id}", "{title}", "{author}", "{url}", "{source}", "{thumbnail}",
+                        "{id}", "{title}", "{author}", "{url}", "{source}", "{actualSource}", "{thumbnail}",
                         "{duration}", "{durationMS}", "{isSeekable}", "{isStream}", "{requestedBy}",
                         "{requester.id}", "{requester.username}", "{requester.globalName}", "{requester.tag}"
                     ]

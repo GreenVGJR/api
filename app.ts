@@ -127,16 +127,22 @@ const API_ROUTES = {
             ],
             channel: [
                 "/tools/discord/listChannel?token=&guildId=&limit=&type=",
+                "/tools/discord/infoChannel?token=&channelId=&guildId=",
             ],
             role: [
                 "/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=",
+                "/tools/discord/infoRole?token=&roleId=&guildId=",
+            ],
+            invite: [
+                "/tools/discord/infoInvite?token=&q=&guildId=",
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
                 { info: ["/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="] },
                 { delete: ["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="] },
                 { send: ["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="] },
-                { list: ["/tools/discord/webhook/list?token=&channelId="] }
+                { list: ["/tools/discord/webhook/list?token=&channelId="] },
+                { listGuild: ["/tools/discord/listWebhooks?token=&guildId=&type="] }
             ],
             message: [
                 "/tools/discord/infoMessages?token=&channelId=&sort=&limit="

@@ -15,7 +15,7 @@ app.get('/discord/listChannel', async (c) => {
         }
     }
     catch {
-        return c.json({ data: "Invalid token format", status: false }, 202);
+        return c.json({ error: "Invalid token format" }, 202);
     }
 
     const queryGuildId = c.req.query('guildId');
@@ -29,12 +29,12 @@ app.get('/discord/listChannel', async (c) => {
     const types = queryType.split(',').map(t => t.trim());
     const invalidTypes = types.filter(t => !validTypes.includes(t));
     if (invalidTypes.length > 0) {
-        return c.json({ data: `List types: ${validTypes.join(', ')}`, status: false }, 202);
+        return c.json({ error: `List types: ${validTypes.join(', ')}` }, 202);
     }
     const type = queryType;
     
-    if (!token) return c.json({ data: "Missing valid parameter: token", status: false }, 202);
-    if (!guildId) return c.json({ data: "Missing valid parameter: guildId", status: false }, 202);
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
     c.header('X-Route', 'discord.com');
     return await dispatch(c, () => DiscordListChannel(token!, guildId!, limit, type));

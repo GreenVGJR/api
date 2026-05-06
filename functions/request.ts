@@ -105,6 +105,7 @@ const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Fire
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
+    'Connection': 'keep-alive',
     'Priority': 'u=0, i',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
@@ -2263,12 +2264,13 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
-            'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+            'x-goog-ext-525001261-jspb': '[1,null,null,null,"56fdd199312815e2",null,null,0,[4],null,null,1]',
             'Referer': 'https://gemini.google.com',
             'Origin': 'https://gemini.google.com',
             'X-Same-Domain': '1'
         },
-        body: reqPayload
+        body: reqPayload,
+        useH2: true
     });
 
     if (req.url.includes('google.com/sorry')) {
@@ -3717,7 +3719,18 @@ export const DiscordWebhook = async (token: string, guildId: string, payload: an
             }
         }
 
-        if (action === 'info' && result && typeof result === 'object') {
+        if (result) {
+            if (Array.isArray(result)) {
+                result = result.map((w: any) => ({
+                    ...w,
+                    created_at: w.id ? String(getSnowflakeDate(w.id)) : null
+                }));
+            } else if (typeof result === 'object' && result.id) {
+                result.created_at = String(getSnowflakeDate(result.id));
+            }
+        }
+
+        if (action === 'info' && result && typeof result === 'object' && !Array.isArray(result)) {
             if (result.user === undefined) {
                 if (checkUserFill && response.status === 200) {
                     result.user = {
@@ -6717,6 +6730,7 @@ export const PERMISSION_KEYS: Record<string, bigint> = {
     sendmessages: 1n << 11n,
     sendmessagesinthreads: 1n << 38n,
     sendvoicemessages: 1n << 45n,
+    setvoicechannelstatus: 1n << 48n,
     slashcommands: 1n << 31n,
     speak: 1n << 21n,
     stream: 1n << 9n,
@@ -6727,6 +6741,20 @@ export const PERMISSION_KEYS: Record<string, bigint> = {
     viewguildinsights: 1n << 19n,
     voicedeafen: 1n << 23n,
     voicemute: 1n << 22n,
+};
+
+export const DISCORD_CHANNEL_TYPES: Record<number, string> = {
+    0: 'text',
+    2: 'voice',
+    4: 'category',
+    5: 'announcement',
+    10: 'announcement_thread',
+    11: 'public_thread',
+    12: 'private_thread',
+    13: 'stage',
+    14: 'directory',
+    15: 'forum',
+    16: 'media'
 };
 
 function resolvePermissions(permissions: string | bigint | null | undefined): string[] {
@@ -6804,19 +6832,28 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
         const urlRoles = guildId ? `https://discord.com/api/v10/guilds/${guildId}/roles` : null;
         const urlGuild = guildId ? `https://discord.com/api/v10/guilds/${guildId}` : null;
 
-        const [req, rolesReq, guildReq] = await Promise.all([
+        const urlDMs = `https://discord.com/api/v10/users/@me/channels`;
+
+        const [req, rolesReq, guildReq, dmReq] = await Promise.all([
             fetch(url, { method: 'GET', headers }),
             urlRoles ? fetch(urlRoles, { method: 'GET', headers }) : Promise.resolve(null),
-            urlGuild ? fetch(urlGuild, { method: 'GET', headers }) : Promise.resolve(null)
+            urlGuild ? fetch(urlGuild, { method: 'GET', headers }) : Promise.resolve(null),
+            fetch(urlDMs, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ recipient_id: userId })
+            })
         ]);
 
         let data: any = null;
         let rolesData: any = [];
         let guildData: any = null;
+        let dmData: any = null;
 
         try { data = await req.json(); } catch { }
         try { if (rolesReq && rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
         try { if (guildReq && guildReq.status === 200) guildData = await guildReq.json(); } catch { }
+        try { if (dmReq && dmReq.status === 200) dmData = await dmReq.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -6848,6 +6885,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
         const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
 
         const result: any = {
+            dmChannelId: dmData?.id || null,
             ...data,
             ...perms,
             avatar_url: guildAvatarUrl || avatarUrl,
@@ -6879,53 +6917,75 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         const types = type.split(',').map(t => t.trim());
         const isBannedRequested = types.includes('banned');
         const isSpecial = types.some(t => ['oldest', 'newest', 'no_role', 'has_role'].includes(t));
-        const fetchLimit = isSpecial ? 1000 : limit;
 
-        const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
+        // If special sorting/filtering is requested, we need a larger pool (at least 1000)
+        // unless the limit is already higher.
+        const targetLimit = isSpecial ? Math.max(1000, limit) : (limit === -1 ? 1000 : limit);
+
         const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
         const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
-        const urlBans = `https://discord.com/api/v10/guilds/${guildId}/bans?limit=${fetchLimit}`;
-
-        const [req, rolesReq, guildReq, bansReq] = await Promise.all([
-            fetch(urlMembers, { method: 'GET', headers }),
+        const [rolesReq, guildReq] = await Promise.all([
             fetch(urlRoles, { method: 'GET', headers }),
-            fetch(urlGuild, { method: 'GET', headers }),
-            isBannedRequested ? fetch(urlBans, { method: 'GET', headers }) : Promise.resolve(null)
+            fetch(urlGuild, { method: 'GET', headers })
         ]);
 
-        let data: any = null;
         let rolesData: any = [];
         let guildData: any = null;
-        let bansData: any = [];
-
-        try { data = await req.json(); } catch { }
         try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
         try { if (guildReq.status === 200) guildData = await guildReq.json(); } catch { }
 
-        if (isBannedRequested && bansReq) {
-            try {
-                const banJson = await bansReq.json();
-                if (bansReq.status === 200) {
-                    bansData = banJson;
-                } else if (types.length === 1 && types[0] === 'banned') {
-                    // Only return hard error if 'banned' was the only type requested
-                    return {
-                        data: null,
-                        error: banJson || { status: bansReq.status, message: 'Failed to fetch bans' }
-                    };
-                }
-            } catch { }
+        // Paginated fetch for members
+        let data: any[] = [];
+        let lastMemberId: string | null = null;
+        let membersFetchRemaining = (isBannedRequested && types.length === 1) ? 0 : targetLimit;
+
+        while (membersFetchRemaining > 0) {
+            const currentFetchLimit = Math.min(membersFetchRemaining, 1000);
+            let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}`;
+            if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
+
+            const req = await fetch(urlMembers, { method: 'GET', headers });
+            if (req.status !== 200) break;
+
+            const batch = await req.json();
+            if (!Array.isArray(batch) || batch.length === 0) break;
+
+            data.push(...batch);
+            lastMemberId = batch[batch.length - 1].user?.id;
+            membersFetchRemaining -= batch.length;
+            if (batch.length < currentFetchLimit) break;
         }
 
-        if (req.status !== 200 && !isBannedRequested) {
+        // Paginated fetch for bans
+        let bansData: any[] = [];
+        if (isBannedRequested) {
+            let lastBanId: string | null = null;
+            let bansFetchRemaining = targetLimit;
+
+            while (bansFetchRemaining > 0) {
+                const currentFetchLimit = Math.min(bansFetchRemaining, 1000);
+                let urlBans = `https://discord.com/api/v10/guilds/${guildId}/bans?limit=${currentFetchLimit}`;
+                if (lastBanId) urlBans += `&after=${lastBanId}`;
+
+                const req = await fetch(urlBans, { method: 'GET', headers });
+                if (req.status !== 200) break;
+
+                const batch = await req.json();
+                if (!Array.isArray(batch) || batch.length === 0) break;
+
+                bansData.push(...batch);
+                lastBanId = batch[batch.length - 1].user?.id;
+                bansFetchRemaining -= batch.length;
+                if (batch.length < currentFetchLimit) break;
+            }
+        }
+
+        if (data.length === 0 && bansData.length === 0 && !isBannedRequested) {
             return {
                 data: null,
-                error: data || { status: req.status, message: 'Failed to fetch members' }
+                error: { message: 'Failed to fetch members or bans' }
             };
         }
-
-        if (!Array.isArray(data)) data = [];
-        if (!Array.isArray(bansData)) bansData = [];
 
         // Map bans to member-like structure
         const mappedBans = bansData.map((ban: any) => ({
@@ -6946,11 +7006,12 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         }
 
         if (Array.isArray(data)) {
-            data = data.map((member: any) => {
+            data = data.map((member: any, index: number) => {
                 // Skip permission check for banned users who aren't members
                 const perms = member.is_banned ? { permissions: "0" } : getMemberPermissions(member, rolesData, guildData, guildId);
                 return {
                     ...member,
+                    position: index + 1,
                     ...perms,
                     joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
                     created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
@@ -6973,11 +7034,14 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
                 }
             }
 
+            const botsCount = data.filter((member: any) => member.user?.bot || member.bot).length;
+            const usersCount = data.filter((member: any) => !member.user?.bot && !member.bot).length;
+
             for (const t of types) {
                 if (t === 'user') {
-                    data = data.filter((member: any) => !member.user?.bot);
+                    data = data.filter((member: any) => !member.user?.bot && !member.bot);
                 } else if (t === 'bot') {
-                    data = data.filter((member: any) => member.user?.bot);
+                    data = data.filter((member: any) => member.user?.bot || member.bot);
                 } else if (t === 'no_role') {
                     data = data.filter((member: any) => !member.roles || member.roles.length === 0);
                 } else if (t === 'has_role') {
@@ -6992,6 +7056,12 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             if (isSpecial) {
                 data = data.slice(0, limit);
             }
+
+            return {
+                botsCount,
+                usersCount,
+                data
+            };
         }
 
         return { data };
@@ -7073,6 +7143,18 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
                 }
             }
 
+            rolesData = rolesData.map((role: any) => {
+                const resolvedArray = resolvePermissions(role.permissions);
+                return {
+                    ...role,
+                    permissions_resolved: {
+                        array: resolvedArray,
+                        string: resolvedArray.join(', ')
+                    },
+                    created_at: role.id ? String(getSnowflakeDate(role.id)) : null
+                };
+            });
+
             rolesData = rolesData.slice(0, limit);
 
             return {
@@ -7125,65 +7207,66 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
             };
         }
 
-        const types = type.split(',').map(t => t.trim().toLowerCase());
+        if (Array.isArray(data)) {
+            data = data.map((channel: any) => ({
+                ...channel,
+                type: {
+                    id: channel.type,
+                    name: DISCORD_CHANNEL_TYPES[channel.type] || 'unknown'
+                },
+                permission_overwrites: Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites.map((o: any) => {
+                    const allowResolved = resolvePermissions(o.allow);
+                    const denyResolved = resolvePermissions(o.deny);
+                    return {
+                        ...o,
+                        allow_resolved: { array: allowResolved, string: allowResolved.join(', ') },
+                        deny_resolved: { array: denyResolved, string: denyResolved.join(', ') }
+                    };
+                }) : channel.permission_overwrites,
+                created_at: channel.id ? String(getSnowflakeDate(channel.id)) : null
+            }));
 
-        const channelTypeMap: Record<number, string> = {
-            0: 'text',
-            2: 'voice',
-            4: 'category',
-            5: 'announcement',
-            10: 'announcement_thread',
-            11: 'public_thread',
-            12: 'private_thread',
-            13: 'stage',
-            14: 'directory',
-            15: 'forum',
-            16: 'media'
-        };
+            const types = type.split(',').map(t => t.trim().toLowerCase());
 
-        const totalChannel: any = {
-            text: 0,
-            voice: 0,
-            category: 0,
-            announcement: 0,
-            announcement_thread: 0,
-            public_thread: 0,
-            private_thread: 0,
-            stage: 0,
-            directory: 0,
-            forum: 0,
-            media: 0,
-            all: data.length
-        };
+            const totalChannel: any = {
+                text: 0,
+                voice: 0,
+                category: 0,
+                announcement: 0,
+                announcement_thread: 0,
+                public_thread: 0,
+                private_thread: 0,
+                stage: 0,
+                directory: 0,
+                forum: 0,
+                media: 0,
+                all: data.length
+            };
 
-        data.forEach((channel: any) => {
-            const typeName = channelTypeMap[channel.type];
-            if (typeName) {
-                totalChannel[typeName]++;
-            }
-        });
-
-        if (!types.includes('all')) {
-            data = data.filter((channel: any) => {
-                const typeName = channelTypeMap[channel.type];
-                if (typeName && types.includes(typeName)) return true;
-                if (types.includes('threads') && [10, 11, 12].includes(channel.type)) return true;
-                return false;
+            data.forEach((channel: any) => {
+                const typeName = channel.type.name;
+                if (typeName && totalChannel[typeName] !== undefined) {
+                    totalChannel[typeName]++;
+                }
             });
+
+            if (!types.includes('all')) {
+                data = data.filter((channel: any) => {
+                    const typeName = channel.type.name;
+                    if (typeName && types.includes(typeName)) return true;
+                    if (types.includes('threads') && [10, 11, 12].includes(channel.type.id)) return true;
+                    return false;
+                });
+            }
+
+            const sliceLimit = limit === -1 ? data.length : limit;
+            data = data.slice(0, sliceLimit);
+
+            return {
+                data,
+                totalChannel,
+            };
         }
-
-        const sliceLimit = limit === -1 ? data.length : limit;
-        data = data.slice(0, sliceLimit).map((channel: any) => ({
-            ...channel,
-            created_at: channel.id ? String(getSnowflakeDate(channel.id)) : null
-        }));
-
-        return {
-            data,
-            totalChannel
-        };
-
-        return { data };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };
     }
@@ -7200,11 +7283,32 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
     };
 
     try {
+        let botId: string | null = null;
+        try {
+            botId = Buffer.from(token.split('.')[0], 'base64').toString();
+        } catch { }
+
         const url = `https://discord.com/api/v10/guilds/${guildId}?with_counts=true`;
-        const req = await fetch(url, { method: 'GET', headers });
+        const urlWebhooks = `https://discord.com/api/v10/guilds/${guildId}/webhooks`;
+        const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
+        const urlClientMember = botId ? `https://discord.com/api/v10/guilds/${guildId}/members/${botId}` : null;
+
+        const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([
+            fetch(url, { method: 'GET', headers }),
+            fetch(urlWebhooks, { method: 'GET', headers }),
+            fetch(urlChannels, { method: 'GET', headers }),
+            urlClientMember ? fetch(urlClientMember, { method: 'GET', headers }) : Promise.resolve(null)
+        ]);
 
         let data: any = null;
+        let webhooksData: any = [];
+        let channelsData: any = [];
+        let clientMemberData: any = null;
+
         try { data = await req.json(); } catch { }
+        try { if (webhooksReq.status === 200) webhooksData = await webhooksReq.json(); } catch { }
+        try { if (channelsReq.status === 200) channelsData = await channelsReq.json(); } catch { }
+        try { if (clientMemberReq && clientMemberReq.status === 200) clientMemberData = await clientMemberReq.json(); } catch { }
 
         if (req.status !== 200) {
             return {
@@ -7224,6 +7328,106 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
         }
         if (data.splash) {
             data.splash_url = `https://cdn.discordapp.com/splashes/${data.id}/${data.splash}.png?size=4096`;
+        }
+
+        if (data.roles) {
+            data.roles = data.roles.map((r: any) => ({ ...r, created_at: r.id ? String(getSnowflakeDate(r.id)) : null }));
+        }
+        if (data.emojis) {
+            data.emojis = data.emojis.map((e: any) => ({ ...e, created_at: e.id ? String(getSnowflakeDate(e.id)) : null }));
+        }
+        if (data.stickers) {
+            data.stickers = data.stickers.map((s: any) => ({ ...s, created_at: s.id ? String(getSnowflakeDate(s.id)) : null }));
+        }
+
+        if (Array.isArray(webhooksData)) {
+            data.webhooks = webhooksData.map((w: any) => ({
+                ...w,
+                created_at: w.id ? String(getSnowflakeDate(w.id)) : null
+            }));
+        } else {
+            data.webhooks = [];
+        }
+
+        const totalChannel: any = {
+            text: 0,
+            voice: 0,
+            category: 0,
+            announcement: 0,
+            announcement_thread: 0,
+            public_thread: 0,
+            private_thread: 0,
+            stage: 0,
+            directory: 0,
+            forum: 0,
+            media: 0,
+            all: 0
+        };
+
+        if (Array.isArray(channelsData)) {
+            totalChannel.all = channelsData.length;
+            channelsData.forEach((channel: any) => {
+                const typeName = DISCORD_CHANNEL_TYPES[channel.type];
+                if (typeName) {
+                    totalChannel[typeName]++;
+                }
+            });
+
+            data.channels = {
+                totalChannel,
+                data: channelsData.map((channel: any) => ({
+                    ...channel,
+                    type: {
+                        id: channel.type,
+                        name: DISCORD_CHANNEL_TYPES[channel.type] || 'unknown'
+                    },
+                    permission_overwrites: Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites.map((o: any) => {
+                        const allowResolved = resolvePermissions(o.allow);
+                        const denyResolved = resolvePermissions(o.deny);
+                        return {
+                            ...o,
+                            allow_resolved: { array: allowResolved, string: allowResolved.join(', ') },
+                            deny_resolved: { array: denyResolved, string: denyResolved.join(', ') }
+                        };
+                    }) : channel.permission_overwrites,
+                    created_at: channel.id ? String(getSnowflakeDate(channel.id)) : null
+                }))
+            };
+        } else {
+            data.channels = {
+                totalChannel,
+                data: []
+            };
+        }
+
+        if (clientMemberData) {
+            const userData = clientMemberData.user;
+            const flagsBadges = resolveFlags(userData?.flags);
+            const publicFlagsBadges = resolveFlags(userData?.public_flags);
+
+            const avatarUrl = userData?.avatar
+                ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+                : null;
+            const bannerUrl = userData?.banner
+                ? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+                : null;
+            const guildAvatarUrl = (guildId && clientMemberData.avatar)
+                ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userData.id}/avatars/${clientMemberData.avatar}.${clientMemberData.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
+                : null;
+
+            const perms = getMemberPermissions(clientMemberData, data.roles, data, guildId);
+
+            data.client = {
+                ...clientMemberData,
+                ...perms,
+                avatar_url: guildAvatarUrl || avatarUrl,
+                banner_url: bannerUrl,
+                badges: publicFlagsBadges,
+                badges_raw: flagsBadges,
+                joined_at: clientMemberData.joined_at ? String(Math.floor(new Date(clientMemberData.joined_at).getTime() / 1000)) : null,
+                premium_since: clientMemberData.premium_since ? String(Math.floor(new Date(clientMemberData.premium_since).getTime() / 1000)) : null,
+                created_at: userData?.id ? String(getSnowflakeDate(userData.id)) : null
+            };
         }
 
         data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
@@ -7265,6 +7469,238 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
                 data: null,
                 error: data || { status: req.status, statusText: req.statusText }
             };
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordInfoInvite = async (token: string | null, q: string, guildId?: string) => {
+    let code = q;
+    if (q) {
+        if (q.includes('discord.gg/')) code = q.split('discord.gg/')[1].split('/')[0].split('?')[0];
+        else if (q.includes('discord.com/invite/')) code = q.split('discord.com/invite/')[1].split('/')[0].split('?')[0];
+    }
+
+    const headers: any = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+    if (token) headers['Authorization'] = `Bot ${token}`;
+
+    try {
+        const url = guildId
+            ? `https://discord.com/api/v10/guilds/${guildId}/invites`
+            : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
+
+        const req = await fetch(url, { method: 'GET', headers });
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (guildId && Array.isArray(data)) {
+            const invite = data.find((i: any) => i.code === code);
+            if (!invite) return { data: null, error: 'Invite not found in guild' };
+            data = invite;
+        }
+
+        if (data && data.guild) {
+            const g = data.guild;
+            const guildId = g.id;
+
+            data.guild.icon_url = g.icon ? `https://cdn.discordapp.com/icons/${guildId}/${g.icon}.${g.icon.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+            data.guild.splash_url = g.splash ? `https://cdn.discordapp.com/splashes/${guildId}/${g.splash}.png?size=4096` : null;
+            data.guild.banner_url = g.banner ? `https://cdn.discordapp.com/banners/${guildId}/${g.banner}.${g.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+            data.guild.created_at = guildId ? String(getSnowflakeDate(guildId)) : null;
+        }
+
+        if (data && data.inviter) {
+            const u = data.inviter;
+            const userId = u.id;
+
+            data.inviter.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${u.avatar}.${u.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+            data.inviter.banner_url = u.banner ? `https://cdn.discordapp.com/banners/${userId}/${u.banner}.${u.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+            data.inviter.badges = resolveFlags(u.public_flags);
+            data.inviter.created_at = userId ? String(getSnowflakeDate(userId)) : null;
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordInfoChannel = async (token: string, channelId: string, guildId?: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!channelId) return { error: 'Missing channelId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const url = guildId
+            ? `https://discord.com/api/v10/guilds/${guildId}/channels`
+            : `https://discord.com/api/v10/channels/${channelId}`;
+
+        const req = await fetch(url, { method: 'GET', headers });
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (guildId && Array.isArray(data)) {
+            const channel = data.find((c: any) => c.id === channelId);
+            if (!channel) return { data: null, error: 'Channel not found in guild' };
+            data = channel;
+        }
+
+        if (data && !Array.isArray(data)) {
+            data.type = {
+                id: data.type,
+                name: DISCORD_CHANNEL_TYPES[data.type] || 'unknown'
+            };
+
+            if (data.permission_overwrites) {
+                data.permission_overwrites = data.permission_overwrites.map((o: any) => {
+                    const allowResolved = resolvePermissions(o.allow);
+                    const denyResolved = resolvePermissions(o.deny);
+                    return {
+                        ...o,
+                        allow_resolved: {
+                            array: allowResolved,
+                            string: allowResolved.join(', ')
+                        },
+                        deny_resolved: {
+                            array: denyResolved,
+                            string: denyResolved.join(', ')
+                        }
+                    };
+                });
+            }
+            data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordInfoRole = async (token: string, roleId: string, guildId: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!roleId) return { error: 'Missing roleId' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
+        const urlCounts = `https://discord.com/api/v9/guilds/${guildId}/roles/member-counts`;
+
+        const [rolesReq, countsReq] = await Promise.all([
+            fetch(urlRoles, { method: 'GET', headers }),
+            fetch(urlCounts, { method: 'GET', headers })
+        ]);
+
+        let rolesData: any = [];
+        let countsData: any = [];
+
+        try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
+        try { if (countsReq.status === 200) countsData = await countsReq.json(); } catch { }
+
+        if (rolesReq.status !== 200) {
+            return {
+                data: null,
+                error: rolesData || { status: rolesReq.status, statusText: rolesReq.statusText }
+            };
+        }
+
+        let data: any = null;
+        if (Array.isArray(rolesData)) {
+            const role = rolesData.find((r: any) => r.id === roleId);
+            if (!role) return { data: null, error: 'Role not found' };
+            data = role;
+        }
+
+        if (data && !Array.isArray(data)) {
+            // Access member count directly from the object using roleId as key
+            const membersCount = (countsData && typeof countsData === 'object') ? (countsData[roleId] || 0) : 0;
+
+            const resolvedArray = resolvePermissions(data.permissions);
+            data = {
+                ...data,
+                membersCount,
+                permissions_resolved: {
+                    array: resolvedArray,
+                    string: resolvedArray.join(', ')
+                },
+                created_at: data.id ? String(getSnowflakeDate(data.id)) : null
+            };
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordListWebhooks = async (token: string, guildId: string, type: string = 'all') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/guilds/${guildId}/webhooks`;
+        const req = await fetch(url, { method: 'GET', headers });
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (Array.isArray(data)) {
+            data = data.map((w: any) => ({
+                ...w,
+                created_at: w.id ? String(getSnowflakeDate(w.id)) : null
+            }));
+
+            const types = type.split(',').map(t => t.trim().toLowerCase());
+            for (const t of types) {
+                if (t === 'oldest') {
+                    data.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
+                } else if (t === 'newest') {
+                    data.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
+                }
+            }
         }
 
         return { data };

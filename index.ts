@@ -14,19 +14,8 @@ if (!g.__vgjr_initialized) {
     g.__vgjr_refresh_count = 0;
     autoInit().catch(() => { });
 
-    if (typeof Bun !== "object") {
-        serve({
-            fetch: app.fetch,
-            port,
-            hostname: "127.0.0.1"
-        }, () => {
-            console.log(`\n🚀 Server is running!`);
-            console.log(`🏠 Local:    http://localhost:${port}/playground`);
-        });
-    } else {
-        console.log(`\n🚀 Bun Server is running!`);
-        console.log(`🏠 Local:    http://localhost:${port}/playground`);
-    }
+    console.log(`\n🚀 Bun Server is running!`);
+    console.log(`🏠 Local:    http://localhost:${port}/playground`);
 } else {
     console.log('🔄 Routes hot-reloaded!');
 }

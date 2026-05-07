@@ -110,6 +110,12 @@ const API_ROUTES = {
             "/tools/timezone?q=",
             "/tools/emoji?q=&limit="
         ],
+        db: [
+            "/tools/db/get?q=&hash=",
+            "/tools/db/getAll?q=&hash=",
+            "/tools/db/delete?q=&hash=",
+            "/tools/db/set?name=&value=&hash="
+        ],
         discord: {
             stream: [
                 "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed="
@@ -136,6 +142,9 @@ const API_ROUTES = {
             ],
             invite: [
                 "/tools/discord/infoInvite?token=&q=&guildId=",
+            ],
+            sticker: [
+                "/tools/discord/infoSticker?token=&q="
             ],
             webhook: [
                 { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
@@ -557,8 +566,7 @@ app.get('/', (c: Context) => stream(c, async (l) => {
         uptime: uptime,
         os_uptime: os_uptime,
         service: `Hono v${honoVersion}`,
-        runtime: (typeof Bun !== "object" ? "Node.js" : "Bun") + " v" + (typeof Bun !== "object" ? process.version.slice(1) : (Bun as any).version),
-        fallback_runtime: (typeof Bun === "object" ? "Node.js" : "Bun") + " v" + (typeof Bun === "object" ? process.version.slice(1) : (Bun as any).version),
+        runtime: "Bun",
         stats: {
             cpu: cpu,
             ram: ram,

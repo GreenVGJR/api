@@ -7331,6 +7331,9 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
         if (data.splash) {
             data.splash_url = `https://cdn.discordapp.com/splashes/${data.id}/${data.splash}.png?size=4096`;
         }
+        if (data.home_header) {
+            data.home_header_url = `https://cdn.discordapp.com/home-headers/${data.id}/${data.home_header}.png?size=4096`;
+        }
 
         if (data.roles) {
             data.roles = data.roles.map((r: any) => ({ ...r, created_at: r.id ? String(getSnowflakeDate(r.id)) : null }));
@@ -7441,7 +7444,104 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 };
 
 
-const processDiscordMessage = (m: any) => {
+const stickerCache = new Map<string, any>();
+
+export const DiscordInfoSticker = async (token: string, q: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!q) return { error: 'Missing sticker ID or URL' };
+
+    const match = q.match(/(?:cdn\.discordapp\.com\/stickers\/|discord\.com\/stickers\/)?(\d+)/);
+    const stickerId = match ? match[1] : q;
+
+    if (stickerCache.has(stickerId)) return { data: stickerCache.get(stickerId) };
+
+    const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': botUserAgent
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/stickers/${stickerId}`;
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (data) {
+            data.created_at = String(getSnowflakeDate(data.id));
+            const ext = data.format_type === 4 ? 'gif' : (data.format_type === 3 ? 'json' : 'png');
+            data.url = `https://cdn.discordapp.com/stickers/${data.id}.${ext}`;
+
+            if (data.guild_id && token) {
+                const guildRes = await DiscordInfoServer(token, data.guild_id);
+                if (guildRes?.data) {
+                    data.guild = guildRes.data;
+                } else {
+                    try {
+                        const previewUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/preview`;
+                        const previewReq = await fetch(previewUrl, { method: 'GET', headers });
+                        if (previewReq.status === 200) {
+                            const previewData: any = await previewReq.json();
+                            if (previewData) {
+                                previewData.icon_url = previewData.icon ? `https://cdn.discordapp.com/icons/${previewData.id}/${previewData.icon}.${previewData.icon.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+                                previewData.splash_url = previewData.splash ? `https://cdn.discordapp.com/splashes/${previewData.id}/${previewData.splash}.png?size=4096` : null;
+                                previewData.discovery_splash_url = previewData.discovery_splash ? `https://cdn.discordapp.com/discovery-splashes/${previewData.id}/${previewData.discovery_splash}.png?size=4096` : null;
+                                previewData.home_header_url = previewData.home_header ? `https://cdn.discordapp.com/home-headers/${previewData.id}/${previewData.home_header}.png?size=4096` : null;
+                                previewData.created_at = String(getSnowflakeDate(previewData.id));
+                                data.guild = previewData;
+                            }
+                            else {
+                                data.guild = {};
+                            }
+                        }
+                        else {
+                            data.guild = {};
+                        }
+                    } catch { }
+                }
+
+                if (!data.user) {
+                    try {
+                        const guildStickersUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/stickers`;
+                        const gsReq = await fetch(guildStickersUrl, { method: 'GET', headers });
+                        if (gsReq.status === 200) {
+                            const stickers: any[] = (await gsReq.json()) as any;
+                            const found = stickers.find(st => st.id === data.id);
+                            if (found && found.user) {
+                                data.user = found.user;
+                            }
+                        }
+                    } catch { }
+                }
+            }
+
+            if (data.user) {
+                const u = data.user;
+                u.created_at = String(getSnowflakeDate(u.id));
+                u.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+            }
+            else {
+                data.user = {};
+            }
+            stickerCache.set(stickerId, data);
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+const processDiscordMessage = async (m: any, token?: string) => {
     if (!m) return m;
 
     if (m.timestamp) {
@@ -7458,9 +7558,17 @@ const processDiscordMessage = (m: any) => {
     }
 
     if (Array.isArray(m.sticker_items)) {
-        for (const s of m.sticker_items) {
+        for (let i = 0; i < m.sticker_items.length; i++) {
+            const s = m.sticker_items[i];
             const ext = s.format_type === 4 ? 'gif' : (s.format_type === 3 ? 'json' : 'png');
             s.url = `https://cdn.discordapp.com/stickers/${s.id}.${ext}`;
+
+            if (token) {
+                const res = await DiscordInfoSticker(token, s.id);
+                if (res?.data) {
+                    m.sticker_items[i] = { ...s, ...res.data };
+                }
+            }
         }
     }
     else {
@@ -7560,7 +7668,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
         }
 
         if (Array.isArray(data)) {
-            data = data.map(m => processDiscordMessage(m));
+            data = await Promise.all(data.map(m => processDiscordMessage(m, token)));
         }
 
         return { limit, data };
@@ -7596,7 +7704,7 @@ export const DiscordInfoMessage = async (token: string, channelId: string, messa
         }
 
         if (data) {
-            data = processDiscordMessage(data);
+            data = await processDiscordMessage(data, token);
         }
 
         return { data };

@@ -7481,7 +7481,7 @@ const processDiscordMessage = (m: any) => {
             url: `https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}?size=4096`
         });
     }
-    if (emojiItems.length > 0) m.emoji_items = emojiItems;
+    m.emoji_items = emojiItems;
 
     const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
     const bareUrlRegex = /https?:\/\/[^\s<]+[^<.,:;"')\]\s]/g;

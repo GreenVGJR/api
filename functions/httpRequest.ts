@@ -148,7 +148,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
   c.header('X-Enc-Route', 'v4');
   c.header('Content-Type', 'application/json');
-  c.header('Cache-Control', requrl.pathname?.startsWith('/tools/discord/') ? 'public, max-age=0, must-revalidate' : 'public, max-age=10, must-revalidate');
+  c.header('Cache-Control', (requrl.pathname?.startsWith('/tools/discord/') || requrl.pathname?.startsWith('/tools/db/')) ? 'public, max-age=0, must-revalidate' : 'public, max-age=10, must-revalidate');
 
   return stream(c, async (stream) => {
     stream.onAbort(() => {

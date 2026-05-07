@@ -7060,6 +7060,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             return {
                 botsCount,
                 usersCount,
+                limit: limit,
                 data
             };
         }
@@ -7159,6 +7160,7 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 
             return {
                 rolesCount: totalRoles,
+                limit: limit,
                 data: rolesData
             };
         }
@@ -7439,7 +7441,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 };
 
 
-export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit?: number) => {
+export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit: number = 50) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!channelId) return { error: 'Missing channelId' };
 
@@ -7471,17 +7473,20 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
             };
         }
 
-        return { data };
+        return { limit, data };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };
     }
 };
 
 export const DiscordInfoInvite = async (token: string | null, q: string, guildId?: string) => {
-    let code = q;
-    if (q) {
-        if (q.includes('discord.gg/')) code = q.split('discord.gg/')[1].split('/')[0].split('?')[0];
-        else if (q.includes('discord.com/invite/')) code = q.split('discord.com/invite/')[1].split('/')[0].split('?')[0];
+    // Extract invite code from URL or bare code
+    const match = q?.match(/(?:discord\.gg\/|discord\.com\/invite\/)([a-zA-Z0-9-]+)|^([a-zA-Z0-9-]+)$/);
+    const code = match?.[1] ?? match?.[2] ?? null;
+
+    // Validate: Discord invite codes are alphanumeric + hyphens, 2–30 chars
+    if (!guildId && (!code || !/^[a-zA-Z0-9-]{2,30}$/.test(code))) {
+        return { error: "Invalid or missing invite code" };
     }
 
     const headers: any = {
@@ -7529,6 +7534,7 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
             data.inviter.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${u.avatar}.${u.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
             data.inviter.banner_url = u.banner ? `https://cdn.discordapp.com/banners/${userId}/${u.banner}.${u.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
             data.inviter.badges = resolveFlags(u.public_flags);
+            data.inviter.badges_raw = resolveFlags(u.flags);
             data.inviter.created_at = userId ? String(getSnowflakeDate(userId)) : null;
         }
 
@@ -9055,4 +9061,163 @@ export const duckSearch = async (query: string): Promise<any> => {
         console.error(e);
         return null;
     }
+}
+
+// ──── Emoji Lookup ────
+
+type EmojiDatabase = {
+    knownSupportedEmoji: string[];
+    data: Record<string, any>;
+    combinations: Record<string, any>;
+};
+
+const EMOJI_SOURCE_URL = 'https://emojikitchen.dev/metadata.json';
+const EMOJI_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+let emojiDataCache: EmojiDatabase | null = null;
+let emojiLoadPromise: Promise<EmojiDatabase | null> | null = null;
+let emojiLastFetchTime = 0;
+
+async function loadEmojiData() {
+    const now = Date.now();
+    if (emojiDataCache && (now - emojiLastFetchTime) < EMOJI_CACHE_TTL) return emojiDataCache;
+    if (emojiLoadPromise) return emojiLoadPromise;
+
+    emojiLoadPromise = (async () => {
+        try {
+            const res = await fetch(EMOJI_SOURCE_URL);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            emojiDataCache = await res.json() as EmojiDatabase;
+            emojiLastFetchTime = Date.now();
+            return emojiDataCache;
+        } catch (e) {
+            console.error('Failed to fetch emoji data:', e);
+            emojiLoadPromise = null;
+            return emojiDataCache; // return stale cache if available
+        }
+    })();
+
+    const result = await emojiLoadPromise;
+    emojiLoadPromise = null;
+    return result;
+}
+
+export const EmojiLookup = async function EmojiLookup(query: string, limit: number = 25) {
+    if (!query || query.trim().length === 0) return { error: "Missing parameter 'q'" };
+
+    const qInput = query.trim();
+    // Discord emoji regex: <:name:id> or <a:name:id>
+    const discordEmojiMatch = qInput.match(/^<(a?):(\w+):(\d+)>$/);
+
+    if (discordEmojiMatch) {
+        const name = discordEmojiMatch[2];
+        const id = discordEmojiMatch[3];
+
+        // Try GIF version first as priority
+        let isAnimated = true;
+        let emojiUrl = `https://media.discordapp.net/emojis/${id}.gif`;
+        let available = await fetch(emojiUrl, { method: "HEAD" }).then(a => a.ok).catch(() => false);
+
+        // Fallback to PNG if GIF is not available
+        if (!available) {
+            isAnimated = false;
+            emojiUrl = `https://media.discordapp.net/emojis/${id}.png`;
+            available = await fetch(emojiUrl, { method: "HEAD" }).then(a => a.ok).catch(() => false);
+        }
+
+        const finalUrl = emojiUrl + '?size=4096&quality=lossless';
+
+        return {
+            query: qInput,
+            count: 1,
+            limit: limit,
+            data: [{
+                type: "discordEmoji",
+                id: id,
+                name: name,
+                animated: isAnimated,
+                available: available,
+                emojiUrl: finalUrl,
+                created_at: String(getSnowflakeDate(id))
+            }]
+        };
+    }
+
+    const db = await loadEmojiData();
+    if (!db) return { error: "Emoji data unavailable" };
+
+    const q = query.toLowerCase().trim();
+    const terms = q.split(/\s+/);
+    const results: any[] = [];
+
+    // Check if query looks like a codepoint (hex string like "2615" or "1f600")
+    const isCodepointQuery = /^[0-9a-f]+(-[0-9a-f]+)*$/i.test(q.replace(/\s+/g, '-'));
+
+    for (const [codepoint, entry] of Object.entries(db.data)) {
+        // Direct emoji character match
+        if (entry.emoji === query.trim()) {
+            results.unshift({ ...entry, codepoint });
+            continue;
+        }
+
+        // Direct codepoint match
+        if (isCodepointQuery && codepoint.toLowerCase() === q.replace(/\s+/g, '-')) {
+            results.unshift({ ...entry, codepoint });
+            continue;
+        }
+
+        const alt = (entry.alt || '').toLowerCase();
+        const keywords: string[] = (entry.keywords || []).map((k: string) => k.toLowerCase());
+        const category = (entry.category || '').toLowerCase();
+        const subcategory = (entry.subcategory || '').toLowerCase();
+        const searchable = `${alt} ${keywords.join(' ')} ${category} ${subcategory}`;
+
+        const matches = terms.every(term => searchable.includes(term));
+        if (matches) {
+            results.push({ ...entry, codepoint });
+        }
+    }
+
+    const totalCount = results.length;
+    // Apply limit to the results before heavy mapping
+    const limitedResults = results.slice(0, limit);
+
+    // Attach combinations for each matched emoji
+    const withCombinations = limitedResults.map(entry => {
+        const combos = entry.combinations;
+        const combinationList: any[] = [];
+
+        if (combos && typeof combos === 'object') {
+            for (const [partnerCodepoint, comboEntries] of Object.entries(combos)) {
+                if (Array.isArray(comboEntries)) {
+                    for (const combo of comboEntries) {
+                        combinationList.push({
+                            ...combo,
+                            partnerCodepoint
+                        });
+                    }
+                }
+            }
+        }
+
+        return {
+            type: "twemoji",
+            alt: entry.alt,
+            emoji: entry.emoji,
+            codepoint: entry.codepoint,
+            emojiUrl: `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u${entry.codepoint.replace(/-fe0f$/, '').replace(/-/g, '_')}.png`,
+            gBoardOrder: entry.gBoardOrder,
+            keywords: entry.keywords,
+            category: entry.category,
+            subcategory: entry.subcategory,
+            combinationCount: combinationList.length
+        };
+    });
+
+    return {
+        query: q,
+        count: totalCount,
+        limit: limit,
+        data: withCombinations
+    };
 }

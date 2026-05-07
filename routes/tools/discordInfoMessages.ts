@@ -22,7 +22,7 @@ app.get('/discord/infoMessages', async (c) => {
     const sort = c.req.query('sort') === 'asc' ? 'asc' : 'desc';
 
     const queryLimit = c.req.query('limit');
-    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : undefined;
+    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? Math.max(1, parseInt(queryLimit)) : undefined;
 
     if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
     if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);

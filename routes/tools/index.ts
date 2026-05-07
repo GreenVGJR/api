@@ -24,5 +24,6 @@ import discordInfoInvite from './discordInfoInvite.js';
 import discordInfoChannel from './discordInfoChannel.js';
 import discordInfoRole from './discordInfoRole.js';
 import discordListWebhooks from './discordListWebhooks.js';
+import emoji from './emoji.js';
 
-export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks] as any[];
+export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji] as any[];

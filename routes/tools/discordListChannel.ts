@@ -22,7 +22,7 @@ app.get('/discord/listChannel', async (c) => {
     const guildId = (queryGuildId && Number.isInteger(parseInt(queryGuildId))) ? queryGuildId : null;
 
     const queryLimit = c.req.query('limit');
-    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : -1;
+    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? Math.max(1, parseInt(queryLimit)) : -1;
 
     const validTypes = ['text', 'voice', 'category', 'announcement', 'announcement_thread', 'public_thread', 'private_thread', 'stage', 'directory', 'forum', 'media', 'threads', 'all'];
     const queryType = c.req.query('type') || 'all';

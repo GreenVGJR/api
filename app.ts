@@ -107,7 +107,8 @@ const API_ROUTES = {
         },
         misc: [
             "/tools/translate?q=&from=&to=",
-            "/tools/timezone?q="
+            "/tools/timezone?q=",
+            "/tools/emoji?q=&limit="
         ],
         discord: {
             stream: [

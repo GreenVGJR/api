@@ -20,7 +20,7 @@ app.get('/discord/listRoles', async (c) => {
     const guildId = (queryGuildId && Number.isInteger(parseInt(queryGuildId))) ? queryGuildId : null;
 
     const queryLimit = c.req.query('limit');
-    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? parseInt(queryLimit) : 10;
+    const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? Math.max(1, parseInt(queryLimit)) : 10;
 
     const validTypes = ['all', 'oldest', 'newest'];
     const queryType = c.req.query('type') || 'all';

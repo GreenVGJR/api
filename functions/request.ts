@@ -7441,6 +7441,92 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 };
 
 
+const processDiscordMessage = (m: any) => {
+    if (!m) return m;
+
+    if (m.timestamp) {
+        m.created_at = String(Math.floor(new Date(m.timestamp).getTime() / 1000));
+        delete m.timestamp;
+    }
+    if (m.hasOwnProperty('edited_timestamp')) {
+        if (m.edited_timestamp) {
+            m.edited_at = String(Math.floor(new Date(m.edited_timestamp).getTime() / 1000));
+        } else {
+            m.edited_at = null;
+        }
+        delete m.edited_timestamp;
+    }
+
+    if (Array.isArray(m.sticker_items)) {
+        for (const s of m.sticker_items) {
+            const ext = s.format_type === 4 ? 'gif' : (s.format_type === 3 ? 'json' : 'png');
+            s.url = `https://cdn.discordapp.com/stickers/${s.id}.${ext}`;
+        }
+    }
+    else {
+        m.sticker_items = [];
+    }
+
+    const emojiRegex = /<(a?):(\w+):(\d+)>/g;
+    const emojiItems = [];
+    let match;
+    while ((match = emojiRegex.exec(m.content)) !== null) {
+        const animated = match[1] === 'a';
+        const name = match[2];
+        const id = match[3];
+        emojiItems.push({
+            id,
+            name,
+            animated,
+            url: `https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'png'}?size=4096`
+        });
+    }
+    if (emojiItems.length > 0) m.emoji_items = emojiItems;
+
+    const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+    const bareUrlRegex = /https?:\/\/[^\s<]+[^<.,:;"')\]\s]/g;
+    const hyperlinkItems: any[] = [];
+    const seenUrls = new Set();
+
+    if (m.content) {
+        let mdMatch;
+        while ((mdMatch = mdLinkRegex.exec(m.content)) !== null) {
+            const alt = mdMatch[1];
+            const url = mdMatch[2];
+            const normalizedUrl = url.replace(/\/$/, '');
+            const richContent = m.embeds?.find((e: any) => e.url && e.url.replace(/\/$/, '') === normalizedUrl);
+            hyperlinkItems.push({
+                alt,
+                url,
+                richContent: richContent || null
+            });
+            seenUrls.add(url);
+        }
+
+        const bareUrlRegex = /(?:^|\s)(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+        let bareMatch;
+        while ((bareMatch = bareUrlRegex.exec(m.content)) !== null) {
+            const url = bareMatch[1];
+            if (seenUrls.has(url)) continue;
+            const normalizedUrl = url.replace(/\/$/, '');
+            const richContent = m.embeds?.find((e: any) => e.url && e.url.replace(/\/$/, '') === normalizedUrl);
+            hyperlinkItems.push({
+                alt: null,
+                url,
+                richContent: richContent || null
+            });
+            seenUrls.add(url);
+        }
+    }
+    m.hyperlink_items = hyperlinkItems;
+
+    if (m.author && m.author.id) {
+        m.author.created_at = String(getSnowflakeDate(m.author.id));
+    }
+
+    return m;
+};
+
 export const DiscordInfoMessages = async (token: string, channelId: string, sort: 'asc' | 'desc' = 'desc', limit: number = 50) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!channelId) return { error: 'Missing channelId' };
@@ -7473,7 +7559,47 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
             };
         }
 
+        if (Array.isArray(data)) {
+            data = data.map(m => processDiscordMessage(m));
+        }
+
         return { limit, data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordInfoMessage = async (token: string, channelId: string, messageId: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!channelId) return { error: 'Missing channelId' };
+    if (!messageId) return { error: 'Missing messageId' };
+
+    const botUserAgent = 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': botUserAgent
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`;
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (data) {
+            data = processDiscordMessage(data);
+        }
+
+        return { data };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };
     }
@@ -7515,6 +7641,15 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
             const invite = data.find((i: any) => i.code === code);
             if (!invite) return { data: null, error: 'Invite not found in guild' };
             data = invite;
+        }
+
+        if (data) {
+            if (data.id) {
+                data.created_at = String(getSnowflakeDate(data.id));
+            }
+            if (data.expires_at) {
+                data.expires_at = String(Math.floor(new Date(data.expires_at).getTime() / 1000));
+            }
         }
 
         if (data && data.guild) {

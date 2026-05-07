@@ -146,6 +146,7 @@ const API_ROUTES = {
                 { listGuild: ["/tools/discord/listWebhooks?token=&guildId=&type="] }
             ],
             message: [
+                "/tools/discord/infoMessage?token=&channelId=&messageId=",
                 "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
             ],
             voice: [

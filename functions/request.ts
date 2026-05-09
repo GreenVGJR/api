@@ -97,6 +97,8 @@ import { decodeHTML, decodeXML } from 'entities';
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
 import { resolve6 } from 'dns';
+import emojibaseData from 'emojibase-data/en/data.json' with { type: 'json' };
+import emojibaseGroups from 'emojibase-data/meta/groups.json' with { type: 'json' };
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -110,7 +112,6 @@ export const commonHeaders = {
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': "?1",
     'Upgrade-Insecure-Requests': "1",
     'User-Agent': userAgent
 }
@@ -7485,6 +7486,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
                 const guildRes = await DiscordInfoServer(token, data.guild_id);
                 if (guildRes?.data) {
                     data.guild = guildRes.data;
+                    data.guild.resultsType = "full";
                 } else {
                     try {
                         const previewUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/preview`;
@@ -7498,6 +7500,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
                                 previewData.home_header_url = previewData.home_header ? `https://cdn.discordapp.com/home-headers/${previewData.id}/${previewData.home_header}.png?size=4096` : null;
                                 previewData.created_at = String(getSnowflakeDate(previewData.id));
                                 data.guild = previewData;
+                                data.guild.resultsType = "preview";
                             }
                             else {
                                 data.guild = {};
@@ -7779,6 +7782,96 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
             data.inviter.badges = resolveFlags(u.public_flags);
             data.inviter.badges_raw = resolveFlags(u.flags);
             data.inviter.created_at = userId ? String(getSnowflakeDate(userId)) : null;
+        }
+
+        return { data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordListInvite = async (token: string, guildId: string, limit: number = 10, type: string = 'all', authorId: string = '') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const url = `https://discord.com/api/v10/guilds/${guildId}/invites`;
+        const req = await fetch(url, { method: 'GET', headers });
+
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        if (req.status !== 200) {
+            return {
+                data: null,
+                error: data || { status: req.status, statusText: req.statusText }
+            };
+        }
+
+        if (Array.isArray(data)) {
+            data = data.map((invite: any) => {
+                const enriched = { ...invite };
+                if (enriched.inviter) {
+                    const u = enriched.inviter;
+                    enriched.inviter.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+                    enriched.inviter.banner_url = u.banner ? `https://cdn.discordapp.com/banners/${u.id}/${u.banner}.${u.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096` : null;
+                    enriched.inviter.badges = resolveFlags(u.public_flags);
+                    enriched.inviter.badges_raw = resolveFlags(u.flags);
+                    enriched.inviter.created_at = u.id ? String(getSnowflakeDate(u.id)) : null;
+                }
+                if (enriched.created_at) {
+                    enriched.created_at = String(Math.floor(new Date(enriched.created_at).getTime() / 1000));
+                }
+                if (enriched.expires_at) {
+                    enriched.expires_at = String(Math.floor(new Date(enriched.expires_at).getTime() / 1000));
+                }
+                return enriched;
+            });
+
+            const totalInvites = data.length;
+
+            if (authorId) {
+                data = data.filter((i: any) => i.inviter?.id === authorId);
+            }
+
+            const types = type.split(',').map(t => t.trim().toLowerCase());
+            const filterTypes = ['temporary', 'permanent', 'has_expire', 'user', 'bot'];
+            const hasFilterType = types.some(t => filterTypes.includes(t));
+
+            if (!types.includes('all') && hasFilterType) {
+                data = data.filter((i: any) => {
+                    let keep = false;
+                    if (types.includes('temporary') && i.temporary) keep = true;
+                    if (types.includes('permanent') && !i.temporary && i.max_age === 0) keep = true;
+                    if (types.includes('has_expire') && !!i.expires_at) keep = true;
+                    if (types.includes('user') && i.inviter && !i.inviter.bot) keep = true;
+                    if (types.includes('bot') && i.inviter && i.inviter.bot) keep = true;
+                    return keep;
+                });
+            }
+
+            for (const t of types) {
+                if (t === 'oldest') {
+                    data.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
+                } else if (t === 'newest') {
+                    data.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
+                }
+            }
+
+            const sliceLimit = limit === -1 ? data.length : limit;
+            data = data.slice(0, sliceLimit);
+
+            return {
+                invitesCount: totalInvites,
+                limit,
+                data
+            };
         }
 
         return { data };
@@ -9180,8 +9273,7 @@ export const duckSearch = async (query: string): Promise<any> => {
     try {
         const res = await request(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
             headers: {
-                ...commonHeaders,
-                'Cookie': 'p=-2'
+                ...commonHeaders
             },
             useH2: true
         });
@@ -9203,6 +9295,8 @@ export const duckSearch = async (query: string): Promise<any> => {
         const res2 = await request(`https://links.duckduckgo.com${linkstarget}`, {
             headers: {
                 ...commonHeaders,
+                'Accept': '*/*',
+                'Referer': 'https://duckduckgo.com/',
                 'Sec-Fetch-Dest': 'script',
                 'Sec-Fetch-Mode': 'no-cors',
                 'Sec-Fetch-Site': 'same-site'
@@ -9222,15 +9316,37 @@ export const duckSearch = async (query: string): Promise<any> => {
             }
         }
 
+        if (res2.statusCode === 202) {
+            return {
+                error: "Can't process due unusual requests"
+            }
+        }
+
         const final = res2.text;
 
-        // Extract instant answers from the leading JSON before the first semicolon
+        // Extract instant answers from deepPayload or duckbar.add
         let instantAnswers: any = null;
         try {
-            const iaMatch = final.match(/^(\{.*?\});/);
-            if (iaMatch) {
-                const iaJson = JSON.parse(iaMatch[1]);
-                instantAnswers = iaJson?.instantAnswers?.[0]?.data || null;
+            const deepMatch = final.match(/DDG\.deep\.deepPayload\s*=\s*(\{[\s\S]*?\});/);
+            if (deepMatch) {
+                const payload = JSON.parse(deepMatch[1]);
+                instantAnswers = payload?.instantAnswers?.[0]?.data || null;
+            }
+
+            if (!instantAnswers) {
+                const duckbarMatch = final.match(/DDG\.duckbar\.add\((\{[\s\S]*?"from":"deep_answer"[\s\S]*?\})\);/);
+                if (duckbarMatch) {
+                    const duckbarData = JSON.parse(duckbarMatch[1]);
+                    instantAnswers = duckbarData?.data || null;
+                }
+            }
+
+            if (!instantAnswers) {
+                const iaMatch = final.match(/^(\{.*?\});/);
+                if (iaMatch) {
+                    const iaJson = JSON.parse(iaMatch[1]);
+                    instantAnswers = iaJson?.instantAnswers?.[0]?.data || null;
+                }
             }
         } catch { }
 
@@ -9386,6 +9502,74 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
         };
     }
 
+    const trimmed = query.trim();
+
+    // Primary Search using emojibase-data
+    const isEmoji = /\p{Emoji}/u.test(trimmed);
+    let emojibaseMatches: any[] = [];
+    
+    if (isEmoji) {
+        emojibaseMatches = emojibaseData.filter((e: any) => e.emoji === trimmed);
+    } else {
+        const searchQ = trimmed.toLowerCase();
+        emojibaseMatches = emojibaseData.filter((e: any) =>
+            e.label.toLowerCase().includes(searchQ) ||
+            e.tags?.some((t: string) => t.toLowerCase().includes(searchQ))
+        );
+
+        // Sort to prioritize better matches
+        emojibaseMatches.sort((a: any, b: any) => {
+            const aLabel = a.label.toLowerCase();
+            const bLabel = b.label.toLowerCase();
+            const aTags = (a.tags || []).map((t: string) => t.toLowerCase());
+            const bTags = (b.tags || []).map((t: string) => t.toLowerCase());
+
+            // 1. Exact label match
+            if (aLabel === searchQ && bLabel !== searchQ) return -1;
+            if (bLabel === searchQ && aLabel !== searchQ) return 1;
+
+            // 2. Label starts with search term
+            if (aLabel.startsWith(searchQ) && !bLabel.startsWith(searchQ)) return -1;
+            if (bLabel.startsWith(searchQ) && !aLabel.startsWith(searchQ)) return 1;
+
+            // 3. Exact tag match
+            const aHasExactTag = aTags.includes(searchQ);
+            const bHasExactTag = bTags.includes(searchQ);
+            if (aHasExactTag && !bHasExactTag) return -1;
+            if (bHasExactTag && !aHasExactTag) return 1;
+
+            // Default to emojibase order
+            return (a.order || 0) - (b.order || 0);
+        });
+    }
+
+    if (emojibaseMatches.length > 0) {
+        const limited = emojibaseMatches.slice(0, limit);
+        return {
+            query: trimmed,
+            count: emojibaseMatches.length,
+            limit,
+            data: limited.map((entry: any) => {
+                const codepoint = entry.hexcode.toLowerCase().replace(/-fe0f/g, '');
+                const cpNoto = codepoint.replace(/-/g, '_');
+                return {
+                    type: 'twemoji',
+                    alt: entry.label,
+                    emoji: entry.emoji,
+                    codepoint,
+                    emojiUrl: `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u${cpNoto}.png`,
+                    emojiUrl2: `https://raw.githubusercontent.com/jdecked/twemoji/refs/heads/main/assets/72x72/${codepoint}.png`,
+                    gBoardOrder: entry.order,
+                    keywords: [entry.label.toLowerCase().replace(/ /g, '_'), ...(entry.tags ?? [])],
+                    category: (emojibaseGroups.groups as any)[entry.group]?.toLowerCase() || '',
+                    subcategory: (emojibaseGroups.subgroups as any)[entry.subgroup] || '',
+                };
+            }),
+            isFallback: false
+        };
+    }
+
+    // Fallback to Google Emoji Kitchen data
     const db = await loadEmojiData();
     if (!db) return { error: "Emoji data unavailable" };
 
@@ -9396,9 +9580,11 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
     // Check if query looks like a codepoint (hex string like "2615" or "1f600")
     const isCodepointQuery = /^[0-9a-f]+(-[0-9a-f]+)*$/i.test(q.replace(/\s+/g, '-'));
 
+    const normalizedQuery = query.trim().replace(/\uFE0F/g, '');
+
     for (const [codepoint, entry] of Object.entries(db.data)) {
         // Direct emoji character match
-        if (entry.emoji === query.trim()) {
+        if (entry.emoji && entry.emoji.replace(/\uFE0F/g, '') === normalizedQuery) {
             results.unshift({ ...entry, codepoint });
             continue;
         }
@@ -9448,7 +9634,8 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
             alt: entry.alt,
             emoji: entry.emoji,
             codepoint: entry.codepoint,
-            emojiUrl: `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u${entry.codepoint.replace(/-fe0f$/, '').replace(/-/g, '_')}.png`,
+            emojiUrl: `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u${entry.codepoint.toLowerCase().replace(/-fe0f$/, '')}.png`,
+            emojiUrl2: `https://raw.githubusercontent.com/jdecked/twemoji/refs/heads/main/assets/72x72/${entry.codepoint.toLowerCase().replace(/-fe0f$/, '')}.png`,
             gBoardOrder: entry.gBoardOrder,
             keywords: entry.keywords,
             category: entry.category,
@@ -9461,6 +9648,7 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
         query: q,
         count: totalCount,
         limit: limit,
-        data: withCombinations
+        data: withCombinations,
+        isFallback: true
     };
 }

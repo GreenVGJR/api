@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { DiscordListRole, PERMISSION_KEYS } from '../../functions/request.js';
+import { DiscordListInvite } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-app.get('/discord/listRoles', async (c) => {
+app.get('/discord/listInvite', async (c) => {
     let token: string | null = null;
     try {
         const queryToken = c.req.query('token');
@@ -22,7 +22,7 @@ app.get('/discord/listRoles', async (c) => {
     const queryLimit = c.req.query('limit');
     const limit = (queryLimit && Number.isInteger(parseInt(queryLimit))) ? Math.max(1, parseInt(queryLimit)) : -1;
 
-    const validTypes = ['all', 'oldest', 'newest'];
+    const validTypes = ['user', 'bot', 'all', 'oldest', 'newest', 'temporary', 'permanent', 'has_expire'];
     const queryType = c.req.query('type') || 'all';
     const types = queryType.split(',').map(t => t.trim());
     const invalidTypes = types.filter(t => !validTypes.includes(t));
@@ -30,20 +30,14 @@ app.get('/discord/listRoles', async (c) => {
         return c.json({ error: `List types: ${validTypes.join(', ')}` }, 202);
     }
     const type = queryType;
-    const permission = c.req.query('permission') || 'all';
-    if (permission !== 'all') {
-        const perms = permission.split(',').map(p => p.trim().toLowerCase());
-        const invalidPerms = perms.filter(p => !PERMISSION_KEYS.hasOwnProperty(p));
-        if (invalidPerms.length > 0) {
-            return c.json({ error: `List permissions: all, ${Object.keys(PERMISSION_KEYS).join(', ')}` }, 202);
-        }
-    }
+    
+    const authorId = c.req.query('authorId') || '';
 
     if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
     if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
     c.header('X-Route', 'discord.com');
-    return await dispatch(c, () => DiscordListRole(token!, guildId!, limit, type, permission));
+    return await dispatch(c, () => DiscordListInvite(token!, guildId!, limit, type, authorId));
 });
 
 export default app;

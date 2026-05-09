@@ -141,7 +141,8 @@ const API_ROUTES = {
                 "/tools/discord/infoRole?token=&roleId=&guildId=",
             ],
             invite: [
-                "/tools/discord/infoInvite?token=&q=&guildId=",
+                "/tools/discord/infoInvite?q=&token=&guildId=",
+                "/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId="
             ],
             sticker: [
                 "/tools/discord/infoSticker?token=&q="
@@ -566,7 +567,7 @@ app.get('/', (c: Context) => stream(c, async (l) => {
         uptime: uptime,
         os_uptime: os_uptime,
         service: `Hono v${honoVersion}`,
-        runtime: "Bun",
+        runtime: "Bun v" + (Bun as any).version,
         stats: {
             cpu: cpu,
             ram: ram,

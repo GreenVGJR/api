@@ -9141,7 +9141,13 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
         const response = JSON.parse(raw);
 
         if (response?.error?.code === 400 || response?.error?.code === 401 || res.statusCode === 400 || res.statusCode === 401) {
-            return await googleSearch(query, true);
+            return await googleImgSearchV2(query, true);
+        }
+
+        // force renew auth data
+        if(!response?.cursor?.estimatedResultCount) {
+            googleImgSpAuth = await googleAuthKey();
+            return await googleImgSearchV2(query);
         }
 
         const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
@@ -9226,6 +9232,12 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 
         if (response?.error?.code === 400 || response?.error?.code === 401 || res.statusCode === 400 || res.statusCode === 401) {
             return await googleSearch(query, true);
+        }
+
+        // force renew auth data
+        if(!response?.cursor?.estimatedResultCount) {
+            googleImgSpAuth = await googleAuthKey();
+            return await googleSearch(query);
         }
 
         const res2 = await request(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {

@@ -9,24 +9,6 @@ const initSPA = () => {
     fontsLink.href = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap';
     document.head.appendChild(fontsLink);
 
-    // Tailwind Config
-    if (window.tailwind) {
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    },
-                    colors: {
-                        mint: { 400: '#4ade80', 500: '#22c55e', 600: '#16a34a' },
-                        dark: { 900: '#0a0a0a', 800: '#141414', 700: '#1f1f1f', 600: '#2a2a2a', 500: '#3a3a3a' }
-                    }
-                }
-            }
-        };
-    }
-
     // Build the UI structure
     document.body.className = "bg-black text-white font-sans antialiased";
     document.body.innerHTML = `
@@ -34,7 +16,7 @@ const initSPA = () => {
         <div class="relative mb-4 flex-shrink-0">
             <div class="flex items-center bg-black/60 rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
                 <textarea id="urlInput" class="flex-1 bg-transparent py-3 px-4 font-mono text-sm text-white placeholder-gray-600 outline-none resize-none overflow-y-auto whitespace-pre-wrap break-all no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
-                <button id="copyBtn" class="copy-btn p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
+                <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
@@ -43,13 +25,13 @@ const initSPA = () => {
         </div>
 
         <div class="flex gap-2 mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
-            <button class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
+            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
         </div>
 
         <div class="flex flex-col md:grid md:grid-cols-[240px_1fr] gap-2 md:gap-4 flex-1 min-h-0">
@@ -62,13 +44,13 @@ const initSPA = () => {
                     <div class="flex items-center justify-between px-4 py-2 border-b border-dark-500 flex-shrink-0">
                         <span class="text-xs text-gray-500 font-mono"><span class="font-semibold text-gray-400">Response</span> | Uptime: <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
                         <div class="flex items-center gap-3">
-                            <button id="clearResponseBtn" class="text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
+                            <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                                 </svg>
                                 <span>Clear</span>
                             </button>
-                            <button id="copyResponseBtn" class="text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Copy Response">
+                            <button id="copyResponseBtn" class="cursor-pointer text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Copy Response">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                 </svg>
@@ -83,7 +65,7 @@ const initSPA = () => {
 
                 <div id="paramsPanel" class="mt-2 flex-shrink-0 hidden">
                     <div class="bg-dark-700/30 panel-gradient rounded-xl border border-dark-500 overflow-hidden">
-                        <button id="paramsToggle" class="w-full flex items-center justify-between px-4 py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+                        <button id="paramsToggle" class="w-full cursor-pointer flex items-center justify-between px-4 py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
                             <span class="flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
@@ -100,7 +82,7 @@ const initSPA = () => {
                 </div>
 
                 <div class="mt-3 flex flex-col md:flex-row items-center gap-3 md:gap-4 flex-shrink-0">
-                    <button id="sendBtn" class="w-full md:flex-1 bg-emerald-500 hover:bg-emerald-500 text-black font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <button id="sendBtn" class="w-full md:flex-1 bg-emerald-500 hover:bg-emerald-500 text-black font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer">
                         <span>Send</span><span>➜</span>
                     </button>
                     <div id="statusIndicator" class="flex items-center justify-center gap-2 text-sm font-mono w-full md:w-auto">
@@ -633,7 +615,7 @@ function renderEndpoints(animate = false) {
 
     const newHTML = categoryEndpoints.map((ep, index) => `
         <button 
-            class="endpoint-item block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
+            class="endpoint-item cursor-pointer block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
             data-index="${index}"
         >
             ${ep.path}

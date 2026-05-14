@@ -22,7 +22,7 @@ if (!g.__vgjr_initialized) {
 
 export default {
     port,
-    hostname: "127.0.0.1",
+    hostname: "::1",
     idleTimeout: 255,
     fetch(req: Request) {
         return app.fetch(req);

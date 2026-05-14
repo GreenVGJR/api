@@ -2413,7 +2413,7 @@ export const Translate = async function Translate(que: string, from?: string, to
     }
 }
 
-export const infoYoutube = async function infoYoutube(que: string) {
+export const infoYoutube = async function infoYoutube(que: string, deepFetch: boolean = true) {
     let videoId = que.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
     videoId = videoId || undefined;
     if (!videoId) return null;
@@ -2464,7 +2464,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
         findToken(testpar);
 
         let comments: any[] = [];
-        if (commentToken) {
+        if (commentToken && deepFetch) {
             try {
                 const endpoint = isLiveChat
                     ? 'https://m.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false'
@@ -3239,6 +3239,36 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
         return null;
     }
 }
+
+export const infoSoundcloudStream = async function infoSoundcloudStream(url: string, refresh_auth: boolean = false): Promise<string | null> {
+    if (!url) return null;
+    if (refresh_auth || !keysc) {
+        keysc = await soundcloudKey();
+    }
+    try {
+        const res = await request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`, {
+            headers: { ...commonHeaders }
+        });
+        if (res.statusCode === 401) return await infoSoundcloudStream(url, true);
+
+        const data: any = res.statusCode === 200 ? await res.json() : null;
+        if (!data) return null;
+
+        const transcoding = data.media?.transcodings?.find((t: any) => t.format.protocol === 'hls') || data.media?.transcodings?.find((t: any) => t.format.protocol === 'progressive');
+
+        if (!transcoding?.url) return null;
+
+        const streamRes = await request(`${transcoding.url}?client_id=${keysc}`, {
+            headers: { ...commonHeaders }
+        });
+        const streamData: any = streamRes.statusCode === 200 ? await streamRes.json() : null;
+        return streamData?.url || null;
+    } catch (e) {
+        console.error("infoSoundcloudStream error:", e);
+        return null;
+    }
+}
+
 
 export const infoSpotify = async function infoSpotify(que: string) {
     if (!que) return null;
@@ -9145,7 +9175,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
         }
 
         // force renew auth data
-        if(!response?.cursor?.estimatedResultCount) {
+        if (!response?.cursor?.estimatedResultCount) {
             googleImgSpAuth = await googleAuthKey();
             return await googleImgSearchV2(query);
         }
@@ -9235,7 +9265,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
         }
 
         // force renew auth data
-        if(!response?.cursor?.estimatedResultCount) {
+        if (!response?.cursor?.estimatedResultCount) {
             googleImgSpAuth = await googleAuthKey();
             return await googleSearch(query);
         }
@@ -9519,7 +9549,7 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
     // Primary Search using emojibase-data
     const isEmoji = /\p{Emoji}/u.test(trimmed);
     let emojibaseMatches: any[] = [];
-    
+
     if (isEmoji) {
         emojibaseMatches = emojibaseData.filter((e: any) => e.emoji === trimmed);
     } else {

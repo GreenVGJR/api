@@ -199,7 +199,7 @@ const API_ROUTES = {
     music: [
         "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
         "/music/disconnect?token=&guildId=",
-        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=",
+        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=",
         "/music/pause?token=&guildId=",
         "/music/resume?token=&guildId=",
         "/music/skip?token=&guildId=&index=",

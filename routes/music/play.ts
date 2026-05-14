@@ -13,7 +13,7 @@ import {
     formatDuration,
     updateVoiceStatus,
 } from '../../functions/musicPlayer.js';
-import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, request, commonHeaders } from '../../functions/request.js';
+import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStream, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 
 // ── Custom search result ──────────────────────────────────────────────────────
@@ -30,6 +30,14 @@ interface CustomSearchResult {
     duration?: number;
 }
 
+function normalizeUrl(url: string): string {
+    if (!url) return url;
+    if (url.startsWith('http://www.tidal.com')) {
+        return url.replace('http://', 'https://');
+    }
+    return url;
+}
+
 function getPlatformFromUrl(url: string): string | null {
     if (url.includes('spotify.com')) return 'spotify';
     if (url.includes('soundcloud.com')) return 'soundcloud';
@@ -40,9 +48,98 @@ function getPlatformFromUrl(url: string): string | null {
     return null;
 }
 
+async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
+    try {
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            const info: any = await infoYoutube(url, false);
+            if (info?.data?.title) {
+                return {
+                    url,
+                    title: info.data.title,
+                    author: info.data.owners?.name,
+                    thumbnail: info.data.thumbnail,
+                    sourceName: 'youtubemusic'
+                };
+            }
+        }
+
+        if (url.includes('spotify.com')) {
+            const info: any = await infoSpotify(url);
+            if (info?.data?.name) {
+                return {
+                    url,
+                    title: info.data.name,
+                    author: info.data.artists?.[0]?.name,
+                    thumbnail: info.data.album?.images?.[0]?.url,
+                    sourceName: 'spotify'
+                };
+            }
+        }
+
+        if (url.includes('music.apple.com')) {
+            const info: any = await infoITunes(url);
+            if (info?.data?.target?.attributes) {
+                return {
+                    url,
+                    title: info.data.target.attributes.name,
+                    author: info.data.target.attributes.artistName,
+                    sourceName: 'applemusic'
+                };
+            }
+        }
+
+        if (url.includes('soundcloud.com')) {
+            const info: any = await infoSoundcloud(url);
+            const track = info?.data?.[0];
+            if (track?.title) {
+                return {
+                    url,
+                    title: track.title,
+                    author: track.user?.username,
+                    thumbnail: track.artwork_url,
+                    sourceName: 'soundcloud'
+                };
+            }
+        }
+
+        // Fallback to oEmbed for others
+        let endpoint = '';
+        if (url.includes('soundcloud.com')) {
+            endpoint = `https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+        } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+        } else if (url.includes('spotify.com')) {
+            endpoint = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+        }
+
+        if (endpoint) {
+            const res = await request(endpoint, { headers: commonHeaders });
+            const data: any = await res.json().catch(() => null);
+            if (data && data.title) {
+                return {
+                    url,
+                    title: data.title,
+                    author: data.author_name,
+                    thumbnail: data.thumbnail_url,
+                    sourceName: getPlatformFromUrl(url) || undefined
+                };
+            }
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 async function customSearch(platform: string, query: string): Promise<CustomSearchResult | null> {
     try {
         const isUrl = query.startsWith('http://') || query.startsWith('https://');
+
+        if (isUrl) {
+            const metadata = await getUrlMetadata(query);
+            if (metadata) return metadata;
+        }
         switch (platform) {
             case 'soundcloud': {
                 const res = await SCMusic(query, undefined, 1);
@@ -59,16 +156,6 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 };
             }
             case 'spotify': {
-                // If it's a URL, we can try to extract the ID directly
-                let trackId = null;
-                if (isUrl && query.includes('/track/')) {
-                    trackId = query.split('/track/')[1]?.split('?')[0];
-                }
-
-                if (trackId) {
-                    // We could do a direct lookup here, but for now let's just search
-                }
-
                 const res = await SPMusic(query, undefined, 1);
                 const track = res?.data?.tracks?.[0];
                 if (!track?.id) return null;
@@ -132,7 +219,7 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 if (!track?.url) return null;
                 return {
                     id: String(track.id),
-                    url: track.url,
+                    url: track.url.startsWith('http://') ? track.url.replace('http://', 'https://') : track.url,
                     title: track.title,
                     author: track.artist?.name || track.artists?.[0]?.name,
                     thumbnail: track.album?.cover ? `https://resources.tidal.com/images/${track.album.cover.replace(/-/g, '/')}/640x640.jpg` : undefined,
@@ -159,6 +246,7 @@ app.get('/play', async (c) => {
         const authorId = c.req.query('authorId');
         const isDeaf = c.req.query('isDeaf') !== 'false';
         const req247 = c.req.query('247');
+        const allowFallback = c.req.query('fallback') !== 'false';
 
         if (!token || !query || (!reqGuildId && !voiceId && !authorId)) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q, guildId, voiceId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -290,20 +378,115 @@ app.get('/play', async (c) => {
             const { gp } = setup;
 
             const doSearch = async (q: string, src: string) => {
+                const normalizedQ = normalizeUrl(q);
                 const res = await gp.search(
-                    { query: q, source: (src === 'url' ? undefined : src) as any },
+                    { query: normalizedQ, source: (src === 'url' ? undefined : src) as any },
                     requester
                 );
-                if (!res?.tracks?.length) throw new Error(`No results for "${q}"`);
+                if (!res?.tracks?.length) throw new Error(`No results for "${normalizedQ}"`);
                 return res;
             };
 
             let result: any = null;
             if (isUrl) {
                 await log(`Loading URL directly: "${queryStr}"`);
-                result = await doSearch(queryStr, 'url');
-                applyOverlay(result, customResult);
-            } else {
+                try {
+                    result = await doSearch(queryStr, 'url');
+                    applyOverlay(result, customResult);
+                } catch (e: any) {
+                    // SoundCloud manual stream resolution fallback
+                    if (effectivePlatform === 'soundcloud') {
+                        await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
+                        const scStream = await infoSoundcloudStream(queryStr);
+                        if (scStream) {
+                            await log(`[Attempt 2] Manual stream resolved — loading via Lavalink`);
+                            try {
+                                result = await doSearch(scStream, 'url');
+                                applyOverlay(result, customResult);
+                                await log(`[Attempt 2] "SoundCloud Manual" succeeded`);
+                            } catch (err2) {
+                                await log(`[Attempt 2] "SoundCloud Manual" failed to load stream: ${err2}`);
+                            }
+                        }
+                    }
+                    if (!result) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to search' : ' — fallback disabled'}`);
+                }
+            }
+
+            if (isUrl && !result && allowFallback) {
+                // URL failed — run the same fallback chain as plain-string mode.
+                // We MUST have metadata (title) to search on other platforms.
+                const metaQuery = customResult?.title ? (customResult.author ? `${customResult.title} ${customResult.author}` : customResult.title) : null;
+
+                if (!metaQuery) {
+                    await log(`[Attempt 1] Could not extract track title from URL — skipping fallback search`);
+                    throw new Error(`Direct load failed and no metadata found for "${queryStr}"`);
+                }
+
+                await log(`[Attempt 1] Extracted metadata: "${metaQuery}" — starting fallback search`);
+                const urlFallbackQuery = metaQuery;
+                const urlFallbacks: Array<{ label: string; searchPlatform: string; query: string }> = [];
+
+                if (effectivePlatform !== 'youtubemusic') {
+                    urlFallbacks.push({ label: 'YouTube Music', searchPlatform: 'youtubemusic', query: urlFallbackQuery });
+                }
+                if (effectivePlatform !== 'spotify') {
+                    urlFallbacks.push({ label: 'Spotify', searchPlatform: 'spotify', query: urlFallbackQuery });
+                }
+                if (effectivePlatform !== 'applemusic') {
+                    urlFallbacks.push({ label: 'Apple Music', searchPlatform: 'applemusic', query: urlFallbackQuery });
+                }
+                if (effectivePlatform !== 'soundcloud') {
+                    urlFallbacks.push({ label: 'SoundCloud', searchPlatform: 'soundcloud', query: urlFallbackQuery });
+                }
+                if (effectivePlatform !== 'deezer') {
+                    urlFallbacks.push({ label: 'Deezer', searchPlatform: 'deezer', query: urlFallbackQuery });
+                }
+                if (effectivePlatform !== 'tidal') {
+                    urlFallbacks.push({ label: 'Tidal', searchPlatform: 'tidal', query: urlFallbackQuery });
+                }
+
+                let currentAttempt = 2;
+                for (const attempt of urlFallbacks) {
+                    await log(`[Attempt ${currentAttempt}] Custom ${attempt.label} search: "${attempt.query}"`);
+                    try {
+                        const fallbackResult = await customSearch(attempt.searchPlatform, attempt.query);
+                        if (!fallbackResult?.url) {
+                            await log(`[Attempt ${currentAttempt}] "${attempt.label}" returned no results`);
+                            currentAttempt++;
+                            continue;
+                        }
+                        await log(`[Attempt ${currentAttempt}] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
+                        try {
+                            result = await doSearch(fallbackResult.url, 'url');
+                            applyOverlay(result, customResult ?? fallbackResult);
+                            await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
+                            break;
+                        } catch (err: any) {
+                            // SoundCloud manual stream resolution fallback in loop
+                            if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
+                                await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
+                                const scStream = await infoSoundcloudStream(fallbackResult.url);
+                                if (scStream) {
+                                    await log(`[Attempt ${currentAttempt}.1] Manual stream resolved — loading via Lavalink`);
+                                    try {
+                                        result = await doSearch(scStream, 'url');
+                                        applyOverlay(result, customResult ?? fallbackResult);
+                                        await log(`[Attempt ${currentAttempt}.1] "SoundCloud Manual" succeeded`);
+                                        break;
+                                    } catch (err2) {
+                                        await log(`[Attempt ${currentAttempt}.1] "SoundCloud Manual" failed: ${err2}`);
+                                    }
+                                }
+                            }
+                            throw err; // Re-throw if not SC or SC manual also failed
+                        }
+                    } catch (err: any) {
+                        await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
+                    }
+                    currentAttempt++;
+                }
+            } else if (!isUrl) {
                 await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
                 if (customResult) {
                     await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
@@ -312,53 +495,45 @@ app.get('/play', async (c) => {
                         applyOverlay(result, customResult);
                         await log('[Attempt 1] Direct URL load succeeded');
                     } catch (e: any) {
-                        await log(`[Attempt 1] Direct URL load failed (${e?.message}) — falling back to Lavalink search`);
+                        // SoundCloud manual stream resolution fallback for non-URL search (Attempt 1)
+                        if (platform === 'soundcloud' && customResult?.url) {
+                            await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
+                            const scStream = await infoSoundcloudStream(customResult.url);
+                            if (scStream) {
+                                await log(`[Attempt 1.1] Manual stream resolved — loading via Lavalink`);
+                                try {
+                                    result = await doSearch(scStream, 'url');
+                                    applyOverlay(result, customResult);
+                                    await log(`[Attempt 1.1] "SoundCloud Manual" succeeded`);
+                                } catch (err2) {
+                                    await log(`[Attempt 1.1] "SoundCloud Manual" failed to load stream: ${err2}`);
+                                }
+                            }
+                        }
+                        if (!result) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to Lavalink search' : ' — fallback disabled'}`);
                     }
                 } else {
-                    await log(`[Attempt 1] No URL returned — falling back to Lavalink search`);
+                    await log(`[Attempt 1] No URL returned${allowFallback ? ' — falling back to Lavalink search' : ' — fallback disabled'}`);
                 }
 
-                if (!result) {
+                if (!result && allowFallback) {
                     const hasMeta = customResult?.title && customResult?.author;
                     const metaQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
 
-                    // Build fallback attempts using custom search functions (not Lavalink search prefixes)
+                    // Build fallback attempts
                     const fallbacks: Array<{ label: string; searchPlatform: string; query: string }> = [];
 
-                    // If we have metadata from Attempt 1, try YouTube Music with enriched query
                     if (metaQuery) {
                         fallbacks.push({ label: 'YouTube Music (metadata)', searchPlatform: 'youtubemusic', query: metaQuery });
                     }
-
-                    // Try YouTube Music with the original query (skip if already queued above with same query)
                     if (!metaQuery && platform !== 'youtubemusic') {
                         fallbacks.push({ label: 'YouTube Music', searchPlatform: 'youtubemusic', query: queryStr });
                     }
-
-                    // Try Spotify with the original query (skip if that was the initial platform — already tried)
-                    if (platform !== 'spotify') {
-                        fallbacks.push({ label: 'Spotify', searchPlatform: 'spotify', query: queryStr });
-                    }
-
-                    // Try Apple Music with the original query (skip if that was the initial platform — already tried)
-                    if (platform !== 'applemusic') {
-                        fallbacks.push({ label: 'Apple Music', searchPlatform: 'applemusic', query: queryStr });
-                    }
-
-                    // Try SoundCloud with the original query (skip if that was the initial platform — already tried)
-                    if (platform !== 'soundcloud') {
-                        fallbacks.push({ label: 'SoundCloud', searchPlatform: 'soundcloud', query: queryStr });
-                    }
-
-                    // Try Deezer with the original query (skip if that was the initial platform — already tried)
-                    if (platform !== 'deezer') {
-                        fallbacks.push({ label: 'Deezer', searchPlatform: 'deezer', query: queryStr });
-                    }
-
-                    // Try Tidal with the original query (skip if that was the initial platform — already tried)
-                    if (platform !== 'tidal') {
-                        fallbacks.push({ label: 'Tidal', searchPlatform: 'tidal', query: queryStr });
-                    }
+                    if (platform !== 'spotify') fallbacks.push({ label: 'Spotify', searchPlatform: 'spotify', query: queryStr });
+                    if (platform !== 'applemusic') fallbacks.push({ label: 'Apple Music', searchPlatform: 'applemusic', query: queryStr });
+                    if (platform !== 'soundcloud') fallbacks.push({ label: 'SoundCloud', searchPlatform: 'soundcloud', query: queryStr });
+                    if (platform !== 'deezer') fallbacks.push({ label: 'Deezer', searchPlatform: 'deezer', query: queryStr });
+                    if (platform !== 'tidal') fallbacks.push({ label: 'Tidal', searchPlatform: 'tidal', query: queryStr });
 
                     let currentAttempt = 2;
                     for (const attempt of fallbacks) {
@@ -371,10 +546,30 @@ app.get('/play', async (c) => {
                                 continue;
                             }
                             await log(`[Attempt ${currentAttempt}] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
-                            result = await doSearch(fallbackResult.url, 'url');
-                            applyOverlay(result, customResult);
-                            await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
-                            break;
+                            try {
+                                result = await doSearch(fallbackResult.url, 'url');
+                                applyOverlay(result, customResult ?? fallbackResult);
+                                await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
+                                break;
+                            } catch (err: any) {
+                                // SoundCloud manual stream resolution fallback in loop
+                                if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
+                                    await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
+                                    const scStream = await infoSoundcloudStream(fallbackResult.url);
+                                    if (scStream) {
+                                        await log(`[Attempt ${currentAttempt}.1] Manual stream resolved — loading via Lavalink`);
+                                        try {
+                                            result = await doSearch(scStream, 'url');
+                                            applyOverlay(result, customResult ?? fallbackResult);
+                                            await log(`[Attempt ${currentAttempt}.1] "SoundCloud Manual" succeeded`);
+                                            break;
+                                        } catch (err2) {
+                                            await log(`[Attempt ${currentAttempt}.1] "SoundCloud Manual" failed: ${err2}`);
+                                        }
+                                    }
+                                }
+                                throw err;
+                            }
                         } catch (err: any) {
                             await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
                         }

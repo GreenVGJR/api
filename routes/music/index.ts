@@ -2,10 +2,10 @@
 import connect from './connect.js';
 import disconnect from './disconnect.js';
 import filters from './filters.js';
-import play from './play.js';
 import queue from './queue.js';
 import stats from './stats.js';
 import voiceStatus from './voiceStatus.js';
 import controls from './controls.js';
+import play from './play.js';
 
-export default [connect, disconnect, filters, play, queue, stats, voiceStatus, controls] as any[];
+export default [connect, disconnect, filters, queue, stats, voiceStatus, controls, play] as any[];

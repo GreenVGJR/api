@@ -240,7 +240,7 @@ app.get('/play', async (c) => {
 
         const token = c.req.query('token');
         const query = c.req.query('q');
-        const platform = (c.req.query('platform') || 'spotify').toLowerCase();
+        const platform = (c.req.query('platform') || 'spotify').toLowerCase().replace(/\s+/g, '');
         const voiceId = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
@@ -248,8 +248,8 @@ app.get('/play', async (c) => {
         const req247 = c.req.query('247');
         const allowFallback = c.req.query('fallback') !== 'false';
 
-        if (!token || !query || (!reqGuildId && !voiceId && !authorId)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q, guildId, voiceId', type: { primary: "error", alt: "invalid_query" } })}}`);
+        if (!token || !query || (!voiceId && (!reqGuildId || !authorId))) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, q, and either voiceId OR (guildId and authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -301,7 +301,10 @@ app.get('/play', async (c) => {
             let requester: any = { id: authorId || 'api', username: 'API' };
             if (authorId) {
                 await log(`Fetching user: ${authorId}`);
-                const fetched = await client.users.fetch(authorId as string).catch(() => null);
+                let fetched = client.users.cache.get(authorId as string);
+                if (!fetched) {
+                    fetched = await client.users.fetch(authorId as string).catch(() => undefined);
+                }
                 if (fetched) {
                     requester = fetched;
                     await log(`User found: ${fetched.tag}`);
@@ -320,7 +323,10 @@ app.get('/play', async (c) => {
                 await log('Voice channel resolved');
             } else if (authorId && reqGuildId) {
                 await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
-                const guild = client.guilds.cache.get(reqGuildId as string);
+                let guild = client.guilds.cache.get(reqGuildId as string);
+                if (!guild) {
+                    guild = await client.guilds.fetch(reqGuildId as string).catch(() => undefined);
+                }
                 if (guild) {
                     const voiceState = guild.voiceStates.cache.get(authorId as string);
                     if (voiceState?.channel) channel = voiceState.channel;

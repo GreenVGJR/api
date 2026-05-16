@@ -122,30 +122,55 @@ export async function createMusicStream(
     c.header('X-Route', 'LIVE');
 
     return stream(c, async (s: any) => {
+        let isAborted = false;
+        if (s.onAbort) {
+            s.onAbort(() => { isAborted = true; });
+        }
+
+        const safeWrite = async (data: string) => {
+            if (isAborted) return;
+            try {
+                await s.write(data);
+            } catch {
+                isAborted = true;
+            }
+        };
+
         const startTime = Date.now();
         let logIndex = 0;
 
-        await s.write('{"_logs":[');
+        await safeWrite('{"_logs":[');
 
         let logPromise = Promise.resolve();
         const log = (msg: string) => {
             logPromise = logPromise.then(async () => {
+                if (isAborted) return;
                 const elapsed = Date.now() - startTime;
                 const entry = `[${elapsed}ms] ${msg}`;
                 const prefix = logIndex > 0 ? ',' : '';
-                try { await s.write(`${prefix}${JSON.stringify(entry)}`); } catch { }
+                await safeWrite(`${prefix}${JSON.stringify(entry)}`);
                 logIndex++;
             });
             return logPromise;
         };
 
+        const customS = {
+            write: async (data: string) => {
+                await logPromise;
+                await safeWrite(data);
+            },
+            onAbort: s.onAbort ? s.onAbort.bind(s) : undefined,
+            close: s.close ? s.close.bind(s) : undefined,
+        };
+
         try {
-            await callback(log, s);
+            await callback(log, customS);
+            await logPromise;
         } catch (err: any) {
+            await logPromise;
             await log(`Error: ${err?.message || 'Failed to process stream'}`);
-            try {
-                await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to process stream', type: { primary: "error", alt: "critical" } })}}`);
-            } catch { }
+            await logPromise;
+            await safeWrite(`],"data":${JSON.stringify({ status: false, message: err?.message || 'Failed to process stream', type: { primary: "error", alt: "critical" } })}}`);
         }
     });
 }
@@ -316,7 +341,8 @@ process.on('unhandledRejection', (reason: any) => {
         (reason as any)?.code === 23 ||
         msg.includes('The operation timed out') ||
         msg.includes('WebSocket was closed') ||
-        msg.includes('Cannot send data')
+        msg.includes('Cannot send data') ||
+        msg.includes('writableStreamDefaultWriterRelease')
     ) {
         console.warn('Suppressed unhandled rejection (WebSocket cleanup):', msg);
         return;
@@ -868,8 +894,11 @@ export function checkVoicePermissions(channel: any, botUser: any) {
 }
 
 export async function resolveVoiceChannel(client: Client, voiceId: string) {
-    const channel = await client.channels.fetch(voiceId).catch(() => null);
-    if (!channel || channel.type !== ChannelType.GuildVoice) {
+    let channel: any = client.channels.cache.get(voiceId);
+    if (!channel) {
+        channel = await client.channels.fetch(voiceId).catch(() => null);
+    }
+    if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
         throw new Error('Invalid voice channel ID or not a voice channel');
     }
 

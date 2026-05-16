@@ -30,7 +30,10 @@ app.get('/voiceStatus', async (c) => {
             const { client, player: manager } = await getOrCreatePlayer(token, log);
             
             await log(`Validating guild: ${guildId}`);
-            const guild = await client.guilds.fetch(guildId).catch(() => null);
+            let guild = client.guilds.cache.get(guildId as string);
+            if (!guild) {
+                guild = await client.guilds.fetch(guildId as string).catch(() => undefined);
+            }
             if (!guild) {
                 await log('Guild not found or bot not in guild');
                 await s.write(`],"data":${JSON.stringify({ status: false, message: 'Guild not found or bot not in guild', data: getVoiceStatusSettings(token, "unknown"), type: { primary: "error", alt: "invalid_query" } })}}`);

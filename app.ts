@@ -108,7 +108,8 @@ const API_ROUTES = {
         misc: [
             "/tools/translate?q=&from=&to=",
             "/tools/timezone?q=",
-            "/tools/emoji?q=&limit="
+            "/tools/emoji?q=&limit=",
+            "/tools/emoji/kitchen?q1=&q2=&imageOnly="
         ],
         db: [
             "/tools/db/get?q=&hash=",
@@ -258,6 +259,12 @@ const PLAYGROUND_ENDPOINTS = {
 };
 
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
+
+setGlobalDispatcher(new Agent({
+    connections: 100,           // Max concurrent connections
+    keepAliveTimeout: 60_000,   // Keep them alive for 60s
+    pipelining: 1,              // Number of requests per connection
+}));
 
 const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 

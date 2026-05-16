@@ -22,7 +22,7 @@ const RM = { OFF: 'off' as RMValue, TRACK: 'track' as RMValue, QUEUE: 'queue' as
 
 function parseTimeMS(timeStr: string): number {
     if (!timeStr) return 0;
-    timeStr = timeStr.toLowerCase().trim();
+    timeStr = timeStr.toLowerCase().replace(/\s+/g, '');
 
     const hmsRegex = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?/;
     if (/[hm]/.test(timeStr)) {
@@ -450,7 +450,7 @@ app.get('/loop', async (c) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const voiceId = c.req.query('voiceId');
-        const mode = (c.req.query('mode') || '').toLowerCase();
+        const mode = (c.req.query('mode') || '').toLowerCase().replace(/\s+/g, '');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -918,7 +918,10 @@ app.get('/where', async (c) => {
 
         for (const [gid, guildPlayer] of playersToCheck) {
             if (guildPlayer?.voiceChannelId) {
-                const ch = await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null) as any;
+                let ch = client.channels.cache.get(guildPlayer.voiceChannelId) as any;
+                if (!ch) {
+                    ch = await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null) as any;
+                }
                 const usersInChannel = ch?.members
                     ? [...ch.members.values()].map((m: any) => ({
                         id: m.user.id,
@@ -945,9 +948,14 @@ app.get('/where', async (c) => {
 
         if (authorId) {
             await log(`Looking up voice channel for user: ${authorId}`);
-            const guildsToCheck = guildId
-                ? [client.guilds.cache.get(guildId)].filter(Boolean)
-                : [...client.guilds.cache.values()];
+            let guildsToCheck: any[] = [];
+            if (guildId) {
+                let g = client.guilds.cache.get(guildId);
+                if (!g) g = await client.guilds.fetch(guildId).catch(() => undefined) as any;
+                if (g) guildsToCheck = [g];
+            } else {
+                guildsToCheck = [...client.guilds.cache.values()];
+            }
 
             for (const guild of guildsToCheck as any[]) {
                 try {

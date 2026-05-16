@@ -9694,3 +9694,40 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
         isFallback: true
     };
 }
+
+export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) {
+    if (!q1 || !q2) return null;
+
+    const fetchEmoji = async (query: string) => {
+        const url = `https://tenor.googleapis.com/v2/featured?key=${process.env.GOOG_TENOR_EMOJI}&client_key=emoji_kitchen_funbox&q=${encodeURIComponent(query)}&collection=emoji_kitchen_v6`;
+        const res = await request(url, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+        if (res.statusCode === 200) {
+            const data = await res.json() as any;
+            if (data.results && data.results.length > 0) {
+                return data.results[0];
+            }
+        }
+        return null;
+    };
+
+    try {
+        let result = await fetchEmoji(`${q1}_${q2}`);
+        if (!result) {
+            result = await fetchEmoji(`${q2}_${q1}`);
+        }
+
+        if (!result) return { error: "No combination found" };
+
+        return {
+            data: result
+        };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}

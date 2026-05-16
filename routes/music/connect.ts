@@ -20,8 +20,8 @@ app.get('/connect', async (c) => {
     const force = c.req.query('force') === 'true';
 
     return await createMusicStream(c, async (log, s) => {
-        if (!token || (!reqGuildId && !voiceId && !authorId)) {
-            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId, voiceId (or authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
+        if (!token || (!voiceId && (!reqGuildId || !authorId))) {
+            await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, and either voiceId OR (guildId and authorId)', type: { primary: "error", alt: "invalid_query" } })}}`);
             return;
         }
 
@@ -34,7 +34,10 @@ app.get('/connect', async (c) => {
 
         if (!voiceId && authorId && reqGuildId) {
             await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
-            const guild = client.guilds.cache.get(reqGuildId as string);
+            let guild = client.guilds.cache.get(reqGuildId as string);
+            if (!guild) {
+                guild = await client.guilds.fetch(reqGuildId as string).catch(() => undefined);
+            }
             if (guild) {
                 const voiceState = guild.voiceStates.cache.get(authorId as string);
                 if (voiceState?.channel) {

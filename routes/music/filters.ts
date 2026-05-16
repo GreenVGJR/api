@@ -254,7 +254,7 @@ app.get('/filter', async (c) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const voiceId = c.req.query('voiceId');
-        const filter = (c.req.query('filter') || '').toLowerCase().trim();
+        const filter = (c.req.query('filter') || '').toLowerCase().replace(/\s+/g, '');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);

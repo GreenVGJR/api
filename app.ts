@@ -127,6 +127,7 @@ const API_ROUTES = {
             server: [
                 "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
                 "/tools/discord/infoServer?token=&guildId=",
+                "/tools/discord/infoAutomod?token=&guildId=",
             ],
             member: [
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
@@ -368,7 +369,6 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
     .replace(/>\s+</g, '><')
     .trim();
 
-
 const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 const cfJs = fs.readFileSync(path.join(__dirname, 'html/cf.js'), 'utf-8');
 
@@ -465,13 +465,16 @@ app.get('/favicon.ico', (c: Context) => {
 
 app.get('/robots.txt', (c: Context) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
-    c.header('Content-Type', 'text/plain');
     return c.text(robots, 200);
 });
 
 app.get('/tools/health', (c: Context) => {
     c.header('Cache-Control', 'public, max-age=60');
     return c.text('OK', 200);
+});
+
+app.get('/err/451', (c: Context) => {
+    return c.body(null, 451);
 });
 
 /*

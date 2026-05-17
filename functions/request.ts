@@ -5590,6 +5590,9 @@ export const setKeys = (sc: string, sp: string, tidal: string, deezer: string) =
 
 export async function MetaAI(query: string, convo: any = null): Promise<any> {
     if (!query) return null;
+    return {
+        error: "Service unavailable"
+    }
 
     let messages: any[] = [];
 
@@ -5713,13 +5716,37 @@ export async function googleWeather(query: string): Promise<any> {
 
 export async function GrokAI(query: string): Promise<any> {
     if (!query) return null;
-    const bodyhttp = { "id": "x-preview", "messages": [{ "id": crypto.randomBytes(12).toString('base64url'), "createdAt": new Date().toISOString(), "role": "user", "content": query, "parts": [{ "type": "text", "text": query }] }], "fp": "x-preview", "filter": { "version": "English" } };
+    const convoId = crypto.randomBytes(12).toString('base64url');
+    const msgId = crypto.randomBytes(12).toString('base64url');
+
+    const bodyhttp = {
+        "id": convoId,
+        "messages": [
+            {
+                "parts": [
+                    {
+                        "type": "text",
+                        "text": query
+                    }
+                ],
+                "id": msgId,
+                "role": "user"
+            }
+        ],
+        "trigger": "submit-message"
+    };
 
     try {
-        const req = await request("https://leaves.mintlify.com/api/assistant/x-preview/message", {
+        const req = await request("https://docs.x.ai/api/chat", {
             method: "POST",
             body: JSON.stringify(bodyhttp),
-            headers: { ...commonHeaders, 'Content-Type': 'application/json' }
+            headers: {
+                ...commonHeaders,
+                'Content-Type': 'application/json',
+                'Origin': 'https://docs.x.ai',
+                'Referer': 'https://docs.x.ai/developers/models/grok-4.3',
+                'User-Agent': 'ai-sdk/6.0.38 runtime/browser'
+            }
         });
 
         if (req.statusCode === 429) {
@@ -5740,20 +5767,24 @@ export async function GrokAI(query: string): Promise<any> {
 
         const res = await req.text;
         const response = res.split('\n')
-            .filter((line: string) => line.startsWith('0:'))
+            .filter((line: string) => line.startsWith('data: '))
             .map((line: string) => {
                 try {
-                    return JSON.parse(line.substring(line.indexOf(':') + 1));
+                    const parsed = JSON.parse(line.substring(6));
+                    if (parsed.type === 'text-delta') {
+                        return parsed.delta || '';
+                    }
                 } catch {
                     return '';
                 }
+                return '';
             })
             .join('');
 
         return {
             response: response || null,
             data: {
-                model: "grok-4.1-fast-preview"
+                model: "developers-grok-4.3"
             }
         }
     }
@@ -9731,3 +9762,149 @@ export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) 
         return null;
     }
 }
+
+export const DiscordInfoAutomod = async (token: string, guildId: string) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const urlRules = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
+        const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
+
+        const [rulesReq, guildReq] = await Promise.all([
+            fetch(urlRules, { method: 'GET', headers }),
+            fetch(urlGuild, { method: 'GET', headers })
+        ]);
+
+        let rulesData: any = null;
+        let guildData: any = null;
+
+        try { rulesData = await rulesReq.json(); } catch { }
+        try { guildData = await guildReq.json(); } catch { }
+
+        if (rulesReq.status !== 200) {
+            return {
+                data: null,
+                error: rulesData || { status: rulesReq.status, statusText: rulesReq.statusText }
+            };
+        }
+
+        let formattedRules = rulesData;
+        if (Array.isArray(rulesData)) {
+            const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<number, string> = {
+                1: 'KEYWORD',
+                3: 'SPAM',
+                4: 'KEYWORD_PRESET',
+                5: 'MENTION_SPAM'
+            };
+
+            const DISCORD_AUTOMOD_EVENT_TYPES: Record<number, string> = {
+                1: 'MESSAGE_SEND'
+            };
+
+            const DISCORD_AUTOMOD_ACTION_TYPES: Record<number, string> = {
+                1: 'BLOCK_MESSAGE',
+                2: 'SEND_ALERT_MESSAGE',
+                3: 'TIMEOUT'
+            };
+
+            const DISCORD_AUTOMOD_PRESET_TYPES: Record<number, string> = {
+                1: 'PROFANITY',
+                2: 'SEXUAL_CONTENT',
+                3: 'SLURS'
+            };
+
+            formattedRules = rulesData.map((rule: any) => {
+                const triggerTypeName = DISCORD_AUTOMOD_TRIGGER_TYPES[rule.trigger_type] || 'UNKNOWN';
+                const eventTypeName = DISCORD_AUTOMOD_EVENT_TYPES[rule.event_type] || 'UNKNOWN';
+                const resolvedActions = (rule.actions || []).map((action: any) => {
+                    const actionTypeName = DISCORD_AUTOMOD_ACTION_TYPES[action.type] || 'UNKNOWN';
+                    return {
+                        ...action,
+                        type_name: actionTypeName
+                    };
+                });
+
+                const triggerMetadata = rule.trigger_metadata || {};
+                if (triggerMetadata.presets) {
+                    triggerMetadata.presets_resolved = triggerMetadata.presets.map(
+                        (p: number) => DISCORD_AUTOMOD_PRESET_TYPES[p] || 'UNKNOWN'
+                    );
+                }
+
+                return {
+                    ...rule,
+                    trigger_type_name: triggerTypeName,
+                    event_type_name: eventTypeName,
+                    actions: resolvedActions,
+                    trigger_metadata: triggerMetadata,
+                    created_at: rule.id ? String(getSnowflakeDate(rule.id)) : null
+                };
+            });
+        }
+
+        let contentFilters: any = null;
+        if (guildReq.status === 200 && guildData && guildData.explicit_content_filter !== undefined) {
+            const filterLevel = guildData.explicit_content_filter;
+            const EXPLICIT_CONTENT_FILTER_LEVELS: Record<number, { name: string, description: string }> = {
+                0: { name: 'DISABLED', description: 'Do not filter' },
+                1: { name: 'MEMBERS_WITHOUT_ROLES', description: 'Filter messages from server members without roles' },
+                2: { name: 'ALL_MEMBERS', description: 'Filter messages from all members' }
+            };
+            const resolved = EXPLICIT_CONTENT_FILTER_LEVELS[filterLevel] || { name: 'UNKNOWN', description: 'Unknown' };
+            contentFilters = {
+                explicit_content_filter: filterLevel,
+                ...resolved
+            };
+        }
+
+        const count = {
+            total: 0,
+            disable: 0,
+            enable: 0,
+            types: {
+                MESSAGE_SEND: 0,
+                UNKNOWN: 0
+            } as Record<string, number>,
+            triggers: {
+                SPAM: 0,
+                UNKNOWN: 0,
+                MENTION_SPAM: 0,
+                KEYWORD: 0,
+                KEYWORD_PRESET: 0
+            } as Record<string, number>
+        };
+
+        if (Array.isArray(formattedRules)) {
+            count.total = formattedRules.length;
+            formattedRules.forEach((rule: any) => {
+                if (rule.enabled) {
+                    count.enable++;
+                } else {
+                    count.disable++;
+                }
+                const eventTypeName = rule.event_type_name || 'UNKNOWN';
+                count.types[eventTypeName] = (count.types[eventTypeName] || 0) + 1;
+
+                const triggerTypeName = rule.trigger_type_name || 'UNKNOWN';
+                count.triggers[triggerTypeName] = (count.triggers[triggerTypeName] || 0) + 1;
+            });
+        }
+
+        return {
+            data: {
+                content: formattedRules,
+                content_filters: contentFilters
+            },
+            count: count
+        };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};

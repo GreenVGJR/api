@@ -1,2 +1,10 @@
+# Places for crawler and external link.
+# Misusing it as bypass alternative will result temporary blacklist.
+
 User-agent: *
-Disallow:
+Allow: /playground
+Disallow: /
+
+User-agent: Discordbot
+Allow: /tools/ai-image/
+Disallow: /

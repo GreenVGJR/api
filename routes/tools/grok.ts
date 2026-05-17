@@ -11,7 +11,7 @@ app.get('/chat/grok', async (c) => {
     } else if (query === '') {
         return c.json({ "error": "Nothing to do" }, 202);
     }
-    c.header('X-Route', 'leaves.mintlify.com');
+    c.header('X-Route', 'docs.x.ai');
     return await dispatch(c, () => GrokAI(query));
 });
 

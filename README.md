@@ -3,7 +3,6 @@ Nothing special here. At least 75% are vibecoded.
 Library: 
 - [@hono/node-server](https://www.npmjs.com/package/@hono/node-server)
 - [discord.js](https://www.npmjs.com/package/discord.js)
-- [dotenv](https://www.npmjs.com/package/dotenv)
 - [entities](https://www.npmjs.com/package/entities)
 - [hono](https://www.npmjs.com/package/hono)
 - [httpcloak](https://www.npmjs.com/package/httpcloak)

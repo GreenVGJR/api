@@ -474,6 +474,7 @@ app.get('/tools/health', (c: Context) => {
 });
 
 app.get('/err/451', (c: Context) => {
+    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     return c.body(null, 451);
 });
 

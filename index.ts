@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { autoInit } from './functions/musicPlayer.js';
 import app from './app.js';

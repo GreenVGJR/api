@@ -182,7 +182,7 @@ const formatAbbreviatedNumber = (num: number | string | null | undefined): strin
     return n.toString();
 };
 
-const parseYtInitial = (html: any) => {
+export const parseYtInitial = (html: any) => {
     try {
 
         const dataParts = html.split(/ytInitialData\s*=\s*/);

@@ -15,6 +15,7 @@ import {
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStream, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
+import { parseYtInitial } from '../../functions/request.ts';
 
 interface CustomSearchResult {
     id?: string;
@@ -45,6 +46,9 @@ function extractYouTubePlaylistUrl(url: string): string | null {
         const urlObj = new URL(url);
         const listParam = urlObj.searchParams.get('list');
         if (listParam) {
+            // RD* are YouTube Radio/Mix lists — they can't be loaded as /playlist URLs.
+            // They're handled separately via fetchYouTubeMixTracks.
+            if (listParam.startsWith('RD')) return null;
             urlObj.pathname = '/playlist';
             urlObj.searchParams.forEach((value, key) => {
                 if (key !== 'list') {
@@ -74,6 +78,38 @@ function extractYouTubeVideoUrl(url: string): string | null {
         }
     } catch { }
     return null;
+}
+
+/**
+ * For YouTube Radio/Mix URLs (list=RD*), fetches the watch page, extracts ytInitialData,
+ * and returns individual video URLs from the mix panel.
+ * Mirrors the BDFD pattern:
+ *   split on "var ytInitialData =" → split on ";" → parse JSON
+ *   → contents.twoColumnWatchNextResults.playlist.playlist.contents
+ *   → map playlistPanelVideoRenderer.videoId
+ */
+async function fetchYouTubeMixTracks(url: string): Promise<string[] | null> {
+    try {
+        const res = await request(url, {
+            headers: { ...commonHeaders },
+            useH2: true
+        });
+        const html = res.text;
+        const ytInitialData = parseYtInitial(html);
+        if (!ytInitialData) return null;
+        const contents: any[] =
+            ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.contents;
+        if (!Array.isArray(contents) || contents.length === 0) return null;
+        return {
+            title: ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.title,
+            list: contents
+                .map((item: any) => item?.playlistPanelVideoRenderer?.videoId)
+                .filter(Boolean)
+                .map((id: string) => `https://www.youtube.com/watch?v=${id}`)
+        }
+    } catch {
+        return null;
+    }
 }
 
 function getPlatformFromUrl(url: string): string | null {
@@ -441,13 +477,36 @@ app.get('/play', async (c) => {
             };
 
             let result: any = null;
-            const ytPlaylistUrl = isUrl ? extractYouTubePlaylistUrl(queryStr) : null;
+            const ytListParam = isUrl ? (() => { try { return new URL(queryStr).searchParams.get('list'); } catch { return null; } })() : null;
+            const isYtMix = ytListParam?.startsWith('RD') ?? false;
+            const ytPlaylistUrl = isUrl ? extractYouTubePlaylistUrl(queryStr) : null; // returns null for RD lists
             const ytVideoUrl = isUrl ? extractYouTubeVideoUrl(queryStr) : null;
 
             if (isUrl) {
                 await log(`Loading URL directly: "${queryStr}"`);
                 try {
-                    if (ytPlaylistUrl) {
+                    if (isYtMix) {
+                        await log(`[Attempt 1] YouTube Mix (list=${ytListParam}) detected — fetching track list from watch page...`);
+                        const splitqueryStr = new URL(queryStr);
+                        const mixTrackUrls = await fetchYouTubeMixTracks(`https://youtube.com/watch?v=&list=${splitqueryStr.searchParams.get("list")}`);
+                        if (mixTrackUrls?.list?.length) {
+                            await log(`[Attempt 1] Fetched ${mixTrackUrls.list.length} tracks from mix — loading individually...`);
+                            const trackResults = await Promise.allSettled(
+                                mixTrackUrls.list.map(u => doSearch(u, 'url'))
+                            );
+                            const tracks = trackResults
+                                .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+                                .flatMap(r => r.value.tracks ?? []);
+                            if (tracks.length > 0) {
+                                result = { loadType: 'playlist', tracks, playlist: { name: mixTrackUrls.title, uri: queryStr } };
+                                await log(`[Attempt 1] Mix loaded: ${tracks.length}/${mixTrackUrls.list.length} tracks`);
+                            } else {
+                                throw new Error('No tracks could be loaded from YouTube Mix');
+                            }
+                        } else {
+                            throw new Error('Failed to extract tracks from YouTube Mix page');
+                        }
+                    } else if (ytPlaylistUrl) {
                         await log(`[Attempt 1] YouTube playlist detected. Trying playlist first: "${ytPlaylistUrl}"`);
                         result = await doSearch(ytPlaylistUrl, 'url');
                         applyOverlay(result, customResult);
@@ -484,12 +543,12 @@ app.get('/play', async (c) => {
                         }
                     }
 
-                    if (!result && !ytPlaylistUrl) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to search' : ' — fallback disabled'}`);
+                    if (!result && !ytPlaylistUrl && !isYtMix) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to search' : ' — fallback disabled'}`);
                 }
             }
 
             // Skip the cross-platform fallback chain for YouTube playlist/mix URLs — if playlist and video-only failed, stop
-            if (isUrl && !result && allowFallback && !ytPlaylistUrl) {
+            if (isUrl && !result && allowFallback && !ytPlaylistUrl && !isYtMix) {
 
                 const metaQuery = customResult?.title ? (customResult.author ? `${customResult.title} ${customResult.author}` : customResult.title) : null;
 

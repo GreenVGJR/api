@@ -14,7 +14,6 @@ import discordWebhook from './discordWebhook.js';
 import magicstudio from './magicstudio.js';
 import flux from './flux.js';
 import discordListMember from './discordListMember.js';
-import ffmpegInterpolate from './ffmpegInterpolate.js';
 import discordVoice from './discordVoice.js';
 import gpt from './gpt.js';
 import discordListChannel from './discordListChannel.js';
@@ -32,4 +31,4 @@ import discordListInvite from './discordListInvite.js';
 import emojiKitchen from './emojiKitchen.js';
 import discordInfoAutomod from './discordInfoAutomod.js';
 
-export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, ffmpegInterpolate, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, discordInfoSticker, db, discordListInvite, emojiKitchen, discordInfoAutomod] as any[];
+export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, discordInfoSticker, db, discordListInvite, emojiKitchen, discordInfoAutomod] as any[];

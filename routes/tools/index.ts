@@ -30,5 +30,6 @@ import db from './db.js';
 import discordListInvite from './discordListInvite.js';
 import emojiKitchen from './emojiKitchen.js';
 import discordInfoAutomod from './discordInfoAutomod.js';
+import md5 from './md5.js';
 
-export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, discordInfoSticker, db, discordListInvite, emojiKitchen, discordInfoAutomod] as any[];
+export default [geminiAmp, translateAmp, meta, grok, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, discordInfoSticker, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5] as any[];

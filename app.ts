@@ -109,7 +109,8 @@ const API_ROUTES = {
             "/tools/translate?q=&from=&to=",
             "/tools/timezone?q=",
             "/tools/emoji?q=&limit=",
-            "/tools/emoji/kitchen?q1=&q2=&imageOnly="
+            "/tools/emoji/kitchen?q1=&q2=&imageOnly=",
+            "/tools/md5?q="
         ],
         db: [
             "/tools/db/get?q=&hash=",

@@ -509,7 +509,6 @@ app.get('/play', async (c) => {
                     } else if (ytPlaylistUrl) {
                         await log(`[Attempt 1] YouTube playlist detected. Trying playlist first: "${ytPlaylistUrl}"`);
                         result = await doSearch(ytPlaylistUrl, 'url');
-                        applyOverlay(result, customResult);
                     } else {
                         result = await doSearch(queryStr, 'url');
                         applyOverlay(result, customResult);

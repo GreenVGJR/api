@@ -262,9 +262,9 @@ const PLAYGROUND_ENDPOINTS = {
 import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
 
 setGlobalDispatcher(new Agent({
-    connections: 100,           // Max concurrent connections
-    keepAliveTimeout: 60_000,   // Keep them alive for 60s
-    pipelining: 1,              // Number of requests per connection
+    connections: 100,           
+    keepAliveTimeout: 60_000,   
+    pipelining: 1,              
 }));
 
 const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
@@ -353,10 +353,7 @@ app.use('*', async (c: Context, next: Next) => {
     await next();
 });
 
-
-
 const starttime = (globalThis as any).__vgjr_starttime || Date.now();
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -372,7 +369,6 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
 const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 const cfJs = fs.readFileSync(path.join(__dirname, 'html/cf.js'), 'utf-8');
 
-
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
 const mainCss = rawCss
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -383,7 +379,6 @@ const mainCss = rawCss
 const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
-
 
 function encryptPayload(data: string, secret: string): string {
     try {
@@ -409,7 +404,6 @@ function decryptPayload(payload: string, secret: string): string {
         return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
     } catch { return ""; }
 }
-
 
 function isLocalRequest(host: string | undefined): boolean {
     if (!host) return false;
@@ -477,20 +471,6 @@ app.get('/err/451', (c: Context) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     return c.body(null, 451);
 });
-
-/*
-app.post('/playground.verify/aaol/:headers/2/:random', (c: Context) => {
-    try {
-        if(c.req.header('Accept') === 'application/json') {
-            return c.text('Forbidden', 403);
-        }
-        c.header('Cache-Control', 'public, max-age=86400, no-transform, must-revalidate');
-        return c.body(null, 200);
-    } catch (e) {
-        return c.body(null, 403);
-    }
-});
-*/
 
 app.get('/playground', (c: Context) => {
     const host = (c.req.header('host') || '').toLowerCase();

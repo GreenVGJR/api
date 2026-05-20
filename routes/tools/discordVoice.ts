@@ -189,7 +189,6 @@ app.get('/discord/voice/list', async (c) => {
     return await dispatch(c, () => DiscordVoice(token!, guildId, 'list', { channelId }));
 });
 
-
 app.get('/discord/voice/setStatus', async (c) => {
     const token = getToken(c);
     const channelId = getQuery(c, 'channelId');

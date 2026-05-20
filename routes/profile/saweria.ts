@@ -15,7 +15,7 @@ app.get('/saweria', async (c) => {
 
     c.header('X-Route', 'saweria.co');
     c.header('X-Ech-Target', 'cloudflare-ech');
-    // @ts-ignore
+    
     return await dispatch(c, () => SaweriaProfile(query));
 });
 

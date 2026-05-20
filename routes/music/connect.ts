@@ -25,7 +25,6 @@ app.get('/connect', async (c) => {
             return;
         }
 
-
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
@@ -60,7 +59,6 @@ app.get('/connect', async (c) => {
 
         const guildId = channel.guild.id;
 
-        // ── Already connected check ───────────────────────────────────────
         const existingPlayer = manager.players.get(guildId);
         if (!force && existingPlayer && existingPlayer.voiceChannelId === vId && existingPlayer.connected) {
             await log('Already connected to this voice channel with an active player');
@@ -73,7 +71,6 @@ app.get('/connect', async (c) => {
             return;
         }
 
-        // ── Create or Reuse Lavalink player ───────────────────────────────
         let guildPlayer = existingPlayer;
         const needsMove = !!guildPlayer && (force || guildPlayer.voiceChannelId !== vId);
 

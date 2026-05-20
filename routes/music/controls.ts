@@ -14,11 +14,9 @@ import {
     formatTrack,
     fillAutoplay,
 } from '../../functions/musicPlayer.js';
-// lavalink-client setRepeatMode expects string literals
+
 type RMValue = 'off' | 'track' | 'queue';
 const RM = { OFF: 'off' as RMValue, TRACK: 'track' as RMValue, QUEUE: 'queue' as RMValue };
-
-// ─── Time Parser ──────────────────────────────────────────────────────────────
 
 function parseTimeMS(timeStr: string): number {
     if (!timeStr) return 0;
@@ -45,14 +43,9 @@ function parseTimeMS(timeStr: string): number {
     return isNaN(secs) ? 0 : secs * 1000;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** True if the player has an active track (playing or paused). */
 function isActive(p: any): boolean {
     return !!(p.playing || p.paused || p.queue.current);
 }
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/pause', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -96,7 +89,6 @@ app.get('/pause', async (c) => {
     });
 });
 
-
 app.get('/resume', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -138,7 +130,6 @@ app.get('/resume', async (c) => {
         })}}`);
     });
 });
-
 
 app.get('/skip', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -220,7 +211,6 @@ app.get('/skip', async (c) => {
     });
 });
 
-
 app.get('/stop', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -263,9 +253,6 @@ app.get('/stop', async (c) => {
                 await (queue as any).stopPlaying(false);
             }
 
-            // Since we didn't clear247 or destroy, playerDestroy won't fire.
-            // queueEnd will fire and naturally apply the queueEnd status.
-
             await s.write(`],"data":${JSON.stringify({
                 status: true,
                 data: { action: 'stopped', context_destroyed: false, is247: true },
@@ -282,7 +269,6 @@ app.get('/stop', async (c) => {
         await queue.destroy();
         await log('Player destroyed');
 
-        // Destroy the full client if no other guilds remain active
         let hasActiveNodes = false;
         for (const [id, p] of manager.players) {
             if (id === guildId) continue;
@@ -310,7 +296,6 @@ app.get('/stop', async (c) => {
         })}}`);
     });
 });
-
 
 app.get('/seek', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -388,7 +373,6 @@ app.get('/seek', async (c) => {
     });
 });
 
-
 app.get('/volume', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -429,7 +413,6 @@ app.get('/volume', async (c) => {
         })}}`);
     });
 });
-
 
 const LOOP_MODES: Record<string, RMValue | 'autoplay'> = {
     off: RM.OFF,
@@ -523,7 +506,6 @@ app.get('/loop', async (c) => {
     });
 });
 
-
 app.get('/shuffle', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -573,7 +555,6 @@ app.get('/shuffle', async (c) => {
         })}}`);
     });
 });
-
 
 app.get('/remove', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -661,7 +642,6 @@ app.get('/clear', async (c) => {
     });
 });
 
-
 app.get('/jump', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -712,7 +692,6 @@ app.get('/jump', async (c) => {
         })}}`);
     });
 });
-
 
 app.get('/move', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -785,7 +764,6 @@ app.get('/move', async (c) => {
         })}}`);
     });
 });
-
 
 app.get('/back', async (c) => {
     return await createMusicStream(c, async (log, s) => {
@@ -977,7 +955,6 @@ app.get('/where', async (c) => {
             if (!authorChannel) await log(`User ${authorId} is not in any voice channel`);
         }
 
-        // Merge bot channels with author info into a flat array
         const result = botChannels.map(b => ({
             client: {
                 id: b.id,

@@ -8,8 +8,6 @@ import { dispatch, processImage } from '../../functions/httpRequest.js';
 
 import { Context } from 'hono';
 
-
-
 app.get('/discord/modifyServer', async (c) => {
     let token: string | null = null;
     try {

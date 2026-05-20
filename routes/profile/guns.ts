@@ -15,7 +15,7 @@ app.get('/guns', async (c) => {
 
     c.header('X-Route', 'guns.lol');
     c.header('X-Ech-Target', 'cloudflare-ech');
-    // @ts-ignore
+    
     return await dispatch(c, () => GunsProfile(query));
 });
 

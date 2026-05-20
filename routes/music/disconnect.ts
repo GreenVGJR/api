@@ -22,7 +22,6 @@ app.get('/disconnect', async (c) => {
             return;
         }
 
-
         if (!hasActivePlayer(token)) {
             await log('No active player found for this token');
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'No active player found', type: { primary: "error", alt: "inactive_player" } })}}`);
@@ -31,7 +30,6 @@ app.get('/disconnect', async (c) => {
 
         const { player: manager } = await getOrCreatePlayer(token);
 
-        // ── Guild-scoped disconnect ───────────────────────────────────────
         if (guildId) {
             await log(`Disconnecting from guild: ${guildId}`);
 
@@ -51,7 +49,6 @@ app.get('/disconnect', async (c) => {
                 guildPlayer.queue.previous.splice(0, guildPlayer.queue.previous.length);
             }
 
-            // Explicitly clear 24/7 and wipe voice status/configs for this guild
             clear247(token, guildId);
             const voiceChannelId = guildPlayer.voiceChannelId;
             if (voiceChannelId) {

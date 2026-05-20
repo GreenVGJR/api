@@ -21,6 +21,7 @@ app.get('/discord/webhook/info', async (c) => {
     if (!webhookUrl && !webhookId) return c.json({ error: "Missing valid parameter: webhookId or webhookUrl" }, 202);
 
     c.header('X-Route', 'discord.com');
+    
     // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'info', webhookToken, webhookUrl }, []));
 });
@@ -35,6 +36,7 @@ app.get('/discord/webhook/create', async (c) => {
     if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
     c.header('X-Route', 'discord.com');
+    // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token!, channelId!, { action: 'create', name, avatar }, []));
 });
 
@@ -53,6 +55,7 @@ app.get('/discord/webhook/delete', async (c) => {
     if (!webhookUrl && !webhookId) return c.json({ error: "Missing valid parameter: webhookId or webhookUrl" }, 202);
 
     c.header('X-Route', 'discord.com');
+    
     // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'delete', webhookToken, webhookUrl }, []));
 });
@@ -71,6 +74,7 @@ app.get('/discord/webhook/send', async (c) => {
     if (!webhookUrl && !webhookId) return c.json({ error: "Missing valid parameter: webhookId or webhookUrl" }, 202);
 
     c.header('X-Route', 'discord.com');
+    
     // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token, webhookId, {
         action: 'send',
@@ -90,6 +94,7 @@ app.get('/discord/webhook/list', async (c) => {
     if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
     c.header('X-Route', 'discord.com');
+    
     // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token, channelId, { action: 'list' }, []));
 });

@@ -8,8 +8,6 @@ import {
     createMusicStream,
 } from '../../functions/musicPlayer.js';
 
-// ─── Filter Presets ───────────────────────────────────────────────────────────
-
 const FILTER_PRESETS: Record<string, { description: string; requires: string; isActive: (p: any) => boolean; apply: (p: any) => Promise<void>; disable: (p: any) => Promise<void> }> = {
     nightcore: {
         description: 'Speeds up the track with a higher pitch for an energetic feel',
@@ -247,8 +245,6 @@ export function getActiveFilters(queue: any): string[] {
     return Object.keys(FILTER_PRESETS).filter(k => k !== 'reset' && FILTER_PRESETS[k].isActive(queue));
 }
 
-// ─── Route ────────────────────────────────────────────────────────────────────
-
 app.get('/filter', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -357,7 +353,6 @@ app.get('/filter', async (c) => {
             return;
         }
 
-        // ── Handle reset separately ───────────────────────────────────────
         if (filter === 'reset') {
             const isAnyPresetActive = Object.keys(FILTER_PRESETS).some(k => k !== 'reset' && FILTER_PRESETS[k].isActive(queue));
             const hasRawEQ = queue.filterManager.equalizerBands?.some((b: any) => b.gain !== 0) ?? false;
@@ -392,7 +387,6 @@ app.get('/filter', async (c) => {
             return;
         }
 
-        // ── All other filters use toggle logic ────────────────────────────
         const currentlyActive = preset.isActive(queue);
         const actionType = currentlyActive ? 'filter_disabled' : 'filter_applied';
 
@@ -403,7 +397,7 @@ app.get('/filter', async (c) => {
             } else {
                 await preset.apply(queue);
             }
-            // Flush the audio buffer immediately so the filter takes effect without delay
+            
             if (queue.position) {
                 await queue.seek(queue.position);
             }

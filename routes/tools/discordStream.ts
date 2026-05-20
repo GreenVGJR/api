@@ -15,6 +15,7 @@ app.get('/discord/stream', async (c) => {
     const fallbackEmbed = c.req.query('fallbackEmbed') === 'true';
 
     c.header('X-Route', 'discord.com');
+    
     // @ts-ignore
     return await dispatch(c, () => DiscordStream(token, channelId, messageId, url, clone, onEmbed, name, fallbackEmbed));
 });

@@ -1,5 +1,3 @@
-document.title = "Playground | VGJR";
-
 {{SSR_STATE}}
 // Initialize layout and Tailwind config dynamically
 const initSPA = () => {

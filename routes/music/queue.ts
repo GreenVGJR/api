@@ -13,7 +13,6 @@ import {
 import { YTMusic, YTLyrics, tidalLyrics, SPLyrics } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 
-
 app.get('/nowplaying', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -79,7 +78,6 @@ app.get('/nowplaying', async (c) => {
     });
 });
 
-
 app.get('/nowplaying/lyrics', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
@@ -112,9 +110,7 @@ app.get('/nowplaying/lyrics', async (c) => {
         await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
         try {
-            // ── Chain: YouTube Music → Tidal → Spotify ────────────────────
 
-            // 1. YouTube Music
             await log('[1/3] Trying YouTube Music lyrics...');
             let lyrics: string | null = null;
             let syncLyrics: any = null;
@@ -147,7 +143,6 @@ app.get('/nowplaying/lyrics', async (c) => {
                 await log(`YouTube Music lyrics failed: ${e?.message || 'unknown'}`);
             }
 
-            // 2. Tidal
             if (!lyrics) {
                 await log('[2/3] Trying Tidal lyrics...');
                 try {
@@ -164,7 +159,6 @@ app.get('/nowplaying/lyrics', async (c) => {
                 }
             }
 
-            // 3. Spotify
             if (!lyrics) {
                 await log('[3/3] Trying Spotify lyrics...');
                 try {
@@ -224,7 +218,6 @@ app.get('/nowplaying/lyrics', async (c) => {
         }
     });
 });
-
 
 app.get('/queue', async (c) => {
     return await createMusicStream(c, async (log, s) => {

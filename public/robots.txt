@@ -6,5 +6,5 @@ Allow: /playground
 Disallow: /
 
 User-agent: Discordbot
-Allow: /tools/ai-image/
+Allow: /tools/ai-image/*
 Disallow: /

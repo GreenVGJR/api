@@ -33,7 +33,6 @@ return c.json({"error":"Nothing to do"}, 202);
     formq.append("user_profile_id", "null");
     formq.append("anonymous_user_id", crypto.randomUUID());
 
-
     return await blobDispatch(c, async () => await fetch("https://ai-api.magicstudio.com/api/ai-art-generator", {
         method: "POST",
         headers: {

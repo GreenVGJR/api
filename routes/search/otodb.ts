@@ -13,7 +13,7 @@ app.get('/otodb', async (c) => {
         return c.json({ "error": "Nothing to do" }, 202);
     }
     c.header('X-Route', 'otodb.net');
-    // @ts-ignore
+    
     return await dispatch(c, () => OtoDB(query));
 });
 

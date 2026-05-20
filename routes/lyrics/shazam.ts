@@ -32,15 +32,12 @@ app.get('/shazam', async (c) => {
             const firstTrack = tracks[0];
             const trackViewUrl: string = firstTrack.trackViewUrl || '';
 
-
             let shazamUrl: string | null = null;
             try {
                 const parsedUrl = new URL(trackViewUrl);
                 const iParam = parsedUrl.searchParams.get('i');
                 const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
 
-                // Path format: /us/album/track-name-slug/albumId?i=trackId
-                // We need the slug (index 2) and the track ID (i param)
                 const slugSegment = pathSegments.length >= 3 ? pathSegments[2] : null;
 
                 if (iParam && slugSegment) {
@@ -48,9 +45,7 @@ app.get('/shazam', async (c) => {
                 }
             } catch { }
 
-
             const trackInfo = { ...firstTrack };
-
 
             let shazamInfo: any = null;
             let lyrics: string | null = null;
@@ -65,7 +60,6 @@ app.get('/shazam', async (c) => {
                     });
 
                     const html = await shazamRes.text;
-
 
                     try {
                         const ldJsonMatch = html.split('script type="application/ld+json">');
@@ -84,7 +78,6 @@ app.get('/shazam', async (c) => {
                                 }
                             }
 
-                            // Handle byArtist as either string or object
                             const byArtist = typeof ldJson.byArtist === 'string'
                                 ? ldJson.byArtist
                                 : (ldJson.byArtist?.name || ldJson.creator?.name || null);
@@ -106,7 +99,6 @@ app.get('/shazam', async (c) => {
                                 byArtist: null, albumName: null, albumPublished: null,
                             };
                         }
-
 
                         const artistMatch = html.match(/TrackPageArtistLink_artistNameText[^>]*>([^<]+)<\/span>/);
                         if (artistMatch) shazamInfo.byArtist = decodeHTML(artistMatch[1]);
@@ -139,7 +131,6 @@ app.get('/shazam', async (c) => {
                         shazamInfo.energy = getAttribute('Energy');
 
                     } catch { }
-
 
                     try {
                         const rx = /\\\\?"lyricLines\\\\?":(\[.*?\])\}/g;
@@ -180,7 +171,6 @@ app.get('/shazam', async (c) => {
                         }
                     } catch { }
 
-
                     if (!lyrics) {
                         try {
                             const lyricParts = html.split('LyricsContent_');
@@ -202,7 +192,6 @@ app.get('/shazam', async (c) => {
                             }
                         } catch { }
                     }
-
 
                     if (!lyrics) {
                         try {

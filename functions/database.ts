@@ -5,7 +5,6 @@ import crypto from "crypto";
 
 const dbPath = path.join(process.cwd(), "database", "database.sqlite");
 
-// Ensure data directory exists
 const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -43,7 +42,6 @@ function decrypt(payload: string): string {
     } catch { return payload; }
 }
 
-// Initialize table with name and hash as a unique pair for separation
 db.run(`
     CREATE TABLE IF NOT EXISTS apidataobjects (
         name TEXT,
@@ -83,13 +81,13 @@ export default {
         if (name.length > 1024) {
             return { error: "Name exceeds limit of 1024 characters" };
         }
-        if (value.length > 65536) { // 64k
+        if (value.length > 65536) { 
             return { error: "Value exceeds limit of 64k characters" };
         }
 
         const encryptedValue = encrypt(value);
         if (existingHash) {
-            // 1. Try to update existing record
+            
             const updateStmt = db.prepare("UPDATE apidataobjects SET value = ? WHERE name = ? AND hash = ?");
             const info = updateStmt.run(encryptedValue, name, existingHash);
 
@@ -97,12 +95,11 @@ export default {
                 return { success: true, type: "update", hash: existingHash };
             }
 
-            // 2. If no record was updated, check if the hash is valid (exists in DB)
             const checkHashStmt = db.prepare("SELECT 1 FROM apidataobjects WHERE hash = ? LIMIT 1");
             const hashExists = checkHashStmt.get(existingHash);
 
             if (hashExists) {
-                // 3. Create new record under existing hash
+                
                 const insertStmt = db.prepare("INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)");
                 insertStmt.run(name, encryptedValue, existingHash);
                 return { success: true, type: "new", hash: existingHash };
@@ -110,7 +107,7 @@ export default {
                 return { error: "Invalid hash or record not found" };
             }
         } else {
-            // Create new record with a new hash
+            
             const hash = crypto.randomBytes(8).toString('hex');
             const stmt = db.prepare("INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)");
             stmt.run(name, encryptedValue, hash);

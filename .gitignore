@@ -10,3 +10,5 @@ vgjr-network.zip
 package-lock.json
 test
 database
+functions/__pycache__
+.venv

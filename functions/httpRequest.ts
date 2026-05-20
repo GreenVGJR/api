@@ -62,7 +62,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
           await s.pipe(dataToPipe);
         } else if (dataToPipe.pipe) {
           const { Readable } = await import('stream');
-          // @ts-ignore
+          
           await s.pipe(Readable.toWeb(dataToPipe));
         } else {
           await s.write(dataToPipe);
@@ -85,7 +85,6 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
     const ua = c.req.header('user-agent') || '';
     const uaHash = crypto.createHash('md5').update(ua).digest('hex').slice(0, 8);
     const checkcookie = getCookie(c, '_sign');
-
 
     const urlObj = new URL(c.req.url);
     const queryKeys = Array.from(urlObj.searchParams.keys()).filter(k => k !== 'sh').sort();

@@ -16,13 +16,10 @@ import {
 import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStream, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 
-// ── Custom search result ──────────────────────────────────────────────────────
-
 interface CustomSearchResult {
     id?: string;
     url: string;
-    // Title + author are used to build a ytsearch fallback when the URL itself
-    // can't be loaded by Lavalink (e.g. no SC source manager on the node).
+
     title?: string;
     author?: string;
     thumbnail?: string;
@@ -36,6 +33,47 @@ function normalizeUrl(url: string): string {
         return url.replace('http://', 'https://');
     }
     return url;
+}
+
+/**
+ * For YouTube URLs containing a playlist (list=...), extract the playlist-only URL.
+ * Returns null if the URL doesn't have a list parameter.
+ */
+function extractYouTubePlaylistUrl(url: string): string | null {
+    if (!url.includes('youtube.com') && !url.includes('youtu.be')) return null;
+    try {
+        const urlObj = new URL(url);
+        const listParam = urlObj.searchParams.get('list');
+        if (listParam) {
+            urlObj.pathname = '/playlist';
+            urlObj.searchParams.forEach((value, key) => {
+                if (key !== 'list') {
+                    urlObj.searchParams.delete(key);
+                }
+            });
+            return urlObj.toString();
+        }
+    } catch { }
+    return null;
+}
+
+/**
+ * For YouTube URLs containing both a video ID and a playlist (list=...), extract the video-only URL.
+ * Returns null if the URL doesn't have both a video ID and a playlist parameter.
+ */
+function extractYouTubeVideoUrl(url: string): string | null {
+    if (!url.includes('youtube.com') && !url.includes('youtu.be')) return null;
+    try {
+        const urlObj = new URL(url);
+        const listParam = urlObj.searchParams.get('list');
+        if (listParam && urlObj.searchParams.has('v')) {
+            urlObj.searchParams.delete('list');
+            urlObj.searchParams.delete('index');
+            urlObj.searchParams.delete('start_radio');
+            return urlObj.toString();
+        }
+    } catch { }
+    return null;
 }
 
 function getPlatformFromUrl(url: string): string | null {
@@ -102,7 +140,6 @@ async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
             }
         }
 
-        // Fallback to oEmbed for others
         let endpoint = '';
         if (url.includes('soundcloud.com')) {
             endpoint = `https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`;
@@ -253,10 +290,25 @@ app.get('/play', async (c) => {
             return;
         }
 
-        const queryStr = query as string;
+        let queryStr = query as string;
+        if (queryStr.startsWith('http://') || queryStr.startsWith('https://')) {
+            if (queryStr.includes('youtube.com') || queryStr.includes('youtu.be')) {
+                try {
+                    const urlObj = new URL(queryStr);
+                    const topLevelList = c.req.query('list');
+                    if (topLevelList && !urlObj.searchParams.has('list')) {
+                        urlObj.searchParams.set('list', topLevelList);
+                        const topLevelIndex = c.req.query('index');
+                        if (topLevelIndex) {
+                            urlObj.searchParams.set('index', topLevelIndex);
+                        }
+                        queryStr = urlObj.toString();
+                    }
+                } catch { }
+            }
+        }
         const isUrl = queryStr.startsWith('http://') || queryStr.startsWith('https://');
 
-        // Verify platform if not a URL
         const supportedPlatforms = ['youtube', 'youtubemusic', 'soundcloud', 'spotify', 'applemusic', 'deezer', 'tidal'];
         if (!isUrl && !supportedPlatforms.includes(platform)) {
             await log(`Unsupported search platform: "${platform}"`);
@@ -264,15 +316,11 @@ app.get('/play', async (c) => {
             return;
         }
 
-        // ── Parallel Setup ──────────────────────────────────────────────────
-
         const isNew = !hasActivePlayer(token);
         await log(isNew ? 'Creating new discord.js client...' : 'Reusing existing discord.js client');
 
-        // Detect effective platform for metadata lookup
         const effectivePlatform = isUrl ? (getPlatformFromUrl(queryStr) || platform) : platform;
 
-        // Start tasks
         const pCustom = customSearch(effectivePlatform, queryStr);
         const { client, player: manager } = await getOrCreatePlayer(token, log);
 
@@ -296,7 +344,6 @@ app.get('/play', async (c) => {
             }
         };
 
-        // Parallel tasks after client is ready
         const pRequester = (async () => {
             let requester: any = { id: authorId || 'api', username: 'API' };
             if (authorId) {
@@ -389,18 +436,26 @@ app.get('/play', async (c) => {
                     { query: normalizedQ, source: (src === 'url' ? undefined : src) as any },
                     requester
                 );
-                if (!res?.tracks?.length) throw new Error(`No results for "${normalizedQ}"`);
+                if (!res?.tracks?.length) throw new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
                 return res;
             };
 
             let result: any = null;
+            const ytPlaylistUrl = isUrl ? extractYouTubePlaylistUrl(queryStr) : null;
+            const ytVideoUrl = isUrl ? extractYouTubeVideoUrl(queryStr) : null;
+
             if (isUrl) {
                 await log(`Loading URL directly: "${queryStr}"`);
                 try {
-                    result = await doSearch(queryStr, 'url');
-                    applyOverlay(result, customResult);
+                    if (ytPlaylistUrl) {
+                        await log(`[Attempt 1] YouTube playlist detected. Trying playlist first: "${ytPlaylistUrl}"`);
+                        result = await doSearch(ytPlaylistUrl, 'url');
+                        applyOverlay(result, customResult);
+                    } else {
+                        result = await doSearch(queryStr, 'url');
+                        applyOverlay(result, customResult);
+                    }
                 } catch (e: any) {
-                    // SoundCloud manual stream resolution fallback
                     if (effectivePlatform === 'soundcloud') {
                         await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
                         const scStream = await infoSoundcloudStream(queryStr);
@@ -415,16 +470,30 @@ app.get('/play', async (c) => {
                             }
                         }
                     }
-                    if (!result) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to search' : ' — fallback disabled'}`);
+
+                    // Playlist URL fallback: if playlist load failed, try the video-only URL
+                    if (!result && ytVideoUrl) {
+                        await log(`[Attempt 1] YouTube playlist load failed (${e?.message}) — falling back to video-only URL`);
+                        try {
+                            await log(`[Attempt 2] Loading video-only URL: "${ytVideoUrl}"`);
+                            result = await doSearch(ytVideoUrl, 'url');
+                            applyOverlay(result, customResult);
+                            await log(`[Attempt 2] Video-only fallback succeeded`);
+                        } catch (e2: any) {
+                            await log(`[Attempt 2] Video-only fallback also failed (${e2?.message}) — giving up`);
+                        }
+                    }
+
+                    if (!result && !ytPlaylistUrl) await log(`[Attempt 1] Direct URL load failed (${e?.message})${allowFallback ? ' — falling back to search' : ' — fallback disabled'}`);
                 }
             }
 
-            if (isUrl && !result && allowFallback) {
-                // URL failed — run the same fallback chain as plain-string mode.
-                // We MUST have metadata (title) to search on other platforms.
+            // Skip the cross-platform fallback chain for YouTube playlist/mix URLs — if playlist and video-only failed, stop
+            if (isUrl && !result && allowFallback && !ytPlaylistUrl) {
+
                 const metaQuery = customResult?.title ? (customResult.author ? `${customResult.title} ${customResult.author}` : customResult.title) : null;
 
-                if (!metaQuery) {
+                if (!metaQuery || !result) {
                     await log(`[Attempt 1] Could not extract track title from URL — skipping fallback search`);
                     throw new Error(`Direct load failed and no metadata found for "${queryStr}"`);
                 }
@@ -469,7 +538,7 @@ app.get('/play', async (c) => {
                             await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
                             break;
                         } catch (err: any) {
-                            // SoundCloud manual stream resolution fallback in loop
+
                             if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
                                 await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
                                 const scStream = await infoSoundcloudStream(fallbackResult.url);
@@ -485,7 +554,7 @@ app.get('/play', async (c) => {
                                     }
                                 }
                             }
-                            throw err; // Re-throw if not SC or SC manual also failed
+                            throw err;
                         }
                     } catch (err: any) {
                         await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
@@ -501,7 +570,7 @@ app.get('/play', async (c) => {
                         applyOverlay(result, customResult);
                         await log('[Attempt 1] Direct URL load succeeded');
                     } catch (e: any) {
-                        // SoundCloud manual stream resolution fallback for non-URL search (Attempt 1)
+
                         if (platform === 'soundcloud' && customResult?.url) {
                             await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
                             const scStream = await infoSoundcloudStream(customResult.url);
@@ -526,7 +595,6 @@ app.get('/play', async (c) => {
                     const hasMeta = customResult?.title && customResult?.author;
                     const metaQuery = hasMeta ? `${customResult!.title} ${customResult!.author}` : null;
 
-                    // Build fallback attempts
                     const fallbacks: Array<{ label: string; searchPlatform: string; query: string }> = [];
 
                     if (metaQuery) {
@@ -558,7 +626,7 @@ app.get('/play', async (c) => {
                                 await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
                                 break;
                             } catch (err: any) {
-                                // SoundCloud manual stream resolution fallback in loop
+
                                 if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
                                     await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
                                     const scStream = await infoSoundcloudStream(fallbackResult.url);
@@ -587,7 +655,6 @@ app.get('/play', async (c) => {
             return result;
         })();
 
-        // Join results
         const [searchResult, setup, _] = await Promise.allSettled([pSearch, pGP, pConnect]);
 
         if (searchResult.status === 'rejected') {
@@ -660,8 +727,6 @@ app.get('/play', async (c) => {
             }
             await log('Track added to queue');
         }
-
-        // ── Start Playback ────────────────────────────────────────────────
 
         if (!guildPlayer.playing && !guildPlayer.paused) {
             await log('Starting playback...');

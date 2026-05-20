@@ -14,7 +14,7 @@ app.get('/patreon', async (c) => {
     }
 
     c.header('X-Route', 'patreon.com');
-    // @ts-ignore
+    
     return await dispatch(c, () => PatreonProfile(query));
 });
 

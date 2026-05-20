@@ -3,6 +3,7 @@ import { type Context } from 'hono';
 import dns from 'dns';
 import { promises as dnsPromises } from 'dns';
 import net from 'net';
+import { browserRequest } from './browserRequest.js';
 
 dns.setServers(['1.1.1.1', '1.0.0.1']);
 
@@ -39,7 +40,7 @@ export const request = async (url: string, options: {
             : controller.signal;
 
         let connectTo: Record<string, string> | undefined;
-        // Alternate between pinned IP and standard routing on retries
+
         if (attempt % 2 === 0) {
             try {
                 const urlObj = new URL(url);
@@ -183,12 +184,12 @@ const formatAbbreviatedNumber = (num: number | string | null | undefined): strin
 
 const parseYtInitial = (html: any) => {
     try {
-        // Robust parsing of ytInitialData
+
         const dataParts = html.split(/ytInitialData\s*=\s*/);
         if (dataParts.length < 2) return null;
 
         let jsonStr = dataParts[1];
-        // Find the end of the script tag or the next variable assignment
+
         const endIdx = jsonStr.indexOf(';</script>') !== -1 ? jsonStr.indexOf(';</script>') :
             jsonStr.indexOf('</script>') !== -1 ? jsonStr.indexOf('</script>') :
                 jsonStr.length;
@@ -745,7 +746,6 @@ export const spotifyKey = async function spotifyKey() {
             }
         } catch { }
 
-        // Final fallback to original embed scraping
         try {
             const res = await request(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
                 headers: { ...commonHeaders, ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}), },
@@ -774,7 +774,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
             body: JSON.stringify(bodyhttp),
             headers: {
                 ...commonHeaders,
-                ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}), // optional but whatever
+                ...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
                 'Origin': 'https://clienttoken.spotify.com',
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
@@ -959,7 +959,6 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
 
         const listids: string[] = pes.photos.photo.map((a: any) => a.id);
 
-        // getInfo bulk + getSizes per-photo in parallel
         const [per2, sizesResults] = await Promise.all([
             request(`https://api.flickr.com/services/rest/?method=flickr.photos.getInfo&photo_ids=${listids}&api_key=${keyflickr}&format=json&nojsoncallback=1`, {
                 headers: commonHeaders,
@@ -1022,20 +1021,6 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
 export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
     if (!que) return null;
     try {
-        /*
-        const bodyload = JSON.stringify({
-            query: que,
-            context: {
-                client:
-                {
-                    clientName: "WEB",
-                    clientVersion: "2.20251212",
-                    hl: "en",
-                    gl: "US"
-                }
-            }
-        });
-        */
 
         const response = await request(`https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`, {
             headers: {
@@ -1425,13 +1410,11 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
                 const meta = a.metadata?.lockupMetadataViewModel;
                 const metadataRows = meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
 
-                // owner
                 const ownerPart = metadataRows[0]?.metadataParts?.[0]?.text;
                 const ownerRun = ownerPart?.commandRuns?.[0];
                 const ownerUrl = ownerRun?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
                 const browseId = ownerRun?.onTap?.innertubeCommand?.browseEndpoint?.browseId;
 
-                // thumbnail: pick highest width source, ensure hq720
                 const sources: any[] = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
                     ?.thumbnailViewModel?.image?.sources || [];
                 const bestThumb = sources.reduce((best: any, s: any) => (!best || s.width > best.width) ? s : best, null);
@@ -1439,12 +1422,10 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
                     ? (bestThumb.url?.startsWith('//') ? 'https:' + bestThumb.url : bestThumb.url)
                     : null;
 
-                // video count badge
                 const badge = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
                     ?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel
                     ?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
 
-                // target videos: rows that have metadataParts with commandRuns to a watch endpoint
                 const targetVideo = metadataRows
                     .filter((row: any) => !row.isSpacerRow && row.metadataParts?.[0]?.text?.commandRuns?.length)
                     .map((row: any) => {
@@ -1456,7 +1437,6 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
                         const watchEndpoint = run?.onTap?.innertubeCommand?.watchEndpoint;
                         const videoId = watchEndpoint?.videoId;
 
-                        // split "title · duration" from content
                         const raw: string = part.content || '';
                         const sepIdx = raw.lastIndexOf(' · ');
                         const title = sepIdx !== -1 ? raw.slice(0, sepIdx) : raw;
@@ -1705,7 +1685,6 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
     let videoId: string | null = null;
     let finalUrl = url;
 
-    // Handle short links (mobile)
     if (url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com')) {
         try {
             const redirectParams = {
@@ -1725,7 +1704,6 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
         }
     }
 
-    // Extract video ID regex
     const patterns = [
         /video\/(\d+)/,
         /v\/(\d+)/,
@@ -1997,7 +1975,6 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
     } catch { return null; }
 }
 
-
 export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
     if (!que) return null;
 
@@ -2265,7 +2242,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
             ...(qCookies ? { 'Cookie': qCookies } : {}),
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(reqPayload).toString(),
-            'x-goog-ext-525001261-jspb': '[1,null,null,null,"56fdd199312815e2",null,null,0,[4],null,null,1]',
+            'x-goog-ext-525001261-jspb': '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
             'Referer': 'https://gemini.google.com',
             'Origin': 'https://gemini.google.com',
             'X-Same-Domain': '1'
@@ -2350,7 +2327,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
         response: response,
         data: {
             conversation: Buffer.from(JSON.stringify(objectbody)).toString('base64url').split('').reverse().join(''),
-            model: 'gemini-3-flash'
+            model: 'gemini-3.5-flash'
         }
     }
 
@@ -2432,7 +2409,6 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 
         let testpar: any = parseYtInitial(pull2);
 
-        // aka status not ok in innertube
         if (testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {
             return {
                 error: testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer?.title?.runs?.[0]?.text || null
@@ -2782,7 +2758,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             const title = modernHeader.title?.dynamicTextViewModel?.text?.content;
             if (title) channelMetadata['name'] = title;
 
-            // Check for verification in modern header
             if (!channelMetadata['verified']) {
                 const headerRows = modernHeader.metadata?.contentMetadataViewModel?.metadataRows || [];
                 let detectedType: string | null = null;
@@ -2802,7 +2777,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 );
 
                 if (!detectedType) {
-                    // Check title attachment runs
+
                     const attachmentBadge = modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns?.map((run: any) =>
                         run.element?.type?.imageType?.image?.sources?.[0]?.clientResource?.imageName
                     ).find((name: string) => getBadgeType(name));
@@ -2811,7 +2786,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
                 }
 
                 if (!detectedType) {
-                    // Fallback to broader string check
+
                     const headerStr = JSON.stringify(modernHeader);
                     const match = headerStr.match(/CHECK_CIRCLE_THICK|CHECK_CIRCLE_FILLED|VERIFIED_BADGE|VERIFIED|OFFICIAL_ARTIST|AUDIO_BADGE|MUSIC_OFFICIAL_ARTIST|OFFICIAL_ARTIST_BADGE/i);
                     if (match) detectedType = match[0].toUpperCase();
@@ -2829,7 +2804,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             channelMetadata['verified_type'] = null;
         }
 
-        // Additional banner check
         if (!channelMetadata['banner']) {
             const b1 = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
                 data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.sources;
@@ -2842,7 +2816,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             else if (b3) channelMetadata['banner'] = b3;
         }
 
-        // Additional avatar check
         if (!channelMetadata['avatar']) {
             const a1 = channelMetadataRenderer?.avatar?.thumbnails;
             const a2 = microformatRenderer?.thumbnail?.thumbnails;
@@ -2850,7 +2823,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             else if (a2) channelMetadata['avatar'] = a2;
         }
 
-        // Additional title check
         if (!channelMetadata['name']) {
             const t1 = channelMetadataRenderer?.title;
             const t2 = microformatRenderer?.title;
@@ -2858,7 +2830,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             else if (t2) channelMetadata['name'] = t2;
         }
 
-        // Extract additional channel info from channelMetadataRenderer
         if (channelMetadataRenderer) {
             if (channelMetadataRenderer.externalId) channelMetadata['channelId'] = channelMetadataRenderer.externalId;
             if (channelMetadataRenderer.vanityChannelUrl) channelMetadata['vanityChannelUrl'] = channelMetadataRenderer.vanityChannelUrl.replace(/^http:\/\//i, 'https://');
@@ -2866,7 +2837,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             if (typeof channelMetadataRenderer.isFamilySafe === 'boolean') channelMetadata['familySafe'] = channelMetadataRenderer.isFamilySafe;
             if (channelMetadataRenderer.availableCountryCodes) channelMetadata['availableCountries'] = channelMetadataRenderer.availableCountryCodes;
             if (channelMetadataRenderer.keywords) {
-                // Parse the keywords string into an array
+
                 const keywordsStr = channelMetadataRenderer.keywords;
                 const keywordsArray = keywordsStr.match(/"[^"]+"|[^\s]+/g)?.map((k: string) => k.replace(/^"|"$/g, '')) || [];
                 if (keywordsArray.length > 0) channelMetadata['keywords'] = keywordsArray;
@@ -2967,10 +2938,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
             } catch { }
         }
 
-        // Search for dedicated Community button/link in header
         const extraEndpoints: any[] = [];
 
-        // Helper to recursively find all buttonViewModels/buttonRenderers in header actions
         const findAllButtons = (obj: any): any[] => {
             const buttons: any[] = [];
             if (!obj || typeof obj !== 'object') return buttons;
@@ -3144,7 +3113,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
             if (!highestUrl) return null;
 
-            // Generate the three banner variants
             const baseUrl = highestUrl.split('=')[0];
 
             return {
@@ -3161,14 +3129,11 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
             if (!highestUrl) return null;
 
-            // Extract base URL (before the parameters)
             const baseUrl = highestUrl.split('=')[0];
 
-            // Preserve the parameter format from the original URL
             const urlParts = highestUrl.split('=');
             let suffix = 'c-k-c0x00ffffff-no-rj';
 
-            // Try to extract the suffix from original URL
             if (urlParts.length > 1) {
                 const params = urlParts.slice(1).join('=');
                 const match = params.match(/[sc]\d+-(.+)/);
@@ -3268,7 +3233,6 @@ export const infoSoundcloudStream = async function infoSoundcloudStream(url: str
         return null;
     }
 }
-
 
 export const infoSpotify = async function infoSpotify(que: string) {
     if (!que) return null;
@@ -3571,8 +3535,6 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
         try {
             patchResponse = await response.json();
 
-            // Retry logic: If 50013 (Missing Permissions) and we tried to change nickname, 
-            // retry without 'nick' to allow bio/avatar/banner updates to proceed.
             if (response.status === 403 && patchResponse?.code === 50013 && payload.nick !== undefined) {
                 const { nick, ...retryPayload } = payload;
                 if (Object.keys(retryPayload).length > 0) {
@@ -3597,9 +3559,9 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
                             })
                         };
                     } else {
-                        // If it still fails, update patchResponse to reflect this new error
+
                         patchResponse = retryJson;
-                        // And let the logic below return the error as usual
+
                     }
                 }
             }
@@ -4270,7 +4232,6 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
     return null;
 }
 
-
 export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string, region_code: string = '') {
     if (!token) return { error: "Missing token" };
     if (!channelId) return { error: "Missing channelId" };
@@ -4330,7 +4291,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         }
     };
 
-    const MAX_DISCORD_SIZE = 8388608; // 8MB
+    const MAX_DISCORD_SIZE = 8388608;
     const urlsToTry = [item.highest_video_url, item.video_url].filter((u, i, a) => u && a.indexOf(u) === i);
     let videoBuffer: ArrayBuffer | null = null;
 
@@ -4346,7 +4307,6 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 
             const contentLength = parseInt(vidReq.headers.get('content-length') || '0');
 
-            // Check size from headers before consuming the body
             if (contentLength > MAX_DISCORD_SIZE) {
                 continue;
             }
@@ -4362,11 +4322,11 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
     }
 
     let filename = item.desc
-        ?.replace(/[^a-z0-9 ]/gi, '_') // Replace non-alphanumeric chars with underscore
-        .replace(/_{2,}/g, '_')        // Collapse multiple underscores
+        ?.replace(/[^a-z0-9 ]/gi, '_')
+        .replace(/_{2,}/g, '_')
         .trim()
-        .substring(0, 50)              // Truncate to 50 chars for safety and readability
-        || "video-" + item.aweme_id;                     // Fallback
+        .substring(0, 50)
+        || "video-" + item.aweme_id;
 
     filename += ".mp4";
 
@@ -4447,7 +4407,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
         return { error: e.message || "Failed to verify Discord resources" };
     }
 
-    const MAX_DISCORD_SIZE = 8388608; // 8MB
+    const MAX_DISCORD_SIZE = 8388608;
 
     let videoBuffer: ArrayBuffer | null = null;
     let filename = "file";
@@ -5406,7 +5366,6 @@ export const infoGiphy = async function infoGiphy(url: string) {
 
         const html = await res.text;
 
-        // Extract keywords from meta tag
         const keywordsMatch = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i);
         const keywords = keywordsMatch?.[1]?.split(',').map((k: string) => k.trim()).filter(Boolean) || null;
 
@@ -5614,7 +5573,6 @@ export async function MetaAI(query: string, convo: any = null): Promise<any> {
             "model": "meta-llama/llama-3.3-70b-instruct:free",
             "messages": messages
         });
-
 
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
@@ -5863,6 +5821,8 @@ export async function OpenRouterGPT(query: string, convo: any = null): Promise<a
     }
 }
 
+let driftCookies: string | null = null;
+
 export async function DriftProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
@@ -5877,19 +5837,42 @@ export async function DriftProfile(query: string): Promise<any> {
                 echConfigDomain: "cloudflare-ech.com",
                 tlsOnly: true,
                 headers: {
-                    ...commonHeaders
+                    ...commonHeaders,
+                    ...(driftCookies ? { cookie: driftCookies } : {})
                 },
             });
 
             if (res.statusCode !== 403) {
-                break; // Success or non-403 error, proceed
+                break;
             }
 
-            // It's a 403, we need to try again with a new session
+            if (attempts === 2) {
+                const browserRes = await browserRequest({
+                    url: filterurl.toString(),
+                    fetcherType: 'stealthy',
+                    headers: {
+                        ...commonHeaders
+                    },
+                    extractHtml: true
+                });
 
-            if (attempts === 2) { // Last attempt still gave 403
-                return {
-                    "error": "Cloudflare Turnstile asking to verify you're not a bot"
+                if (!browserRes.success || browserRes.status === 403) {
+                    return {
+                        "error": "Cloudflare Turnstile asking to verify you're not a bot"
+                    };
+                }
+
+                if (browserRes.cookies && Object.keys(browserRes.cookies).length > 0) {
+                    driftCookies = Object.entries(browserRes.cookies)
+                        .map(([key, val]) => `${key}=${val}`)
+                        .join('; ');
+                }
+
+                res = {
+                    statusCode: browserRes.status ?? 200,
+                    text: browserRes.html ?? "",
+                    url: browserRes.url ?? filterurl.toString(),
+                    headers: browserRes.headers ?? {}
                 };
             }
         } catch (e) {
@@ -5898,7 +5881,7 @@ export async function DriftProfile(query: string): Promise<any> {
     }
 
     try {
-        const test = res.text;
+        let test = res.text;
         if (res.url?.includes('/message')) {
             return {
                 data: null
@@ -6006,7 +5989,7 @@ export async function DriftProfile(query: string): Promise<any> {
                                 richContent
                             };
                         }),
-                        // Discord Servers
+
                         ...Array.from(document.querySelectorAll('#profile-cards-section a[data-guild-json]')).map((el: any) => {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
@@ -6023,7 +6006,7 @@ export async function DriftProfile(query: string): Promise<any> {
                                 richContent
                             };
                         }),
-                        // FiveM Servers
+
                         ...Array.from(document.querySelectorAll('#profile-cards-section a[data-fivem-id]')).map((el: any) => {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
@@ -6038,7 +6021,7 @@ export async function DriftProfile(query: string): Promise<any> {
                                 richContent: { serverId: el.getAttribute('data-fivem-id') }
                             };
                         }),
-                        // Roblox Users
+
                         ...Array.from(document.querySelectorAll('#profile-cards-section a[data-roblox-user-json]')).map((el: any) => {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
@@ -6055,7 +6038,7 @@ export async function DriftProfile(query: string): Promise<any> {
                                 richContent
                             };
                         }),
-                        // Social connections (Discord, YouTube, GitHub, etc.)
+
                         ...Array.from(document.querySelectorAll('#section-profile-connections > a')).map((el: any) => {
                             const href = el.getAttribute('href') || '';
                             const directUrl = href.includes('url=') ? decodeURIComponent(new URL(href).searchParams.get('url') || '') : href;
@@ -6096,7 +6079,6 @@ export async function DriftProfile(query: string): Promise<any> {
     }
 }
 
-
 export async function PatreonProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
@@ -6107,7 +6089,6 @@ export async function PatreonProfile(query: string): Promise<any> {
             useH2: true,
             headers: { ...commonHeaders }
         });
-
 
         if (res.statusCode === 404) {
             return { error: "User not found" };
@@ -6231,7 +6212,6 @@ export async function SaweriaProfile(query: string): Promise<any> {
             }
         }
 
-
         if (dataRes.statusCode !== 200) {
             return { data: null };
         }
@@ -6264,7 +6244,6 @@ export async function TrakteerProfile(query: string): Promise<any> {
                 ...commonHeaders,
             }
         });
-
 
         if (res.statusCode === 403) {
             return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
@@ -6313,7 +6292,6 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
             }
         });
 
-
         if (res.statusCode === 403) {
             return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
         }
@@ -6339,16 +6317,15 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
     }
 }
 
-
-
-
+let gunsCookies: string | null = null;
 
 export async function GunsProfile(query: string): Promise<any> {
     if (!query) return null;
     const username = query.split(/[?#]/)[0].split('/').filter(Boolean).pop();
-    if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard', 'leaderboard', 'de', 'fr', 'es', 'tr', 'ru', 'pt', 'ar'].includes(username.toLowerCase())) return null;
+    if (!username || ['robots.txt', 'favicon.ico', 'register', 'pricing', 'login', 'reset', 'cdn-cgi', 'account', 'terms', 'privacy', 'dashboard', 'leaderboard', 'api', 'de', 'fr', 'es', 'tr', 'ru', 'pt', 'ar'].includes(username.toLowerCase())) return null;
 
     let res: any;
+    let browserGuns: boolean = false;
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
@@ -6357,16 +6334,55 @@ export async function GunsProfile(query: string): Promise<any> {
                 echConfigDomain: "cloudflare-ech.com",
                 tlsOnly: true,
                 headers: {
-                    ...commonHeaders
+                    ...commonHeaders,
+                    ...(gunsCookies ? { cookie: gunsCookies } : {})
                 }
             });
 
-            if (res.statusCode !== 401 && res.statusCode !== 403 && res.statusCode !== 429) {
+            const { document: doc } = parseHTML(res.text || "");
+            const pageTitle = doc.querySelector('title')?.textContent?.trim() || '';
+            const isChallenge = res.statusCode === 401 ||
+                res.statusCode === 403 ||
+                res.statusCode === 429 ||
+                pageTitle === 'Just a moment...';
+
+            if (!isChallenge) {
                 break;
             }
 
             if (attempts === 2) {
-                return { error: "Guns.lol asking to verify you're not a bot" };
+                const browserRes = await browserRequest({
+                    url: `https://guns.lol/${username}`,
+                    fetcherType: 'stealthy',
+                    headers: {
+                        ...commonHeaders
+                    },
+                    extractHtml: true
+                });
+
+                const browserChallenge = !browserRes.success ||
+                    browserRes.status === 401 ||
+                    browserRes.status === 403 ||
+                    browserRes.status === 429;
+
+                if (browserChallenge) {
+                    return { error: "Guns.lol asking to verify you're not a bot" };
+                }
+
+                if (browserRes.cookies && Object.keys(browserRes.cookies).length > 0) {
+                    gunsCookies = Object.entries(browserRes.cookies)
+                        .map(([key, val]) => `${key}=${val}`)
+                        .join('; ');
+                }
+
+                res = {
+                    statusCode: browserRes.status ?? 200,
+                    text: browserRes.html ?? "",
+                    url: browserRes.url ?? `https://guns.lol/${username}`,
+                    headers: browserRes.headers ?? {}
+                };
+
+                browserGuns = true;
             }
         } catch (e) {
             if (attempts === 2) throw e;
@@ -6388,24 +6404,21 @@ export async function GunsProfile(query: string): Promise<any> {
         for (const chunk of chunks) {
             try {
                 // Each chunk looks like: [1,"ID:content\n"])</script>
-                // Find the closing )
+
                 const endIdx = chunk.lastIndexOf(')</script>');
                 if (endIdx === -1) continue;
 
                 const pushArg = chunk.substring(0, endIdx);
                 const parsed = JSON.parse(pushArg);
 
-                // parsed is [0] or [1, "string content"]
                 if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== 'string') continue;
 
                 const content = parsed[1];
 
-                // The content format is "ID:JSON_CONTENT\n" — may have multiple lines with different IDs
-                // Split by newlines and process each line
                 const lines = content.split('\n').filter((l: string) => l.trim());
 
                 for (const line of lines) {
-                    // Each line is like "5:[\"$\",\"$L18\",null,{\"data\":{...}}]"
+
                     const colonIdx = line.indexOf(':');
                     if (colonIdx === -1) continue;
 
@@ -6415,7 +6428,6 @@ export async function GunsProfile(query: string): Promise<any> {
                     try {
                         const innerParsed = JSON.parse(jsonPart);
 
-                        // It could be an array like ["$","$L18",null,{"data":{...}}]
                         if (Array.isArray(innerParsed)) {
                             for (const item of innerParsed) {
                                 if (item && typeof item === 'object' && !Array.isArray(item) && 'data' in item) {
@@ -6423,17 +6435,21 @@ export async function GunsProfile(query: string): Promise<any> {
                                 }
                             }
                         }
-                        // Or a direct object with "data"
+
                         else if (innerParsed && typeof innerParsed === 'object' && 'data' in innerParsed) {
                             dataResults.push(innerParsed.data);
                         }
                     } catch {
-                        // Some lines may not be valid JSON, skip
+
                     }
                 }
             } catch {
-                // Skip malformed chunks
+
             }
+        }
+
+        if (dataResults.length === 0 && browserGuns) {
+            return { error: "Can't process this due Guns.lol sent empty response" };
         }
 
         if (dataResults.length === 0) {
@@ -6442,7 +6458,6 @@ export async function GunsProfile(query: string): Promise<any> {
 
         const finalresult: any = dataResults[0];
 
-        // The main profile data is the first data object found
         const { _gpp_ch, success, session: _session, ...rest } = finalresult;
         let secfinal: any = rest;
         if (secfinal?.config?.socials?.[0]) {
@@ -6455,7 +6470,6 @@ export async function GunsProfile(query: string): Promise<any> {
             })?.filter(Boolean);
         }
 
-        // Return the cleaned-up profile data
         return { data: secfinal };
     }
     catch (e) {
@@ -6664,10 +6678,8 @@ export async function HauntProfile(query: string): Promise<any> {
 
         const finalresult: any = dataResults[0];
 
-        // The main profile data is the first data object found
         const { links, ...rest } = finalresult;
 
-        // Return the cleaned-up profile data
         return { data: rest?.user || null };
     }
     catch (e) {
@@ -6924,14 +6936,11 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
             };
         }
 
-        // Guild member response has user info nested under .user
         const userData = guildId ? data.user : data;
 
-        // Resolve flags into badge names
         const flagsBadges = resolveFlags(userData?.flags);
         const publicFlagsBadges = resolveFlags(userData?.public_flags);
 
-        // Build avatar & banner CDN URLs
         const avatarUrl = userData?.avatar
             ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
             : null;
@@ -6939,7 +6948,6 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
             ? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith('a_') ? 'gif' : 'png'}?size=4096`
             : null;
 
-        // Guild-specific avatar
         const guildAvatarUrl = (guildId && data.avatar)
             ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${data.avatar}.${data.avatar.startsWith('a_') ? 'gif' : 'png'}?size=4096`
             : null;
@@ -6980,8 +6988,6 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         const isBannedRequested = types.includes('banned');
         const isSpecial = types.some(t => ['oldest', 'newest', 'no_role', 'has_role'].includes(t));
 
-        // If special sorting/filtering is requested, we need a larger pool (at least 1000)
-        // unless the limit is already higher.
         const targetLimit = isSpecial ? Math.max(1000, limit) : (limit === -1 ? 1000 : limit);
 
         const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
@@ -6996,7 +7002,6 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
         try { if (guildReq.status === 200) guildData = await guildReq.json(); } catch { }
 
-        // Paginated fetch for members
         let data: any[] = [];
         let lastMemberId: string | null = null;
         let membersFetchRemaining = (isBannedRequested && types.length === 1) ? 0 : targetLimit;
@@ -7018,7 +7023,6 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             if (batch.length < currentFetchLimit) break;
         }
 
-        // Paginated fetch for bans
         let bansData: any[] = [];
         if (isBannedRequested) {
             let lastBanId: string | null = null;
@@ -7049,7 +7053,6 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             };
         }
 
-        // Map bans to member-like structure
         const mappedBans = bansData.map((ban: any) => ({
             ...ban.user,
             roles: [],
@@ -7060,7 +7063,6 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             created_at: ban.user?.id ? String(getSnowflakeDate(ban.user.id)) : null
         }));
 
-        // Merge data based on types
         if (types.length === 1 && types[0] === 'banned') {
             data = mappedBans;
         } else if (isBannedRequested) {
@@ -7069,7 +7071,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 
         if (Array.isArray(data)) {
             data = data.map((member: any, index: number) => {
-                // Skip permission check for banned users who aren't members
+
                 const perms = member.is_banned ? { permissions: "0" } : getMemberPermissions(member, rolesData, guildData, guildId);
                 return {
                     ...member,
@@ -7087,10 +7089,9 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
                 if (permBits.length > 0) {
                     data = data.filter((member: any) => {
                         const memberPerms = BigInt(member.permissions);
-                        // Administrator matches everything
+
                         if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
 
-                        // Check if member has ALL requested permissions
                         return permBits.every(bit => (memberPerms & bit) === bit);
                     });
                 }
@@ -7168,7 +7169,6 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
         if (Array.isArray(rolesData)) {
             const totalRoles = rolesData.length;
 
-            // Map members to roles
             rolesData = rolesData.map((role: any) => {
                 const members = membersData
                     .filter((m: any) => m.roles.includes(role.id))
@@ -7182,7 +7182,6 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
                 };
             });
 
-            // Filtering by permission
             if (permission !== 'all') {
                 const requestedPerms = permission.split(',').map(p => p.trim().toLowerCase());
                 const permBits = requestedPerms.map(p => PERMISSION_KEYS[p]).filter(b => b !== undefined) as bigint[];
@@ -7196,7 +7195,6 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
                 }
             }
 
-            // Sorting by type
             const types = type.split(',').map(t => t.trim());
             for (const t of types) {
                 if (t === 'oldest') {
@@ -7505,7 +7503,6 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
     }
 };
 
-
 const stickerCache = new Map<string, any>();
 
 export const DiscordInfoSticker = async (token: string, q: string) => {
@@ -7778,11 +7775,10 @@ export const DiscordInfoMessage = async (token: string, channelId: string, messa
 };
 
 export const DiscordInfoInvite = async (token: string | null, q: string, guildId?: string) => {
-    // Extract invite code from URL or bare code
+
     const match = q?.match(/(?:discord\.gg\/|discord\.com\/invite\/)([a-zA-Z0-9-]+)|^([a-zA-Z0-9-]+)$/);
     const code = match?.[1] ?? match?.[2] ?? null;
 
-    // Validate: Discord invite codes are alphanumeric + hyphens, 2–30 chars
     if (!guildId && (!code || !/^[a-zA-Z0-9-]{2,30}$/.test(code))) {
         return { error: "Invalid or missing invite code" };
     }
@@ -8046,7 +8042,7 @@ export const DiscordInfoRole = async (token: string, roleId: string, guildId: st
         }
 
         if (data && !Array.isArray(data)) {
-            // Access member count directly from the object using roleId as key
+
             const membersCount = (countsData && typeof countsData === 'object') ? (countsData[roleId] || 0) : 0;
 
             const resolvedArray = resolvePermissions(data.permissions);
@@ -8233,7 +8229,6 @@ export const infoKlipy = async function infoKlipy(url: string) {
         return null;
     }
 }
-
 
 export const TimezoneInfo = async function TimezoneInfo(q: string) {
     if (!q) return { error: "Missing parameter 'q'" };
@@ -8462,12 +8457,12 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
     const parseMeta = (section: string, subtitle: string, description: string) => {
         switch (section) {
             case 'memes': {
-                // e.g. "meme template, 200,000+ captions"
+
                 const captions = subtitle.match(/([\d,]+\+?)\s+captions?/)?.[1] ?? null;
                 return { subtitle: captions };
             }
             case 'images': {
-                // e.g. "user-captioned meme, 3,132 views" / "user-generated gif, 22,183 views"
+
                 const type = subtitle.split(',')[0]?.trim() ?? null;
                 const views = subtitle.match(/([\d,]+)\s+views?/)?.[1] ?? null;
                 return {
@@ -8477,12 +8472,12 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
                 };
             }
             case 'tags': {
-                // e.g. "view all 12,277 images tagged \"anime\""
+
                 const count = subtitle.match(/([\d,]+)\s+images?/)?.[1] ?? null;
                 return { count };
             }
             case 'streams': {
-                // e.g. "60,773 submitted images"
+
                 const count = subtitle.match(/([\d,]+)\s+submitted/)?.[1] ?? null;
                 return {
                     count,
@@ -8490,7 +8485,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
                 };
             }
             case 'users': {
-                // e.g. "joined Aug 17 2014, 2,415 creations, 41 comments"
+
                 const joined = subtitle.match(/joined\s+([^,]+)/)?.[1]?.trim() ?? null;
                 const creations = subtitle.match(/([\d,]+)\s+creations?/)?.[1] ?? null;
                 const comments = subtitle.match(/([\d,]+)\s+comments?/)?.[1] ?? null;
@@ -8526,7 +8521,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
         let currentSection = 'unknown';
 
         for (const child of container.children) {
-            // Section heading — direct H2 or H2 inside a wrapper div (.s-results-title-wrap)
+
             const heading = child.tagName === 'H2'
                 ? child
                 : child.querySelector?.('h2');
@@ -8537,12 +8532,10 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
                 continue;
             }
 
-            // Skip non-result elements (buttons, dropdowns, etc.)
             if (!hasClass(child, 's-result') && !hasClass(child, 's-more-results')) {
                 continue;
             }
 
-            // Collect anchors — direct .s-result or nested inside .s-more-results
             const anchors: any[] = hasClass(child, 's-result')
                 ? [child]
                 : [...child.querySelectorAll('a.s-result')];
@@ -8691,8 +8684,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         const guild = await client.guilds.fetch(guildId);
 
         const formatMemberData = (m: any) => {
-            // Deep clone to ensure old and new data are independent
-            // We use JSON.parse/stringify to get a clean slice of the current state
+
             return JSON.parse(JSON.stringify({ member: m, voiceState: m.voice }));
         };
 
@@ -8753,7 +8745,6 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
                 result = await modifyMember(userId, { channel_id: toChannelId });
             }
 
-            // Construct the updated state in the same structure
             const newData = formatMemberData(memberObj);
             if (result.data) {
                 if (result.data.deaf !== undefined) newData.voiceState.serverDeaf = result.data.deaf;
@@ -8972,8 +8963,6 @@ export const SafeBooru = async function SafeBooru(que: string) {
 
                 const res2: any = await req2.json();
 
-                // Safebooru labels are usually "tag_name (count)"
-                // We extract the count inside the parentheses
                 const totalMatch = e.label.match(/\((\d+)\)/);
                 const total = totalMatch ? totalMatch[1] : "0";
 
@@ -9205,7 +9194,6 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
             return await googleImgSearchV2(query, true);
         }
 
-        // force renew auth data
         if (!response?.cursor?.estimatedResultCount) {
             googleImgSpAuth = await googleAuthKey();
             return await googleImgSearchV2(query);
@@ -9295,7 +9283,6 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
             return await googleSearch(query, true);
         }
 
-        // force renew auth data
         if (!response?.cursor?.estimatedResultCount) {
             googleImgSpAuth = await googleAuthKey();
             return await googleSearch(query);
@@ -9397,7 +9384,6 @@ export const duckSearch = async (query: string): Promise<any> => {
 
         const final = res2.text;
 
-        // Extract instant answers from deepPayload or duckbar.add
         let instantAnswers: any = null;
         try {
             const deepMatch = final.match(/DDG\.deep\.deepPayload\s*=\s*(\{[\s\S]*?\});/);
@@ -9423,14 +9409,13 @@ export const duckSearch = async (query: string): Promise<any> => {
             }
         } catch { }
 
-        // Extract organic results from DDG.pageLayout.load('d', [...])
         let organicResults: any[] = [];
         try {
             const organicMatch = final.match(/DDG\.pageLayout\) DDG\.pageLayout\.load\('d',\s*(\[[\s\S]*?\])\);/);
             if (organicMatch) {
                 const parsed = JSON.parse(organicMatch[1]);
                 organicResults = parsed
-                    .filter((r: any) => r.u) // filter out pagination objects (they have 'n' key only)
+                    .filter((r: any) => r.u)
                     .map((r: any) => ({
                         title: r.t || null,
                         url: r.u || null,
@@ -9525,7 +9510,7 @@ async function loadEmojiData() {
         } catch (e) {
             console.error('Failed to fetch emoji data:', e);
             emojiLoadPromise = null;
-            return emojiDataCache; // return stale cache if available
+            return emojiDataCache;
         }
     })();
 
@@ -9538,19 +9523,17 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
     if (!query || query.trim().length === 0) return { error: "Missing parameter 'q'" };
 
     const qInput = query.trim();
-    // Discord emoji regex: <:name:id> or <a:name:id>
+
     const discordEmojiMatch = qInput.match(/^<(a?):(\w+):(\d+)>$/);
 
     if (discordEmojiMatch) {
         const name = discordEmojiMatch[2];
         const id = discordEmojiMatch[3];
 
-        // Try GIF version first as priority
         let isAnimated = true;
         let emojiUrl = `https://media.discordapp.net/emojis/${id}.gif`;
         let available = await fetch(emojiUrl, { method: "HEAD" }).then(a => a.ok).catch(() => false);
 
-        // Fallback to PNG if GIF is not available
         if (!available) {
             isAnimated = false;
             emojiUrl = `https://media.discordapp.net/emojis/${id}.png`;
@@ -9577,7 +9560,6 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
 
     const trimmed = query.trim();
 
-    // Primary Search using emojibase-data
     const isEmoji = /\p{Emoji}/u.test(trimmed);
     let emojibaseMatches: any[] = [];
 
@@ -9590,28 +9572,23 @@ export const EmojiLookup = async function EmojiLookup(query: string, limit: numb
             e.tags?.some((t: string) => t.toLowerCase().includes(searchQ))
         );
 
-        // Sort to prioritize better matches
         emojibaseMatches.sort((a: any, b: any) => {
             const aLabel = a.label.toLowerCase();
             const bLabel = b.label.toLowerCase();
             const aTags = (a.tags || []).map((t: string) => t.toLowerCase());
             const bTags = (b.tags || []).map((t: string) => t.toLowerCase());
 
-            // 1. Exact label match
             if (aLabel === searchQ && bLabel !== searchQ) return -1;
             if (bLabel === searchQ && aLabel !== searchQ) return 1;
 
-            // 2. Label starts with search term
             if (aLabel.startsWith(searchQ) && !bLabel.startsWith(searchQ)) return -1;
             if (bLabel.startsWith(searchQ) && !aLabel.startsWith(searchQ)) return 1;
 
-            // 3. Exact tag match
             const aHasExactTag = aTags.includes(searchQ);
             const bHasExactTag = bTags.includes(searchQ);
             if (aHasExactTag && !bHasExactTag) return -1;
             if (bHasExactTag && !aHasExactTag) return 1;
 
-            // Default to emojibase order
             return (a.order || 0) - (b.order || 0);
         });
     }
@@ -9908,3 +9885,71 @@ export const DiscordInfoAutomod = async (token: string, guildId: string) => {
         return { error: e.message || 'Something just happened' };
     }
 };
+
+export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
+    if (!query) return null;
+    try {
+        const [res, res2, res3, res4, res5, res6] = await Promise.all([
+            request(`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+            request(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+            request(`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+            request(`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+            request(`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+            request(`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: commonHeaders
+            }),
+        ]);
+
+        const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([
+            res.json(),
+            res2.text,
+            res3.json(),
+            res4.json(),
+            res5.json(),
+            res6.json(),
+        ]);
+
+        let parselks2: any = [];
+        try {
+            const serverDataMatch = lks2.match(/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/);
+            if (serverDataMatch) {
+                parselks2 = JSON.parse(serverDataMatch[1]);
+            }
+        }
+        catch (e) {
+            console.error("Apple Music parse error:", e);
+        }
+
+        return {
+            data: [{
+                music: lks?.results || null,
+                musicVideo: lks5?.results || null,
+                audiobook: lks3?.results || null,
+                podcast: lks4?.results || null,
+                tvShow: lks5?.results || null
+            },
+            parselks2?.data?.[0]?.data?.sections || null
+            ]
+        };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}

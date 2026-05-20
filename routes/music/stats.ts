@@ -31,7 +31,6 @@ app.get('/stats', async (c) => {
             };
         });
 
-        // Calculate global player statistics for this client instance
         const totalPlayers = manager.players.size;
         let playingPlayers = 0;
         manager.players.forEach(p => {

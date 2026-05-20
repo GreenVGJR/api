@@ -15,7 +15,7 @@ app.get('/sociabuzz', async (c) => {
 
     c.header('X-Route', 'sociabuzz.com');
     c.header('X-Ech-Target', 'cloudflare-ech');
-    // @ts-ignore
+    
     return await dispatch(c, () => SociaBuzzProfile(query));
 });
 

@@ -44,7 +44,6 @@ app.get('/voiceStatus', async (c) => {
             const channelId = player?.voiceChannelId;
             const isActivePlayer = !!(player && player.queue.current);
 
-            // If type/status provided, we allow changing settings even if no active player exists yet
             if (type && statusStr !== undefined) {
                 const validTypes = ['trackStart', 'queueEnd'];
                 if (!validTypes.includes(type)) {

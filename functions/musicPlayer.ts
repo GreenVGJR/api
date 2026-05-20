@@ -6,8 +6,6 @@ import config from '../config.json' with { type: 'json' };
 import { pullInfo, verifyChallenge, ipToNumber } from './musicChallenges.ts';
 import { Number_random } from './request.ts';
 
-// ─── Voice Status API Helper ───────────────────────────────────────────────
-
 export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
@@ -30,21 +28,18 @@ export async function setVoiceStatus(channelId: string, token: string, content: 
 
             if (res.ok) return;
 
-            // Log other errors but maybe retry if it's a 5xx
             if (res.status >= 500 && i < retries - 1) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 continue;
             }
 
-            return; // Give up on 4xx other than 429
+            return; 
         } catch (err) {
             console.error("Voice Status Fetch Error:", err);
             if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 }
-
-
 
 export async function updateVoiceStatus(player: LavalinkPlayer, token: string, track?: any) {
     const settings = getVoiceStatusSettings(token, player.guildId);
@@ -91,7 +86,7 @@ export async function createMusicStream(
             }
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
-        const rrmc = c.req.header('x-client-secret') || "0"; // Cloudflare Inject
+        const rrmc = c.req.header('x-client-secret') || "0"; 
         const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v: string, i: number) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
         if (!(await verifyChallenge(rrma, ipLL, rrmc, rrmi))) {
             c.header('X-Player', "lavalink");
@@ -542,7 +537,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 console.log(`24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`);
                 await new Promise(r => setTimeout(r, 1500));
                 try {
-                    // Guard: client must still be alive and its shard ready
+                    
                     if (!players.has(token) || client.ws.status !== 0) {
                         console.log(`24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
                         return;
@@ -564,7 +559,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                     lastVoiceChannel.set(`${token}:${guildId}`, voiceChannelId);
                     console.log(`24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
 
-                    // Re-apply voice status in case it was cleared or reset during the transition
                     const settings = getVoiceStatusSettings(token, guildId);
                     const currentTrack = p.queue.current;
                     const useTrackStart = !!currentTrack;
@@ -588,8 +582,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 cancelAutoDestroy(token);
                 if (p.get('autoplay') && track) fillAutoplay(p, track);
             });
-
-
 
             manager.on('queueEnd', (p) => {
                 const settings = getVoiceStatusSettings(token, p.guildId);
@@ -843,8 +835,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     }
 
     try {
-        // Kill all node connections — remove from map FIRST so the
-        // library's close() handler doesn't re-trigger reconnect()
+
         const nodesToKill = [...managed.player.nodeManager.nodes.values()];
         for (const node of nodesToKill) {
             try { (node as any).resetReconnectionAttempts?.(); } catch { }
@@ -852,8 +843,8 @@ export async function destroyPlayer(token: string): Promise<boolean> {
             try { node.disconnect(); } catch { }
         }
         managed.client.destroy();
-    } catch { /* WebSocket may already be dead */ }
-    // Also clear from pending if it was mid-initialization
+    } catch {  }
+    
     pendingPlayers.delete(token);
     return true;
 }
@@ -862,10 +853,9 @@ async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) =
     if (managed.contextCached) return;
     managed.contextCached = true;
 
-    // Fire and forget — caller doesn't wait for this
     (async () => {
         try {
-            // Only fetch guilds and basic channel info, skipping heavy roles and members
+            
             const guilds = await managed.client.guilds.fetch();
             await Promise.allSettled(
                 guilds.map(async (g) => {
@@ -880,8 +870,6 @@ async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) =
         }
     })();
 }
-
-// ── Utilities ────────────────────────
 
 export function checkVoicePermissions(channel: any, botUser: any) {
     const permissions = channel.permissionsFor(botUser);
@@ -907,7 +895,6 @@ export async function resolveVoiceChannel(client: Client, voiceId: string) {
     return channel;
 }
 
-/** Returns the per-guild Lavalink player (equivalent to the old GuildQueue). */
 export function getQueue(manager: LavalinkManager, guildId: string): LavalinkPlayer | null {
     return manager.players.get(guildId) ?? null;
 }
@@ -975,13 +962,6 @@ export const PLATFORM_SEARCH: Record<string, string> = {
     tidal: 'tdsearch',
 };
 
-// ── Auto-Init ────────────────────────
-// Reads DISCORD_TOKENS (comma-separated) from env and pre-warms each client so
-// the Lavalink node connection is ready before the first request arrives.
-//
-// Set in your .env / pm2 ecosystem:
-//   DISCORD_TOKENS=Bot1Token,Bot2Token
-//
 export async function autoInit(): Promise<void> {
     const raw = process.env.DISCORD_TOKENS || '';
     const tokens = raw.split(',').map(t => t.trim()).filter(Boolean);
@@ -1004,14 +984,9 @@ export async function autoInit(): Promise<void> {
     );
 }
 
-/**
- * Fills the queue with recommended tracks if autoplay is enabled.
- * Keeps at least 50 recommended tracks in the queue.
- */
 export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
     if (!player.get('autoplay')) return;
 
-    // Safety: don't start multiple fills at once
     if (player.get('isFillingAutoplay')) return;
     player.set('isFillingAutoplay', true);
 
@@ -1022,7 +997,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 
         while (currentAutoplayCount < TARGET && attempts < 3) {
             attempts++;
-            // Use the last track currently in the queue pool as the seed to keep progression going forward
+            
             const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
             if (!track) break;
 

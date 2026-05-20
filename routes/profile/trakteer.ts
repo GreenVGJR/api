@@ -15,7 +15,7 @@ app.get('/trakteer', async (c) => {
 
     c.header('X-Route', 'trakteer.id');
     c.header('X-Ech-Target', 'cloudflare-ech');
-    // @ts-ignore
+    
     return await dispatch(c, () => TrakteerProfile(query));
 });
 

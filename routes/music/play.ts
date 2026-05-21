@@ -88,10 +88,15 @@ function extractYouTubeVideoUrl(url: string): string | null {
  *   → contents.twoColumnWatchNextResults.playlist.playlist.contents
  *   → map playlistPanelVideoRenderer.videoId
  */
-async function fetchYouTubeMixTracks(url: string): Promise<string[] | null> {
+interface YtMixResult {
+    title: string;
+    list: string[];
+}
+
+async function fetchYouTubeMixTracks(url: string): Promise<YtMixResult | null> {
     try {
         const res = await request(url, {
-            headers: { ...commonHeaders },
+            headers: { ...commonHeaders, 'Accept-Language': 'en-US,en;q=0.9' },
             useH2: true
         });
         const html = res.text;
@@ -101,12 +106,12 @@ async function fetchYouTubeMixTracks(url: string): Promise<string[] | null> {
             ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.contents;
         if (!Array.isArray(contents) || contents.length === 0) return null;
         return {
-            title: ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.title,
+            title: ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.title ?? 'YouTube Mix',
             list: contents
                 .map((item: any) => item?.playlistPanelVideoRenderer?.videoId)
                 .filter(Boolean)
-                .map((id: string) => `https://www.youtube.com/watch?v=${id}`)
-        }
+                .map((id: string) => `https://www.youtube.com/watch?v=${id}`),
+        };
     } catch {
         return null;
     }

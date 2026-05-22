@@ -199,12 +199,12 @@ app.get('/skip', async (c) => {
             status: true,
             data: {
                 action: 'skipped',
-                 skippedTrack: skippedTrack
-                     ? formatTrack(skippedTrack, client, queue)
-                     : null,
-                 currentTrack: nextTrack
-                     ? formatTrack(nextTrack, client, queue)
-                     : null,
+                skippedTrack: skippedTrack
+                    ? formatTrack(skippedTrack, client, queue)
+                    : null,
+                currentTrack: nextTrack
+                    ? formatTrack(nextTrack, client, queue)
+                    : null,
             },
             type: { primary: "final", alt: "success" }
         })}}`);
@@ -402,13 +402,15 @@ app.get('/volume', async (c) => {
             return;
         }
 
+        const previousVolume = queue.volume;
+
         await log(`Setting volume to ${value}...`);
         await queue.setVolume(value);
-        await log(`Volume set to ${queue.volume}`);
+        await log(`Volume set to ${queue.volume} (previous: ${previousVolume})`);
 
         await s.write(`],"data":${JSON.stringify({
             status: true,
-            data: { action: 'volume_set', volume: queue.volume },
+            data: { action: 'volume_set', volume: queue.volume, previousVolume },
             type: { primary: "final", alt: "success" }
         })}}`);
     });
@@ -598,8 +600,8 @@ app.get('/remove', async (c) => {
             status: true,
             data: {
                 action: 'removed',
-                 removedTrack: formatTrack(trackToRemove, client, queue),
-                 currentTrack: current ? formatTrack(current, client, queue) : null,
+                removedTrack: formatTrack(trackToRemove, client, queue),
+                currentTrack: current ? formatTrack(current, client, queue) : null,
             },
             type: { primary: "final", alt: "success" }
         })}}`);
@@ -685,8 +687,8 @@ app.get('/jump', async (c) => {
             status: true,
             data: {
                 action: 'jumped',
-                 track: formatTrack(targetTrack, client, queue),
-                 index
+                track: formatTrack(targetTrack, client, queue),
+                index
             },
             type: { primary: "final", alt: "success" }
         })}}`);

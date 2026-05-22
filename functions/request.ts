@@ -1,109 +1,42 @@
-import httpcloak from 'httpcloak';
 import { type Context } from 'hono';
-import dns from 'dns';
-import { promises as dnsPromises } from 'dns';
 import net from 'net';
 import { browserRequest } from './browserRequest.js';
-
-dns.setServers(['1.1.1.1', '1.0.0.1']);
+import { get as httpcloakGet } from 'httpcloak';
 
 const DEFAULT_TIMEOUT_MS = 60000;
-
-const FIREFOX_150_JA3 = process.env.TLS_JA3;
-const FIREFOX_150_AKAMAI = process.env.TLS_AKAMAI;
-
-export const request = async (url: string, options: {
-    method?: string;
-    headers?: Record<string, string>;
-    body?: string | Buffer;
-    signal?: AbortSignal;
-    useH2?: boolean;
-    useH3?: boolean;
-    echConfigDomain?: string;
-    tlsOnly?: boolean;
-    allowRedirects?: boolean;
-    retries?: number;
-    timeout?: number;
-    useOwnTLS?: boolean;
-} = {}) => {
-    const maxRetries = options.retries ?? 2;
-    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-    let lastError: any;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-        const parentSignal = options.signal;
-        const signal = parentSignal
-            ? AbortSignal.any([controller.signal, parentSignal])
-            : controller.signal;
-
-        let connectTo: Record<string, string> | undefined;
-
-        if (attempt % 2 === 0) {
-            try {
-                const urlObj = new URL(url);
-                if (!net.isIP(urlObj.hostname)) {
-                    const ips = await dnsPromises.resolve4(urlObj.hostname);
-                    if (ips && ips.length > 0) {
-                        const resolvedIp = ips[Math.floor(Math.random() * ips.length)];
-                        if (resolvedIp) {
-                            connectTo = { [urlObj.hostname]: resolvedIp };
-                        }
-                    }
-                }
-            } catch { }
-        }
-
-        const activeSession = new httpcloak.Session({
-            preset: options.useOwnTLS ? "firefox-133" : undefined,
-            ja3: options.useOwnTLS ? FIREFOX_150_JA3 : undefined,
-            akamai: options.useOwnTLS ? FIREFOX_150_AKAMAI : undefined,
-            preferIpv4: true,
-            tlsOnly: options.tlsOnly ?? false,
-            httpVersion: options.useH3 ? "h3" : (options.useH2 ? "h2" : undefined),
-            echConfigDomain: options.echConfigDomain,
-            allowRedirects: options.allowRedirects ?? true,
-            connectTo,
-        });
-
-        try {
-            const method = (options.method?.toLowerCase() ?? 'get') as 'get' | 'post' | 'put' | 'delete' | 'patch';
-            const headers: any = { ...options.headers };
-            if (url.includes('discord.com/api/')) {
-                headers['User-Agent'] = headers['User-Agent'] || 'DiscordBot (https://github.com/discord-bot, 1.0.0)';
-            }
-            const res = await activeSession[method](url, {
-                headers: headers,
-                body: options.body,
-                timeout: timeoutMs / 1000
-            });
-            return res;
-        } catch (e: any) {
-            lastError = e;
-            if (attempt === maxRetries) break;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-        } finally {
-            try { activeSession.close(); } catch { }
-            clearTimeout(timeoutId);
-        }
-    }
-    throw lastError;
-};
 
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from 'linkedom';
 import { decodeHTML, decodeXML } from 'entities';
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
-import { resolve6 } from 'dns';
 import emojibaseData from 'emojibase-data/en/data.json' with { type: 'json' };
 import emojibaseGroups from 'emojibase-data/meta/groups.json' with { type: 'json' };
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
+
+export async function request(url: string | URL, options: any = {}): Promise<any> {
+    const { useH2, useOwnTLS, ...fetchOptions } = options;
+    const response = await fetch(url, fetchOptions);
+    const body = Buffer.from(await response.arrayBuffer());
+    const text = body.toString('utf8');
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => { headers[key.toLowerCase()] = value; });
+    return {
+        statusCode: response.status,
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+        url: response.url,
+        headers,
+        text,
+        json: async () => JSON.parse(text),
+        arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+        blob: async () => new Blob([body]),
+    };
+}
 
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -4103,13 +4036,13 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
     const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en`;
     const headers = {
         ...commonHeaders,
-        'Accept-Language': 'en-US',
         'Referer': 'https://www.tiktok.com/explore'
     };
 
     for (let i = 0; i < 3; i++) {
         try {
             const pul = await request(url, { headers, useH2: true, useOwnTLS: true });
+            console.log(pul);
             const res = await pul.text;
 
             if (res === '' || pul.statusCode !== 200) {
@@ -4712,7 +4645,7 @@ export const redditMedia = async function redditMedia(que: string) {
         const res: any = await req.json();
         return { data: res?.data?.children?.map((a: any) => a?.data) || null }
     }
-    catch {
+    catch (e) {
         return null;
     }
 }
@@ -6329,7 +6262,7 @@ export async function GunsProfile(query: string): Promise<any> {
 
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            res = await request(`https://guns.lol/${username}`, {
+            res = await (httpcloakGet as any)(`https://guns.lol/${username}`, {
                 useH2: true,
                 echConfigDomain: "cloudflare-ech.com",
                 tlsOnly: true,
@@ -6339,11 +6272,14 @@ export async function GunsProfile(query: string): Promise<any> {
                 }
             });
 
+            if (res.statusCode === 429) {
+                return { error: "IP Blocked" }
+            }
+
             const { document: doc } = parseHTML(res.text || "");
             const pageTitle = doc.querySelector('title')?.textContent?.trim() || '';
             const isChallenge = res.statusCode === 401 ||
                 res.statusCode === 403 ||
-                res.statusCode === 429 ||
                 pageTitle === 'Just a moment...';
 
             if (!isChallenge) {
@@ -6360,10 +6296,13 @@ export async function GunsProfile(query: string): Promise<any> {
                     extractHtml: true
                 });
 
+                if (browserRes.status === 429) {
+                    return { error: "IP Blocked" }
+                }
+
                 const browserChallenge = !browserRes.success ||
                     browserRes.status === 401 ||
-                    browserRes.status === 403 ||
-                    browserRes.status === 429;
+                    browserRes.status === 403;
 
                 if (browserChallenge) {
                     return { error: "Guns.lol asking to verify you're not a bot" };
@@ -6385,6 +6324,7 @@ export async function GunsProfile(query: string): Promise<any> {
                 browserGuns = true;
             }
         } catch (e) {
+            console.error(e);
             if (attempts === 2) throw e;
         }
     }

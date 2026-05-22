@@ -2,6 +2,13 @@ import { Number_random } from './request.ts';
 import crypto from 'crypto';
 
 const smellyFeel = "fda0bd57ec7312592292772bdb8780cadbcb884d59b4cc79b5ed45f680cc06b2";
+
+function getMdKey(): string {
+    const key = process.env.MD_KEY;
+    if (!key) throw new Error('Missing required environment variable: MD_KEY');
+    return key;
+}
+
 const hash = crypto.createHash('sha256').update(smellyFeel).digest();
 export const xt = Array.from({ length: 100 }, (_, i) => {
     return crypto.createHash('sha256').update(hash).update(i.toString()).digest('base64url');
@@ -55,7 +62,7 @@ export function pullInfo(r: string | number, q: string, s: string, u?: string[])
             challengeTarget: "c",
             challengeExpire: 7200000
         },
-        c: xorEncrypt(cPayload, "cc1772647f01f4b5")
+        c: xorEncrypt(cPayload, getMdKey())
     };
 
     return xorEncrypt(JSON.stringify(fullResponse), s) + '\n' + cKey;

@@ -53,5 +53,12 @@ async function solveChallenge(challenge, ouuid, ssk) {
     }
 }
 
-clientSecretKey = getComputedStyle(document.documentElement).getPropertyValue(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj')).trim().replace(/"/g, '');
-document.documentElement.style.setProperty(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj'), '');
+function setMusicChallengePart(part = '') {
+    clientSecretKey = getComputedStyle(document.documentElement).getPropertyValue(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj')).trim().replace(/"/g, '') + part;
+    document.documentElement.style.setProperty(atob('LS14LXNpbGVudC12ZXJpZnktc3RhdGlj'), '');
+}
+
+setTimeout(() => {
+    const part = Array.from(document.scripts).find(script => !!script.id)?.id || '';
+    setMusicChallengePart(part);
+}, 0);

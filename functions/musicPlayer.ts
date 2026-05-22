@@ -33,7 +33,7 @@ export async function setVoiceStatus(channelId: string, token: string, content: 
                 continue;
             }
 
-            return; 
+            return;
         } catch (err) {
             console.error("Voice Status Fetch Error:", err);
             if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, 1000));
@@ -86,7 +86,7 @@ export async function createMusicStream(
             }
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
-        const rrmc = c.req.header('x-client-secret') || "0"; 
+        const rrmc = c.req.header('x-client-secret') || "0";
         const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v: string, i: number) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
         if (!(await verifyChallenge(rrma, ipLL, rrmc, rrmi))) {
             c.header('X-Player', "lavalink");
@@ -94,7 +94,7 @@ export async function createMusicStream(
             c.header('Content-Type', checkAccept && checkReferer ? 'text/event-stream' : 'video/mpeg');
             c.header('Cache-Control', 'public, no-cache, no-store, max-age=0, must-revalidate');
             if (!(checkAccept && checkReferer)) {
-                c.header('Location', c.req.path + new URL(c.req.url).search);
+                c.header('Location', '/playground');
             }
             const rrkc = String(Number_random(1000000000, 9999999999));
             const cryUID = crypto.randomUUID();
@@ -537,7 +537,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 console.log(`24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`);
                 await new Promise(r => setTimeout(r, 1500));
                 try {
-                    
+
                     if (!players.has(token) || client.ws.status !== 0) {
                         console.log(`24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
                         return;
@@ -843,8 +843,8 @@ export async function destroyPlayer(token: string): Promise<boolean> {
             try { node.disconnect(); } catch { }
         }
         managed.client.destroy();
-    } catch {  }
-    
+    } catch { }
+
     pendingPlayers.delete(token);
     return true;
 }
@@ -855,7 +855,7 @@ async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) =
 
     (async () => {
         try {
-            
+
             const guilds = await managed.client.guilds.fetch();
             await Promise.allSettled(
                 guilds.map(async (g) => {
@@ -911,10 +911,37 @@ export function formatDuration(ms: number): string {
 
 export function formatTrack(track: Track | any, client?: any, guildPlayer?: any) {
     const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
-    const requestedId = (track.requester as any).id;
-    let isInVC: boolean | null = null;
-    if (!isNaN(requestedId)) {
-        isInVC = (client?.channels?.cache?.get(guildPlayer?.voiceChannelId) as VoiceChannel | null)?.members.has(requestedId) ?? null;
+    const requester = track.requester || null;
+    const requestedId = requester ? String((requester as any).id ?? requester) : null;
+    const cachedRequester = requestedId ? client?.users?.cache?.get(requestedId) : null;
+    const requesterData: any = typeof requester === 'object' ? { ...requester } : { id: requestedId };
+    if (cachedRequester) {
+        requesterData.id = cachedRequester.id;
+        requesterData.username = cachedRequester.username;
+        requesterData.globalName = cachedRequester.globalName;
+        requesterData.tag = cachedRequester.tag;
+        requesterData.avatar = cachedRequester.avatar;
+        requesterData.bot = cachedRequester.bot;
+    } else if (requestedId && requesterData.username == null) {
+        requesterData.username = 'Discord User';
+    }
+    delete requesterData.guildId;
+    delete requesterData.voiceChannelId;
+
+    let voiceInfo: { isInVC: boolean; _warning?: string } | null = null;
+    if (requestedId && !isNaN(Number(requestedId))) {
+        const guild = client?.guilds?.cache?.get(guildPlayer?.guildId);
+        const voiceState = guild?.voiceStates?.cache?.get(requestedId);
+        const channel = client?.channels?.cache?.get(guildPlayer?.voiceChannelId) as VoiceChannel | null;
+
+        if (voiceState) {
+            voiceInfo = { isInVC: voiceState.channelId === guildPlayer?.voiceChannelId };
+        } else if (channel?.members?.has(requestedId)) {
+            const isInVC = channel.members.has(requestedId);
+            voiceInfo = { isInVC };
+        } else {
+            voiceInfo = { isInVC: false, _warning: 'This information is not available at moment' };
+        }
     }
     return {
         id: track.info.identifier,
@@ -928,8 +955,8 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any)
         durationMS: String(track.info.duration),
         isSeekable: track.info.isSeekable,
         isStream: track.info.isStream,
-        requestedBy: track.requester ? String(requestedId) : null,
-        requester: { ...(isInVC !== null ? { isInVoice: isInVC } : {}), ...(track.requester || {}) },
+        requestedBy: requestedId,
+        requester: requester ? { ...requesterData, ...(voiceInfo ?? {}) } : null,
         playlist: (track as any).playlist ? {
             name: (track as any).playlist.name,
             size: (track as any).playlist.tracks?.length,
@@ -997,7 +1024,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 
         while (currentAutoplayCount < TARGET && attempts < 3) {
             attempts++;
-            
+
             const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
             if (!track) break;
 

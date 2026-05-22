@@ -8,7 +8,81 @@ import {
     createMusicStream,
 } from '../../functions/musicPlayer.js';
 
-const FILTER_PRESETS: Record<string, { description: string; requires: string; isActive: (p: any) => boolean; apply: (p: any) => Promise<void>; disable: (p: any) => Promise<void> }> = {
+type FilterPreset = { description: string; requires: string | string[]; isActive: (p: any) => boolean; apply: (p: any) => Promise<void>; disable: (p: any) => Promise<void> };
+
+function nearlyEqual(a: number, b: number): boolean {
+    return Math.abs(a - b) < 0.000001;
+}
+
+function eqBands(gains: number[]) {
+    return Array.from({ length: 15 }, (_, band) => ({ band, gain: gains[band] ?? 0 }));
+}
+
+function eqPreset(description: string, gains: number[]): FilterPreset {
+    return {
+        description,
+        requires: 'equalizer',
+        isActive: (p) => eqBands(gains).every(({ band, gain }) => nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain)),
+        apply: async (p) => {
+            await p.filterManager.setEQ(eqBands(gains));
+        },
+        disable: async (p) => {
+            await p.filterManager.clearEQ();
+        },
+    };
+}
+
+function timescalePreset(description: string, timescale: { speed: number; pitch: number; rate: number }): FilterPreset {
+    return {
+        description,
+        requires: 'timescale',
+        isActive: (p) => {
+            const active = p.filterManager.data.timescale;
+            return nearlyEqual(active?.speed ?? 1, timescale.speed) && nearlyEqual(active?.pitch ?? 1, timescale.pitch) && nearlyEqual(active?.rate ?? 1, timescale.rate);
+        },
+        apply: async (p) => {
+            p.filterManager.data.timescale = timescale;
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.timescale;
+            await p.filterManager.applyPlayerFilters();
+        },
+    };
+}
+
+function channelMixPreset(description: string, channelMix: { leftToLeft: number; leftToRight: number; rightToLeft: number; rightToRight: number }): FilterPreset {
+    return {
+        description,
+        requires: 'channelMix',
+        isActive: (p) => {
+            const active = p.filterManager.data.channelMix;
+            return nearlyEqual(active?.leftToLeft ?? 1, channelMix.leftToLeft)
+                && nearlyEqual(active?.leftToRight ?? 0, channelMix.leftToRight)
+                && nearlyEqual(active?.rightToLeft ?? 0, channelMix.rightToLeft)
+                && nearlyEqual(active?.rightToRight ?? 1, channelMix.rightToRight);
+        },
+        apply: async (p) => {
+            p.filterManager.data.channelMix = channelMix;
+            p.filterManager.filters.audioOutput = 'custom';
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.channelMix;
+            p.filterManager.filters.audioOutput = 'stereo';
+            await p.filterManager.applyPlayerFilters();
+        },
+    };
+}
+
+function normalizeFilterName(filter: string): string {
+    return filter.toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+const VOCAL_ONLY_EQ = [-0.25, -0.25, -0.20, -0.12, 0.02, 0.18, 0.30, 0.35, 0.30, 0.22, 0.08, -0.06, -0.16, -0.22, -0.25];
+const VOCAL_ONLY_CHANNEL_MIX = { leftToLeft: 0.5, leftToRight: 0.5, rightToLeft: 0.5, rightToRight: 0.5 };
+
+const FILTER_PRESETS: Record<string, FilterPreset> = {
     nightcore: {
         description: 'Speeds up the track with a higher pitch for an energetic feel',
         requires: 'timescale',
@@ -35,6 +109,10 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.applyPlayerFilters();
         },
     },
+    speed: timescalePreset('Speeds up playback without changing the pitch much', { speed: 1.25, pitch: 1.0, rate: 1.0 }),
+    slow: timescalePreset('Slows playback down while keeping the original pitch', { speed: 0.75, pitch: 1.0, rate: 1.0 }),
+    chipmunk: timescalePreset('Raises the pitch for a chipmunk-style vocal effect', { speed: 1.0, pitch: 1.55, rate: 1.0 }),
+    deep: timescalePreset('Lowers the pitch for a deeper vocal tone', { speed: 1.0, pitch: 0.75, rate: 1.0 }),
     bassboost: {
         description: 'Enhances the bass frequencies for a heavier sound',
         requires: 'equalizer',
@@ -62,6 +140,8 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.clearEQ();
         },
     },
+    bassboostlow: eqPreset('Adds a lighter bass boost without overpowering the mix', [0.20, 0.18, 0.16, 0.10, 0.04, 0.0, -0.03, -0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    bassboosthigh: eqPreset('Adds a stronger bass boost while keeping the highs controlled', [0.45, 0.50, 0.50, 0.28, 0.08, 0.0, -0.05, -0.08, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     soft: {
         description: 'Softens the audio by lowering highs and smoothing the sound',
         requires: 'lowPass',
@@ -102,6 +182,37 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.clearEQ();
         },
     },
+    rock: eqPreset('Boosts lows and highs for a punchier rock sound', [0.22, 0.18, 0.12, 0.06, 0.03, -0.03, -0.08, -0.12, -0.08, -0.03, 0.04, 0.08, 0.14, 0.18, 0.22]),
+    pop: eqPreset('Adds clearer vocals and polished highs for pop tracks', [0.12, 0.10, -0.04, -0.06, -0.04, 0.08, 0.12, 0.14, 0.14, 0.12, 0.04, -0.02, 0.08, 0.10, 0.10]),
+    electronic: eqPreset('Strengthens sub-bass and bright highs for electronic music', [0.25, 0.22, 0.14, 0.06, 0.0, -0.04, -0.06, 0.0, 0.10, 0.14, 0.18, 0.20, 0.22, 0.24, 0.25]),
+    classical: eqPreset('Balances the spectrum with smooth high-end detail', [0.10, 0.08, 0.04, 0.0, 0.0, 0.04, 0.08, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20]),
+    vocal: eqPreset('Highlights vocals by lifting the mid frequencies', [-0.08, -0.06, -0.04, 0.02, 0.08, 0.14, 0.18, 0.16, 0.12, 0.08, 0.02, -0.02, -0.04, -0.06, -0.08]),
+    vocalonly: {
+        description: 'Emphasizes centered vocals while reducing lows and highs',
+        requires: ['equalizer', 'channelMix'],
+        isActive: (p) => {
+            const active = p.filterManager.data.channelMix;
+            return eqBands(VOCAL_ONLY_EQ).every(({ band, gain }) => nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain))
+                && nearlyEqual(active?.leftToLeft ?? 1, VOCAL_ONLY_CHANNEL_MIX.leftToLeft)
+                && nearlyEqual(active?.leftToRight ?? 0, VOCAL_ONLY_CHANNEL_MIX.leftToRight)
+                && nearlyEqual(active?.rightToLeft ?? 0, VOCAL_ONLY_CHANNEL_MIX.rightToLeft)
+                && nearlyEqual(active?.rightToRight ?? 1, VOCAL_ONLY_CHANNEL_MIX.rightToRight);
+        },
+        apply: async (p) => {
+            p.filterManager.equalizerBands = eqBands(VOCAL_ONLY_EQ);
+            p.filterManager.data.channelMix = VOCAL_ONLY_CHANNEL_MIX;
+            p.filterManager.filters.audioOutput = 'custom';
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            p.filterManager.equalizerBands = eqBands([]);
+            delete p.filterManager.data.channelMix;
+            p.filterManager.filters.audioOutput = 'stereo';
+            await p.filterManager.applyPlayerFilters();
+        },
+    },
+    fullsound: eqPreset('Gives the whole track a fuller and slightly louder profile', [0.18, 0.18, 0.16, 0.14, 0.12, 0.10, 0.10, 0.10, 0.12, 0.12, 0.14, 0.16, 0.18, 0.18, 0.18]),
+    gaming: eqPreset('Emphasizes low-end impact and trims sharp highs for game audio', [0.18, 0.16, 0.14, 0.12, 0.08, 0.04, 0.0, -0.04, -0.08, -0.10, -0.12, -0.14, -0.16, -0.18, -0.20]),
     '8d': {
         description: 'Creates a 360° rotating audio effect around the listener',
         requires: 'rotation',
@@ -141,12 +252,38 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.applyPlayerFilters();
         },
     },
+    pulse: {
+        description: 'Adds a slower pulsing volume movement',
+        requires: 'tremolo',
+        isActive: (p) => p.filterManager.data.tremolo?.frequency === 2.0,
+        apply: async (p) => {
+            p.filterManager.data.tremolo = { frequency: 2.0, depth: 0.45 };
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.tremolo;
+            await p.filterManager.applyPlayerFilters();
+        },
+    },
     vibrato: {
         description: 'Creates a vibrating pitch effect for a richer sound',
         requires: 'vibrato',
         isActive: (p) => p.filterManager.data.vibrato?.frequency === 4.0,
         apply: async (p) => {
             p.filterManager.data.vibrato = { frequency: 4.0, depth: 0.75 };
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.vibrato;
+            await p.filterManager.applyPlayerFilters();
+        },
+    },
+    wobble: {
+        description: 'Adds a gentler pitch wobble than vibrato',
+        requires: 'vibrato',
+        isActive: (p) => p.filterManager.data.vibrato?.frequency === 2.5,
+        apply: async (p) => {
+            p.filterManager.data.vibrato = { frequency: 2.5, depth: 0.4 };
             await p.filterManager.applyPlayerFilters();
         },
         disable: async (p) => {
@@ -167,12 +304,38 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
             await p.filterManager.applyPlayerFilters();
         },
     },
+    muffled: {
+        description: 'Strongly muffles the track for an underwater-like tone',
+        requires: 'lowPass',
+        isActive: (p) => p.filterManager.data.lowPass?.smoothing === 80.0,
+        apply: async (p) => {
+            p.filterManager.data.lowPass = { smoothing: 80.0 };
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.lowPass;
+            await p.filterManager.applyPlayerFilters();
+        },
+    },
     rotation: {
         description: 'Slow rotation effect that gently pans audio around',
         requires: 'rotation',
         isActive: (p) => p.filterManager.data.rotation?.rotationHz === 0.1,
         apply: async (p) => {
             p.filterManager.data.rotation = { rotationHz: 0.1 };
+            await p.filterManager.applyPlayerFilters();
+        },
+        disable: async (p) => {
+            delete p.filterManager.data.rotation;
+            await p.filterManager.applyPlayerFilters();
+        },
+    },
+    spin: {
+        description: 'Faster rotating stereo movement than the 8d preset',
+        requires: 'rotation',
+        isActive: (p) => p.filterManager.data.rotation?.rotationHz === 0.35,
+        apply: async (p) => {
+            p.filterManager.data.rotation = { rotationHz: 0.35 };
             await p.filterManager.applyPlayerFilters();
         },
         disable: async (p) => {
@@ -199,35 +362,49 @@ const FILTER_PRESETS: Record<string, { description: string; requires: string; is
     channelmix: {
         description: 'Swaps left and right audio channels',
         requires: 'channelMix',
-        isActive: (p) => p.filterManager.data.channelMix?.leftToRight === 1,
+        isActive: (p) => {
+            const active = p.filterManager.data.channelMix;
+            return active?.leftToLeft === 0 && active?.leftToRight === 1 && active?.rightToLeft === 1 && active?.rightToRight === 0;
+        },
         apply: async (p) => {
             p.filterManager.data.channelMix = {
                 leftToLeft: 0, leftToRight: 1,
                 rightToLeft: 1, rightToRight: 0,
             };
+            p.filterManager.filters.audioOutput = 'custom';
             await p.filterManager.applyPlayerFilters();
         },
         disable: async (p) => {
             delete p.filterManager.data.channelMix;
+            p.filterManager.filters.audioOutput = 'stereo';
             await p.filterManager.applyPlayerFilters();
         },
     },
     mono: {
         description: 'Mixes stereo audio into a single mono channel',
         requires: 'channelMix',
-        isActive: (p) => p.filterManager.data.channelMix?.leftToLeft === 0.5,
+        isActive: (p) => {
+            const active = p.filterManager.data.channelMix;
+            return active?.leftToLeft === 0.5 && active?.leftToRight === 0.5 && active?.rightToLeft === 0.5 && active?.rightToRight === 0.5;
+        },
         apply: async (p) => {
             p.filterManager.data.channelMix = {
                 leftToLeft: 0.5, leftToRight: 0.5,
                 rightToLeft: 0.5, rightToRight: 0.5,
             };
+            p.filterManager.filters.audioOutput = 'mono';
             await p.filterManager.applyPlayerFilters();
         },
         disable: async (p) => {
             delete p.filterManager.data.channelMix;
+            p.filterManager.filters.audioOutput = 'stereo';
             await p.filterManager.applyPlayerFilters();
         },
     },
+    wide: channelMixPreset('Adds subtle crossfeed for a wider stereo image', { leftToLeft: 1, leftToRight: 0.15, rightToLeft: 0.15, rightToRight: 1 }),
+    surround: channelMixPreset('Creates a wider virtual surround-like stereo spread', { leftToLeft: 0.75, leftToRight: 0.25, rightToLeft: 0.25, rightToRight: 0.75 }),
+    left: channelMixPreset('Plays the left channel through both speakers', { leftToLeft: 1, leftToRight: 0, rightToLeft: 1, rightToRight: 0 }),
+    right: channelMixPreset('Plays the right channel through both speakers', { leftToLeft: 0, leftToRight: 1, rightToLeft: 0, rightToRight: 1 }),
     reset: {
         description: 'Removes all active filters and resets to default playback',
         requires: '',
@@ -250,7 +427,7 @@ app.get('/filter', async (c) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
         const voiceId = c.req.query('voiceId');
-        const filter = (c.req.query('filter') || '').toLowerCase().replace(/\s+/g, '');
+        const filter = normalizeFilterName(c.req.query('filter') || '');
 
         if (!token || !guildId) {
             await s.write(`],"data":${JSON.stringify({ status: false, message: 'Missing required params: token, guildId', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -319,7 +496,9 @@ app.get('/filter', async (c) => {
         const { player: manager } = await getOrCreatePlayer(token, log);
 
         // ── Check if Lavalink node supports this filter ───────────────────
-        if (preset.requires) {
+        const requiredFilters = Array.isArray(preset.requires) ? preset.requires : preset.requires ? [preset.requires] : [];
+
+        if (requiredFilters.length) {
             const nodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected);
 
             if (nodes.length === 0) {
@@ -328,17 +507,18 @@ app.get('/filter', async (c) => {
             }
 
             const nodeFilters: string[] = (nodes[0] as any).info?.filters ?? [];
+            const missingFilters = requiredFilters.filter(required => !nodeFilters.includes(required));
 
-            if (!nodeFilters.includes(preset.requires)) {
+            if (missingFilters.length) {
                 await s.write(`],"data":${JSON.stringify({
                     status: false,
-                    message: `Filter "${filter}" is not supported by the Lavalink node (requires: ${preset.requires})`,
+                    message: `Filter "${filter}" is not supported by the Lavalink node (requires: ${requiredFilters.join(', ')}; missing: ${missingFilters.join(', ')})`,
                     type: { primary: "error", alt: "invalid_query" }
                 })}}`);
                 return;
             }
 
-            await log(`Node supports "${preset.requires}", proceeding`);
+            await log(`Node supports "${requiredFilters.join(', ')}", proceeding`);
         }
 
         const queue = getQueue(manager, guildId);
@@ -397,7 +577,7 @@ app.get('/filter', async (c) => {
             } else {
                 await preset.apply(queue);
             }
-            
+
             if (queue.position) {
                 await queue.seek(queue.position);
             }

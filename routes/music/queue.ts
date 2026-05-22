@@ -40,8 +40,10 @@ app.get('/nowplaying', async (c) => {
 
         const current: any = queue.queue.current;
         const previous: any = queue.queue.previous?.[0];
-        const next: any = queue.queue.tracks?.[0];
-        const totalQueueDuration = queue.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
+        const currentQueueIndex = queue.queue.tracks.findIndex((track: any) => track.info.identifier === current.info.identifier);
+        const upcomingTracks = currentQueueIndex === 0 ? queue.queue.tracks.slice(1) : queue.queue.tracks;
+        const next: any = upcomingTracks[0];
+        const totalQueueDuration = upcomingTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
         const activeFilters = getActiveFilters(queue);
 
         await log(`Now playing: "${current.info.title}"`);
@@ -63,7 +65,7 @@ app.get('/nowplaying', async (c) => {
                     array: activeFilters.length > 0 ? activeFilters : [],
                     string: activeFilters.length > 0 ? activeFilters.join(", ") : ""
                 },
-                queueSize: queue.queue.tracks.length,
+                queueSize: upcomingTracks.length,
                 queueElapsedTime: {
                     label: formatDuration(totalQueueDuration),
                     value: String(totalQueueDuration)

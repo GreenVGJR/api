@@ -4,6 +4,7 @@ import app from './app.js';
 
 const port = 3000;
 const g = globalThis as any;
+
 g.__vgjr_refresh_count = (g.__vgjr_refresh_count || 0) + 1;
 g.__vgjr_last_reload = Date.now();
 

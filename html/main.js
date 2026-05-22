@@ -10,10 +10,10 @@ const initSPA = () => {
     // Build the UI structure
     document.body.className = "bg-black text-white font-sans antialiased";
     document.body.innerHTML = `
-    <div class="h-screen flex flex-col max-w-5xl mx-auto px-4 py-6">
-        <div class="relative mb-4 flex-shrink-0">
-            <div class="flex items-center bg-black/60 rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
-                <textarea id="urlInput" class="flex-1 bg-transparent py-3 px-4 font-mono text-sm text-white placeholder-gray-600 outline-none resize-none overflow-y-auto whitespace-pre-wrap break-all no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
+    <div class="h-dvh flex flex-col max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-6">
+        <div class="relative mb-3 sm:mb-4 flex-shrink-0">
+            <div class="flex items-center bg-black/60 rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
+                <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
                 <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -22,25 +22,25 @@ const initSPA = () => {
             </div>
         </div>
 
-        <div class="flex gap-2 mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
-            <button class="tab-btn cursor-pointer px-4 py-1.5 rounded-full text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
+        <div class="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
+            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
         </div>
 
-        <div class="flex flex-col md:grid md:grid-cols-[240px_1fr] gap-2 md:gap-4 flex-1 min-h-0">
-            <div class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-2 md:pb-0 no-scrollbar">
+        <div class="flex flex-col md:grid md:grid-cols-[260px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
+            <div class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
                 <div id="endpointsList" class="space-y-1"></div>
             </div>
 
-            <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[7]">
-                <div class="bg-dark-700/30 panel-gradient rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
-                    <div class="flex items-center justify-between px-4 py-2 border-b border-dark-500 flex-shrink-0">
-                        <span class="text-xs text-gray-500 font-mono"><span class="font-semibold text-gray-400">Response</span> | Uptime: <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
+            <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[6] md:flex-[7]">
+                <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
+                    <div class="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                        <span class="text-xs text-gray-500 font-mono"><span class="font-semibold text-gray-400">Response</span> | <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
                         <div class="flex items-center gap-3">
                             <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -56,14 +56,14 @@ const initSPA = () => {
                             </button>
                         </div>
                     </div>
-                    <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
-                        <span class="text-white-600">What you gonna try?</span>
+                    <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-3 sm:p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
+                        <span class="text-white-500">What you gonna try?</span>
                     </div>
                 </div>
 
-                <div id="paramsPanel" class="mt-2 flex-shrink-0 hidden">
-                    <div class="bg-dark-700/30 panel-gradient rounded-xl border border-dark-500 overflow-hidden">
-                        <button id="paramsToggle" class="w-full cursor-pointer flex items-center justify-between px-4 py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+                <div id="paramsPanel" class="mt-1.5 sm:mt-2 flex-shrink-0 hidden">
+                    <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden">
+                        <button id="paramsToggle" class="w-full cursor-pointer flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
                             <span class="flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
@@ -75,33 +75,33 @@ const initSPA = () => {
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
-                        <div id="paramsBody" class="params-body no-scrollbar"><div id="paramsContainer" class="px-3 pb-3 space-y-2"></div></div>
+                        <div id="paramsBody" class="params-body no-scrollbar"><div id="paramsContainer" class="px-2 sm:px-3 pb-2 sm:pb-3 space-y-1.5 sm:space-y-2"></div></div>
                     </div>
                 </div>
 
-                <div class="mt-3 flex flex-col md:flex-row items-center gap-3 md:gap-4 flex-shrink-0">
-                    <button id="sendBtn" class="w-full md:flex-1 bg-emerald-500 hover:bg-emerald-500 text-black font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                        <span>Send</span><span>➜</span>
+                <div class="mt-2 sm:mt-3 flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
+                    <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
+                        <span class="send-label">Send</span><span class="send-arrow">➜</span>
                     </button>
-                    <div id="statusIndicator" class="flex items-center justify-center gap-2 text-sm font-mono w-full md:w-auto">
-                        <span class="w-2 h-2 rounded-full bg-gray-500"></span><span id="statusText" class="text-gray-500">Ready</span>
+                    <div id="statusIndicator" class="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-mono w-full md:w-auto">
+                        <span class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500"></span><span id="statusText" class="text-gray-500">Ready</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <footer class="mt-4 flex flex-col items-center md:flex-row md:items-center md:justify-between text-gray-600 text-xs flex-shrink-0 gap-2 md:gap-0 pb-2">
-            <div class="flex flex-col items-center md:items-start space-y-1">
+        <footer class="mt-3 sm:mt-4 flex flex-col items-center md:flex-row md:items-center md:justify-between text-gray-600 text-xs flex-shrink-0 gap-1.5 sm:gap-2 md:gap-0 pb-1 sm:pb-2">
+            <div class="flex flex-col items-center md:items-start space-y-0.5 sm:space-y-1">
                 <p>Built with <span class="text-mint-400">♥</span></p>
-                <p class="flex items-center gap-1.5">
+                <p class="flex items-center gap-1 sm:gap-1.5">
                     <span>AI-Generated by</span>
                     <a href="https://claude.ai" target="_blank" class="inline-flex items-center gap-1 text-[#D97757] hover:underline"><span>Claude</span></a>
                     <span>and</span>
                     <a href="https://gemini.google.com" target="_blank" class="inline-flex items-center gap-1 hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Gemini</span></a>
                 </p>
             </div>
-            <div class="flex items-center gap-3 text-gray-500">
-                <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a>
+            <div class="flex items-center gap-2 sm:gap-3 text-gray-500">
+                <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
             </div>
         </footer>
     </div>`;
@@ -139,6 +139,7 @@ const copyBtn = document.getElementById('copyBtn');
 const copyResponseBtn = document.getElementById('copyResponseBtn');
 const clearResponseBtn = document.getElementById('clearResponseBtn');
 const sendBtn = document.getElementById('sendBtn');
+const sendBtnLabel = sendBtn.querySelector('.send-label');
 const responseArea = document.getElementById('responseArea');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
@@ -165,6 +166,7 @@ function adjustHeight() {
 
 adjustHeight();
 urlInput.addEventListener('input', adjustHeight);
+urlInput.addEventListener('focus', () => setTimeout(adjustHeight, 0));
 window.addEventListener('resize', adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
@@ -208,15 +210,26 @@ let solvedChallengeCode = null;
 let knownDeviceID = null;
 let clientSecretKey = null;
 
+function triggerSendButtonAnimation() {
+    sendBtn.classList.remove('send-clicked');
+    void sendBtn.offsetWidth;
+    sendBtn.classList.add('send-clicked');
+    setTimeout(() => sendBtn.classList.remove('send-clicked'), 240);
+}
+
+function setSendButtonLabel(text) {
+    sendBtnLabel.textContent = text;
+}
+
 async function performRequest(targetUrl, retryCount = 0) {
     if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
 
     if (retryCount === 0) {
         isLoading = true;
-        sendBtn.innerHTML = '<span>Loading...</span>';
+        setSendButtonLabel('Loading...');
         sendBtn.classList.add('opacity-70');
         responseArea.classList.add('empty-state');
-        responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Fetching...</span>';
+        responseArea.innerHTML = '<span class="text-gray-500 flex h-full items-center justify-center">Fetching...</span>';
 
         statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
         statusText.textContent = 'Fetching';
@@ -238,7 +251,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         const response = await fetch(targetUrl, { headers, mode: "same-origin" });
 
         responseArea.classList.add('empty-state');
-        responseArea.innerHTML = '<span class="text-gray-500 loading flex h-full items-center justify-center">Waiting response...</span>';
+        responseArea.innerHTML = '<span class="waiting-loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
 
         const contentType = response.headers.get('content-type') || '';
@@ -331,7 +344,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             const preElement = responseArea.querySelector('pre');
 
             if (!isJson) {
-                preElement.textContent = formatted;
+                preElement.innerHTML = linkifyText(formatted);
             } else {
                 const lines = formatted.split('\n');
                 const CHUNK_SIZE = 1;
@@ -373,22 +386,18 @@ async function performRequest(targetUrl, retryCount = 0) {
     } finally {
         if (retryCount === 0) {
             isLoading = false;
-            sendBtn.innerHTML = 'Send';
+            setSendButtonLabel('Send');
 
             isCoolingDown = true;
             sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
             let timeLeft = 0.3;
 
-            const cooldownInterval = setInterval(() => {
-                timeLeft -= 0.1;
-                if (timeLeft <= 0) {
-                    clearInterval(cooldownInterval);
-                    isCoolingDown = false;
-                    sendBtn.innerHTML = '<span>Send</span><span>➜</span>';
-                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    sendBtn.classList.remove('opacity-70');
-                }
-            }, 100);
+            const cooldownTimeout = setTimeout(() => {
+                isCoolingDown = false;
+                setSendButtonLabel('Send');
+                sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                sendBtn.classList.remove('opacity-70');
+            }, 300);
         }
     }
 
@@ -613,7 +622,7 @@ function renderEndpoints(animate = false) {
 
     const newHTML = categoryEndpoints.map((ep, index) => `
         <button 
-            class="endpoint-item cursor-pointer block w-full text-left py-1 px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
+            class="endpoint-item cursor-pointer block w-full text-left py-1 px-2 sm:px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? 'active bg-dark-700 text-mint-400 border-l-2 border-mint-400' : ''} break-all transition-colors"
             data-index="${index}"
         >
             ${ep.path}
@@ -908,16 +917,53 @@ copyResponseBtn.addEventListener('click', async () => {
 clearResponseBtn.addEventListener('click', () => {
     lastRawResponse = '';
     responseArea.classList.add('empty-state');
-    responseArea.innerHTML = '<span class="text-white-600">What you gonna try?</span>';
+    responseArea.innerHTML = '<span class="text-white-500">What you gonna try?</span>';
     statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-gray-500';
     statusText.textContent = 'Ready';
     statusText.className = 'text-gray-500';
 });
 
-sendBtn.addEventListener('click', () => performRequest(urlInput.value));
+sendBtn.addEventListener('click', () => {
+    triggerSendButtonAnimation();
+    performRequest(urlInput.value);
+});
+
+function escapeHTML(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttribute(value) {
+    return escapeHTML(value).replace(/"/g, '&quot;');
+}
+
+function unescapeHTML(value) {
+    return value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+
+function isHttpUrl(value) {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function responseLink(href, content) {
+    return `<a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer" class="response-link">${content}</a>`;
+}
+
+function linkifyText(text) {
+    return escapeHTML(text).replace(/https?:\/\/[^\s"'<>]+/g, (match) => {
+        const trailing = match.match(/[),.;:!?\]]+$/)?.[0] || '';
+        const href = match.slice(0, match.length - trailing.length);
+        if (!isHttpUrl(unescapeHTML(href))) return match;
+        return responseLink(unescapeHTML(href), href) + trailing;
+    });
+}
 
 function syntaxHighlight(json) {
-    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    json = escapeHTML(json);
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
         let cls = 'text-orange-300';
         if (/^"/.test(match)) {
@@ -926,6 +972,12 @@ function syntaxHighlight(json) {
                 match = match.slice(0, -1) + '<span class="text-gray-500">:</span>';
             } else {
                 cls = 'text-emerald-400';
+                try {
+                    const value = JSON.parse(unescapeHTML(match));
+                    if (typeof value === 'string' && isHttpUrl(value)) {
+                        return responseLink(value, '<span class="' + cls + '">' + match + '</span>');
+                    }
+                } catch { }
             }
         } else if (/true|false/.test(match)) {
             cls = 'text-purple-400';

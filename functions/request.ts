@@ -4042,7 +4042,6 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
     for (let i = 0; i < 3; i++) {
         try {
             const pul = await request(url, { headers, useH2: true, useOwnTLS: true });
-            console.log(pul);
             const res = await pul.text;
 
             if (res === '' || pul.statusCode !== 200) {

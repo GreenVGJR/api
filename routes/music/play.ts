@@ -14,7 +14,7 @@ import {
     updateVoiceStatus,
     PLATFORM_SEARCH,
 } from '../../functions/musicPlayer.js';
-import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStream, request, commonHeaders } from '../../functions/request.js';
+import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStreams, request, commonHeaders } from '../../functions/request.js';
 import { getActiveFilters } from './filters.js';
 import { parseYtInitial } from '../../functions/request.ts';
 
@@ -549,6 +549,29 @@ app.get('/play', async (c) => {
             const customResult = await pCustom;
 
             let result: any = null;
+            const loadSoundCloudManual = async (sourceUrl: string, attempt: string | number, overlaySource: CustomSearchResult | null): Promise<boolean> => {
+                const streams = await infoSoundcloudStreams(sourceUrl);
+                if (streams.length === 0) {
+                    await log(`[Attempt ${attempt}] No SoundCloud manual streams found`);
+                    return false;
+                }
+
+                for (const stream of streams) {
+                    const protocol = stream.protocol === 'progressive' ? 'progressive/legacy' : stream.protocol;
+                    const mime = stream.mimeType ? ` (${stream.mimeType})` : '';
+                    await log(`[Attempt ${attempt}] Manual ${protocol}${mime} stream resolved — loading via Lavalink`);
+                    try {
+                        result = await doSearch(stream.url, 'url');
+                        applyOverlay(result, overlaySource);
+                        await log(`[Attempt ${attempt}] "SoundCloud Manual ${protocol}" succeeded`);
+                        return true;
+                    } catch (err: any) {
+                        await log(`[Attempt ${attempt}] "SoundCloud Manual ${protocol}" failed: ${err?.message || err}`);
+                    }
+                }
+
+                return false;
+            };
             const ytListParam = isUrl ? (() => { try { return new URL(queryStr).searchParams.get('list'); } catch { return null; } })() : null;
             const isYtMix = ytListParam?.startsWith('RD') ?? false;
             const ytPlaylistUrl = isUrl ? extractYouTubePlaylistUrl(queryStr) : null; // returns null for RD lists
@@ -588,17 +611,7 @@ app.get('/play', async (c) => {
                 } catch (e: any) {
                     if (effectivePlatform === 'soundcloud') {
                         await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
-                        const scStream = await infoSoundcloudStream(queryStr);
-                        if (scStream) {
-                            await log(`[Attempt 2] Manual stream resolved — loading via Lavalink`);
-                            try {
-                                result = await doSearch(scStream, 'url');
-                                applyOverlay(result, customResult);
-                                await log(`[Attempt 2] "SoundCloud Manual" succeeded`);
-                            } catch (err2) {
-                                await log(`[Attempt 2] "SoundCloud Manual" failed to load stream: ${err2}`);
-                            }
-                        }
+                        await loadSoundCloudManual(queryStr, 2, customResult);
                     }
 
                     // Playlist URL fallback: if playlist load failed, try the video-only URL
@@ -674,18 +687,7 @@ app.get('/play', async (c) => {
 
                                 if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
                                     await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
-                                    const scStream = await infoSoundcloudStream(fallbackResult.url);
-                                    if (scStream) {
-                                        await log(`[Attempt ${currentAttempt}] Manual stream resolved — loading via Lavalink`);
-                                        try {
-                                            result = await doSearch(scStream, 'url');
-                                            applyOverlay(result, customResult ?? fallbackResult);
-                                            await log(`[Attempt ${currentAttempt}] "SoundCloud Manual" succeeded`);
-                                            break;
-                                        } catch (err2) {
-                                            await log(`[Attempt ${currentAttempt}] "SoundCloud Manual" failed: ${err2}`);
-                                        }
-                                    }
+                                    if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
                                 }
                                 await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
                             }
@@ -713,18 +715,8 @@ app.get('/play', async (c) => {
 
                         if (platform === 'soundcloud' && customResult?.url) {
                             await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
-                            const scStream = await infoSoundcloudStream(customResult.url);
-                            if (scStream) {
-                                const manualAttempt = currentAttempt++;
-                                await log(`[Attempt ${manualAttempt}] Manual stream resolved — loading via Lavalink`);
-                                try {
-                                    result = await doSearch(scStream, 'url');
-                                    applyOverlay(result, customResult);
-                                    await log(`[Attempt ${manualAttempt}] "SoundCloud Manual" succeeded`);
-                                } catch (err2) {
-                                    await log(`[Attempt ${manualAttempt}] "SoundCloud Manual" failed to load stream: ${err2}`);
-                                }
-                            }
+                            const manualAttempt = currentAttempt++;
+                            await loadSoundCloudManual(customResult.url, manualAttempt, customResult);
                         }
                     }
                 } else {
@@ -779,18 +771,7 @@ app.get('/play', async (c) => {
 
                                     if (attempt.searchPlatform === 'soundcloud' && fallbackResult.url) {
                                         await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
-                                        const scStream = await infoSoundcloudStream(fallbackResult.url);
-                                        if (scStream) {
-                                            await log(`[Attempt ${currentAttempt}] Manual stream resolved — loading via Lavalink`);
-                                            try {
-                                                result = await doSearch(scStream, 'url');
-                                                applyOverlay(result, customResult ?? fallbackResult);
-                                                await log(`[Attempt ${currentAttempt}] "SoundCloud Manual" succeeded`);
-                                                break;
-                                            } catch (err2) {
-                                                await log(`[Attempt ${currentAttempt}] "SoundCloud Manual" failed: ${err2}`);
-                                            }
-                                        }
+                                        if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
                                     }
                                     await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
                                 }

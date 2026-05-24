@@ -423,7 +423,7 @@ app.use('*', cors({
 
 if (BUILD_ID) {
     const apiPrefixes = ['search', 'lyrics', 'tools', 'info', 'music'];
-    const excludedPaths = ['favicon.ico', 'robots.txt', 'playground'];
+    const excludedPaths = ['favicon.ico', 'robots.txt', 'playground', 'terms', 'privacy'];
 
     app.use('*', async (c: Context, next: Next) => {
         const url = new URL(c.req.url);
@@ -490,7 +490,7 @@ app.get('/playground', (c: Context) => {
 });
 
 app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
-    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
 
     const host = (c.req.header('host') || '').toLowerCase();
@@ -504,16 +504,24 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
 }));
 
 app.get('/playground/cf.js', (c: Context) => stream(c, async (s) => {
-    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
     await s.write(cfJs);
 }));
 
 app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
-    c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'text/css');
     await s.write(mainCss);
 }));
+
+['/terms', '/privacy'].forEach((route) => {
+    app.get(route, (c: Context) => {
+        c.header('Content-Type', 'text/html; charset=UTF-8');
+        c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+        return c.body(playgroundTemplate);
+    });
+});
 
 app.get('/', (c: Context) => stream(c, async (l) => {
     const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');

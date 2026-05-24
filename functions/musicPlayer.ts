@@ -222,6 +222,7 @@ interface ManagedPlayer {
 const g = globalThis as any;
 
 const players: Map<string, ManagedPlayer> = g.__vgjr_players || (g.__vgjr_players = new Map<string, ManagedPlayer>());
+const musicLogCooldowns: Map<string, number> = g.__vgjr_musicLogCooldowns || (g.__vgjr_musicLogCooldowns = new Map<string, number>());
 
 // Persistent 24/7 state: "token:guildId" → true/false
 // Stored separately so it survives Lavalink player object recreation
@@ -254,6 +255,51 @@ export function get247Key(token: string, guildId: string) { return `${token}:${g
 export function set247(token: string, guildId: string, value: boolean) { state247.set(get247Key(token, guildId), value); }
 export function get247(token: string, guildId: string): boolean { return state247.get(get247Key(token, guildId)) ?? false; }
 export function clear247(token: string, guildId: string) { state247.delete(get247Key(token, guildId)); }
+
+function musicErrorMessage(err: any): string {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    const msg = err.message || err.name || String(err);
+    const path = err.path ? ` (${err.path})` : '';
+    return `${msg}${path}`;
+}
+
+function isKnownTransientMusicError(err: any): boolean {
+    const msg = musicErrorMessage(err);
+    return err?.name === 'TimeoutError' ||
+        err?.code === 23 ||
+        err?.code === 'ConnectionRefused' ||
+        msg.includes('The operation timed out') ||
+        msg.includes('Failed to parse JSON') ||
+        msg.includes('Unable to connect') ||
+        msg.includes('ConnectionRefused') ||
+        msg.includes('The node is not connected') ||
+        msg.includes('Node is not connected') ||
+        msg.includes('fetch failed') ||
+        msg.includes('ECONNREFUSED');
+}
+
+function warnMusicThrottled(key: string, message: string, cooldownMs = 60_000) {
+    const now = Date.now();
+    const last = musicLogCooldowns.get(key) || 0;
+    if (now - last < cooldownMs) return;
+    musicLogCooldowns.set(key, now);
+    console.warn(message);
+}
+
+function safeResumePosition(player: LavalinkPlayer): number | undefined {
+    const currentTrack = player.queue.current as any;
+    const duration = Number(currentTrack?.info?.duration || 0);
+    const position = Number(player.position || 0);
+
+    if (!Number.isFinite(duration) || duration <= 0) return undefined;
+    if (!Number.isFinite(position) || position <= 0) return undefined;
+
+    const maxPosition = duration - 1000;
+    if (maxPosition <= 0 || position >= maxPosition) return undefined;
+
+    return Math.max(1, Math.floor(position));
+}
 
 export function hasActivePlayer(token: string): boolean {
     return players.has(token);
@@ -314,36 +360,47 @@ function cancelAutoDestroy(token: string) {
     managed.destroyTimer = null;
 }
 
-// Handle potential library crashes from lavalink-client and discord.js
-process.on('uncaughtException', (err) => {
-    if (err.message.includes("Argument 'data.encoded' must be present")) {
-        console.error('Caught and suppressed a crash in lavalink-client (trackStuck event):', err.message);
-        return;
-    }
-    // Bun throws DOMException TimeoutError when discord.js tries to close a dead WebSocket
-    if (err.name === 'TimeoutError' || (err as any).code === 23) {
-        console.warn('Suppressed WebSocket TimeoutError during cleanup:', err.message);
-        return;
-    }
-    console.error('Uncaught Exception:', err);
-});
+// Handle potential library crashes from lavalink-client and discord.js.
+// Hot reload can re-evaluate this module, so install global handlers once.
+if (!g.__vgjr_music_process_handlers_installed) {
+    g.__vgjr_music_process_handlers_installed = true;
 
-process.on('unhandledRejection', (reason: any) => {
-    // Suppress known non-fatal WebSocket/network errors from discord.js internals
-    const msg = reason?.message || String(reason);
-    if (
-        reason?.name === 'TimeoutError' ||
-        (reason as any)?.code === 23 ||
-        msg.includes('The operation timed out') ||
-        msg.includes('WebSocket was closed') ||
-        msg.includes('Cannot send data') ||
-        msg.includes('writableStreamDefaultWriterRelease')
-    ) {
-        console.warn('Suppressed unhandled rejection (WebSocket cleanup):', msg);
-        return;
-    }
-    console.error('Unhandled Rejection:', reason);
-});
+    process.on('uncaughtException', (err) => {
+        const msg = musicErrorMessage(err);
+        if (msg.includes("Argument 'data.encoded' must be present")) {
+            console.error('Caught and suppressed a crash in lavalink-client (trackStuck event):', msg);
+            return;
+        }
+        if (isKnownTransientMusicError(err)) {
+            warnMusicThrottled('uncaught:' + msg, `Suppressed transient music exception: ${msg}`);
+            return;
+        }
+        // Bun throws DOMException TimeoutError when discord.js tries to close a dead WebSocket
+        if (err.name === 'TimeoutError' || (err as any).code === 23) {
+            console.warn('Suppressed WebSocket TimeoutError during cleanup:', msg);
+            return;
+        }
+        console.error('Uncaught Exception:', err);
+    });
+
+    process.on('unhandledRejection', (reason: any) => {
+        // Suppress known non-fatal WebSocket/network errors from discord.js/lavalink internals
+        const msg = musicErrorMessage(reason);
+        if (
+            isKnownTransientMusicError(reason) ||
+            reason?.name === 'TimeoutError' ||
+            (reason as any)?.code === 23 ||
+            msg.includes('The operation timed out') ||
+            msg.includes('WebSocket was closed') ||
+            msg.includes('Cannot send data') ||
+            msg.includes('writableStreamDefaultWriterRelease')
+        ) {
+            warnMusicThrottled('unhandled:' + msg, `Suppressed transient music rejection: ${msg}`);
+            return;
+        }
+        console.error('Unhandled Rejection:', reason);
+    });
+}
 
 export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
     const existing = players.get(token);
@@ -570,7 +627,12 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                         setVoiceStatus(voiceChannelId, token, content).catch(() => { });
                     }
                 } catch (err: any) {
-                    console.error(`24/7 reconnect failed for guild ${guildId}: ${err.message}`);
+                    const msg = musicErrorMessage(err);
+                    if (isKnownTransientMusicError(err)) {
+                        warnMusicThrottled(`247-reconnect:${guildId}:${msg}`, `24/7 reconnect skipped for guild ${guildId}: ${msg}`, 30_000);
+                    } else {
+                        console.error(`24/7 reconnect failed for guild ${guildId}: ${msg}`);
+                    }
                 } finally {
                     reconnecting247.delete(guildId);
                 }
@@ -632,7 +694,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             manager.nodeManager.on('error', (node, err) => {
                 const hasConnected = [...manager.nodeManager.nodes.values()].some(n => n.connected);
                 if (!hasConnected) {
-                    console.error(`[Lavalink Node Error] ${node.id}: ${(err as Error).message}`);
+                    warnMusicThrottled(`node-error:${node.id}:${musicErrorMessage(err)}`, `[Lavalink Node Error] ${node.id}: ${musicErrorMessage(err)}`, 30_000);
                 }
             });
 
@@ -657,13 +719,41 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                                 await new Promise(r => setTimeout(r, 2500));
 
                                 if (player.queue.current) {
-                                    console.log(`Auto-resuming playback for guild ${player.guildId} at ${player.position}ms`);
-                                    player.play({ position: player.position }).catch((err: any) => {
-                                        console.error(`Failed to auto-resume for guild ${player.guildId}:`, err.message);
+                                    if (!player.node?.connected) {
+                                        warnMusicThrottled(`resume-node:${player.guildId}`, `Auto-resume skipped for guild ${player.guildId}: Lavalink node is not connected`, 30_000);
+                                        return;
+                                    }
+
+                                    const position = safeResumePosition(player);
+                                    console.log(`Auto-resuming playback for guild ${player.guildId}${position ? ` at ${position}ms` : ''}`);
+                                    let playPromise: Promise<any>;
+                                    try {
+                                        playPromise = position === undefined ? player.play() : player.play({ position });
+                                    } catch (err: any) {
+                                        const msg = musicErrorMessage(err);
+                                        if (isKnownTransientMusicError(err) || msg.includes('PlayerOption#position')) {
+                                            warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
+                                            return;
+                                        }
+                                        console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
+                                        return;
+                                    }
+                                    playPromise.catch((err: any) => {
+                                        const msg = musicErrorMessage(err);
+                                        if (isKnownTransientMusicError(err) || msg.includes('PlayerOption#position')) {
+                                            warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
+                                            return;
+                                        }
+                                        console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
                                     });
                                 }
                             }).catch(err => {
-                                console.error(`Failed to re-connect voice for guild ${player.guildId}:`, err.message);
+                                const msg = musicErrorMessage(err);
+                                if (isKnownTransientMusicError(err)) {
+                                    warnMusicThrottled(`voice-reconnect:${player.guildId}:${msg}`, `Voice reconnect skipped for guild ${player.guildId}: ${msg}`, 30_000);
+                                    return;
+                                }
+                                console.error(`Failed to re-connect voice for guild ${player.guildId}:`, msg);
                             });
                         }
                     }
@@ -673,7 +763,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             manager.nodeManager.on('disconnect', (node) => {
                 const hasConnected = [...manager.nodeManager.nodes.values()].some(n => n.connected);
                 if (!hasConnected) {
-                    console.warn(`[Lavalink] Node disconnected: ${node.id}`);
+                    warnMusicThrottled(`node-disconnect:${node.id}`, `[Lavalink] Node disconnected: ${node.id}`, 30_000);
                 }
             });
 
@@ -1068,10 +1158,18 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
             }
 
             currentAutoplayCount = player.queue.tracks.filter(t => (t.requester as any)?.isAutoplay).length;
-            if (!player.playing && !player.paused) await player.play();
+            if (!player.playing && !player.paused) {
+                if (!player.node?.connected) break;
+                await player.play();
+            }
         }
     } catch (err) {
-        console.error('Autoplay error:', err);
+        const msg = musicErrorMessage(err);
+        if (isKnownTransientMusicError(err)) {
+            warnMusicThrottled(`autoplay:${player.guildId}:${msg}`, `Autoplay skipped for guild ${player.guildId}: ${msg}`, 60_000);
+        } else {
+            console.error(`Autoplay failed for guild ${player.guildId}:`, msg);
+        }
     } finally {
         player.set('isFillingAutoplay', false);
     }

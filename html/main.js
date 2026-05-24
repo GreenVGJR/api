@@ -8,89 +8,105 @@ const initSPA = () => {
     document.head.appendChild(fontsLink);
 
     // Build the UI structure
-    document.body.className = "bg-black text-white font-sans antialiased";
+    document.body.className = "bg-black text-white font-sans antialiased overflow-hidden";
     document.body.innerHTML = `
-    <div class="h-dvh flex flex-col max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-6">
-        <div class="relative mb-3 sm:mb-4 flex-shrink-0">
-            <div class="flex items-center bg-black/60 rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
-                <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
-                <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                </button>
-            </div>
-        </div>
+    <div class="h-dvh flex flex-col max-w-5xl xl:max-w-[84rem] mx-auto px-4 sm:px-6 py-3 sm:py-6">
+        <section id="playgroundView" class="flex flex-col flex-1 min-h-0">
+        <div class="flex flex-col xl:grid xl:grid-cols-[150px_minmax(0,64rem)_150px] gap-1.5 xl:gap-4 flex-1 min-h-0">
+            <aside class="overflow-x-auto xl:overflow-y-auto flex-shrink-0 xl:h-full min-h-0 border-b border-dark-700 xl:border-b-0 xl:border-r xl:border-dark-700 xl:pr-3 pb-1.5 xl:pb-0 no-scrollbar">
+                <nav class="flex xl:flex-col gap-1.5" aria-label="Page navigation">
+                    <a href="/playground" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="playground">Playground</a>
+                    <a href="/terms" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="terms">Terms</a>
+                    <a href="/privacy" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="privacy">Privacy</a>
+                </nav>
+            </aside>
 
-        <div class="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
-            <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
-        </div>
-
-        <div class="flex flex-col md:grid md:grid-cols-[260px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
-            <div class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
-                <div id="endpointsList" class="space-y-1"></div>
-            </div>
-
-            <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[6] md:flex-[7]">
-                <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
-                    <div class="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
-                        <span class="text-xs text-gray-500 font-mono"><span class="font-semibold text-gray-400">Response</span> | <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
-                        <div class="flex items-center gap-3">
-                            <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                                </svg>
-                                <span>Clear</span>
-                            </button>
-                            <button id="copyResponseBtn" class="cursor-pointer text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Copy Response">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                </svg>
-                                <span>Copy</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-3 sm:p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
-                        <span class="text-white-500">What you gonna try?</span>
-                    </div>
-                </div>
-
-                <div id="paramsPanel" class="mt-1.5 sm:mt-2 flex-shrink-0 hidden">
-                    <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden">
-                        <button id="paramsToggle" class="w-full cursor-pointer flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
-                            <span class="flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
-                                </svg>
-                                <span>Parameters</span>
-                                <span id="paramsCount" class="text-[10px] bg-dark-500 px-1.5 py-0.5 rounded-full font-mono">0</span>
-                            </span>
-                            <svg id="paramsChevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200">
-                                <polyline points="6 9 12 15 18 9"></polyline>
+            <div class="flex flex-col flex-1 min-h-0 min-w-0">
+                <div id="urlBar" class="relative mb-3 sm:mb-4 flex-shrink-0">
+                    <div class="flex items-center bg-black/60 rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
+                        <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
+                        <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
                         </button>
-                        <div id="paramsBody" class="params-body no-scrollbar"><div id="paramsContainer" class="px-2 sm:px-3 pb-2 sm:pb-3 space-y-1.5 sm:space-y-2"></div></div>
                     </div>
                 </div>
 
-                <div class="mt-2 sm:mt-3 flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
-                    <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
-                        <span class="send-label">Send</span><span class="send-arrow">➜</span>
-                    </button>
-                    <div id="statusIndicator" class="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-mono w-full md:w-auto">
-                        <span class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500"></span><span id="statusText" class="text-gray-500">Ready</span>
+                <div id="categoryTabs" class="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar" aria-label="Endpoint categories">
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
+                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
+                </div>
+
+                <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[260px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
+                    <div id="endpointPane" class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
+                        <div id="endpointsList" class="space-y-1"></div>
+                    </div>
+
+                    <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[6] md:flex-[7]">
+                        <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
+                            <div id="responseHeader" class="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                                <span class="text-xs text-gray-500 font-mono"><span id="responseTitle" class="font-semibold text-gray-400">Response</span> | <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
+                                <div id="responseActions" class="flex items-center gap-3">
+                                    <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                        </svg>
+                                        <span>Clear</span>
+                                    </button>
+                                    <button id="copyResponseBtn" class="cursor-pointer text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Copy Response">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                        <span>Copy</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-3 sm:p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
+                                <span class="text-white-500">What you gonna try?</span>
+                            </div>
+                        </div>
+
+                        <div id="paramsPanel" class="mt-1.5 sm:mt-2 flex-shrink-0 hidden">
+                            <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden">
+                                <button id="paramsToggle" class="w-full cursor-pointer flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+                                    <span class="flex items-center gap-1.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
+                                        </svg>
+                                        <span>Parameters</span>
+                                        <span id="paramsCount" class="text-[10px] bg-dark-500 px-1.5 py-0.5 rounded-full font-mono">0</span>
+                                    </span>
+                                    <svg id="paramsChevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div id="paramsBody" class="params-body no-scrollbar"><div id="paramsContainer" class="px-2 sm:px-3 pb-2 sm:pb-3 space-y-1.5 sm:space-y-2"></div></div>
+                            </div>
+                        </div>
+
+                        <div id="sendRow" class="mt-2 sm:mt-3 flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
+                            <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
+                                <span class="send-label">Send</span><span class="send-arrow">➜</span>
+                            </button>
+                            <div id="statusIndicator" class="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-mono w-full md:w-auto">
+                                <span class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500"></span><span id="statusText" class="text-gray-500">Ready</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <footer class="mt-3 sm:mt-4 flex flex-col items-center md:flex-row md:items-center md:justify-between text-gray-600 text-xs flex-shrink-0 gap-1.5 sm:gap-2 md:gap-0 pb-1 sm:pb-2">
+            <div class="hidden xl:block" aria-hidden="true"></div>
+        </div>
+        </section>
+
+        <footer class="mt-3 sm:mt-4 flex flex-col items-center md:flex-row md:items-center md:justify-between text-gray-600 text-xs flex-shrink-0 gap-1.5 sm:gap-2 md:gap-0 pb-1 sm:pb-2 w-full max-w-5xl mx-auto">
             <div class="flex flex-col items-center md:items-start space-y-0.5 sm:space-y-1">
                 <p>Built with <span class="text-mint-400">♥</span></p>
                 <p class="flex items-center gap-1 sm:gap-1.5">
@@ -100,7 +116,7 @@ const initSPA = () => {
                     <a href="https://gemini.google.com" target="_blank" class="inline-flex items-center gap-1 hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Gemini</span></a>
                 </p>
             </div>
-            <div class="flex items-center gap-2 sm:gap-3 text-gray-500">
+            <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-gray-500">
                 <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
             </div>
         </footer>
@@ -143,14 +159,183 @@ const sendBtnLabel = sendBtn.querySelector('.send-label');
 const responseArea = document.getElementById('responseArea');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
+const workspaceGrid = document.getElementById('workspaceGrid');
+const endpointPane = document.getElementById('endpointPane');
 const endpointsList = document.getElementById('endpointsList');
 const tabBtns = document.querySelectorAll('.tab-btn');
+const categoryTabs = document.getElementById('categoryTabs');
+const urlBar = document.getElementById('urlBar');
+const responseHeader = document.getElementById('responseHeader');
+const responseTitle = document.getElementById('responseTitle');
+const responseActions = document.getElementById('responseActions');
+const sendRow = document.getElementById('sendRow');
 const paramsPanel = document.getElementById('paramsPanel');
 const paramsToggle = document.getElementById('paramsToggle');
 const paramsBody = document.getElementById('paramsBody');
 const paramsContainer = document.getElementById('paramsContainer');
 const paramsCount = document.getElementById('paramsCount');
 const paramsChevron = document.getElementById('paramsChevron');
+
+const legalPages = {
+    terms: {
+        title: 'Terms of Service',
+        switchLabel: 'Privacy Policy',
+        switchPath: '/privacy',
+        sections: [
+            ['Acceptance', 'By using or accessing VGJR API, the playground, or any endpoint, you agree to these Terms. If you do not agree, do not use the service.'],
+            ['Allowed Use', 'Use the service only for personal, development, automation, or integration purposes. Any kind malicious activity and commercial purpose are not allowed.'],
+            ['Tokens and Credentials', 'If you submit Discord tokens, webhook URLs, IDs, or other credentials, you are responsible for having permission to use them and for keeping them secure. Rotate any credential that may have been exposed.'],
+            ['Third-Party Services', "Endpoints may call platforms such as search engines, media services, Discord, AI providers, and public APIs. Their own terms and policies may also apply. We're not responsible their content, availability, limits, or policy changes."],
+            ['No Warranty', 'The service is provided as is and as available, without warranties of accuracy, uptime, security, compatibility, or fitness for a specific purpose.'],
+            ['Limitation of Liability', "To the maximum extent permitted by law, We are not liable for losses, damages, account actions, data loss, third-party consequences, or service interruptions caused by your use of the service."],
+            ['Suspension or Blocking', 'Access may be blocked, limited, or suspended if usage appears abusive, unsafe, unlawful, harmful to infrastructure, or harmful to third-party services.'],
+            ['Changes', 'These Terms may be updated as the project changes. Continued use of the service after updates means you accept the updated Terms.']
+        ]
+    },
+    privacy: {
+        title: 'Privacy Policy',
+        switchLabel: 'Terms of Service',
+        switchPath: '/terms',
+        sections: [
+            ['Data You Provide', 'Depending on the endpoint, you may provide search queries, URLs, prompts, text to translate, usernames, IDs, media links, Discord tokens, guild IDs, channel IDs, webhook URLs, music queries, database keys, hashes, or stored values.'],
+            ['Automatically Processed Data', 'Standard request data may be processed, including IP address, user agent, request path, query string, headers, timestamps, response status, and diagnostic details. This may be used for operation, debugging, security, abuse prevention, and reliability.'],
+            ['How Data Is Used', 'Data is used to provide requested API responses, call third-party services, operate Discord or music features requested by you, store values submitted to database endpoints, prevent abuse, troubleshoot issues, and improve reliability.'],
+            ['How We Handle Your Data', 'We usually do not store your data. Most requests only act as a relay: your input is processed to complete the request, then the response is returned. Some endpoints, such as database and music features, may store data until an action deletes, clears, overwrites, or destroys it.'],
+            ['Third-Party Sharing', 'Some endpoint inputs must be sent to third-party services to complete your request. For example, search terms may be sent to a search or media provider, Discord values may be sent to Discord APIs, and AI prompts may be sent to an AI provider.'],
+            ['Sensitive Information', 'Avoid sending private, sensitive, or confidential information unless required for the endpoint and you understand the risk. Query strings may appear in server logs or third-party request logs.'],
+            ['Changes', 'This Privacy Policy may be updated as the project changes. Continued use of the service after updates means you accept the updated policy.']
+        ]
+    }
+};
+
+let activePage = null;
+
+function pageFromPath(pathname) {
+    if (pathname === '/terms') return 'terms';
+    if (pathname === '/privacy') return 'privacy';
+    return 'playground';
+}
+
+function setPageLinkState(page) {
+    document.querySelectorAll('.page-link').forEach(link => {
+        const active = link.dataset.page === page;
+        link.classList.toggle('active', active);
+        link.classList.toggle('text-white', active);
+        link.classList.toggle('text-gray-300', !active);
+        link.classList.toggle('border-mint-400', active);
+        link.classList.toggle('border-dark-500', !active);
+        link.classList.toggle('bg-white/10', active);
+    });
+}
+
+function renderLegalPage(page) {
+    const legal = legalPages[page];
+    if (!legal) return;
+
+    if (animationTimeout) clearTimeout(animationTimeout);
+    endpointsList.classList.remove('is-animating');
+    endpointsList.innerHTML = '';
+
+    responseArea.classList.remove('empty-state', 'font-mono');
+    responseArea.classList.add('font-sans');
+    responseArea.innerHTML = `
+        <section class="rounded-xl sm:rounded-2xl border border-dark-500 bg-black/30 p-5 sm:p-8 mb-4 sm:mb-5">
+            <h1 class="text-3xl sm:text-5xl font-bold tracking-[-0.06em] text-white">${legal.title}</h1>
+            ${legal.description ? `<p class="mt-4 text-sm sm:text-base text-gray-400 max-w-3xl">${legal.description}</p>` : ''}
+        </section>
+
+        <section class="grid gap-3 sm:gap-4">
+            ${legal.sections.map(([title, text], index) => `
+                <article id="legal-section-${page}-${index}" class="rounded-xl border border-dark-500 bg-black/35 p-4 sm:p-5 scroll-mt-4">
+                    <h2 class="text-sm sm:text-base font-semibold text-white mb-2"><span class="text-mint-400 font-mono">${String(index + 1).padStart(2, '0')}.</span> ${title}</h2>
+                    <p class="text-sm text-gray-400 leading-6">${text}</p>
+                </article>
+            `).join('')}
+        </section>
+    `;
+
+    urlBar.classList.add('hidden');
+    categoryTabs.classList.add('hidden');
+    endpointPane.classList.add('hidden');
+    workspaceGrid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+    responseHeader.classList.add('hidden');
+    responseActions.classList.add('hidden');
+    sendRow.classList.add('hidden');
+    paramsPanel.classList.add('hidden');
+    paramsBody.style.height = null;
+    paramsChevron.classList.remove('rotated');
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    responseTitle.textContent = legal.title;
+    lastRawResponse = legal.sections.map(([title, text]) => `${title}\n${text}`).join('\n\n');
+    activePage = page;
+}
+
+function renderPlaygroundPage() {
+    urlBar.classList.remove('hidden');
+    categoryTabs.classList.remove('hidden');
+    endpointPane.classList.remove('hidden');
+    workspaceGrid.style.gridTemplateColumns = '';
+    responseHeader.classList.remove('hidden');
+    responseActions.classList.remove('hidden');
+    sendRow.classList.remove('hidden');
+    responseTitle.textContent = 'Response';
+    responseArea.classList.add('font-mono');
+    responseArea.classList.remove('font-sans');
+
+    if (activePage && activePage !== 'playground') {
+        lastRawResponse = '';
+        responseArea.classList.add('empty-state');
+        responseArea.innerHTML = '<span class="text-white-500">What you gonna try?</span>';
+        statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-gray-500';
+        statusText.textContent = 'Ready';
+        statusText.className = 'text-gray-500';
+    }
+
+    renderEndpoints();
+    renderParams();
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    const activeTab = document.querySelector(`.tab-btn[data-category="${currentCategory}"]`);
+    if (activeTab) activeTab.classList.add('active');
+    activePage = 'playground';
+}
+
+function renderCurrentPage() {
+    const page = pageFromPath(window.location.pathname);
+    const isLegalPage = page === 'terms' || page === 'privacy';
+
+    document.title = isLegalPage ? `${legalPages[page].title} | VGJR` : 'Playground | VGJR';
+    setPageLinkState(page);
+
+    if (isLegalPage) {
+        renderLegalPage(page);
+        responseArea.scrollTop = 0;
+    } else {
+        renderPlaygroundPage();
+    }
+}
+
+document.addEventListener('click', (event) => {
+    const clickTarget = event.target instanceof Element ? event.target : null;
+    const link = clickTarget?.closest('[data-page-link]');
+    if (!link) return;
+
+    const href = link.getAttribute('href');
+    if (!href) return;
+
+    const targetUrl = new URL(href, window.location.origin);
+    if (targetUrl.origin !== window.location.origin) return;
+
+    const nextPage = pageFromPath(targetUrl.pathname);
+    if (!['playground', 'terms', 'privacy'].includes(nextPage)) return;
+
+    event.preventDefault();
+    if (targetUrl.pathname !== window.location.pathname) {
+        history.pushState({}, '', targetUrl.pathname);
+    }
+    renderCurrentPage();
+});
+
+window.addEventListener('popstate', renderCurrentPage);
 
 let paramsOpen = window.innerWidth >= 768;
 let currentParams = [];
@@ -221,8 +406,79 @@ function setSendButtonLabel(text) {
     sendBtnLabel.textContent = text;
 }
 
+function formatVerboseHeaders(headers) {
+    return Object.entries(headers)
+        .map(([key, value]) => `> ${key}: ${value}`)
+        .join('\n');
+}
+
+function createVerboseFetchView(targetUrl, fetchOptions) {
+    const requestUrl = new URL(targetUrl);
+    const method = (fetchOptions?.method || 'GET').toUpperCase();
+    const headers = fetchOptions?.headers || {};
+    const startedAt = performance.now();
+    const lines = [
+        `* URL: ${requestUrl.href}`,
+        `* Host: ${requestUrl.host}`,
+        `* Scheme: ${requestUrl.protocol.replace(':', '')}`,
+        `* Method: ${method}`,
+        `> ${method} ${requestUrl.pathname}${requestUrl.search} HTTP/browser`,
+        `> Host: ${requestUrl.host}`,
+        formatVerboseHeaders(headers),
+        `* Request dispatched`,
+    ].filter(Boolean);
+
+    responseArea.classList.add('empty-state');
+    responseArea.innerHTML = `
+        <div class="relative w-full h-full min-h-[180px] overflow-hidden rounded-lg">
+            <pre id="verboseFetchLog" class="absolute inset-0 overflow-auto no-scrollbar whitespace-pre-wrap break-all p-3 sm:p-4 text-[10px] sm:text-xs leading-5 text-gray-600 blur-[0.2px] opacity-70 select-text"></pre>
+            <div id="verboseFetchOverlay" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10">
+                <span class="waiting-loading text-sm sm:text-base">Fetching...</span>
+            </div>
+        </div>
+    `;
+
+    const logEl = document.getElementById('verboseFetchLog');
+    const overlayEl = document.getElementById('verboseFetchOverlay');
+
+    const render = () => {
+        if (!logEl) return;
+        logEl.textContent = lines.join('\n');
+        logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    render();
+
+    return {
+        line(text) {
+            const elapsed = Math.round(performance.now() - startedAt);
+            lines.push(`* [${elapsed}ms] ${text}`);
+            render();
+        },
+        response(response) {
+            const elapsed = Math.round(performance.now() - startedAt);
+            lines.push(`< HTTP ${response.status} ${response.statusText || ''}`.trimEnd());
+            response.headers.forEach((value, key) => lines.push(`< ${key}: ${value}`));
+            lines.push(`* [${elapsed}ms] Response headers received`);
+            render();
+        },
+        done(label = 'Response body received') {
+            const elapsed = Math.round(performance.now() - startedAt);
+            lines.push(`* [${elapsed}ms] ${label}`);
+            render();
+            if (overlayEl) overlayEl.innerHTML = '<span class="waiting-loading text-sm sm:text-base">Rendering response...</span>';
+        },
+        fail(error) {
+            const elapsed = Math.round(performance.now() - startedAt);
+            lines.push(`* [${elapsed}ms] Fetch failed: ${error?.message || error}`);
+            render();
+        }
+    };
+}
+
 async function performRequest(targetUrl, retryCount = 0) {
     if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
+    let verboseFetch = null;
 
     if (retryCount === 0) {
         isLoading = true;
@@ -244,22 +500,27 @@ async function performRequest(targetUrl, retryCount = 0) {
         const headers = {
             'Accept': 'application/json'
         };
+        headers['x-tel-data'] = btoa(JSON.stringify([[String(screen.height), String(screen.width), String(window.innerHeight), String(window.innerWidth), String(lastCursorX ?? ''), String(lastCursorY ?? '')], solvedChallengeCode !== null, window.location.pathname])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
             headers[`x-challenge-codes-${knownDeviceID}`] = await xorEncrypt(encodeURIComponent(solvedChallengeCode), knownDeviceID);
         }
 
-        const response = await fetch(targetUrl, { headers, mode: "same-origin" });
+        const fetchOptions = { headers, mode: "same-origin" };
+        verboseFetch = createVerboseFetchView(targetUrl, fetchOptions);
+        verboseFetch.line('Waiting for response headers...');
+        const response = await fetch(targetUrl, fetchOptions);
+        verboseFetch.response(response);
 
-        responseArea.classList.add('empty-state');
-        responseArea.innerHTML = '<span class="waiting-loading flex h-full items-center justify-center">Waiting response...</span>';
         statusText.textContent = 'Fetching';
 
         const contentType = response.headers.get('content-type') || '';
         let duration;
 
         if (contentType.startsWith('image/')) {
+            verboseFetch.line('Reading image body...');
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
+            verboseFetch.done(`Image body received (${blob.size.toLocaleString()} bytes)`);
             updateStatusUI(response.ok, response.status, duration);
             const imageUrl = URL.createObjectURL(blob);
 
@@ -272,8 +533,10 @@ async function performRequest(targetUrl, retryCount = 0) {
                 </div>
             `;
         } else if ((contentType.startsWith('video/') || contentType === 'application/octet-stream') && response.headers.get('x-player') !== 'lavalink') {
+            verboseFetch.line('Reading binary body...');
             const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
+            verboseFetch.done(`Binary body received (${blob.size.toLocaleString()} bytes)`);
             updateStatusUI(response.ok, response.status, duration);
             const videoUrl = URL.createObjectURL(blob);
 
@@ -288,8 +551,10 @@ async function performRequest(targetUrl, retryCount = 0) {
         } else {
             responseArea.classList.remove('empty-state');
 
+            verboseFetch.line('Reading text body...');
             let text = await response.text();
             duration = Math.round(performance.now() - startTime);
+            verboseFetch.done(`Text body received (${text.length.toLocaleString()} chars)`);
 
             let cleanText = text.trim();
             if (cleanText.startsWith('"') && cleanText.endsWith('"')) {
@@ -378,6 +643,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             }
         }
     } catch (err) {
+        verboseFetch?.fail(err);
         responseArea.classList.remove('empty-state');
         responseArea.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
         statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-red-500';
@@ -673,10 +939,13 @@ function attachEndpointListeners() {
 
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        // Prevent re-rendering and animating if clicking the already active tab
-        if (currentCategory === btn.dataset.category) return;
+        const nextCategory = btn.dataset.category;
+        const wasLegalPage = pageFromPath(window.location.pathname) !== 'playground';
 
-        const wasOpen = paramsOpen;
+        // Prevent re-rendering and animating if clicking the already active tab
+        if (!wasLegalPage && currentCategory === nextCategory) return;
+
+        const wasOpen = !wasLegalPage && paramsOpen;
 
         if (wasOpen) {
             paramsBody.style.height = null;
@@ -684,9 +953,11 @@ tabBtns.forEach(btn => {
         }
 
         setTimeout(() => {
+            if (wasLegalPage) history.pushState({}, '', '/playground');
+
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            currentCategory = btn.dataset.category;
+            currentCategory = nextCategory;
             const categoryList = endpoints[currentCategory] || [];
             if (categoryList.length > 0) {
                 currentEndpoint = categoryList[0];
@@ -695,8 +966,13 @@ tabBtns.forEach(btn => {
             } else {
                 currentEndpoint = null;
             }
-            renderEndpoints(true);
-            renderParams();
+            if (wasLegalPage) {
+                renderCurrentPage();
+            } else {
+                renderEndpoints(true);
+                renderParams();
+            }
+            endpointPane.scrollTo({ top: 0, behavior: window.innerWidth >= 768 ? 'smooth' : 'auto' });
         }, wasOpen ? 50 : 0);
     });
 });
@@ -924,6 +1200,7 @@ clearResponseBtn.addEventListener('click', () => {
 });
 
 sendBtn.addEventListener('click', () => {
+    if (pageFromPath(window.location.pathname) !== 'playground') return;
     triggerSendButtonAnimation();
     performRequest(urlInput.value);
 });
@@ -964,29 +1241,75 @@ function linkifyText(text) {
 
 function syntaxHighlight(json) {
     json = escapeHTML(json);
-    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        let cls = 'text-orange-300';
-        if (/^"/.test(match)) {
-            if (/:$/.test(match)) {
-                cls = 'text-cyan-400';
-                match = match.slice(0, -1) + '<span class="text-gray-500">:</span>';
-            } else {
-                cls = 'text-emerald-400';
-                try {
-                    const value = JSON.parse(unescapeHTML(match));
-                    if (typeof value === 'string' && isHttpUrl(value)) {
-                        return responseLink(value, '<span class="' + cls + '">' + match + '</span>');
-                    }
-                } catch { }
+    const len = json.length;
+    let result = '';
+    let i = 0;
+
+    while (i < len) {
+        const ch = json[i];
+
+        if (ch === '"') {
+            const start = i;
+            i++;
+            while (i < len) {
+                if (json[i] === '\\') {
+                    i += 2;
+                } else if (json[i] === '"') {
+                    i++;
+                    break;
+                } else {
+                    i++;
+                }
             }
-        } else if (/true|false/.test(match)) {
-            cls = 'text-purple-400';
-        } else if (/null/.test(match)) {
-            cls = 'text-gray-500';
+
+            let j = i;
+            while (j < len && json[j] === ' ') j++;
+            if (j < len && json[j] === ':') {
+                result += '<span class="text-cyan-400">' + json.slice(start, i) + '</span><span class="text-gray-500">:</span>';
+                i = j + 1;
+            } else {
+                const content = json.slice(start + 1, i - 1);
+                if (content.startsWith('http')) {
+                    const raw = unescapeHTML(content);
+                    if (isHttpUrl(raw)) {
+                        result += responseLink(raw, '<span class="text-emerald-400">' + json.slice(start, i) + '</span>');
+                    } else {
+                        result += '<span class="text-emerald-400">' + json.slice(start, i) + '</span>';
+                    }
+                } else {
+                    result += '<span class="text-emerald-400">' + json.slice(start, i) + '</span>';
+                }
+            }
+        } else if (ch === '-' || (ch >= '0' && ch <= '9')) {
+            const start = i;
+            i++;
+            while (i < len && (json[i] >= '0' && json[i] <= '9' || json[i] === '.' || json[i] === 'e' || json[i] === 'E' || json[i] === '+' || json[i] === '-')) {
+                i++;
+            }
+            result += '<span class="text-orange-300">' + json.slice(start, i) + '</span>';
+        } else if (json.startsWith('true', i)) {
+            result += '<span class="text-purple-400">true</span>';
+            i += 4;
+        } else if (json.startsWith('false', i)) {
+            result += '<span class="text-purple-400">false</span>';
+            i += 5;
+        } else if (json.startsWith('null', i)) {
+            result += '<span class="text-gray-500">null</span>';
+            i += 4;
+        } else {
+            result += ch;
+            i++;
         }
-        return '<span class="' + cls + '">' + match + '</span>';
-    });
+    }
+    return result;
 }
+
+let lastCursorX = null;
+let lastCursorY = null;
+document.addEventListener('mousemove', (e) => {
+    lastCursorX = e.clientX;
+    lastCursorY = e.clientY;
+});
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -1011,6 +1334,8 @@ setInterval(updateUptime, 1000);
 updateUptime();
 
 fetchInitialEndpoints().then(() => {
+    renderCurrentPage();
+
     // Final height adjustment after everything is loaded and rendered
     setTimeout(adjustHeight, 0);
 

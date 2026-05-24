@@ -1,4 +1,4 @@
-Nothing special here. At least 75% are vibecoded.
+Nothing special here. Most of codes are vibecoded.
 
 Library: 
 - [@hono/node-server](https://www.npmjs.com/package/@hono/node-server)

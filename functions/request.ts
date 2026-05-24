@@ -40,6 +40,7 @@ export async function request(url: string | URL, options: any = {}): Promise<any
 
 export const commonHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Encoding': 'identity, gzip, br',
     'Accept-Language': 'en-US,en;q=0.9',
     'Connection': 'keep-alive',
     'Priority': 'u=0, i',
@@ -1612,6 +1613,30 @@ export const Deezer = async function Deezer(que: string, limits: number = 10) {
     } catch { return null; }
 }
 
+async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<string> {
+    let currentUrl = url;
+
+    for (let i = 0; i < maxRedirects; i++) {
+        const res = await request(currentUrl, {
+            method: 'GET',
+            redirect: 'manual' as const,
+            headers: commonHeaders,
+        });
+
+        if (![301, 302, 303, 307, 308].includes(res.statusCode)) break;
+
+        const location = res.headers['location'];
+        if (typeof location !== 'string' || !location) break;
+
+        const nextUrl = new URL(location, currentUrl).toString();
+        if (nextUrl === currentUrl) break;
+
+        currentUrl = nextUrl;
+    }
+
+    return currentUrl;
+}
+
 export const TiktokVideo = async function TiktokVideo(url: string) {
     if (!url) return null;
 
@@ -1620,17 +1645,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
     if (url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com')) {
         try {
-            const redirectParams = {
-                method: 'HEAD',
-                redirect: 'manual' as const
-            };
-            const res = await request(url, redirectParams);
-            if (res.statusCode === 301 || res.statusCode === 302) {
-                const location = res.headers['location'];
-                if (typeof location === 'string') {
-                    finalUrl = location;
-                }
-            }
+            finalUrl = await resolveTikTokRedirect(url);
         } catch (e) {
             console.error("TikTok redirect error:", e);
             return null;
@@ -2250,7 +2265,9 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: bool
         objectbody.rcid = (innerData as any)[4][0][0];
         objectbody.cookies = filterCookies(cookiess) || convo;
 
-        response = (innerData as any)[4]?.[0]?.[1]?.[0] || null;
+        const finalres = innerData as any;
+
+        response = (finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ?? finalres[4]?.[0]?.[1]?.[0]) || null;
     } catch (e) {
         console.error(e);
         response = null;
@@ -3138,8 +3155,14 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
     }
 }
 
-export const infoSoundcloudStream = async function infoSoundcloudStream(url: string, refresh_auth: boolean = false): Promise<string | null> {
-    if (!url) return null;
+export type SoundcloudStreamCandidate = {
+    protocol: string;
+    mimeType?: string;
+    url: string;
+};
+
+export const infoSoundcloudStreams = async function infoSoundcloudStreams(url: string, refresh_auth: boolean = false): Promise<SoundcloudStreamCandidate[]> {
+    if (!url) return [];
     if (refresh_auth || !keysc) {
         keysc = await soundcloudKey();
     }
@@ -3147,24 +3170,51 @@ export const infoSoundcloudStream = async function infoSoundcloudStream(url: str
         const res = await request(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`, {
             headers: { ...commonHeaders }
         });
-        if (res.statusCode === 401) return await infoSoundcloudStream(url, true);
+        if (res.statusCode === 401) return await infoSoundcloudStreams(url, true);
 
         const data: any = res.statusCode === 200 ? await res.json() : null;
-        if (!data) return null;
+        if (!data) return [];
 
-        const transcoding = data.media?.transcodings?.find((t: any) => t.format.protocol === 'hls') || data.media?.transcodings?.find((t: any) => t.format.protocol === 'progressive');
+        const transcodings: any[] = Array.isArray(data.media?.transcodings) ? data.media.transcodings : [];
+        const orderedTranscodings = [
+            ...transcodings.filter((t: any) => t?.format?.protocol === 'hls'),
+            ...transcodings.filter((t: any) => t?.format?.protocol === 'progressive')
+        ];
 
-        if (!transcoding?.url) return null;
+        const candidates: SoundcloudStreamCandidate[] = [];
+        const seen = new Set<string>();
 
-        const streamRes = await request(`${transcoding.url}?client_id=${keysc}`, {
-            headers: { ...commonHeaders }
-        });
-        const streamData: any = streamRes.statusCode === 200 ? await streamRes.json() : null;
-        return streamData?.url || null;
+        for (const transcoding of orderedTranscodings) {
+            if (!transcoding?.url || seen.has(transcoding.url)) continue;
+            seen.add(transcoding.url);
+
+            try {
+                const streamUrl = new URL(transcoding.url);
+                streamUrl.searchParams.set('client_id', keysc || '');
+                const streamRes = await request(streamUrl.toString(), {
+                    headers: { ...commonHeaders }
+                });
+                const streamData: any = streamRes.statusCode === 200 ? await streamRes.json() : null;
+                if (streamData?.url) {
+                    candidates.push({
+                        protocol: transcoding.format?.protocol || 'unknown',
+                        mimeType: transcoding.format?.mime_type,
+                        url: streamData.url
+                    });
+                }
+            } catch { }
+        }
+
+        return candidates;
     } catch (e) {
-        console.error("infoSoundcloudStream error:", e);
-        return null;
+        console.error("infoSoundcloudStreams error:", e);
+        return [];
     }
+}
+
+export const infoSoundcloudStream = async function infoSoundcloudStream(url: string, refresh_auth: boolean = false): Promise<string | null> {
+    const streams = await infoSoundcloudStreams(url, refresh_auth);
+    return streams[0]?.url || null;
 }
 
 export const infoSpotify = async function infoSpotify(que: string) {
@@ -8350,7 +8400,7 @@ export const IMDB = async (query: string): Promise<any> => {
 
     try {
         const resBody: any = { "includeAdult": true, "isExactMatch": false, "locale": "en-US", "numResults": 5, "originalTitleText": true, "searchTerm": query, "skipHasExact": true, "typeFilter": "TITLE" };
-        const exter: any = { "persistedQuery": { "sha256Hash": "b6a7c673cfb2d2cc8d78570a7d5f6e0d65601021fcbbdc71cde7a53468641fa1", "version": 1 } };
+        const exter: any = { "persistedQuery": { "sha256Hash": "600c8ca2deb61df89fced826818a7b5bdfc5539c39402a8bd285221aedbfa99a", "version": 1 } };
         const res = await request(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
             headers: {
                 ...commonHeaders,

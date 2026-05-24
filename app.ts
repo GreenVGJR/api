@@ -482,9 +482,6 @@ app.get('/playground', (c: Context) => {
     return stream(c, async (s) => {
         await s.write(''); // Initial flush
 
-        const secFetchDest = c.req.header('Sec-Fetch-Dest');
-        if (secFetchDest && secFetchDest !== 'document') return;
-
         await s.write(playgroundTemplate);
     });
 });
@@ -517,9 +514,14 @@ app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {
 
 ['/terms', '/privacy'].forEach((route) => {
     app.get(route, (c: Context) => {
-        c.header('Content-Type', 'text/html; charset=UTF-8');
-        c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
-        return c.body(playgroundTemplate);
+        c.header('Content-Type', 'text/html');
+        c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
+
+        return stream(c, async (s) => {
+            await s.write('');
+
+            await s.write(playgroundTemplate);
+        });
     });
 });
 

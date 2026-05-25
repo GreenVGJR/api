@@ -272,9 +272,7 @@ const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
 
 const app = new Hono({ strict: false });
 
-app.use('*', (c: Context, next: Next) => {
-    return compress({ encoding: 'gzip', threshold: 0 })(c, next);
-});
+app.use('*', compress({ encoding: 'gzip' }));
 
 const challengeHtml = (verifyUrl: string) => `
 <!DOCTYPE html>

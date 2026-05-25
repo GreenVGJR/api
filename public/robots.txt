@@ -3,6 +3,8 @@
 
 User-agent: *
 Allow: /playground
+Allow: /terms
+Allow: /privacy
 Disallow: /
 
 User-agent: Discordbot

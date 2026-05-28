@@ -140,6 +140,14 @@ export default {
                         return;
                     }
 
+                    let fetchUrl = targetUrl;
+                    const parsedTarget = new URL(targetUrl);
+                    if (parsedTarget.hostname === 'api.vgjr.top') {
+                        parsedTarget.protocol = 'http:';
+                        parsedTarget.host = `[::1]:${port}`;
+                        fetchUrl = parsedTarget.toString();
+                    }
+
                     const fetchHeaders = new Headers();
                     const baseHeaders = ws.data?.requestHeaders || {};
                     for (const [key, value] of Object.entries(baseHeaders)) {
@@ -164,7 +172,7 @@ export default {
                         fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
                     }
 
-                    const response = await fetch(targetUrl, fetchOptions);
+                    const response = await fetch(fetchUrl, fetchOptions);
 
                     const responseHeaders: Record<string, string> = {};
                     response.headers.forEach((value, key) => {

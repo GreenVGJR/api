@@ -1,7 +1,4 @@
-import { Number_random } from './request.ts';
 import crypto from 'crypto';
-
-const smellyFeel = "fda0bd57ec7312592292772bdb8780cadbcb884d59b4cc79b5ed45f680cc06b2";
 
 function getMdKey(): string {
     const key = process.env.MD_KEY;
@@ -9,28 +6,9 @@ function getMdKey(): string {
     return key;
 }
 
-const hash = crypto.createHash('sha256').update(smellyFeel).digest();
-export const xt = Array.from({ length: 100 }, (_, i) => {
-    return crypto.createHash('sha256').update(hash).update(i.toString()).digest('base64url');
-});
-
-function xorEncrypt(text: string, key: string): string {
-    const mask = crypto.createHash('sha256').update(key).digest();
-    const data = Buffer.from(text);
-    for (let i = 0; i < data.length; i++) {
-        data[i] ^= mask[i % mask.length];
-    }
-    return data.toString('base64url');
-}
-
-function xorDecrypt(base64: string, key: string): string {
-    const mask = crypto.createHash('sha256').update(key).digest();
-    const data = Buffer.from(base64, 'base64url');
-    for (let i = 0; i < data.length; i++) {
-        data[i] ^= mask[i % mask.length];
-    }
-    return data.toString();
-}
+const CHALLENGE_MAGIC = Buffer.from([0xf3, 0xc2, 0xd0, 0xd9]);
+const CHALLENGE_EXPIRY = 6 * 60 * 60 * 1000;
+const DEFAULT_DIFFICULTY = 10;
 
 export function ipToNumber(ip: string): number | string {
     if (ip.includes(':')) return ip;
@@ -39,104 +17,118 @@ export function ipToNumber(ip: string): number | string {
     return octets.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
-export function pullInfo(r: string | number, q: string, s: string, u?: string[]) {
-    const formattedIp = String(typeof r === 'number' ? r : ipToNumber(r));
-    const ip = crypto.createHash('md5').update(formattedIp).digest('hex');
-    const time = Date.now().toString();
-    const slicekf = crypto.createHash('md5').update(time.slice(-4)).digest('hex').replace(/[^0-9]/g, '');
-
-    const xtIndex = Number_random(0, xt.length - 1);
-    let keyIndex: number;
-    do {
-        keyIndex = Number_random(0, xt.length - 1);
-    } while (keyIndex === xtIndex);
-
-    const obfuscatedXt = xt.map((val, i) => i === keyIndex ? q : xorEncrypt(val.toString(), q));
-    const mx = btoa(JSON.stringify(obfuscatedXt));
-    const cPayload = JSON.stringify([mx, 1000, [slicekf, ip], btoa(time), xtIndex, keyIndex]);
-    const cKey = s + btoa(JSON.stringify(u));
-    
-    const fullResponse = {
-        _submit: {
-            name: "x-challenge-codes",
-            challengeTarget: "c",
-            challengeExpire: 7200000
-        },
-        c: xorEncrypt(cPayload, getMdKey())
-    };
-
-    return xorEncrypt(JSON.stringify(fullResponse), s) + '\n' + cKey;
+function hashInput(input: string): string {
+    return crypto.createHash('sha256').update(input).digest('base64url');
 }
 
-type ChallengeResponse = [string, number, [string, string], string, number, number];
+function encryptPayload(data: object, key: string): string {
+    const cipherKey = crypto.createHash('sha256').update(key).digest();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', cipherKey, iv);
+    const encrypted = Buffer.concat([cipher.update(JSON.stringify(data), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([iv, encrypted, tag]).toString('base64url');
+}
 
-export async function verifyChallenge(responseStr: string | undefined | null, r: string | number, q: string, ouuid: string): Promise<boolean> {
-    if (!responseStr) return false;
-
-    if (!ouuid || !ouuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        return false;
-    }
-
-    let response: ChallengeResponse;
+function decryptPayload(payload: string, key: string): object | null {
     try {
-        let decoded = decodeURIComponent(xorDecrypt(responseStr, ouuid));
-        decoded = xorDecrypt(decoded, q);
-
-        const lastBracket = decoded.lastIndexOf(']');
-        if (lastBracket !== -1) {
-            decoded = decoded.slice(0, lastBracket + 1);
-        }
-
-        response = JSON.parse(decoded);
-    } catch (e) {
-        return false;
+        const cipherKey = crypto.createHash('sha256').update(key).digest();
+        const raw = Buffer.from(payload, 'base64url');
+        if (raw.length < 28) return null;
+        const iv = raw.subarray(0, 12);
+        const tag = raw.subarray(raw.length - 16);
+        const encrypted = raw.subarray(12, raw.length - 16);
+        const decipher = crypto.createDecipheriv('aes-256-gcm', cipherKey, iv);
+        decipher.setAuthTag(tag);
+        const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+        return JSON.parse(decrypted.toString('utf8'));
+    } catch {
+        return null;
     }
+}
 
-    if (!Array.isArray(response) || response.length < 6) {
-        return false;
-    }
+export function generateChallenge(ip: string | number): { challenge: string; difficulty: number } {
+    const formattedIp = String(typeof ip === 'number' ? ip : ipToNumber(ip));
+    const ipHash = hashInput(formattedIp);
+    const timestamp = Date.now();
+    const salt = crypto.randomBytes(8);
 
-    const [receivedHash, validType, [slicekf, ip], time, xtIndex, keyIndex] = response;
+    const challengePayload = Buffer.concat([
+        CHALLENGE_MAGIC,
+        salt,
+        Buffer.from(timestamp.toString(16).padStart(16, '0'), 'hex'),
+    ]);
 
-    if (validType !== 1000) return false;
+    const encrypted = encryptPayload({
+        ip: ipHash,
+        time: timestamp,
+    }, getMdKey());
 
-    let expectedIp: any;
-    let expectedSlice: any;
+    return {
+        challenge: challengePayload.toString('base64url') + '.' + encrypted,
+        difficulty: DEFAULT_DIFFICULTY,
+    };
+}
+
+export function verifyChallenge(solution: string | undefined | null, ip: string | number): boolean {
+    if (!solution) return false;
+
+    const formattedIp = String(typeof ip === 'number' ? ip : ipToNumber(ip));
+    const ipHash = hashInput(formattedIp);
+
+    let payload: any;
+    let solutionStr: string;
     try {
-        const timeNum = parseInt(atob(time));
-        if (isNaN(timeNum) || Date.now() - timeNum > 2 * 60 * 60 * 1000) {
-            return false;
+        let base64 = solution.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        solutionStr = atob(base64);
+    } catch {
+        return false;
+    }
+
+    try {
+        const parts = solutionStr.split('.');
+        if (parts.length !== 3) return false;
+
+        const [challengeB64, encrypted, nonceStr] = parts;
+        const nonce = parseInt(nonceStr, 10);
+        if (isNaN(nonce) || nonce < 0) return false;
+
+        const challengeBytes = Buffer.from(challengeB64, 'base64url');
+        if (challengeBytes.length < 20) return false;
+
+        const magic = challengeBytes.subarray(0, 4);
+        if (!magic.equals(CHALLENGE_MAGIC)) return false;
+
+        const hashInputStr = challengeB64 + nonceStr;
+        const hash = crypto.createHash('sha256').update(hashInputStr).digest();
+
+        let zeroBits = 0;
+        for (const byte of hash) {
+            if (byte === 0) {
+                zeroBits += 8;
+            } else {
+                let b = byte;
+                while ((b & 0x80) === 0) {
+                    zeroBits++;
+                    b <<= 1;
+                }
+                break;
+            }
         }
+        if (zeroBits < DEFAULT_DIFFICULTY) return false;
 
-        const formattedIp = String(typeof r === 'number' ? r : ipToNumber(r));
-        expectedIp = crypto.createHash('md5').update(formattedIp).digest('hex');
-        expectedSlice = crypto.createHash('md5').update(atob(time).slice(-4)).digest('hex').replace(/[^0-9]/g, '');
-    }
-    catch {
+        payload = decryptPayload(encrypted, getMdKey());
+        if (!payload) return false;
+    } catch {
         return false;
     }
 
-    if (ip !== expectedIp) {
-        return false;
-    }
-    if (slicekf !== expectedSlice) {
-        return false;
-    }
+    if (payload.ip !== ipHash) return false;
 
-    const secretValue = xt[xtIndex];
-    if (secretValue === undefined) return false;
-
-    const expectedHash = crypto
-        .createHash('sha256')
-        .update(atob(time))
-        .update(secretValue.toString())
-        .update(ip)
-        .update(ouuid.replaceAll('-', ''))
-        .digest('base64url');
-
-    if (receivedHash !== expectedHash) {
-        return false;
-    }
+    const timeNum = payload.time;
+    if (typeof timeNum !== 'number' || isNaN(timeNum)) return false;
+    if (Date.now() - timeNum > CHALLENGE_EXPIRY) return false;
 
     return true;
 }

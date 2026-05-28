@@ -3,7 +3,7 @@ import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-clien
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
-import { pullInfo, verifyChallenge, ipToNumber } from './musicChallenges.ts';
+import { generateChallenge, verifyChallenge, ipToNumber } from './musicChallenges.ts';
 import { Number_random } from './request.ts';
 
 export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
@@ -86,24 +86,33 @@ export async function createMusicStream(
             }
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
-        const rrmc = c.req.header('x-client-secret') || "0";
-        const [rrmi, rrma] = [...c.req.raw.headers.entries()].find(([k]) => k.startsWith('x-challenge-codes-'))?.map((v: string, i: number) => i === 0 ? v.slice('x-challenge-codes-'.length) : v) ?? [undefined, undefined];
-        if (!(await verifyChallenge(rrma, ipLL, rrmc, rrmi))) {
+        const rrmc = c.req.header('x-challenge-codes') || "";
+        if (!(await verifyChallenge(rrmc, ipLL))) {
             c.header('X-Player', "lavalink");
             c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');
-            c.header('Content-Type', checkAccept && checkReferer ? 'text/event-stream' : 'video/mpeg');
+            c.header('Content-Type', checkAccept && checkReferer ? 'application/json' : 'video/mpeg');
             c.header('Cache-Control', 'public, no-cache, no-store, max-age=0, must-revalidate');
             if (!(checkAccept && checkReferer)) {
                 c.header('Location', '/playground');
             }
-            const rrkc = String(Number_random(1000000000, 9999999999));
-            const cryUID = crypto.randomUUID();
-            const rakc = cryUID.split('-');
-            c.status(302);
+            const challengeData = generateChallenge(ipLL, telData);
+            c.status(200);
             if (checkAccept && checkReferer) {
+                const ch = challengeData.challenge;
+                const parts: string[] = [];
+                let i = 0;
+                while (i < ch.length) {
+                    const len = 3 + Math.floor(Math.random() * 18);
+                    parts.push(ch.slice(i, i + len));
+                    i += len;
+                }
                 return stream(c, async (s: any) => {
                     await s.write('');
-                    await s.write(pullInfo(ipLL, rrmc, rrkc, rakc));
+                    await s.write(JSON.stringify({
+                        _challenge: true,
+                        c: parts,
+                        d: challengeData.difficulty,
+                    }));
                 });
             }
             else {
@@ -175,6 +184,7 @@ export async function createMusicStream(
 const sg = crypto.randomUUID();
 
 let LAVALINK_NODES: any[] = [];
+let LAVALINK_NODE_GROUPS: any[][] = [];
 
 const localNode = {
     id: "vgjr_" + sg,
@@ -197,11 +207,105 @@ const serentiaNode = {
 };
 
 if (config.useLocalLavalink === 1) {
-    LAVALINK_NODES = [serentiaNode, localNode];
+    LAVALINK_NODE_GROUPS = [[serentiaNode, localNode]];
 } else if (config.useLocalLavalink === 2) {
-    LAVALINK_NODES = [localNode];
+    LAVALINK_NODE_GROUPS = [[serentiaNode], [localNode]];
 } else {
-    LAVALINK_NODES = [serentiaNode];
+    LAVALINK_NODE_GROUPS = [[serentiaNode]];
+}
+
+LAVALINK_NODES = LAVALINK_NODE_GROUPS[0] || [];
+
+function lavalinkNodeGroups() {
+    return LAVALINK_NODE_GROUPS
+        .map(group => group.filter(node => node.host && node.host.length > 0))
+        .filter(group => group.length > 0);
+}
+
+function lavalinkNodeLabel(nodes: any[]) {
+    return nodes.map(node => node.id).join(', ');
+}
+
+function clearLavalinkNodes(manager: LavalinkManager) {
+    const nodesToKill = [...manager.nodeManager.nodes.values()];
+    for (const node of nodesToKill) {
+        try { (node as any).resetReconnectionAttempts?.(); } catch { }
+        try { manager.nodeManager.nodes.delete(node.id); } catch { }
+        try { node.disconnect(); } catch { }
+        try { (node as any).socket?.close(); } catch { }
+        try { (node as any).ws?.close(); } catch { }
+        try { (node as any).socket = null; } catch { }
+        try { (node as any).ws = null; } catch { }
+    }
+}
+
+function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
+    for (const nodeConfig of nodeConfigs) {
+        if (nodeConfig.host) manager.nodeManager.createNode(nodeConfig);
+    }
+}
+
+function waitForLavalinkConnection(manager: LavalinkManager, timeoutMs: number, connectNodes: boolean) {
+    const nodes = [...manager.nodeManager.nodes.values()];
+    if (nodes.some(node => node.connected)) return Promise.resolve(true);
+
+    return new Promise<boolean>((resolve) => {
+        let settled = false;
+
+        const onConnect = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            try { (manager.nodeManager as any).off('connect', onConnect); } catch { }
+            resolve(true);
+        };
+
+        const timeout = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            try { (manager.nodeManager as any).off('connect', onConnect); } catch { }
+            resolve(false);
+        }, timeoutMs);
+
+        manager.nodeManager.once('connect', onConnect);
+
+        if (connectNodes) {
+            for (const node of nodes) {
+                if (!node.connected) {
+                    try { node.connect(); } catch { }
+                }
+            }
+        }
+    });
+}
+
+async function connectLavalinkWithFallback(
+    manager: LavalinkManager,
+    timeoutMs: number,
+    log?: (msg: string) => Promise<void>,
+    useExistingPrimary = false
+) {
+    const groups = lavalinkNodeGroups();
+    if (groups.length === 0) return false;
+
+    for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        const isExistingPrimary = i === 0 && useExistingPrimary;
+
+        if (!isExistingPrimary) {
+            clearLavalinkNodes(manager);
+            createLavalinkNodes(manager, group);
+        }
+
+        const connected = await waitForLavalinkConnection(manager, timeoutMs, !isExistingPrimary);
+        if (connected) return true;
+
+        if (i < groups.length - 1 && log) {
+            await log(`Lavalink node group failed (${lavalinkNodeLabel(group)}). Trying fallback...`);
+        }
+    }
+
+    return false;
 }
 
 // ─── Player Pool ──────────────────────────────────────────────────────────────
@@ -430,45 +534,8 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 await existing.reconnecting;
             } else {
                 existing.reconnecting = (async () => {
-                    if (log) await log(`All Lavalink nodes are disconnected. Performing nuclear reset and reconnecting...`);
-
-                    for (const n of allNodes) {
-                        try { (n as any).resetReconnectionAttempts?.(); } catch { }
-                        try { (existing.player.nodeManager as any).nodes.delete(n.id); } catch { }
-                        try { n.disconnect(); } catch { }
-                        try { (n as any).socket?.close(); } catch { }
-                        try { (n as any).ws?.close(); } catch { }
-                        try { (n as any).socket = null; } catch { }
-                        try { (n as any).ws = null; } catch { }
-                    }
-                    for (const nodeConfig of LAVALINK_NODES) {
-                        if (nodeConfig.host) existing.player.nodeManager.createNode(nodeConfig);
-                    }
-
-                    const freshNodes = [...existing.player.nodeManager.nodes.values()];
-                    await Promise.allSettled(freshNodes.map(node => {
-                        return new Promise<void>((resolve) => {
-                            let isResolved = false;
-
-                            const onConnect = () => {
-                                if (isResolved) return;
-                                isResolved = true;
-                                try { (node as any).off('connect', onConnect); } catch { }
-                                clearTimeout(timeout);
-                                resolve();
-                            };
-
-                            const timeout = setTimeout(() => {
-                                if (isResolved) return;
-                                isResolved = true;
-                                try { (node as any).off('connect', onConnect); } catch { }
-                                resolve();
-                            }, 8000); // Wait up to 8s, allowing built-in retries to happen
-
-                            (node as any).once('connect', onConnect);
-                            node.connect();
-                        });
-                    }));
+                    if (log) await log(`All Lavalink nodes are disconnected. Reconnecting...`);
+                    await connectLavalinkWithFallback(existing.player, 8000, log);
                 })();
 
                 try {
@@ -826,23 +893,8 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                 // Init Lavalink manager (this starts node connections in the background)
                 await manager.init({ id: readyClient.user.id, username: readyClient.user.username });
 
-                // Wait for at least one node to connect (poll-based, no unhandled rejections)
-                const nodeConnected = await new Promise<boolean>((resolve) => {
-                    // Check if already connected
-                    const alreadyConnected = [...manager.nodeManager.nodes.values()].some(n => n.connected);
-                    if (alreadyConnected) { resolve(true); return; }
-
-                    const onConnect = () => {
-                        clearTimeout(timeout);
-                        console.log(`Lavalink node connected (token: ...${token.slice(-6)})`);
-                        resolve(true);
-                    };
-                    const timeout = setTimeout(() => {
-                        try { (manager.nodeManager as any).off('connect', onConnect); } catch { }
-                        resolve(false);
-                    }, 30_000);
-                    manager.nodeManager.once('connect', onConnect);
-                });
+                // Wait for the primary node group; mode 2 then falls back to local only.
+                const nodeConnected = await connectLavalinkWithFallback(manager, 30_000, log, true);
 
                 if (!nodeConnected) {
                     throw new Error('Timed out waiting for Lavalink node connection');

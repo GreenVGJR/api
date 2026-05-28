@@ -1,3 +1,7 @@
+html {
+    visibility: hidden;
+}
+
 * {
     scrollbar-width: thin;
     scrollbar-color: #3a3a3a transparent;

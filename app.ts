@@ -301,10 +301,8 @@ const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Plea
 app.use('*', async (c: Context, next: Next) => {
     if (restrictLocal) {
         const host = c.req.header('host');
-        const h = host?.split(':')[0];
-        const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
-            h?.startsWith('192.168.') || h?.startsWith('10.') || h?.startsWith('172.');
-        const isAllowed = host === 'api.vgjr.top' || host === 'vgjr.vercel.app';
+        const isLocal = isLocalRequest(host);
+        const isAllowed = host === 'api.vgjr.top';
 
         if (!isAllowed && !isLocal) {
             const isMozilla = c.req.header('user-agent')?.startsWith('Mozilla/5.0');
@@ -340,8 +338,7 @@ app.use('*', async (c: Context, next: Next) => {
                     parsed.hostname === 'api.vgjr.top' ||
                     parsed.hostname === 'localhost' ||
                     parsed.hostname === '127.0.0.1' ||
-                    parsed.hostname === '[::1]' ||
-                    parsed.hostname === 'vgjr.vercel.app'
+                    parsed.hostname === '[::1]'
                 ) {
                     return c.json({ error: "Query not allowed" });
                 }
@@ -404,9 +401,18 @@ function decryptPayload(payload: string, secret: string): string {
     } catch { return ""; }
 }
 
+function hostHeaderName(host: string | undefined): string {
+    if (!host) return '';
+    try { host = decodeURIComponent(host); } catch { }
+    if (host.startsWith('[')) {
+        const end = host.indexOf(']');
+        if (end !== -1) return host.slice(0, end + 1).toLowerCase();
+    }
+    return host.split(':')[0].toLowerCase();
+}
+
 function isLocalRequest(host: string | undefined): boolean {
-    if (!host) return false;
-    const h = host.split(':')[0];
+    const h = hostHeaderName(host);
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
         h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
 }
@@ -492,7 +498,7 @@ app.get('/playground/main.js', (c: Context) => stream(c, async (s) => {
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : 'https://api.vgjr.top';
 
-    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = "${btoa(JSON.stringify(PLAYGROUND_ENDPOINTS))}";`;
+    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};`;
     const finalJs = mainJs.replace('{{SSR_STATE}}', stateJs);
 
     await s.write(finalJs);

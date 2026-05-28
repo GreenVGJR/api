@@ -69,6 +69,39 @@ function buildLocalTarget(path: string, base: string = `http://[::1]:${port}`): 
     }
 }
 
+function isLocalHost(hostname: string): boolean {
+    const h = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+        h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.');
+}
+
+function isLocalOrigin(origin: string): boolean {
+    try {
+        return isLocalHost(new URL(origin).hostname);
+    } catch {
+        return false;
+    }
+}
+
+function resolveFetchUrl(targetUrl: string, origin: string): string {
+    const parsedTarget = new URL(targetUrl);
+    const localOrigin = isLocalOrigin(origin);
+
+    if (localOrigin && parsedTarget.hostname === 'api.vgjr.top') {
+        parsedTarget.protocol = 'http:';
+        parsedTarget.host = `[::1]:${port}`;
+        return parsedTarget.toString();
+    }
+
+    if (!localOrigin && isLocalHost(parsedTarget.hostname)) {
+        parsedTarget.protocol = 'https:';
+        parsedTarget.host = 'api.vgjr.top';
+        return parsedTarget.toString();
+    }
+
+    return parsedTarget.toString();
+}
+
 function shouldForwardWsHeader(key: string): boolean {
     const k = key.toLowerCase();
     return !(
@@ -140,13 +173,7 @@ export default {
                         return;
                     }
 
-                    let fetchUrl = targetUrl;
-                    const parsedTarget = new URL(targetUrl);
-                    if (parsedTarget.hostname === 'api.vgjr.top') {
-                        parsedTarget.protocol = 'http:';
-                        parsedTarget.host = `[::1]:${port}`;
-                        fetchUrl = parsedTarget.toString();
-                    }
+                    const fetchUrl = resolveFetchUrl(targetUrl, origin);
 
                     const fetchHeaders = new Headers();
                     const baseHeaders = ws.data?.requestHeaders || {};

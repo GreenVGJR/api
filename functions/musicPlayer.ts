@@ -4,7 +4,7 @@ import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
 import { generateChallenge, verifyChallenge, ipToNumber } from './musicChallenges.ts';
-import { Number_random } from './request.ts';
+// import { Number_random } from './request.ts';
 
 /**
  * Patch a Lavalink node's connect() method to temporarily disable TLS
@@ -127,7 +127,7 @@ export async function createMusicStream(
                 const parts: string[] = [];
                 let i = 0;
                 while (i < ch.length) {
-                    const len = 3 + Math.floor(Math.random() * 18);
+                    const len = 1 + Math.floor(Math.random() * 8);
                     parts.push(ch.slice(i, i + len));
                     i += len;
                 }
@@ -147,7 +147,7 @@ export async function createMusicStream(
     }
 
     c.header('X-Player', "lavalink");
-    c.header('X-Enc-Route', 'v3');
+    c.header('X-Enc-Route', 'v4-beta');
     c.header('X-Route', 'LIVE');
 
     return stream(c, async (s: any) => {

@@ -176,143 +176,6 @@ const paramsContainer = document.getElementById('paramsContainer');
 const paramsCount = document.getElementById('paramsCount');
 const paramsChevron = document.getElementById('paramsChevron');
 
-class WebSocketManager {
-    constructor() {
-        this.ws = null;
-        this.clientId = crypto.randomUUID();
-        this.pendingRequests = new Map();
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 1000;
-        this.connectionState = 'disconnected';
-        this.onStateChange = null;
-    }
-
-    connect() {
-        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-            return;
-        }
-
-        this.connectionState = 'connecting';
-        if (this.onStateChange) this.onStateChange(this.connectionState);
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws?client=${this.clientId}`;
-
-        try {
-            this.ws = new WebSocket(wsUrl);
-        } catch (e) {
-            this.connectionState = 'disconnected';
-            if (this.onStateChange) this.onStateChange(this.connectionState);
-            return;
-        }
-
-        this.ws.onopen = () => {
-            this.connectionState = 'connected';
-            this.reconnectAttempts = 0;
-            document.documentElement.style.visibility = 'visible';
-            if (this.onStateChange) this.onStateChange(this.connectionState);
-        };
-
-        this.ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                const pending = this.pendingRequests.get(msg.id);
-                if (!pending) return;
-
-                if (msg.type === 'response') {
-                    pending.status = msg.status;
-                    pending.statusText = msg.statusText;
-                    pending.headers = msg.headers;
-                    if (pending.onResponse) pending.onResponse(msg);
-                } else if (msg.type === 'chunk') {
-                    if (pending.onChunk) pending.onChunk(msg.data, msg.finish);
-                } else if (msg.type === 'error') {
-                    if (pending.onError) pending.onError(new Error(msg.message));
-                    this.pendingRequests.delete(msg.id);
-                }
-            } catch (e) {
-                // Ignore parse errors
-            }
-        };
-
-        this.ws.onclose = () => {
-            this.connectionState = 'disconnected';
-            if (this.onStateChange) this.onStateChange(this.connectionState);
-
-            for (const [id, pending] of this.pendingRequests) {
-                if (pending.onError) pending.onError(new Error('WebSocket closed'));
-            }
-            this.pendingRequests.clear();
-
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                this.clientId = crypto.randomUUID();
-                setTimeout(() => this.connect(), this.reconnectDelay * this.reconnectAttempts);
-            }
-        };
-
-        this.ws.onerror = () => {
-            this.connectionState = 'disconnected';
-            if (this.onStateChange) this.onStateChange(this.connectionState);
-        };
-    }
-
-    sendRequest(options) {
-        return new Promise((resolve, reject) => {
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                this.connect();
-                reject(new Error('WebSocket not connected'));
-                return;
-            }
-
-            const id = crypto.randomUUID();
-            const { url, headers, method = 'GET', body } = options;
-
-            const pending = {
-                id,
-                status: null,
-                statusText: null,
-                headers: null,
-                onResponse: null,
-                onChunk: null,
-                onError: null,
-            };
-
-            this.pendingRequests.set(id, pending);
-
-            this.ws.send(JSON.stringify({
-                type: 'request',
-                id,
-                url,
-                headers,
-                method,
-                body,
-            }));
-
-            resolve({
-                id,
-                onResponse: (cb) => { pending.onResponse = cb; return this; },
-                onChunk: (cb) => { pending.onChunk = cb; return this; },
-                onError: (cb) => { pending.onError = cb; return this; },
-                getStatus: () => pending.status,
-                getHeaders: () => pending.headers,
-            });
-        });
-    }
-
-    disconnect() {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-        this.connectionState = 'disconnected';
-        if (this.onStateChange) this.onStateChange(this.connectionState);
-    }
-}
-
-const wsManager = new WebSocketManager();
-
 const legalPages = {
     terms: {
         title: 'Terms of Service',
@@ -557,7 +420,7 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
         `* Host: ${requestUrl.host}`,
         `* Scheme: ${requestUrl.protocol.replace(':', '')}`,
         `* Method: ${method}`,
-        `> ${method} ${requestUrl.pathname}${requestUrl.search}`,
+        `> ${method} ${requestUrl.pathname}${requestUrl.search} HTTP/browser`,
         `> Host: ${requestUrl.host}`,
         formatVerboseHeaders(headers),
         `* Request dispatched`,
@@ -597,7 +460,7 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
             lines.push(`* [${elapsed}ms] Response headers received`);
             render();
         },
-        finish(label = 'Response body received') {
+        done(label = 'Response body received') {
             const elapsed = Math.round(performance.now() - startedAt);
             lines.push(`* [${elapsed}ms] ${label}`);
             render();
@@ -620,10 +483,10 @@ async function performRequest(targetUrl, retryCount = 0) {
         setSendButtonLabel('Loading...');
         sendBtn.classList.add('opacity-70');
         responseArea.classList.add('empty-state');
-        responseArea.innerHTML = '<span class="text-gray-500 flex h-full items-center justify-center">Connecting via WebSocket...</span>';
+        responseArea.innerHTML = '<span class="text-gray-500 flex h-full items-center justify-center">Fetching...</span>';
 
         statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
-        statusText.textContent = 'Connecting';
+        statusText.textContent = 'Fetching';
         statusText.className = 'text-yellow-400';
     }
 
@@ -632,130 +495,64 @@ async function performRequest(targetUrl, retryCount = 0) {
     try {
         const startTime = performance.now();
         const parseUrl = new URL(targetUrl);
-        const wsRequestUrl = parseUrl.pathname + parseUrl.search;
         const headers = {
             'Accept': 'application/json'
         };
         headers['x-tel-data'] = btoa(JSON.stringify([[String(screen.height), String(screen.width), String(window.innerHeight), String(window.innerWidth), String(lastCursorX ?? ''), String(lastCursorY ?? '')], solvedChallengeCode !== null, window.location.pathname])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        if (parseUrl.pathname.startsWith('/music/')) {
-            headers['Referer'] = window.location.origin + '/playground';
-            if (solvedChallengeCode) {
-                headers['x-challenge-codes'] = solvedChallengeCode;
-            }
+        if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
+            headers['x-challenge-codes'] = solvedChallengeCode;
         }
 
-        const fetchOptions = { headers };
+        const fetchOptions = { headers, mode: "same-origin" };
         verboseFetch = createVerboseFetchView(targetUrl, fetchOptions);
-        verboseFetch.line('Opening WebSocket connection...');
-
-        if (!wsManager.ws || wsManager.ws.readyState !== WebSocket.OPEN) {
-            wsManager.connect();
-            await new Promise((resolve, reject) => {
-                const checkOpen = setInterval(() => {
-                    if (wsManager.ws && wsManager.ws.readyState === WebSocket.OPEN) {
-                        clearInterval(checkOpen);
-                        resolve();
-                    }
-                }, 50);
-                setTimeout(() => {
-                    clearInterval(checkOpen);
-                    reject(new Error('WebSocket connection timeout'));
-                }, 5000);
-            });
-        }
-
-        verboseFetch.line('WebSocket connected. Sending request...');
-        statusText.textContent = 'Fetching';
-        statusText.className = 'text-yellow-400';
-
-        const wsRequest = await wsManager.sendRequest({
-            url: wsRequestUrl,
-            headers,
-            method: 'GET',
-        });
-
-        let fullText = '';
-        let responseStatus = null;
-        let responseHeaders = null;
-        let resolveRequest;
-
-        const requestPromise = new Promise((resolve) => {
-            resolveRequest = resolve;
-        });
-
-        wsRequest.onResponse((msg) => {
-            responseStatus = msg.status;
-            const raw = msg.headers || {};
-            responseHeaders = new Map(Object.entries(raw).map(([k, v]) => [k.toLowerCase(), v]));
-            verboseFetch.response({ status: msg.status, statusText: msg.statusText, headers: responseHeaders });
-        });
-
-        wsRequest.onChunk((data, finish) => {
-            fullText += data;
-            verboseFetch.line(`Received ${data.length} bytes`);
-            if (finish) {
-                verboseFetch.finish('Response complete');
-                resolveRequest({ status: responseStatus, headers: responseHeaders, text: fullText });
-            }
-        });
-
-        wsRequest.onError((err) => {
-            verboseFetch.fail(err);
-            resolveRequest(null);
-        });
-
-        const result = await Promise.race([
-            requestPromise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 300_000))
-        ]);
-
-        if (!result) {
-            throw new Error('WebSocket request failed');
-        }
-
-        const { status, headers: respHeaders, text } = result;
-        let duration = Math.round(performance.now() - startTime);
+        verboseFetch.line('Waiting for response headers...');
+        const response = await fetch(targetUrl, fetchOptions);
+        verboseFetch.response(response);
 
         statusText.textContent = 'Fetching';
 
-        const contentType = respHeaders?.get('content-type') || '';
+        const contentType = response.headers.get('content-type') || '';
+        let duration;
 
-        if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType === 'application/octet-stream') {
-            verboseFetch.line('Processing binary response...');
-
-            const base64Data = text;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            const blob = new Blob([bytes], { type: contentType });
+        if (contentType.startsWith('image/')) {
+            verboseFetch.line('Reading image body...');
+            const blob = await response.blob();
             duration = Math.round(performance.now() - startTime);
-            verboseFetch.finish(`Binary body received (${blob.size.toLocaleString()} bytes)`);
-            updateStatusUI(status >= 200 && status < 300, status, duration);
+            verboseFetch.done(`Image body received (${blob.size.toLocaleString()} bytes)`);
+            updateStatusUI(response.ok, response.status, duration);
+            const imageUrl = URL.createObjectURL(blob);
 
-            if (contentType.startsWith('image/')) {
-                const imageUrl = URL.createObjectURL(blob);
-                lastRawResponse = '';
-                responseArea.classList.add('empty-state');
-                responseArea.innerHTML = `
-                    <div class="w-full h-full flex items-center justify-center p-4">
-                        <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
-                    </div>
-                `;
-            } else {
-                const videoUrl = URL.createObjectURL(blob);
-                lastRawResponse = '';
-                responseArea.classList.add('empty-state');
-                responseArea.innerHTML = `
-                    <div class="w-full h-full flex items-center justify-center p-4">
-                        <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
-                    </div>
-                `;
-            }
+            lastRawResponse = '';
+
+            responseArea.classList.add('empty-state');
+            responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                    <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
+                </div>
+            `;
+        } else if ((contentType.startsWith('video/') || contentType === 'application/octet-stream') && response.headers.get('x-player') !== 'lavalink') {
+            verboseFetch.line('Reading binary body...');
+            const blob = await response.blob();
+            duration = Math.round(performance.now() - startTime);
+            verboseFetch.done(`Binary body received (${blob.size.toLocaleString()} bytes)`);
+            updateStatusUI(response.ok, response.status, duration);
+            const videoUrl = URL.createObjectURL(blob);
+
+            lastRawResponse = '';
+
+            responseArea.classList.add('empty-state');
+            responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                    <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
+                </div>
+            `;
         } else {
             responseArea.classList.remove('empty-state');
-            verboseFetch.line('Processing text response...');
+
+            verboseFetch.line('Reading text body...');
+            let text = await response.text();
+            duration = Math.round(performance.now() - startTime);
+            verboseFetch.done(`Text body received (${text.length.toLocaleString()} chars)`);
 
             let cleanText = text.trim();
             if (cleanText.startsWith('"') && cleanText.endsWith('"')) {
@@ -764,23 +561,24 @@ async function performRequest(targetUrl, retryCount = 0) {
 
             let decryptedText = cleanText;
 
-            const isLavalink = respHeaders?.get('x-player') === 'lavalink';
-            if (isLavalink && status === 302 && retryCount < 4) {
+            const isLavalink = response.headers.get('x-player') === 'lavalink';
+            if (response.status === 302 && isLavalink && retryCount < 4) {
                 try {
                     const data = JSON.parse(decryptedText);
-                    if (data && data._challenge && data.c && data.d) {
-                        const overlay = document.getElementById('verboseFetchOverlay');
-                        if (overlay) overlay.innerHTML = '<span class="text-white waiting-loading text-sm sm:text-base">Solving challenge...</span>';
-                        const solved = await d(data.c, data.d);
+                    if (data && data.c && data._challenge && typeof d === 'function') {
+                        responseArea.innerHTML = '<div class="loading flex h-full flex-col items-center justify-center text-center"><span class="text-white">Solving challenges...</span><span class="mt-2 text-xs text-gray-400">This may take a while</span></div>';
+                        const solved = await d(data.c, data.d || 10);
                         if (solved) {
                             solvedChallengeCode = solved;
                             return await performRequest(targetUrl, retryCount + 1);
                         }
                     }
                 } catch { }
+            } else if (response.status === 302 && isLavalink) {
+                solvedChallengeCode = null;
             }
 
-            updateStatusUI(status >= 200 && status < 300, status, duration);
+            updateStatusUI(response.ok, response.status, duration);
             let formatted = text;
             let isJson = false;
 
@@ -1497,8 +1295,10 @@ function syntaxHighlight(json) {
 
 let lastCursorX = null;
 let lastCursorY = null;
-const trackCursor = (e) => { lastCursorX = e.clientX; lastCursorY = e.clientY; };
-document.addEventListener('mousemove', trackCursor);
+document.addEventListener('mousemove', (e) => {
+    lastCursorX = e.clientX;
+    lastCursorY = e.clientY;
+});
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -1521,8 +1321,6 @@ function updateUptime() {
 
 setInterval(updateUptime, 1000);
 updateUptime();
-
-wsManager.connect();
 
 fetchInitialEndpoints().then(() => {
     renderCurrentPage();

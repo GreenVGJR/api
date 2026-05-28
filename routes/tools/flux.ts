@@ -1,22 +1,15 @@
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
-const commonHeaders = {
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-site',
-    'Sec-Fetch-User': '?1',
-    'User-Agent': userAgent
-}
-
 import { Hono } from 'hono';
 import { Buffer } from 'buffer';
 const app = new Hono();
 
 import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { commonHeaders, userAgent } from '../../functions/request.js';
 
 async function resizeImage(input: Buffer | ArrayBuffer) {
-    return await new Bun.Image(input).resize(1024, 1024).png().buffer();
+    return await new Bun.Image(input)
+        .resize(1024, 1024, { filter: 'mks2021' })
+        .png({ compressionLevel: 9, palette: false })
+        .buffer();
 }
 
 app.get('/ai-image/flux_schnell', async (c) => {
@@ -69,7 +62,13 @@ app.get('/ai-image/flux_schnell', async (c) => {
     const fallbackResponse = await fetch(`https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`, {
         method: "GET",
         headers: {
-            ...commonHeaders
+            ...commonHeaders,
+            'Accept': 'application/json, text/plain, */*',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-site',
+            'Sec-Fetch-User': '?1',
+            'User-Agent': userAgent
         }
     });
 

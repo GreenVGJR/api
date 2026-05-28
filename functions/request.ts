@@ -15,7 +15,7 @@ import emojibaseGroups from 'emojibase-data/meta/groups.json' with { type: 'json
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
+export const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
 
 export async function request(url: string | URL, options: any = {}): Promise<any> {
     const { useH2, useOwnTLS, ...fetchOptions } = options;
@@ -1446,7 +1446,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
     } catch (e) { console.error(e); return null; }
 }
 
-export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 20): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
     if (!que) return null;
 
     if (refresh_auth || !keysp || !keysptoken) {

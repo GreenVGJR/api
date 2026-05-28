@@ -8,7 +8,7 @@ function getMdKey(): string {
 
 const CHALLENGE_MAGIC = Buffer.from([0xf3, 0xc2, 0xd0, 0xd9]);
 const CHALLENGE_EXPIRY = 6 * 60 * 60 * 1000;
-const DEFAULT_DIFFICULTY = 10;
+const DEFAULT_DIFFICULTY = 15;
 
 export function ipToNumber(ip: string): number | string {
     if (ip.includes(':')) return ip;

@@ -45,12 +45,13 @@ function validateTelData(raw: string | undefined | null): boolean {
     }
 }
 
-function buildLocalTarget(path: string): string | null {
+function buildLocalTarget(path: string, base: string = `http://[::1]:${port}`): string | null {
     if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) return null;
     if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return null;
     try {
-        const u = new URL(path, `http://[::1]:${port}`);
-        if (u.origin !== `http://[::1]:${port}`) return null;
+        const u = new URL(path, base);
+        if (u.origin !== new URL(base).origin) return null;
+        if (u.pathname.toLowerCase() === '/ws') return null;
         return u.toString();
     } catch {
         return null;
@@ -90,7 +91,8 @@ export default {
             req.headers.forEach((value, key) => {
                 if (shouldForwardWsHeader(key)) requestHeaders[key] = value;
             });
-            const upgraded = server.upgrade(req, { data: { clientId, requestHeaders } });
+            const origin = req.headers.get('origin') || `http://[::1]:${port}`;
+            const upgraded = server.upgrade(req, { data: { clientId, requestHeaders, origin } });
             if (upgraded) return undefined;
             return new Response(null, { status: 404 });
         }
@@ -119,7 +121,8 @@ export default {
                         return;
                     }
 
-                    const targetUrl = buildLocalTarget(url);
+                    const origin = ws.data?.origin || `http://[::1]:${port}`;
+                    const targetUrl = buildLocalTarget(url, origin);
                     if (!targetUrl) {
                         ws.send(JSON.stringify({ id, type: 'response', status: 403, statusText: 'Forbidden', headers: {} }));
                         ws.send(JSON.stringify({ id, type: 'chunk', data: '', finish: true }));

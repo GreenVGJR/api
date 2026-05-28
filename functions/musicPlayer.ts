@@ -6,6 +6,31 @@ import config from '../config.json' with { type: 'json' };
 import { generateChallenge, verifyChallenge, ipToNumber } from './musicChallenges.ts';
 import { Number_random } from './request.ts';
 
+/**
+ * Patch a Lavalink node's connect() method to temporarily disable TLS
+ * certificate verification only during the WebSocket handshake.
+ * This avoids globally setting NODE_TLS_REJECT_UNAUTHORIZED which would
+ * break HTTP/2 fetch and other secure connections in the process.
+ */
+function patchNodeTls(node: any) {
+    if (node.__tlsPatched) return;
+    node.__tlsPatched = true;
+    const origConnect = node.connect.bind(node);
+    node.connect = (...args: any[]) => {
+        const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        try {
+            return origConnect(...args);
+        } finally {
+            // Restore after the synchronous WebSocket constructor call.
+            // The actual TLS handshake happens async but Bun/ws captures the
+            // env value at construction time.
+            if (prev === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+            else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
+        }
+    };
+}
+
 export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
@@ -241,7 +266,10 @@ function clearLavalinkNodes(manager: LavalinkManager) {
 
 function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
     for (const nodeConfig of nodeConfigs) {
-        if (nodeConfig.host) manager.nodeManager.createNode(nodeConfig);
+        if (nodeConfig.host) {
+            const node = manager.nodeManager.createNode(nodeConfig);
+            patchNodeTls(node);
+        }
     }
 }
 
@@ -520,7 +548,10 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         if (existing.player.nodeManager.nodes.size === 0 && LAVALINK_NODES.length > 0) {
             if (log) await log(`Recovering lost Lavalink node configurations...`);
             for (const nodeConfig of LAVALINK_NODES) {
-                if (nodeConfig.host) existing.player.nodeManager.createNode(nodeConfig);
+                if (nodeConfig.host) {
+                    const node = existing.player.nodeManager.createNode(nodeConfig);
+                    patchNodeTls(node);
+                }
             }
         }
 
@@ -639,6 +670,11 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                     maxPreviousTracks: 100,
                 },
             });
+
+            // Patch all nodes for scoped TLS bypass before init() connects them
+            for (const node of manager.nodeManager.nodes.values()) {
+                patchNodeTls(node);
+            }
 
             // Forward Discord gateway events to Lavalink
             client.on('raw', (d: any) => manager.sendRawData(d));

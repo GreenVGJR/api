@@ -632,6 +632,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     try {
         const startTime = performance.now();
         const parseUrl = new URL(targetUrl);
+        const wsRequestUrl = parseUrl.pathname + parseUrl.search;
         const headers = {
             'Accept': 'application/json'
         };
@@ -668,7 +669,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         statusText.className = 'text-yellow-400';
 
         const wsRequest = await wsManager.sendRequest({
-            url: targetUrl,
+            url: wsRequestUrl,
             headers,
             method: 'GET',
         });

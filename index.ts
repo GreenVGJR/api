@@ -62,7 +62,7 @@ function buildLocalTarget(path: string, base: string = `http://[::1]:${port}`): 
         ];
 
         if (!allowedOrigins.includes(u.origin)) return null;
-        if (u.pathname.toLowerCase() === '/ws') return null;
+        if (u.pathname === '/' || u.pathname.toLowerCase() === '/ws') return null;
         return u.toString();
     } catch {
         return null;

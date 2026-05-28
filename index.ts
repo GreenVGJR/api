@@ -160,7 +160,7 @@ export default {
                             }
                         }
                     }
-                    fetchHeaders.set('referer', `${new URL(targetUrl).origin}/playground`);
+                    fetchHeaders.set('referer', `${new URL(fetchUrl).origin}/playground`);
 
                     const fetchOptions: RequestInit = {
                         method,

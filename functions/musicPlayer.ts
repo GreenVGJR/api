@@ -96,7 +96,7 @@ export async function createMusicStream(
                 c.header('Location', '/playground');
             }
             const challengeData = generateChallenge(ipLL);
-            c.status(200);
+            c.status(302);
             if (checkAccept && checkReferer) {
                 const ch = challengeData.challenge;
                 const parts: string[] = [];

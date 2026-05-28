@@ -668,7 +668,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         statusText.className = 'text-yellow-400';
 
         const wsRequest = await wsManager.sendRequest({
-            url: new URL(targetUrl).pathname + new URL(targetUrl).search,
+            url: targetUrl,
             headers,
             method: 'GET',
         });

@@ -312,6 +312,7 @@ function renderCurrentPage() {
     } else {
         renderPlaygroundPage();
     }
+    updateConnectionUI();
 }
 
 document.addEventListener('click', (event) => {
@@ -404,6 +405,49 @@ function setSendButtonLabel(text) {
     sendBtnLabel.textContent = text;
 }
 
+function hasConnection() {
+    return navigator.onLine !== false;
+}
+
+function updateConnectionUI() {
+    const statusDot = statusIndicator.querySelector('span:first-child');
+
+    if (!hasConnection()) {
+        setSendButtonLabel('No Connection');
+        sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        sendBtn.classList.remove('opacity-70');
+
+        if (!isLoading) {
+            statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+            statusText.textContent = 'Offline';
+            statusText.className = 'text-red-400';
+        }
+        return false;
+    }
+
+    if (!isLoading && !isCoolingDown) {
+        setSendButtonLabel('Send');
+        sendBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'opacity-70');
+
+        if (statusText.textContent === 'Offline') {
+            statusDot.className = 'w-2 h-2 rounded-full bg-gray-500';
+            statusText.textContent = 'Ready';
+            statusText.className = 'text-gray-500';
+        }
+    }
+    return true;
+}
+
+function registerOfflinePlayground() {
+    if (!('serviceWorker' in navigator)) return;
+
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/playground/sw.js', { scope: '/' }).catch(() => { });
+    });
+}
+
+registerOfflinePlayground();
+
 function formatVerboseHeaders(headers) {
     return Object.entries(headers)
         .map(([key, value]) => `> ${key}: ${value}`)
@@ -476,6 +520,10 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
 
 async function performRequest(targetUrl, retryCount = 0) {
     if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
+    if (retryCount === 0 && !hasConnection()) {
+        updateConnectionUI();
+        return null;
+    }
     let verboseFetch = null;
 
     if (retryCount === 0) {
@@ -641,18 +689,20 @@ async function performRequest(targetUrl, retryCount = 0) {
     } finally {
         if (retryCount === 0) {
             isLoading = false;
-            setSendButtonLabel('Send');
-
-            isCoolingDown = true;
-            sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            let timeLeft = 0.3;
-
-            const cooldownTimeout = setTimeout(() => {
+            if (!hasConnection()) {
                 isCoolingDown = false;
+                updateConnectionUI();
+            } else {
                 setSendButtonLabel('Send');
-                sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                sendBtn.classList.remove('opacity-70');
-            }, 300);
+
+                isCoolingDown = true;
+                sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                setTimeout(() => {
+                    isCoolingDown = false;
+                    updateConnectionUI();
+                }, 300);
+            }
         }
     }
 
@@ -1186,10 +1236,15 @@ clearResponseBtn.addEventListener('click', () => {
     statusIndicator.querySelector('span:first-child').className = 'w-2 h-2 rounded-full bg-gray-500';
     statusText.textContent = 'Ready';
     statusText.className = 'text-gray-500';
+    updateConnectionUI();
 });
 
 sendBtn.addEventListener('click', () => {
     if (pageFromPath(window.location.pathname) !== 'playground') return;
+    if (!hasConnection()) {
+        updateConnectionUI();
+        return;
+    }
     triggerSendButtonAnimation();
     performRequest(urlInput.value);
 });
@@ -1306,6 +1361,9 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+window.addEventListener('online', updateConnectionUI);
+window.addEventListener('offline', updateConnectionUI);
+
 
 function updateUptime() {
     const uptimeDisplay = document.getElementById('uptimeDisplay');
@@ -1324,6 +1382,7 @@ updateUptime();
 
 fetchInitialEndpoints().then(() => {
     renderCurrentPage();
+    updateConnectionUI();
 
     // Final height adjustment after everything is loaded and rendered
     setTimeout(adjustHeight, 0);

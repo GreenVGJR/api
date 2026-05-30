@@ -388,6 +388,13 @@ let twitterDocument: any;
 let twitterTransaction: any;
 let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 let twitterObj: any = {};
+type DiscordListCacheValue = { status: number; statusText: string; data: any };
+type DiscordListCacheEntry = { expiresAt: number; value: DiscordListCacheValue };
+const DISCORD_LIST_CACHE_TTL = 5 * 60 * 1000;
+let discordObj: Record<string, DiscordListCacheEntry> = {};
+let discordListCacheFetches: Record<string, Promise<DiscordListCacheValue> | undefined> = {};
+let discordListMemberPartialObj: Record<string, DiscordListCacheEntry | undefined> = {};
+let discordListMemberFetches: Record<string, Promise<void> | undefined> = {};
 let konaSummary: any;
 
 let googleImgSpAuth: any = {};
@@ -6876,6 +6883,132 @@ const getSnowflakeDate = (id: string) => {
     }
 }
 
+async function discordListCache(token: string, url: string, headers: any): Promise<DiscordListCacheValue> {
+    const key = `${token}:${url}`;
+    const now = Date.now();
+    const cached = discordObj[key];
+
+    if (cached) {
+        if (cached.expiresAt > now) return cached.value;
+        delete discordObj[key];
+    }
+
+    const activeFetch = discordListCacheFetches[key];
+    if (activeFetch) return await activeFetch;
+
+    const fetchCache = (async (): Promise<DiscordListCacheValue> => {
+        const req = await fetch(url, { method: 'GET', headers });
+        let data: any = null;
+        try { data = await req.json(); } catch { }
+
+        const value = { status: req.status, statusText: req.statusText, data };
+        if (req.status === 200) {
+            discordObj[key] = {
+                expiresAt: Date.now() + DISCORD_LIST_CACHE_TTL,
+                value
+            };
+        }
+
+        return value;
+    })();
+
+    discordListCacheFetches[key] = fetchCache;
+
+    try {
+        return await fetchCache;
+    } finally {
+        delete discordListCacheFetches[key];
+    }
+}
+
+function discordListMembersCacheKey(token: string, guildId: string) {
+    return `${token}:guild:${guildId}:members:all`;
+}
+
+function getDiscordListMembersCache(token: string, guildId: string): any[] | null {
+    const key = discordListMembersCacheKey(token, guildId);
+    const cached = discordObj[key];
+
+    if (!cached) return null;
+    if (cached.expiresAt <= Date.now()) {
+        delete discordObj[key];
+        return null;
+    }
+
+    return Array.isArray(cached.value.data) ? cached.value.data : null;
+}
+
+function getDiscordListMembersPartialCache(token: string, guildId: string): any[] | null {
+    const key = discordListMembersCacheKey(token, guildId);
+    const cached = discordListMemberPartialObj[key];
+
+    if (!cached) return null;
+    if (cached.expiresAt <= Date.now()) {
+        delete discordListMemberPartialObj[key];
+        return null;
+    }
+
+    return Array.isArray(cached.value.data) ? cached.value.data : null;
+}
+
+async function discordListMembersCache(token: string, guildId: string, headers: any) {
+    const cacheKey = discordListMembersCacheKey(token, guildId);
+    if (getDiscordListMembersCache(token, guildId)) return;
+
+    let data: any[] = [];
+    let lastMemberId: string | null = null;
+
+    while (true) {
+        let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`;
+        if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
+
+        const req = await discordListCache(token, urlMembers, headers);
+        if (req.status !== 200 || !Array.isArray(req.data)) return;
+
+        const batch = req.data;
+        data.push(...batch);
+        discordListMemberPartialObj[cacheKey] = {
+            expiresAt: Date.now() + DISCORD_LIST_CACHE_TTL,
+            value: { status: 200, statusText: 'OK', data }
+        };
+
+        if (batch.length < 1000) break;
+
+        lastMemberId = batch[batch.length - 1].user?.id;
+        if (!lastMemberId) return;
+    }
+
+    discordObj[cacheKey] = {
+        expiresAt: Date.now() + DISCORD_LIST_CACHE_TTL,
+        value: { status: 200, statusText: 'OK', data }
+    };
+    delete discordListMemberPartialObj[cacheKey];
+}
+
+function discordListMembersCacheLater(token: string, guildId: string, headers: any) {
+    const cacheKey = discordListMembersCacheKey(token, guildId);
+    if (getDiscordListMembersCache(token, guildId) || discordListMemberFetches[cacheKey]) return;
+
+    discordListMemberFetches[cacheKey] = discordListMembersCache(token, guildId, headers)
+        .catch(() => { })
+        .finally(() => {
+            delete discordListMemberFetches[cacheKey];
+        });
+}
+
+async function ensureDiscordListMembersCache(token: string, guildId: string, headers: any): Promise<any[] | null> {
+    const cacheKey = discordListMembersCacheKey(token, guildId);
+    const cached = getDiscordListMembersCache(token, guildId);
+    if (cached) return cached;
+
+    if (!discordListMemberFetches[cacheKey]) {
+        discordListMembersCacheLater(token, guildId, headers);
+    }
+
+    await discordListMemberFetches[cacheKey];
+    return getDiscordListMembersCache(token, guildId);
+}
+
 export const DiscordInfoMember = async (token: string, userId: string, guildId?: string) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!userId) return { error: 'Missing userId' };
@@ -6982,34 +7115,57 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
         const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
         const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
         const [rolesReq, guildReq] = await Promise.all([
-            fetch(urlRoles, { method: 'GET', headers }),
-            fetch(urlGuild, { method: 'GET', headers })
+            discordListCache(token, urlRoles, headers),
+            discordListCache(token, urlGuild, headers)
         ]);
 
         let rolesData: any = [];
         let guildData: any = null;
-        try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
-        try { if (guildReq.status === 200) guildData = await guildReq.json(); } catch { }
+        if (rolesReq.status === 200) rolesData = rolesReq.data;
+        if (guildReq.status === 200) guildData = guildReq.data;
+
+        const memberCacheKey = discordListMembersCacheKey(token, guildId);
+        let memberCacheBuilding = !!discordListMemberFetches[memberCacheKey];
+        let cachedMembers = (isBannedRequested && types.length === 1) ? null : getDiscordListMembersCache(token, guildId);
+        if (!cachedMembers && !(isBannedRequested && types.length === 1)) {
+            const partialMembers = getDiscordListMembersPartialCache(token, guildId);
+            if (partialMembers && (isSpecial || partialMembers.length >= targetLimit)) {
+                cachedMembers = partialMembers;
+            }
+
+            if (!cachedMembers && !memberCacheBuilding) {
+                discordListMembersCacheLater(token, guildId, headers);
+                memberCacheBuilding = !!discordListMemberFetches[memberCacheKey];
+            }
+        }
 
         let data: any[] = [];
-        let lastMemberId: string | null = null;
-        let membersFetchRemaining = (isBannedRequested && types.length === 1) ? 0 : targetLimit;
+        let cachedMembersCount = cachedMembers?.length ?? 0;
+        if (cachedMembers) {
+            data = isSpecial ? cachedMembers.slice() : cachedMembers.slice(0, targetLimit);
+        } else {
+            let lastMemberId: string | null = null;
+            let membersFetchRemaining = (isBannedRequested && types.length === 1) ? 0 : targetLimit;
 
-        while (membersFetchRemaining > 0) {
-            const currentFetchLimit = Math.min(membersFetchRemaining, 1000);
-            let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}`;
-            if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
+            while (membersFetchRemaining > 0) {
+                const currentFetchLimit = Math.min(membersFetchRemaining, 1000);
+                const fetchLimit = (memberCacheBuilding && !lastMemberId && currentFetchLimit < 1000) ? 1000 : currentFetchLimit;
+                let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
+                if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
 
-            const req = await fetch(urlMembers, { method: 'GET', headers });
-            if (req.status !== 200) break;
+                const req = await discordListCache(token, urlMembers, headers);
+                if (req.status !== 200) break;
 
-            const batch = await req.json();
-            if (!Array.isArray(batch) || batch.length === 0) break;
+                const batch = req.data;
+                if (!Array.isArray(batch) || batch.length === 0) break;
+                const usedBatch = batch.slice(0, currentFetchLimit);
 
-            data.push(...batch);
-            lastMemberId = batch[batch.length - 1].user?.id;
-            membersFetchRemaining -= batch.length;
-            if (batch.length < currentFetchLimit) break;
+                data.push(...usedBatch);
+                lastMemberId = batch[batch.length - 1].user?.id;
+                membersFetchRemaining -= usedBatch.length;
+                if (batch.length < fetchLimit || usedBatch.length < currentFetchLimit) break;
+            }
+            cachedMembersCount = data.length;
         }
 
         let bansData: any[] = [];
@@ -7022,10 +7178,10 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
                 let urlBans = `https://discord.com/api/v10/guilds/${guildId}/bans?limit=${currentFetchLimit}`;
                 if (lastBanId) urlBans += `&after=${lastBanId}`;
 
-                const req = await fetch(urlBans, { method: 'GET', headers });
+                const req = await discordListCache(token, urlBans, headers);
                 if (req.status !== 200) break;
 
-                const batch = await req.json();
+                const batch = req.data;
                 if (!Array.isArray(batch) || batch.length === 0) break;
 
                 bansData.push(...batch);
@@ -7067,6 +7223,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
                     position: index + 1,
                     ...perms,
                     joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+                    premium_since: member.premium_since ? String(Math.floor(new Date(member.premium_since).getTime() / 1000)) : null,
                     created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
                 };
             });
@@ -7112,12 +7269,111 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
             return {
                 botsCount,
                 usersCount,
+                cachedMembersCount,
                 limit: limit,
                 data
             };
         }
 
-        return { data };
+        return { cachedMembersCount, data };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
+export const DiscordListMemberRole = async (token: string, guildId: string, roleId: string, type: string = 'all', permission: string = 'all') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+    if (!roleId) return { error: 'Missing roleId' };
+
+    const roleIds = roleId.split(',').map(id => id.trim()).filter(Boolean);
+    if (roleIds.length === 0) return { error: 'Missing roleId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+
+    try {
+        const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
+        const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
+        const cachedMembers = await ensureDiscordListMembersCache(token, guildId, headers);
+
+        const [rolesReq, guildReq] = await Promise.all([
+            discordListCache(token, urlRoles, headers),
+            discordListCache(token, urlGuild, headers)
+        ]);
+
+        let rolesData: any = [];
+        let guildData: any = null;
+        if (rolesReq.status === 200) rolesData = rolesReq.data;
+        if (guildReq.status === 200) guildData = guildReq.data;
+
+        if (!cachedMembers) {
+            return {
+                data: null,
+                error: { message: 'Failed to fetch members' }
+            };
+        }
+
+        const cachedMembersCount = cachedMembers.length;
+        const types = type.split(',').map(t => t.trim());
+        let data = cachedMembers
+            .map((member: any, index: number) => ({ ...member, position: index + 1 }))
+            .filter((member: any) => Array.isArray(member.roles) && roleIds.some(id => member.roles.includes(id)));
+
+        data = data.map((member: any) => {
+            const perms = getMemberPermissions(member, rolesData, guildData, guildId);
+            return {
+                ...member,
+                ...perms,
+                joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+                premium_since: member.premium_since ? String(Math.floor(new Date(member.premium_since).getTime() / 1000)) : null,
+                created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null
+            };
+        });
+
+        if (permission !== 'all') {
+            const requestedPerms = permission.split(',').map(p => p.trim().toLowerCase());
+            const permBits = requestedPerms.map(p => PERMISSION_KEYS[p]).filter(b => b !== undefined) as bigint[];
+
+            if (permBits.length > 0) {
+                data = data.filter((member: any) => {
+                    const memberPerms = BigInt(member.permissions);
+                    if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
+                    return permBits.every(bit => (memberPerms & bit) === bit);
+                });
+            }
+        }
+
+        const botsCount = data.filter((member: any) => member.user?.bot || member.bot).length;
+        const usersCount = data.filter((member: any) => !member.user?.bot && !member.bot).length;
+
+        for (const t of types) {
+            if (t === 'user') {
+                data = data.filter((member: any) => !member.user?.bot && !member.bot);
+            } else if (t === 'bot') {
+                data = data.filter((member: any) => member.user?.bot || member.bot);
+            } else if (t === 'oldest') {
+                data.sort((a: any, b: any) => Number(a.joined_at || 0) - Number(b.joined_at || 0));
+            } else if (t === 'newest') {
+                data.sort((a: any, b: any) => Number(b.joined_at || 0) - Number(a.joined_at || 0));
+            } else if (t === 'oldest_position') {
+                data.sort((a: any, b: any) => Number(a.position || 0) - Number(b.position || 0));
+            } else if (t === 'newest_position') {
+                data.sort((a: any, b: any) => Number(b.position || 0) - Number(a.position || 0));
+            }
+        }
+
+        return {
+            botsCount,
+            usersCount,
+            membersCount: data.length,
+            cachedMembersCount,
+            roleIds,
+            data
+        };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };
     }
@@ -7136,17 +7392,32 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
     try {
         const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
         const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`;
+        const memberCacheKey = discordListMembersCacheKey(token, guildId);
+        let memberCacheBuilding = !!discordListMemberFetches[memberCacheKey];
+        let cachedMembers = getDiscordListMembersCache(token, guildId);
+        if (!cachedMembers) {
+            cachedMembers = getDiscordListMembersPartialCache(token, guildId);
+            if (!cachedMembers && !memberCacheBuilding) {
+                discordListMembersCacheLater(token, guildId, headers);
+                memberCacheBuilding = !!discordListMemberFetches[memberCacheKey];
+            }
+        }
+
+        const membersReqPromise: Promise<DiscordListCacheValue> = cachedMembers
+            ? Promise.resolve({ status: 200, statusText: 'OK', data: cachedMembers })
+            : discordListCache(token, urlMembers, headers);
 
         const [rolesReq, membersReq] = await Promise.all([
-            fetch(urlRoles, { method: 'GET', headers }),
-            fetch(urlMembers, { method: 'GET', headers })
+            discordListCache(token, urlRoles, headers),
+            membersReqPromise
         ]);
 
         let rolesData: any = [];
         let membersData: any = [];
 
-        try { if (rolesReq.status === 200) rolesData = await rolesReq.json(); } catch { }
-        try { if (membersReq.status === 200) membersData = await membersReq.json(); } catch { }
+        if (rolesReq.status === 200) rolesData = rolesReq.data;
+        if (membersReq.status === 200) membersData = membersReq.data;
+        const cachedRolesCount = Array.isArray(rolesData) ? rolesData.length : 0;
 
         if (rolesReq.status !== 200) {
             return {
@@ -7209,12 +7480,13 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 
             return {
                 rolesCount: totalRoles,
+                cachedRolesCount,
                 limit: limit,
                 data: rolesData
             };
         }
 
-        return { data: rolesData };
+        return { cachedRolesCount, data: rolesData };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };
     }

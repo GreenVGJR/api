@@ -134,6 +134,7 @@ const API_ROUTES = {
                 "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
                 "/tools/discord/infoMember?token=&userId=&guildId=",
                 "/tools/discord/listMember?token=&guildId=&limit=&type=&permission=",
+                "/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=",
             ],
             channel: [
                 "/tools/discord/listChannel?token=&guildId=&limit=&type=",
@@ -364,6 +365,7 @@ const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground
 
 const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
 const cfJs = fs.readFileSync(path.join(__dirname, 'html/cf.js'), 'utf-8');
+const playgroundSwJs = fs.readFileSync(path.join(__dirname, 'html/sw.js'), 'utf-8');
 
 const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
 const mainCss = rawCss
@@ -508,6 +510,14 @@ app.get('/playground/cf.js', (c: Context) => stream(c, async (s) => {
     c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
     c.header('Content-Type', 'application/javascript');
     await s.write(cfJs);
+}));
+
+app.get('/playground/sw.js', (c: Context) => stream(c, async (s) => {
+    c.header('Cache-Control', 'no-cache');
+    c.header('Content-Type', 'application/javascript');
+    c.header('Service-Worker-Allowed', '/');
+
+    await s.write(playgroundSwJs.replace('__PLAYGROUND_CACHE_NAME__', JSON.stringify(`vgjr-playground-${starttime}`)));
 }));
 
 app.get('/playground/main.css', (c: Context) => stream(c, async (s) => {

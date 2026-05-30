@@ -31,6 +31,22 @@ function patchNodeTls(node: any) {
     };
 }
 
+const transientFetchCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'UND_ERR_SOCKET']);
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getFetchErrorCode(err: any): string {
+    return String(err?.code || err?.cause?.code || '');
+}
+
+function isTransientFetchError(err: any): boolean {
+    const code = getFetchErrorCode(err);
+    const message = String(err?.message || err || '').toLowerCase();
+    return transientFetchCodes.has(code) || message.includes('socket connection was closed') || message.includes('fetch failed');
+}
+
 export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
@@ -47,21 +63,28 @@ export async function setVoiceStatus(channelId: string, token: string, content: 
             if (res.status === 429) {
                 const retryAfter = Number(res.headers.get('Retry-After')) || 5;
                 console.warn(`Voice Status Rate Limited (Attempt ${i + 1}/${retries}). Retrying after ${retryAfter}s...`);
-                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                await sleep(retryAfter * 1000);
                 continue;
             }
 
             if (res.ok) return;
 
             if (res.status >= 500 && i < retries - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await sleep(1000 * (i + 1));
                 continue;
             }
 
             return;
         } catch (err) {
-            console.error("Voice Status Fetch Error:", err);
-            if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, 1000));
+            const canRetry = i < retries - 1 && isTransientFetchError(err);
+            if (!canRetry) {
+                console.error("Voice Status Fetch Error:", err);
+                return;
+            }
+
+            const delay = 750 * (i + 1);
+            console.warn(`Voice Status Fetch Retry (${i + 1}/${retries}): ${getFetchErrorCode(err) || 'network error'}, retrying in ${delay}ms`);
+            await sleep(delay);
         }
     }
 }

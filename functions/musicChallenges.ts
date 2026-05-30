@@ -8,7 +8,7 @@ function getMdKey(): string {
 
 const CHALLENGE_MAGIC = Buffer.from([0xf3, 0xc2, 0xd0, 0xd9]);
 const CHALLENGE_EXPIRY = 6 * 60 * 60 * 1000;
-const DEFAULT_DIFFICULTY = 15;
+const DEFAULT_DIFFICULTY = 12;
 
 export function ipToNumber(ip: string): number | string {
     if (ip.includes(':')) return ip;
@@ -19,6 +19,30 @@ export function ipToNumber(ip: string): number | string {
 
 function hashInput(input: string): string {
     return crypto.createHash('sha256').update(input).digest('base64url');
+}
+
+function md5(input: string): string {
+    return crypto.createHash('md5').update(input).digest('hex');
+}
+
+function formatChallengeHash(hash: string): string {
+    let numbers = '';
+    let letters = '';
+    for (const char of hash.toLowerCase()) {
+        if (char >= '0' && char <= '9') numbers += char;
+        else if (char >= 'a' && char <= 'f') letters += char;
+    }
+    return numbers + letters;
+}
+
+export function verifyChallengeHash(solution: string | undefined | null, challengeHash: string | undefined | null): boolean {
+    if (!solution || !challengeHash) return false;
+
+    const normalizedHash = challengeHash.trim().toLowerCase();
+    if (!/^[a-f0-9]{32}$/.test(normalizedHash)) return false;
+
+    const expectedHash = formatChallengeHash(md5(solution));
+    return crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(normalizedHash));
 }
 
 function encryptPayload(data: object, key: string): string {

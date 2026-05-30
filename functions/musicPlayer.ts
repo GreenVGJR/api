@@ -3,7 +3,7 @@ import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-clien
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
 import config from '../config.json' with { type: 'json' };
-import { generateChallenge, verifyChallenge, ipToNumber } from './musicChallenges.ts';
+import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from './musicChallenges.ts';
 // import { Number_random } from './request.ts';
 
 /**
@@ -112,7 +112,8 @@ export async function createMusicStream(
         } catch { }
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
         const rrmc = c.req.header('x-challenge-codes') || "";
-        if (!(await verifyChallenge(rrmc, ipLL))) {
+        const challengeHash = c.req.header('x-challenge') || "";
+        if (!verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL))) {
             c.header('X-Player', "lavalink");
             c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');
             c.header('Content-Type', checkAccept && checkReferer ? 'application/json' : 'video/mpeg');

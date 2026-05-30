@@ -9741,6 +9741,189 @@ export const duckSearch = async (query: string): Promise<any> => {
     }
 }
 
+export const duckImageSearch = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`;
+        const res = await request(landingUrl, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        const vqd = res.text.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
+        if (!vqd) {
+            return {
+                error: "Can't get vqd token"
+            }
+        }
+
+        const imageHeaders = {
+            ...commonHeaders,
+            'Referer': landingUrl,
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        };
+
+        const [res2, res3] = await Promise.all([
+            request(`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1`, {
+                headers: imageHeaders,
+                useH2: true
+            }),
+            request(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`, {
+                headers: {
+                    ...commonHeaders
+                },
+                useH2: true
+            }).catch(() => null)
+        ]);
+
+        if (res2.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res2.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        if (res2.statusCode === 202) {
+            return {
+                error: "Can't process due unusual requests"
+            }
+        }
+
+        const response = JSON.parse(res2.text);
+        let autotext: any = [];
+
+        try {
+            autotext = res3 ? JSON.parse(res3.text) : [];
+        }
+        catch { }
+
+        return {
+            data: {
+                autocomplete: autotext?.map((a: any) => a.phrase) || [],
+                items: response.results || []
+            },
+            altData: response.query_expansions || []
+        };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const duckVideoSearch = async (query: string): Promise<any> => {
+    if (!query) return null;
+
+    try {
+        const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=videos&ia=videos`;
+        const res = await request(landingUrl, {
+            headers: {
+                ...commonHeaders
+            },
+            useH2: true
+        });
+
+        if (res.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        const vqd = res.text.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
+        if (!vqd) {
+            return {
+                error: "Can't get vqd token"
+            }
+        }
+
+        const videoHeaders = {
+            ...commonHeaders,
+            'Referer': landingUrl,
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        };
+
+        const [res2, res3] = await Promise.all([
+            request(`https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2`, {
+                headers: videoHeaders,
+                useH2: true
+            }),
+            request(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`, {
+                headers: {
+                    ...commonHeaders
+                },
+                useH2: true
+            }).catch(() => null)
+        ]);
+
+        if (res2.statusCode === 403) {
+            return {
+                error: "Blocked / Challenge"
+            }
+        }
+
+        if (res2.statusCode === 429) {
+            return {
+                error: "Rate-limited"
+            }
+        }
+
+        if (res2.statusCode === 202) {
+            return {
+                error: "Can't process due unusual requests"
+            }
+        }
+
+        const response = JSON.parse(res2.text);
+        let autotext: any = [];
+
+        try {
+            autotext = res3 ? JSON.parse(res3.text) : [];
+        }
+        catch { }
+
+        return {
+            data: {
+                autocomplete: autotext?.map((a: any) => a.phrase) || [],
+                items: response.results || []
+            }
+        };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
 // ──── Emoji Lookup ────
 
 type EmojiDatabase = {

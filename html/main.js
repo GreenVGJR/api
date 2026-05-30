@@ -392,6 +392,85 @@ function flattenRoutes(obj, parentPath = '') {
     return flatResults;
 }
 
+const MD5_S = [
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+];
+const MD5_K = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000));
+
+function md5(input) {
+    const bytes = new TextEncoder().encode(String(input));
+    const bitLength = bytes.length * 8;
+    const paddedLength = (((bytes.length + 9 + 63) >> 6) << 6);
+    const buffer = new Uint8Array(paddedLength);
+    buffer.set(bytes);
+    buffer[bytes.length] = 0x80;
+
+    const view = new DataView(buffer.buffer);
+    view.setUint32(paddedLength - 8, bitLength >>> 0, true);
+    view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
+
+    let a0 = 0x67452301;
+    let b0 = 0xefcdab89;
+    let c0 = 0x98badcfe;
+    let d0 = 0x10325476;
+
+    for (let offset = 0; offset < paddedLength; offset += 64) {
+        const words = new Array(16);
+        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4, true);
+
+        let a = a0;
+        let b = b0;
+        let c = c0;
+        let d = d0;
+
+        for (let i = 0; i < 64; i++) {
+            let f;
+            let g;
+            if (i < 16) {
+                f = (b & c) | (~b & d);
+                g = i;
+            } else if (i < 32) {
+                f = (d & b) | (~d & c);
+                g = (5 * i + 1) % 16;
+            } else if (i < 48) {
+                f = b ^ c ^ d;
+                g = (3 * i + 5) % 16;
+            } else {
+                f = c ^ (b | ~d);
+                g = (7 * i) % 16;
+            }
+
+            const rotatedInput = (f + a + MD5_K[i] + words[g]) >>> 0;
+            a = d;
+            d = c;
+            c = b;
+            b = (b + ((rotatedInput << MD5_S[i]) | (rotatedInput >>> (32 - MD5_S[i])))) >>> 0;
+        }
+
+        a0 = (a0 + a) >>> 0;
+        b0 = (b0 + b) >>> 0;
+        c0 = (c0 + c) >>> 0;
+        d0 = (d0 + d) >>> 0;
+    }
+
+    return [a0, b0, c0, d0]
+        .map((word) => [0, 8, 16, 24].map((shift) => ((word >>> shift) & 0xff).toString(16).padStart(2, '0')).join(''))
+        .join('');
+}
+
+function formatChallengeHash(hash) {
+    let numbers = '';
+    let letters = '';
+    for (const char of hash.toLowerCase()) {
+        if (char >= '0' && char <= '9') numbers += char;
+        else if (char >= 'a' && char <= 'f') letters += char;
+    }
+    return numbers + letters;
+}
+
 let solvedChallengeCode = null;
 
 function triggerSendButtonAnimation() {
@@ -464,7 +543,7 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
         `* Host: ${requestUrl.host}`,
         `* Scheme: ${requestUrl.protocol.replace(':', '')}`,
         `* Method: ${method}`,
-        `> ${method} ${requestUrl.pathname}${requestUrl.search} HTTP/browser`,
+        `> ${method} ${requestUrl.pathname}${requestUrl.search}`,
         `> Host: ${requestUrl.host}`,
         formatVerboseHeaders(headers),
         `* Request dispatched`,
@@ -549,6 +628,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         headers['x-tel-data'] = btoa(JSON.stringify([[String(screen.height), String(screen.width), String(window.innerHeight), String(window.innerWidth), String(lastCursorX ?? ''), String(lastCursorY ?? '')], solvedChallengeCode !== null, window.location.pathname])).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         if (solvedChallengeCode && parseUrl.pathname.startsWith('/music/')) {
             headers['x-challenge-codes'] = solvedChallengeCode;
+            headers['x-challenge'] = formatChallengeHash(md5(solvedChallengeCode));
         }
 
         const fetchOptions = { headers, mode: "same-origin" };
@@ -615,6 +695,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                     const data = JSON.parse(decryptedText);
                     if (data && data.c && data._challenge && typeof d === 'function') {
                         responseArea.innerHTML = '<div class="loading flex h-full flex-col items-center justify-center text-center"><span class="text-white">Solving challenges...</span><span class="mt-2 text-xs text-gray-400">This may take a while</span></div>';
+                        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
                         const solved = await d(data.c, data.d || 10);
                         if (solved) {
                             solvedChallengeCode = solved;

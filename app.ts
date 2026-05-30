@@ -41,6 +41,8 @@ const API_ROUTES = {
         "/search/googleImage?q=&sort=",
         "/search/googleImage/cse?q=",
         "/search/duckduckgo?q=",
+        "/search/duckduckgo/image?q=",
+        "/search/duckduckgo/video?q=",
         "/search/safebooru?q=",
         "/search/konachan?q=",
         "/search/imdb?q=",
@@ -96,8 +98,6 @@ const API_ROUTES = {
         ai: {
             chat: [
                 "/tools/chat/gemini?prompt=&conversation=",
-                "/tools/chat/meta?prompt=&conversation=",
-                "/tools/chat/grok?prompt=",
                 "/tools/chat/gpt?prompt=&conversation="
             ],
             image_generation: [

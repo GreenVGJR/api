@@ -4681,20 +4681,13 @@ export const redditMedia = async function redditMedia(que: string) {
     try {
         const req = await request(`https://old.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`, {
             headers: {
-                ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
+                ...commonHeaders
             }
         });
 
         if (req.statusCode === 403) {
             return {
                 "error": "IP Blocked"
-            }
-        }
-
-        if (req.statusCode === 302) {
-            return {
-                "error": "Google asking to verify you're not a bot"
             }
         }
 
@@ -4972,8 +4965,7 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
     try {
         const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/new.json`, {
             headers: {
-                ...commonHeaders,
-                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
+                ...commonHeaders
             }
         });
 
@@ -4989,12 +4981,6 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
             }
         }
 
-        if (req.statusCode === 302) {
-            return {
-                "error": "Google asking to verify you're not a bot"
-            }
-        }
-
         const res: any = await req.json();
         const finalres: any = res?.data?.children?.map((a: any) => a?.data);
         return { data: finalres?.[0] ? finalres : null }
@@ -5003,6 +4989,64 @@ export const redditSubreddit = async function redditSubreddit(que: string) {
         return null;
     }
 }
+
+let redditPostCookies: string = '';
+
+export const RedditPost = async (url: string, refreshCookies: boolean = false): Promise<any> => {
+    if (!url) return null;
+
+    try {
+        let urlObj: URL;
+        try { urlObj = new URL(url); } catch { return { error: 'Invalid URL' }; }
+        const pathname = urlObj.pathname.replace(/\/+$/, '');
+        const jsonUrl = `https://www.reddit.com${pathname}.json`;
+        
+        if (refreshCookies || !redditPostCookies) {
+            const embedUrl = `https://embed.reddit.com${pathname}/?embed=true`;
+            const embedRes = await fetch(embedUrl, {
+                headers: { ...commonHeaders }
+            });
+
+            const cookieParts: string[] = [];
+            embedRes.headers.forEach((value, key) => {
+                if (key.toLowerCase() === 'set-cookie') {
+                    const cookie = value.split(';')[0];
+                    if (cookie) cookieParts.push(cookie);
+                }
+            });
+            redditPostCookies = cookieParts.length > 0 ? cookieParts.join('; ') : '';
+        }
+
+        const headers: any = { ...commonHeaders };
+        if (redditPostCookies) headers['Cookie'] = redditPostCookies;
+
+        const req = await request(jsonUrl, { headers });
+
+        if (req.statusCode === 451) {
+            return { error: "This subreddit is not available in your country" }
+        }
+
+        if (req.statusCode === 403) {
+            if (!refreshCookies) {
+                return await RedditPost(url, true);
+            }
+            return { error: "IP Blocked" };
+        }
+
+        let res;
+        try {
+            res = await req.json();
+            res = Array.isArray(res) ? res.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : res;
+        } catch {
+            if (!refreshCookies) return await RedditPost(url, true);
+            return { error: 'Invalid response. Probably anti-bot challenge return.' };
+        }
+
+        return { _wafChallenge: redditPostCookies !== "", data: res };
+    } catch (e: any) {
+        return null;
+    }
+};
 
 export const instagramUser = async function instagramUser(que: string) {
     if (!que) return null;

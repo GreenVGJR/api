@@ -14,5 +14,6 @@ import googleWeather from './googleWeather.js';
 import infoKlipy from './infoKlipy.js';
 import infoPinterest from './infoPinterest.js';
 import infoTiktokVideo from './infoTiktokVideo.js';
+import redditPost from './redditPost.js';
 
-export default [infoYoutube, infoSoundcloud, infoSpotify, infoITunes, infoTwitterUser, infoTwitterTweet, redditSubreddit, infoInstagramUser, infoThreadUser, infoGiphy, infoTenor, googleWeather, infoKlipy, infoPinterest, infoTiktokVideo] as any[];
+export default [infoYoutube, infoSoundcloud, infoSpotify, infoITunes, infoTwitterUser, infoTwitterTweet, redditSubreddit, infoInstagramUser, infoThreadUser, infoGiphy, infoTenor, googleWeather, infoKlipy, infoPinterest, infoTiktokVideo, redditPost] as any[];

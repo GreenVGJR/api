@@ -190,6 +190,7 @@ const API_ROUTES = {
         "/info/twitter/user?q=",
         "/info/twitter/tweet?url=",
         "/info/reddit/subreddit?q=",
+        "/info/reddit/post?url=",
         "/info/instagram/user?q=",
         "/info/threads/user?q=",
         "/info/tenor?url=",

@@ -62,7 +62,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
           await s.pipe(dataToPipe);
         } else if (dataToPipe.pipe) {
           const { Readable } = await import('stream');
-          
+
           await s.pipe(Readable.toWeb(dataToPipe));
         } else {
           await s.write(dataToPipe);
@@ -156,19 +156,15 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
     if (c.req.raw.signal.aborted) return;
 
-    const dataPromise = typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory;
-
-    const [dataResult] = await Promise.allSettled([
-      dataPromise,
+    const [data] = await Promise.all([
+      Promise.resolve()
+        .then(() => typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory)
+        .catch((err) => {
+          console.error('Promise error:', err);
+          return null;
+        }),
       stream.write(''),
     ]);
-
-    let data = null;
-    if (dataResult.status === 'rejected') {
-      console.error('Promise error:', dataResult.reason);
-    } else {
-      data = dataResult.value;
-    }
 
     if (c.req.raw.signal.aborted) return;
 
@@ -217,4 +213,3 @@ export const processImage = async (c: Context, url?: string) => {
     return '';
   }
 }
-

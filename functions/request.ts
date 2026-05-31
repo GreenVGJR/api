@@ -7317,6 +7317,28 @@ export const DiscordListMemberRole = async (token: string, guildId: string, role
             };
         }
 
+        const altData = Array.isArray(rolesData) ? roleIds
+            .map(id => rolesData.find((role: any) => role.id === id))
+            .filter(Boolean)
+            .map((role: any) => {
+                const members = cachedMembers
+                    .filter((member: any) => Array.isArray(member.roles) && member.roles.includes(role.id))
+                    .map((member: any) => member.user?.id)
+                    .filter(Boolean);
+                const resolvedArray = resolvePermissions(role.permissions);
+
+                return {
+                    ...role,
+                    membersCount: members.length,
+                    members,
+                    permissions_resolved: {
+                        array: resolvedArray,
+                        string: resolvedArray.join(', ')
+                    },
+                    created_at: role.id ? String(getSnowflakeDate(role.id)) : null
+                };
+            }) : [];
+
         const cachedMembersCount = cachedMembers.length;
         const types = type.split(',').map(t => t.trim());
         let data = cachedMembers
@@ -7371,8 +7393,8 @@ export const DiscordListMemberRole = async (token: string, guildId: string, role
             usersCount,
             membersCount: data.length,
             cachedMembersCount,
-            roleIds,
-            data
+            data,
+            altData,
         };
     } catch (e: any) {
         return { error: e.message || 'Something just happened' };

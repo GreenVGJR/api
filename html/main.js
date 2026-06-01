@@ -137,7 +137,7 @@ let endpoints = {
 };
 
 let currentCategory = 'search';
-let currentEndpoint = { path: '/loading...', query: '' };
+let currentEndpoint = { path: '/loading...', query: '', types: [] };
 let isLoading = false;
 let lastRawResponse = '';
 let isCoolingDown = false;
@@ -368,17 +368,28 @@ function updateStatusUI(ok, status, duration) {
     }
 }
 
-function flattenRoutes(obj, parentPath = '') {
+function routeToEndpoint(route, types = []) {
+    const parts = route.split('?');
+    return {
+        path: parts[0],
+        query: parts.length > 1 ? '?' + parts[1] : '',
+        types: Array.isArray(types) ? types.filter(type => typeof type === 'string') : []
+    };
+}
+
+function flattenRoutes(obj) {
     let flatResults = [];
     if (Array.isArray(obj)) {
+        if (typeof obj[0] === 'string') {
+            return [routeToEndpoint(obj[0], obj.slice(1))];
+        }
+
         return obj.map(item => {
             if (typeof item === 'string') {
-                const parts = item.split('?');
-                return {
-                    path: parts[0],
-                    query: parts.length > 1 ? '?' + parts[1] : ''
-                };
-            } else if (typeof item === 'object') {
+                return routeToEndpoint(item);
+            } else if (Array.isArray(item) && typeof item[0] === 'string') {
+                return routeToEndpoint(item[0], item.slice(1));
+            } else if (typeof item === 'object' && item !== null) {
                 return flattenRoutes(item);
             }
             return null;
@@ -792,19 +803,21 @@ async function performRequest(targetUrl, retryCount = 0) {
 
 
 
-function parseQueryParams(queryString) {
+function parseQueryParams(queryString, types = []) {
     if (!queryString || !queryString.startsWith('?')) return [];
     const raw = queryString.substring(1);
     const params = [];
     const parts = raw.split('&');
     for (const part of parts) {
         const eqIdx = part.indexOf('=');
+        const type = normalizeParamType(types[params.length]);
         if (eqIdx === -1) {
-            params.push({ key: part, value: '' });
+            params.push({ key: part, value: '', type });
         } else {
             params.push({
                 key: part.substring(0, eqIdx),
-                value: decodeURIComponent(part.substring(eqIdx + 1))
+                value: decodeURIComponent(part.substring(eqIdx + 1)),
+                type
             });
         }
     }
@@ -820,13 +833,43 @@ function buildQueryString(params) {
     }).join('&');
 }
 
+const PARAM_TYPES = new Set(['string', 'number', 'boolean', 'url', 'enum']);
+
+function normalizeParamType(type) {
+    return PARAM_TYPES.has(type) ? type : 'string';
+}
+
+function buildEndpointUrl(endpoint) {
+    if (!endpoint) return apiBaseUrl;
+    const cleanBase = apiBaseUrl.replace(/\/$/, '');
+    const cleanPath = endpoint.path.startsWith('/') ? endpoint.path : '/' + endpoint.path;
+    return cleanBase + cleanPath + (endpoint.query || '');
+}
+
+function renderParamControl(p, i) {
+    const type = normalizeParamType(p.type);
+    const value = String(p.value ?? '');
+
+    return `
+        <input
+            type="text"
+            class="param-input"
+            data-param-index="${i}"
+            value="${escapeAttribute(value)}"
+            placeholder="${escapeAttribute(type)}"
+            spellcheck="false"
+            autocomplete="off"
+        />
+    `;
+}
+
 function renderParams() {
     paramsPanel.classList.remove('hidden');
 
     if (!currentEndpoint || !currentEndpoint.query) {
         currentParams = [];
     } else {
-        currentParams = parseQueryParams(currentEndpoint.query);
+        currentParams = parseQueryParams(currentEndpoint.query, currentEndpoint.types || []);
     }
 
     paramsCount.textContent = currentParams.length;
@@ -849,27 +892,22 @@ function renderParams() {
 
         paramsContainer.innerHTML = currentParams.map((p, i) => `
             <div class="param-row">
-                <label class="param-label" title="${p.key}">${p.key}</label>
+                <label class="param-label" title="${escapeAttribute(p.key)}">${escapeHTML(p.key)}</label>
                 <div class="param-input-wrap">
-                    <input 
-                        type="text" 
-                        class="param-input" 
-                        data-param-index="${i}"
-                        value="${p.value.replace(/"/g, '&quot;')}"
-                        spellcheck="false"
-                        autocomplete="off"
-                    />
+                    ${renderParamControl(p, i)}
                 </div>
             </div>
         `).join('');
 
 
         paramsContainer.querySelectorAll('.param-input').forEach(input => {
-            input.addEventListener('input', () => {
+            const updateValue = () => {
                 const idx = parseInt(input.dataset.paramIndex);
                 currentParams[idx].value = input.value;
                 syncParamsToUrl();
-            });
+            };
+            input.addEventListener('input', updateValue);
+            input.addEventListener('change', updateValue);
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -956,11 +994,7 @@ async function fetchInitialEndpoints() {
 
     if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
         currentEndpoint = endpoints[currentCategory][0];
-
-        const cleanBase = apiBaseUrl.replace(/\/$/, '');
-        const cleanPath = currentEndpoint.path.startsWith('/') ? currentEndpoint.path : '/' + currentEndpoint.path;
-
-        urlInput.value = cleanBase + cleanPath + (currentEndpoint.query || '');
+        urlInput.value = buildEndpointUrl(currentEndpoint);
         adjustHeight();
 
         renderEndpoints();
@@ -1045,7 +1079,7 @@ function attachEndpointListeners() {
         btn.addEventListener('click', () => {
             const index = parseInt(btn.dataset.index);
             currentEndpoint = endpoints[currentCategory][index];
-            urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
+            urlInput.value = buildEndpointUrl(currentEndpoint);
             adjustHeight();
             renderEndpoints();
             renderParams();
@@ -1081,7 +1115,7 @@ tabBtns.forEach(btn => {
             const categoryList = endpoints[currentCategory] || [];
             if (categoryList.length > 0) {
                 currentEndpoint = categoryList[0];
-                urlInput.value = apiBaseUrl + currentEndpoint.path + currentEndpoint.query;
+                urlInput.value = buildEndpointUrl(currentEndpoint);
                 adjustHeight();
             } else {
                 currentEndpoint = null;

@@ -22,224 +22,236 @@ import music from './routes/music/index.js';
 
 const API_ROUTES = {
     search: [
-        "/search/youtube/video?q=&mix=",
-        "/search/youtube/music?q=&mix=",
-        "/search/youtube/channel?q=",
-        "/search/youtube/playlist?q=",
-        "/search/crunchyroll?q=",
-        "/search/soundcloud?q=",
-        "/search/spotify?q=",
-        "/search/applemusic?q=",
-        "/search/shazam?q=",
-        "/search/deezer?q=",
-        "/search/tidal?q=",
-        "/search/tidal/v2?q=",
-        "/search/genius?q=",
-        "/search/audiomack?q=&type=",
-        "/search/pinterest?q=",
-        "/search/google?q=",
-        "/search/googleImage?q=&sort=",
-        "/search/googleImage/cse?q=",
-        "/search/duckduckgo?q=",
-        "/search/duckduckgo/image?q=",
-        "/search/duckduckgo/video?q=",
-        "/search/safebooru?q=",
-        "/search/konachan?q=",
-        "/search/imdb?q=",
-        "/search/tumblr?q=",
-        "/search/imgflip?q=",
-        "/search/flickr?q=",
-        "/search/istockphoto?q=",
-        "/search/imgur/posts?q=",
-        "/search/unsplash?q=",
-        "/search/pixiv?q=",
-        "/search/otodb?q=",
-        "/search/discord/discovery/apps?q=",
-        "/search/discord/discovery/servers?q=",
-        "/search/bilibili?q=",
-        "/search/jiosaavn?q=",
-        "/search/twitch?q=",
-        "/search/threads/users?q=",
-        "/search/pexels?q=",
-        "/search/tiktok/video?q=",
-        "/search/tiktok/music?q=",
-        "/search/tiktok/users?q=",
-        "/search/tiktok/feed?region_code=",
-        "/search/reddit/media?q=",
-        "/search/roblox/games?q=",
-        "/search/roblox/audio?q=",
-        "/search/bandcamp?q=",
-        "/search/capcut/templates?q=",
-        "/search/tenor?q=&type=",
-        "/search/giphy?q=&type=",
-        "/search/giphy/v2?q=&type=",
-        "/search/klipy?q=&type=",
-        "/search/patreon?q=",
-        "/search/trakteer?q="
+        ["/search/youtube/video?q=&mix=", "string", "boolean"],
+        ["/search/youtube/music?q=&mix=", "string", "boolean"],
+        ["/search/youtube/channel?q=", "string"],
+        ["/search/youtube/playlist?q=", "string"],
+        ["/search/crunchyroll?q=", "string"],
+        ["/search/soundcloud?q=", "string"],
+        ["/search/spotify?q=", "string"],
+        ["/search/applemusic?q=", "string"],
+        ["/search/shazam?q=", "string"],
+        ["/search/deezer?q=", "string"],
+        ["/search/tidal?q=", "string"],
+        ["/search/tidal/v2?q=", "string"],
+        ["/search/genius?q=", "string"],
+        ["/search/audiomack?q=&type=", "string", "enum"],
+        ["/search/pinterest?q=", "string"],
+        ["/search/google?q=", "string"],
+        ["/search/googleImage?q=&sort=", "string", "enum"],
+        ["/search/googleImage/cse?q=", "string"],
+        ["/search/duckduckgo?q=", "string"],
+        ["/search/duckduckgo/image?q=", "string"],
+        ["/search/duckduckgo/video?q=", "string"],
+        ["/search/safebooru?q=", "string"],
+        ["/search/konachan?q=", "string"],
+        ["/search/imdb?q=", "string"],
+        ["/search/tumblr?q=", "string"],
+        ["/search/imgflip?q=", "string"],
+        ["/search/flickr?q=", "string"],
+        ["/search/istockphoto?q=", "string"],
+        ["/search/imgur/posts?q=", "string"],
+        ["/search/unsplash?q=", "string"],
+        ["/search/pixiv?q=", "string"],
+        ["/search/otodb?q=", "string"],
+        ["/search/discord/discovery/apps?q=", "string"],
+        ["/search/discord/discovery/servers?q=", "string"],
+        ["/search/bilibili?q=", "string"],
+        ["/search/jiosaavn?q=", "string"],
+        ["/search/twitch?q=", "string"],
+        ["/search/threads/users?q=", "string"],
+        ["/search/pexels?q=", "string"],
+        ["/search/tiktok/video?q=", "string"],
+        ["/search/tiktok/music?q=", "string"],
+        ["/search/tiktok/users?q=", "string"],
+        ["/search/tiktok/feed"],
+        ["/search/reddit/media?q=", "string"],
+        ["/search/roblox/games?q=", "string"],
+        ["/search/roblox/audio?q=", "string"],
+        ["/search/bandcamp?q=", "string"],
+        ["/search/capcut/templates?q=", "string"],
+        ["/search/tenor?q=&type=", "string", "enum"],
+        ["/search/giphy?q=&type=", "string", "enum"],
+        ["/search/giphy/v2?q=&type=", "string", "enum"],
+        ["/search/klipy?q=&type=", "string", "enum"],
+        ["/search/patreon?q=", "string"],
+        ["/search/trakteer?q=", "string"]
     ],
     profile: [
-        "/profile/guns?q=",
-        "/profile/drift?q=",
-        "/profile/haunt?q=",
-        "/profile/rage?q=",
-        "/profile/saweria?q=",
-        "/profile/trakteer?q=",
-        "/profile/sociabuzz?q=",
-        "/profile/patreon?q="
+        ["/profile/guns?q=", "string"],
+        ["/profile/drift?q=", "string"],
+        ["/profile/haunt?q=", "string"],
+        ["/profile/rage?q=", "string"],
+        ["/profile/saweria?q=", "string"],
+        ["/profile/trakteer?q=", "string"],
+        ["/profile/sociabuzz?q=", "string"],
+        ["/profile/patreon?q=", "string"]
     ],
     lyrics: [
-        "/lyrics/youtube?q=",
-        "/lyrics/deezer?q=",
-        "/lyrics/shazam?q=",
-        "/lyrics/tidal?q=",
-        "/lyrics/spotify?q="
+        ["/lyrics/youtube?q=", "string"],
+        ["/lyrics/deezer?q=", "string"],
+        ["/lyrics/shazam?q=", "string"],
+        ["/lyrics/tidal?q=", "string"],
+        ["/lyrics/spotify?q=", "string"]
     ],
     tools: {
         ai: {
             chat: [
-                "/tools/chat/gemini?prompt=&conversation=",
-                "/tools/chat/gpt?prompt=&conversation="
+                ["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
+                ["/tools/chat/gpt?prompt=&conversation=", "string", "string"]
             ],
             image_generation: [
-                "/tools/ai-image/flux_schnell?prompt=",
-                "/tools/ai-image/magicstudio?prompt=",
+                ["/tools/ai-image/flux_schnell?prompt=", "string"],
+                ["/tools/ai-image/magicstudio?prompt=", "string"],
             ],
         },
         misc: [
-            "/tools/translate?q=&from=&to=",
-            "/tools/timezone?q=",
-            "/tools/emoji?q=&limit=",
-            "/tools/emoji/kitchen?q1=&q2=&imageOnly=",
-            "/tools/md5?q="
+            ["/tools/translate?q=&from=&to=", "string", "string", "string"],
+            ["/tools/timezone?q=", "string"],
+            ["/tools/emoji?q=&limit=", "string", "number"],
+            ["/tools/emoji/kitchen?q1=&q2=&imageOnly=", "string", "string", "boolean"],
+            ["/tools/md5?q=", "string"]
         ],
         db: [
-            "/tools/db/get?q=&hash=",
-            "/tools/db/getAll?q=&hash=",
-            "/tools/db/delete?q=&hash=",
-            "/tools/db/set?name=&value=&hash="
+            ["/tools/db/get?q=&hash=", "string", "string"],
+            ["/tools/db/getAll?q=&hash=", "string", "string"],
+            ["/tools/db/delete?q=&hash=", "string", "string"],
+            ["/tools/db/set?name=&value=&hash=", "string", "string", "string"]
         ],
         discord: {
             stream: [
-                "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed="
+                ["/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=", "string", "number", "number", "url", "string", "boolean", "boolean", "boolean"]
             ],
             tiktok: [
-                "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code="
+                ["/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code=", "string", "number", "number", "string"]
             ],
             server: [
-                "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
-                "/tools/discord/infoServer?token=&guildId=",
-                "/tools/discord/infoAutomod?token=&guildId=",
+                ["/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=", "string", "number", "string", "string", "string", "number", "url", "url", "url"],
+                ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
+                ["/tools/discord/infoAutomod?token=&guildId=", "string", "number"],
             ],
             member: [
-                "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
-                "/tools/discord/infoMember?token=&userId=&guildId=",
-                "/tools/discord/listMember?token=&guildId=&limit=&type=&permission=",
-                "/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=",
+                ["/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "string", "url", "url", "string", "string"],
+                ["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
+                ["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum", "string"],
+                ["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum", "string"],
             ],
             channel: [
-                "/tools/discord/listChannel?token=&guildId=&limit=&type=",
-                "/tools/discord/infoChannel?token=&channelId=&guildId=",
+                ["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum"],
+                ["/tools/discord/infoChannel?token=&channelId=&guildId=", "string", "number", "number"],
             ],
             role: [
-                "/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=",
-                "/tools/discord/infoRole?token=&roleId=&guildId=",
+                ["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum", "string"],
+                ["/tools/discord/infoRole?token=&roleId=&guildId=", "string", "number", "number"],
             ],
             invite: [
-                "/tools/discord/infoInvite?q=&token=&guildId=",
-                "/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId="
+                ["/tools/discord/infoInvite?q=&token=&guildId=", "string", "string", "number"],
+                ["/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId=", "string", "number", "number", "enum", "number"]
             ],
             sticker: [
-                "/tools/discord/infoSticker?token=&q="
+                ["/tools/discord/infoSticker?token=&q=", "string", "string"],
+                ["/tools/discord/sticker/create?token=&guildId=&url=&name=&description=&tags=&reason=", "string", "number", "url", "string", "string", "string", "string"]
             ],
             webhook: [
-                { create: ["/tools/discord/webhook/create?token=&channelId=&name=&avatar="] },
-                { info: ["/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl="] },
-                { delete: ["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl="] },
-                { send: ["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar="] },
-                { list: ["/tools/discord/webhook/list?token=&channelId="] },
-                { listGuild: ["/tools/discord/listWebhooks?token=&guildId=&type="] }
+                { create: [["/tools/discord/webhook/create?token=&channelId=&name=&avatar=", "string", "number", "string", "url"]] },
+                { info: [["/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl=", "string", "number", "string", "url"]] },
+                { delete: [["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl=", "string", "number", "string", "url"]] },
+                { send: [["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar=", "number", "string", "url", "string", "string", "url"]] },
+                { list: [["/tools/discord/webhook/list?token=&channelId=", "string", "number"]] },
+                { listGuild: [["/tools/discord/listWebhooks?token=&guildId=&type=", "string", "number", "enum"]] }
             ],
             message: [
-                "/tools/discord/infoMessage?token=&channelId=&messageId=",
-                "/tools/discord/infoMessages?token=&channelId=&sort=&limit="
+                ["/tools/discord/infoMessage?token=&channelId=&messageId=", "string", "number", "number"],
+                ["/tools/discord/infoMessages?token=&channelId=&sort=&limit=", "string", "number", "enum", "number"]
             ],
             voice: [
-                "/tools/discord/voice/deafen?token=&guildId=&userId=",
-                "/tools/discord/voice/undeafen?token=&guildId=&userId=",
-                "/tools/discord/voice/mute?token=&guildId=&userId=",
-                "/tools/discord/voice/unmute?token=&guildId=&userId=",
-                "/tools/discord/voice/kick?token=&guildId=&userId=",
-                "/tools/discord/voice/move?token=&guildId=&userId=&toChannelId=",
-                "/tools/discord/voice/muteall?token=&guildId=&channelId=&authorId=",
-                "/tools/discord/voice/unmuteall?token=&guildId=&channelId=&authorId=",
-                "/tools/discord/voice/deafall?token=&guildId=&channelId=&authorId=",
-                "/tools/discord/voice/undeafall?token=&guildId=&channelId=&authorId=",
-                "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
-                "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=",
-                "/tools/discord/voice/list?token=&guildId=&channelId=",
-                "/tools/discord/voice/setStatus?token=&channelId=&content="
+                ["/tools/discord/voice/deafen?token=&guildId=&userId=", "string", "number", "number"],
+                ["/tools/discord/voice/undeafen?token=&guildId=&userId=", "string", "number", "number"],
+                ["/tools/discord/voice/mute?token=&guildId=&userId=", "string", "number", "number"],
+                ["/tools/discord/voice/unmute?token=&guildId=&userId=", "string", "number", "number"],
+                ["/tools/discord/voice/kick?token=&guildId=&userId=", "string", "number", "number"],
+                ["/tools/discord/voice/move?token=&guildId=&userId=&toChannelId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/muteall?token=&guildId=&channelId=&authorId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/unmuteall?token=&guildId=&channelId=&authorId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/deafall?token=&guildId=&channelId=&authorId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/undeafall?token=&guildId=&channelId=&authorId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=", "string", "number", "number", "number"],
+                ["/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=", "string", "number", "number", "number", "number"],
+                ["/tools/discord/voice/list?token=&guildId=&channelId=", "string", "number", "number"],
+                ["/tools/discord/voice/setStatus?token=&channelId=&content=", "string", "number", "string"]
             ]
         },
     },
     info: [
-        "/info/youtube/video?url=",
-        "/info/youtube/channel?url=",
-        "/info/soundcloud?url=",
-        "/info/spotify?url=",
-        "/info/applemusic?url=",
-        "/info/twitter/user?q=",
-        "/info/twitter/tweet?url=",
-        "/info/reddit/subreddit?q=",
-        "/info/reddit/post?url=",
-        "/info/instagram/user?q=",
-        "/info/threads/user?q=",
-        "/info/tenor?url=",
-        "/info/giphy?url=",
-        "/info/tiktok/video?q=",
-        "/info/weather?q=",
-        "/info/pinterest?url=",
-        "/info/klipy?url="
+        ["/info/youtube/video?url=", "url"],
+        ["/info/youtube/channel?url=", "url"],
+        ["/info/soundcloud?url=", "url"],
+        ["/info/spotify?url=", "url"],
+        ["/info/applemusic?url=", "url"],
+        ["/info/twitter/user?q=", "string"],
+        ["/info/twitter/tweet?url=", "url"],
+        ["/info/reddit/subreddit?q=", "string"],
+        ["/info/reddit/post?url=", "url"],
+        ["/info/instagram/user?q=", "string"],
+        ["/info/threads/user?q=", "string"],
+        ["/info/tenor?url=", "url"],
+        ["/info/giphy?url=", "url"],
+        ["/info/tiktok/video?q=", "string"],
+        ["/info/weather?q=", "string"],
+        ["/info/pinterest?url=", "url"],
+        ["/info/klipy?url=", "url"]
     ],
     download: [],
     music: [
-        "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
-        "/music/disconnect?token=&guildId=",
-        "/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=",
-        "/music/pause?token=&guildId=",
-        "/music/resume?token=&guildId=",
-        "/music/skip?token=&guildId=&index=",
-        "/music/stop?token=&guildId=",
-        "/music/seek?token=&guildId=&time=",
-        "/music/volume?token=&guildId=&value=",
-        "/music/loop?token=&guildId=&mode=",
-        "/music/shuffle?token=&guildId=",
-        "/music/remove?token=&guildId=&index=",
-        "/music/clear?token=&guildId=",
-        "/music/jump?token=&guildId=&index=",
-        "/music/move?token=&guildId=&from=&to=",
-        "/music/back?token=&guildId=",
-        "/music/247?token=&guildId=&value=",
-        "/music/where?token=&guildId=&authorId=",
-        "/music/nowplaying?token=&guildId=",
-        "/music/nowplaying/lyrics?token=&guildId=",
-        "/music/queue?token=&guildId=&limit=&offset=",
-        "/music/stats?token=",
-        "/music/filter?token=&guildId=&filter=",
-        "/music/voiceStatus?token=&guildId=&type=&status=&content=",
+        ["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
+        ["/music/disconnect?token=&guildId=", "string", "number"],
+        ["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=", "string", "string", "enum", "number", "number", "number", "boolean", "boolean", "boolean"],
+        ["/music/pause?token=&guildId=", "string", "number"],
+        ["/music/resume?token=&guildId=", "string", "number"],
+        ["/music/skip?token=&guildId=&index=", "string", "number", "number"],
+        ["/music/stop?token=&guildId=", "string", "number"],
+        ["/music/seek?token=&guildId=&time=", "string", "number", "string"],
+        ["/music/volume?token=&guildId=&value=", "string", "number", "number"],
+        ["/music/loop?token=&guildId=&mode=", "string", "number", "enum"],
+        ["/music/shuffle?token=&guildId=", "string", "number"],
+        ["/music/remove?token=&guildId=&index=", "string", "number", "number"],
+        ["/music/clear?token=&guildId=", "string", "number"],
+        ["/music/jump?token=&guildId=&index=", "string", "number", "number"],
+        ["/music/move?token=&guildId=&from=&to=", "string", "number", "number", "number"],
+        ["/music/back?token=&guildId=", "string", "number"],
+        ["/music/247?token=&guildId=&value=", "string", "number", "boolean"],
+        ["/music/where?token=&guildId=&authorId=", "string", "number", "number"],
+        ["/music/nowplaying?token=&guildId=", "string", "number"],
+        ["/music/nowplaying/lyrics?token=&guildId=", "string", "number"],
+        ["/music/queue?token=&guildId=&limit=&offset=", "string", "number", "number", "number"],
+        ["/music/stats?token=", "string"],
+        ["/music/filter?token=&guildId=&filter=", "string", "number", "enum"],
+        ["/music/voiceStatus?token=&guildId=&type=&status=&content=", "string", "number", "enum", "boolean", "string"],
     ]
 };
+
+function routeToEndpoint(route: string, types: string[] = []) {
+    const parts = route.split('?');
+    return {
+        path: parts[0],
+        query: parts.length > 1 ? '?' + parts[1] : '',
+        types
+    };
+}
 
 function flattenRoutes(obj: any): any[] {
     let flatResults: any[] = [];
     if (Array.isArray(obj)) {
+        if (typeof obj[0] === 'string') {
+            return [routeToEndpoint(obj[0], obj.slice(1).filter((type: any) => typeof type === 'string'))];
+        }
+
         return obj.map(item => {
             if (typeof item === 'string') {
-                const parts = item.split('?');
-                return {
-                    path: parts[0],
-                    query: parts.length > 1 ? '?' + parts[1] : ''
-                };
-            } else if (typeof item === 'object') {
+                return routeToEndpoint(item);
+            } else if (Array.isArray(item) && typeof item[0] === 'string') {
+                return routeToEndpoint(item[0], item.slice(1).filter((type: any) => typeof type === 'string'));
+            } else if (typeof item === 'object' && item !== null) {
                 return flattenRoutes(item);
             }
             return null;
@@ -259,6 +271,7 @@ const PLAYGROUND_ENDPOINTS = {
     tools: flattenRoutes(API_ROUTES.tools),
     info: flattenRoutes(API_ROUTES.info),
     profile: flattenRoutes(API_ROUTES.profile),
+    download: flattenRoutes(API_ROUTES.download),
     music: flattenRoutes(API_ROUTES.music)
 };
 

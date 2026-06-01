@@ -7929,6 +7929,127 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
     }
 };
 
+type DiscordCreateStickerPayload = {
+    url: string;
+    name: string;
+    description?: string;
+    tags?: string;
+    reason?: string;
+};
+
+const DISCORD_STICKER_MAX_BYTES = 512 * 1024;
+const DISCORD_STICKER_MIME_TO_EXT: Record<string, string> = {
+    'image/png': 'png',
+    'image/apng': 'apng',
+    'image/gif': 'gif',
+    'application/json': 'json'
+};
+const DISCORD_STICKER_EXT_TO_MIME: Record<string, string> = {
+    png: 'image/png',
+    apng: 'image/png',
+    gif: 'image/gif',
+    json: 'application/json'
+};
+
+export const DiscordCreateSticker = async (token: string, guildId: string, payload: DiscordCreateStickerPayload) => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+    if (!payload.url) return { error: 'Missing sticker URL' };
+
+    const name = payload.name?.trim() || '';
+    const description = payload.description ?? '';
+    const tags = payload.tags?.trim() || name;
+
+    if (name.length < 2 || name.length > 30) return { error: 'Sticker name must be 2-30 characters' };
+    if (description.length === 1 || description.length > 100) return { error: 'Sticker description must be empty or 2-100 characters' };
+    if (!tags || tags.length > 200) return { error: 'Sticker tags must be 1-200 characters' };
+
+    let stickerUrl: URL;
+    try {
+        stickerUrl = new URL(payload.url);
+        if (stickerUrl.protocol !== 'http:' && stickerUrl.protocol !== 'https:') throw new Error();
+    } catch {
+        return { error: 'Invalid sticker URL' };
+    }
+
+    try {
+        const source = await fetch(stickerUrl, {
+            headers: {
+                'Accept': 'image/png,image/apng,image/gif,application/json,*/*;q=0.8',
+                'User-Agent': userAgent
+            }
+        });
+
+        if (!source.ok) {
+            return {
+                data: null,
+                error: { message: 'Failed to download sticker file', status: source.status, statusText: source.statusText }
+            };
+        }
+
+        const contentLength = Number(source.headers.get('content-length') || 0);
+        if (contentLength > DISCORD_STICKER_MAX_BYTES) {
+            return { error: `Sticker file is too large. Max ${DISCORD_STICKER_MAX_BYTES} bytes` };
+        }
+
+        const rawContentType = source.headers.get('content-type')?.split(';')[0]?.toLowerCase() || '';
+        const pathExt = stickerUrl.pathname.split('.').pop()?.toLowerCase() || '';
+        const extFromUrl = DISCORD_STICKER_EXT_TO_MIME[pathExt] ? pathExt : '';
+        const extFromType = DISCORD_STICKER_MIME_TO_EXT[rawContentType] || '';
+        const ext = extFromUrl || extFromType;
+        const mimeType = DISCORD_STICKER_EXT_TO_MIME[ext] || (DISCORD_STICKER_MIME_TO_EXT[rawContentType] ? rawContentType : '');
+
+        if (!ext || !mimeType) {
+            return { error: 'Unsupported sticker file type. Use PNG, APNG, GIF, or Lottie JSON' };
+        }
+
+        const arrayBuffer = await source.arrayBuffer();
+        if (arrayBuffer.byteLength > DISCORD_STICKER_MAX_BYTES) {
+            return { error: `Sticker file is too large. Max ${DISCORD_STICKER_MAX_BYTES} bytes` };
+        }
+
+        const filenameBase = name.replace(/[^a-zA-Z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'sticker';
+        const form = new FormData();
+        form.append('name', name);
+        form.append('description', description);
+        form.append('tags', tags);
+        form.append('file', new Blob([arrayBuffer], { type: mimeType }), `${filenameBase}.${ext}`);
+
+        const headers: any = {
+            'Authorization': `Bot ${token}`,
+            'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+        };
+        if (payload.reason) headers['X-Audit-Log-Reason'] = encodeURIComponent(payload.reason);
+
+        const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/stickers`, {
+            method: 'POST',
+            headers,
+            body: form
+        });
+
+        let result: any = null;
+        try { result = await response.json(); } catch { }
+
+        if (response.status < 200 || response.status >= 300) {
+            return {
+                data: null,
+                error: result || { status: response.status, statusText: response.statusText }
+            };
+        }
+
+        if (result?.id) {
+            result.created_at = String(getSnowflakeDate(result.id));
+            const resultExt = result.format_type === 4 ? 'gif' : (result.format_type === 3 ? 'json' : ext);
+            result.url = `https://cdn.discordapp.com/stickers/${result.id}.${resultExt}`;
+            stickerCache.set(result.id, result);
+        }
+
+        return { data: [result || true, null, response.status] };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
 const processDiscordMessage = async (m: any, token?: string) => {
     if (!m) return m;
 

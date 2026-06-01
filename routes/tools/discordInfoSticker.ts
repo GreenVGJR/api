@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { DiscordInfoSticker } from '../../functions/request';
+import { DiscordCreateSticker, DiscordInfoSticker, getQuery, getToken } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest';
 
 const app = new Hono();
@@ -22,6 +22,33 @@ app.get('/discord/infoSticker', async (c) => {
     if (!q) return c.json({ error: "Missing valid parameter: q" }, 202);
 
     return await dispatch(c, () => DiscordInfoSticker(token!, q));
+});
+
+app.get('/discord/sticker/create', async (c) => {
+    const token = getToken(c);
+
+    const queryGuildId = c.req.query('guildId');
+    const guildId = (queryGuildId && Number.isInteger(parseInt(queryGuildId))) ? queryGuildId : null;
+
+    const url = getQuery(c, 'url');
+    const name = getQuery(c, 'name');
+    const descriptionQuery = getQuery(c, 'description');
+    const tagsQuery = getQuery(c, 'tags');
+    const reasonQuery = getQuery(c, 'reason');
+
+    if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+    if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+    if (!url || typeof url !== 'string') return c.json({ error: "Missing valid parameter: url" }, 202);
+    if (!name || typeof name !== 'string') return c.json({ error: "Missing valid parameter: name" }, 202);
+
+    c.header('X-Route', 'discord.com');
+    return await dispatch(c, () => DiscordCreateSticker(token, guildId, {
+        url,
+        name,
+        description: typeof descriptionQuery === 'string' ? descriptionQuery : '',
+        tags: (typeof tagsQuery === 'string' && tagsQuery.trim()) ? tagsQuery : name,
+        reason: (typeof reasonQuery === 'string' && reasonQuery.trim()) ? reasonQuery : undefined
+    }));
 });
 
 export default app;

@@ -1136,6 +1136,12 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 export const YTMusic = async function YTMusic(que: string, deepSearch: boolean = false) {
     if (!que) return null;
     try {
+        const videoIdFromPlaylist = (playlistId: string | undefined | null) => {
+            if (!playlistId) return null;
+            return playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1]
+                || playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1]
+                || null;
+        };
         const bodyload = JSON.stringify({
             query: que,
             params: "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D",
@@ -1207,8 +1213,12 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                 const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(':')).pop() || flexColumn1[flexColumn1.length - 1];
 
                 const musch = a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
-                const muspl = a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint?.playlistId;
-                const videoId = a.playlistItemData?.videoId || a.navigationEndpoint?.watchEndpoint?.videoId;
+                const menuWatchEndpoint = a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint;
+                const titleWatchEndpoint = flexColumn0[0]?.navigationEndpoint?.watchEndpoint;
+                const itemWatchEndpoint = a.navigationEndpoint?.watchEndpoint;
+                const muspl = menuWatchEndpoint?.playlistId || titleWatchEndpoint?.playlistId || itemWatchEndpoint?.playlistId;
+                const videoId = a.playlistItemData?.videoId || titleWatchEndpoint?.videoId || itemWatchEndpoint?.videoId || menuWatchEndpoint?.videoId || videoIdFromPlaylist(muspl);
+                const altUrl = videoId ? "https://music.youtube.com/watch?v=" + videoId + (muspl ? "&list=" + muspl : "") : null;
 
                 let mixData: any = null;
                 if (muspl && deepSearch) {
@@ -1276,13 +1286,13 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
                     playlistId: muspl,
                     videoId,
                     url: videoId ? "https://music.youtube.com/watch?v=" + videoId : null,
-                    altUrl: videoId ? "https://music.youtube.com/watch?v=" + videoId + "&list=" + muspl : null,
+                    altUrl,
                     baseUrl: videoId ? "https://www.youtube.com/watch?v=" + videoId : null,
                     shortUrl: videoId ? "https://youtu.be/" + videoId : null,
                     thumbnail: musch?.startsWith('//') ? 'https:' + musch : musch,
                     title: flexColumn0[0]?.text,
                     listenCount: String(parseAbbreviatedNumber(flexColumn2[0]?.text?.split(' ')?.[0])),
-                    isATV: flexColumn0[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType === 'MUSIC_VIDEO_TYPE_ATV',
+                    isATV: titleWatchEndpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType === 'MUSIC_VIDEO_TYPE_ATV',
                     isExplicit: a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType?.startsWith('MUSIC_EXPLICIT') || false,
                     isCollab: artistRunsFinal.length > 1,
                     mixPlaylist: mixData,
@@ -7938,12 +7948,15 @@ type DiscordCreateStickerPayload = {
 };
 
 const DISCORD_STICKER_MAX_BYTES = 512 * 1024;
+const DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES = 8 * 1024 * 1024;
 const DISCORD_STICKER_MIME_TO_EXT: Record<string, string> = {
     'image/png': 'png',
     'image/apng': 'apng',
     'image/gif': 'gif',
     'application/json': 'json'
 };
+const DISCORD_STICKER_CONVERT_MIME_TO_PNG = new Set(['image/jpeg', 'image/jpg', 'image/pjpeg', 'image/webp', 'image/x-webp']);
+const DISCORD_STICKER_CONVERT_EXT_TO_PNG = new Set(['jpg', 'jpeg', 'jpe', 'jfif', 'webp']);
 const DISCORD_STICKER_EXT_TO_MIME: Record<string, string> = {
     png: 'image/png',
     apng: 'image/png',
@@ -7975,7 +7988,7 @@ export const DiscordCreateSticker = async (token: string, guildId: string, paylo
     try {
         const source = await fetch(stickerUrl, {
             headers: {
-                'Accept': 'image/png,image/apng,image/gif,application/json,*/*;q=0.8',
+                'Accept': 'image/png,image/apng,image/gif,image/jpeg,image/webp,application/json,*/*;q=0.8',
                 'User-Agent': userAgent
             }
         });
@@ -7987,25 +8000,41 @@ export const DiscordCreateSticker = async (token: string, guildId: string, paylo
             };
         }
 
-        const contentLength = Number(source.headers.get('content-length') || 0);
-        if (contentLength > DISCORD_STICKER_MAX_BYTES) {
-            return { error: `Sticker file is too large. Max ${DISCORD_STICKER_MAX_BYTES} bytes` };
-        }
-
         const rawContentType = source.headers.get('content-type')?.split(';')[0]?.toLowerCase() || '';
         const pathExt = stickerUrl.pathname.split('.').pop()?.toLowerCase() || '';
-        const extFromUrl = DISCORD_STICKER_EXT_TO_MIME[pathExt] ? pathExt : '';
+        const shouldConvertToPng = DISCORD_STICKER_CONVERT_MIME_TO_PNG.has(rawContentType) || DISCORD_STICKER_CONVERT_EXT_TO_PNG.has(pathExt);
+        const sourceLimit = shouldConvertToPng ? DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES : DISCORD_STICKER_MAX_BYTES;
+        const contentLength = Number(source.headers.get('content-length') || 0);
+        if (contentLength > sourceLimit) {
+            return { error: `Sticker file is too large. Max ${sourceLimit} bytes${shouldConvertToPng ? ' before conversion' : ''}` };
+        }
+
+        const extFromUrl = !shouldConvertToPng && DISCORD_STICKER_EXT_TO_MIME[pathExt] ? pathExt : '';
         const extFromType = DISCORD_STICKER_MIME_TO_EXT[rawContentType] || '';
-        const ext = extFromUrl || extFromType;
-        const mimeType = DISCORD_STICKER_EXT_TO_MIME[ext] || (DISCORD_STICKER_MIME_TO_EXT[rawContentType] ? rawContentType : '');
+        const ext = shouldConvertToPng ? 'png' : (extFromUrl || extFromType);
+        const mimeType = shouldConvertToPng ? 'image/png' : (DISCORD_STICKER_EXT_TO_MIME[ext] || (DISCORD_STICKER_MIME_TO_EXT[rawContentType] ? rawContentType : ''));
 
         if (!ext || !mimeType) {
-            return { error: 'Unsupported sticker file type. Use PNG, APNG, GIF, or Lottie JSON' };
+            return { error: 'Unsupported sticker file type. Use PNG, APNG, GIF, Lottie JSON, JPEG, or WebP' };
         }
 
         const arrayBuffer = await source.arrayBuffer();
-        if (arrayBuffer.byteLength > DISCORD_STICKER_MAX_BYTES) {
-            return { error: `Sticker file is too large. Max ${DISCORD_STICKER_MAX_BYTES} bytes` };
+        if (arrayBuffer.byteLength > sourceLimit) {
+            return { error: `Sticker file is too large. Max ${sourceLimit} bytes${shouldConvertToPng ? ' before conversion' : ''}` };
+        }
+
+        let fileBytes = new Uint8Array(arrayBuffer);
+        if (shouldConvertToPng) {
+            try {
+                const sharp = (await import('sharp')).default;
+                fileBytes = new Uint8Array(await sharp(Buffer.from(fileBytes)).rotate().png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer());
+            } catch (err: any) {
+                return { error: `Failed to convert sticker image to PNG: ${err?.message || err}` };
+            }
+        }
+
+        if (fileBytes.byteLength > DISCORD_STICKER_MAX_BYTES) {
+            return { error: `Sticker file is too large after conversion. Max ${DISCORD_STICKER_MAX_BYTES} bytes` };
         }
 
         const filenameBase = name.replace(/[^a-zA-Z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'sticker';
@@ -8013,7 +8042,7 @@ export const DiscordCreateSticker = async (token: string, guildId: string, paylo
         form.append('name', name);
         form.append('description', description);
         form.append('tags', tags);
-        form.append('file', new Blob([arrayBuffer], { type: mimeType }), `${filenameBase}.${ext}`);
+        form.append('file', new Blob([fileBytes], { type: mimeType }), `${filenameBase}.${ext}`);
 
         const headers: any = {
             'Authorization': `Bot ${token}`,

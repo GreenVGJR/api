@@ -260,7 +260,7 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
                 const res = await YTMusic(query, false);
                 const track = res?.data?.[0];
                 if (!track?.url) return null;
-                return { id: track.videoId, url: track.url, title: track.title, author: track.author, thumbnail: track.thumbnail, sourceName: 'youtube' };
+                return { id: track.videoId, url: track.url, title: track.title, author: track.author || track.artists?.map((a: any) => a.name).filter(Boolean).join(', '), thumbnail: track.thumbnail, sourceName: 'youtube' };
             }
             case 'applemusic': {
                 const amRes = await request(
@@ -347,7 +347,7 @@ app.get('/play', async (c) => {
 
         const token = c.req.query('token');
         const query = c.req.query('q');
-        const platform = (c.req.query('platform') || 'spotify').toLowerCase().replace(/\s+/g, '');
+        const platform = (c.req.query('platform') || 'youtubemusic').toLowerCase().replace(/\s+/g, '');
         const voiceId = c.req.query('voiceId');
         const reqGuildId = c.req.query('guildId');
         const authorId = c.req.query('authorId');
@@ -423,7 +423,7 @@ app.get('/play', async (c) => {
 
         const pRequester: Promise<any> = authorId
             ? client.users.fetch(authorId as string).then(user => user).catch(() => ({ id: authorId, username: 'Discord User' }))
-            : Promise.resolve({ id: 'api', username: 'API' });
+            : Promise.resolve(client.user);
         const requesterVoiceContext: { guildId?: string; voiceChannelId?: string } = {};
 
         const pVoice = (async () => {
@@ -712,11 +712,12 @@ app.get('/play', async (c) => {
                         result = await doSearch(customResult.url, 'url');
                         applyOverlay(result, customResult);
                     } catch (e: any) {
-
                         if (platform === 'soundcloud' && customResult?.url) {
-                            await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
+                            await log(`[Attempt 1] SoundCloud direct load failed (${e?.message || e}) — attempting manual stream resolution`);
                             const manualAttempt = currentAttempt++;
                             await loadSoundCloudManual(customResult.url, manualAttempt, customResult);
+                        } else {
+                            await log(`[Attempt 1] ${platform} direct URL load failed (${e?.message || e})${allowFallback ? ' — falling back to Lavalink search' : ''}`);
                         }
                     }
                 } else {

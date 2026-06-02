@@ -2,5 +2,5 @@
     "generate_hash": false,
     "buildId": false,
     "restrictLocal": false,
-    "useLocalLavalink": 2
+    "useLocalLavalink": 1
 }

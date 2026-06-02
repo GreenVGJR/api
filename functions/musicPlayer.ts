@@ -259,7 +259,7 @@ const serentiaNode = {
 };
 
 if (config.useLocalLavalink === 1) {
-    LAVALINK_NODE_GROUPS = [[serentiaNode, localNode]];
+    LAVALINK_NODE_GROUPS = [[localNode]];
 } else if (config.useLocalLavalink === 2) {
     LAVALINK_NODE_GROUPS = [[serentiaNode], [localNode]];
 } else {
@@ -1216,6 +1216,33 @@ export async function autoInit(): Promise<void> {
     );
 }
 
+function requesterFromUser(user: any) {
+    if (!user?.id) return null;
+    return {
+        id: user.id,
+        username: user.username,
+        globalName: user.globalName,
+        tag: user.tag,
+        avatar: user.avatar,
+        bot: user.bot,
+    };
+}
+
+function clientRequesterForPlayer(player: LavalinkPlayer) {
+    const manager = (player as any).LavalinkManager;
+    const managed = [...players.values()].find(entry => entry.player === manager);
+    const requester = requesterFromUser(managed?.client.user);
+    if (requester) return requester;
+
+    const clientInfo = manager?.options?.client;
+    if (!clientInfo?.id) return null;
+    return {
+        id: clientInfo.id,
+        username: clientInfo.username,
+        bot: true,
+    };
+}
+
 export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
     if (!player.get('autoplay')) return;
 
@@ -1268,7 +1295,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
             if (toAdd.length === 0) break;
 
             for (const t of toAdd) {
-                t.requester = track.requester ? { ...(track.requester as any), isAutoplay: true } : { id: 'api', username: 'API', isAutoplay: true };
+                t.requester = { ...((track.requester as any) || clientRequesterForPlayer(player) || {}), isAutoplay: true };
                 await player.queue.add(t);
             }
 

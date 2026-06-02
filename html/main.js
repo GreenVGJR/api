@@ -1,4 +1,8 @@
 {{SSR_STATE}}
+if (window.location.pathname === '/') {
+    window.location.replace('/playground');
+}
+
 // Initialize layout and Tailwind config dynamically
 const initSPA = () => {
     // Inject Fonts

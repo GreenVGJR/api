@@ -1,4 +1,3 @@
-import { autoInit } from './functions/musicPlayer.js';
 import app from './app.js';
 
 const port = 3000;
@@ -11,7 +10,11 @@ if (!g.__vgjr_initialized) {
     g.__vgjr_initialized = true;
     g.__vgjr_starttime = Date.now();
     g.__vgjr_refresh_count = 0;
-    autoInit().catch(() => { });
+    setTimeout(() => {
+        import('./functions/musicPlayer.js')
+            .then(({ autoInit }) => autoInit())
+            .catch(() => { });
+    }, 0);
 
     console.log(`\n🚀 Bun Server is running!`);
     console.log(`🏠 Local:    http://localhost:${port}/playground`);

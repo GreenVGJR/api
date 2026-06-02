@@ -5,20 +5,31 @@ import { compress } from 'hono/compress';
 import { stream } from 'hono/streaming';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs/promises';
 import crypto from 'crypto';
 import config from './config.json' with { type: 'json' };
 import os from 'os';
 
-const honoVersion = (() => { try { return JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'node_modules/hono/package.json'), 'utf-8')).version; } catch { return '?'; } })();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-import reqs from './routes/search/index.js';
-import lyrics from './routes/lyrics/index.js';
-import tools from './routes/tools/index.js';
-import info from './routes/info/index.js';
-import profile from './routes/profile/index.js';
-import download from './routes/download/index.js';
-import music from './routes/music/index.js';
+const startupDataPromise = Promise.all([
+    import('./routes/search/index.js'),
+    import('./routes/lyrics/index.js'),
+    import('./routes/tools/index.js'),
+    import('./routes/info/index.js'),
+    import('./routes/profile/index.js'),
+    import('./routes/download/index.js'),
+    import('./routes/music/index.js'),
+    fs.readFile(path.join(__dirname, 'node_modules/hono/package.json'), 'utf-8').catch(() => ''),
+    fs.readFile(path.join(__dirname, 'public/robots.txt'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'public/favicon.ico')),
+    fs.readFile(path.join(__dirname, 'html/playground.html'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'html/main.js'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'html/cf.js'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'html/sw.js'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'html/main.css'), 'utf-8'),
+] as const);
 
 const API_ROUTES = {
     search: [
@@ -366,22 +377,39 @@ app.use('*', async (c: Context, next: Next) => {
 
 const starttime = (globalThis as any).__vgjr_starttime || Date.now();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const [
+    reqsModule,
+    lyricsModule,
+    toolsModule,
+    infoModule,
+    profileModule,
+    downloadModule,
+    musicModule,
+    honoPackageJson,
+    robots,
+    favicon,
+    playgroundTemplateSource,
+    mainJs,
+    cfJs,
+    playgroundSwJs,
+    rawCss,
+] = await startupDataPromise;
 
-const robots = fs.readFileSync(path.join(__dirname, 'public/robots.txt'), 'utf-8');
-const favicon = fs.readFileSync(path.join(__dirname, 'public/favicon.ico'));
-const playgroundTemplate = fs.readFileSync(path.join(__dirname, 'html/playground.html'), 'utf-8')
+const reqs = reqsModule.default;
+const lyrics = lyricsModule.default;
+const tools = toolsModule.default;
+const info = infoModule.default;
+const profile = profileModule.default;
+const download = downloadModule.default;
+const music = musicModule.default;
+const honoVersion = (() => { try { return JSON.parse(honoPackageJson).version; } catch { return '?'; } })();
+
+const playgroundTemplate = playgroundTemplateSource
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\s+/g, ' ')
     .replace(/>\s+</g, '><')
     .trim();
 
-const mainJs = fs.readFileSync(path.join(__dirname, 'html/main.js'), 'utf-8');
-const cfJs = fs.readFileSync(path.join(__dirname, 'html/cf.js'), 'utf-8');
-const playgroundSwJs = fs.readFileSync(path.join(__dirname, 'html/sw.js'), 'utf-8');
-
-const rawCss = fs.readFileSync(path.join(__dirname, 'html/main.css'), 'utf-8');
 const mainCss = rawCss
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\s+/g, ' ')

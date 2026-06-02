@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options, V
 import { LavalinkManager, Player as LavalinkPlayer, Track } from 'lavalink-client';
 import { stream } from 'hono/streaming';
 import crypto from 'crypto';
+import zlib from 'zlib';
 import config from '../config.json' with { type: 'json' };
 import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from './musicChallenges.ts';
 // import { Number_random } from './request.ts';
@@ -136,11 +137,12 @@ export async function createMusicStream(
         const ipLL = ipToNumber(c.req.header('cf-connecting-ip') || "127.0.0.1");
         const rrmc = c.req.header('x-challenge-codes') || "";
         const challengeHash = c.req.header('x-challenge') || "";
-        if (!verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL))) {
+        const checkValidChallenges = !verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL));
+        if (checkValidChallenges) {
             c.header('X-Player', "lavalink");
             c.header('X-Warning', 'Germany (DE) only. Outside that, you need to solve this challenge');
-            c.header('Content-Type', checkAccept && checkReferer ? 'application/json' : 'video/mpeg');
-            c.header('Cache-Control', 'public, no-cache, no-store, max-age=0, must-revalidate');
+            c.header('Content-Type', 'text/event-stream');
+            c.header('Cache-Control', 'public, no-cache, no-store, no-transform, max-age=0, must-revalidate');
             if (!(checkAccept && checkReferer)) {
                 c.header('Location', '/playground');
             }
@@ -155,13 +157,14 @@ export async function createMusicStream(
                     parts.push(ch.slice(i, i + len));
                     i += len;
                 }
+                const payload = JSON.stringify({
+                    _challenge: true,
+                    c: parts,
+                    d: challengeData.difficulty,
+                });
+                const gzipData = zlib.gzipSync(Buffer.from(payload));
                 return stream(c, async (s: any) => {
-                    await s.write('');
-                    await s.write(JSON.stringify({
-                        _challenge: true,
-                        c: parts,
-                        d: challengeData.difficulty,
-                    }));
+                    await s.write(gzipData);
                 });
             }
             else {

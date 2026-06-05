@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 const app = new Hono();
 
 import { duckImageSearch, duckSearch, duckVideoSearch } from '../../functions/request.js';
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { dispatch } from '../../functions/httpRequest.js';
 
 app.get('/duckduckgo', async (c) => {
     const query = c.req.query('q');

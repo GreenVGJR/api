@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import {
     getOrCreatePlayer,
-    resolveVoiceChannel,
     setVoiceStatus,
     updateVoiceStatus,
     createMusicStream,
@@ -15,7 +14,6 @@ app.get('/voiceStatus', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const voiceId = c.req.query('voiceId');
         const type = c.req.query('type');
         const statusStr = c.req.query('status');
         const content = c.req.query('content');

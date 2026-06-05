@@ -4,8 +4,6 @@ const app = new Hono();
 import { DiscordWebhook, getQuery, getToken } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-import { Context } from 'hono';
-
 app.get('/discord/webhook/info', async (c) => {
     const token = getToken(c);
     let webhookId = getQuery(c, 'webhookId');
@@ -22,8 +20,7 @@ app.get('/discord/webhook/info', async (c) => {
 
     c.header('X-Route', 'discord.com');
     
-    // @ts-ignore
-    return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'info', webhookToken, webhookUrl }, []));
+    return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'info', webhookToken, webhookUrl }));
 });
 
 app.get('/discord/webhook/create', async (c) => {
@@ -36,8 +33,7 @@ app.get('/discord/webhook/create', async (c) => {
     if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
     c.header('X-Route', 'discord.com');
-    // @ts-ignore
-    return await dispatch(c, () => DiscordWebhook(token!, channelId!, { action: 'create', name, avatar }, []));
+    return await dispatch(c, () => DiscordWebhook(token!, channelId!, { action: 'create', name, avatar }));
 });
 
 app.get('/discord/webhook/delete', async (c) => {
@@ -56,8 +52,7 @@ app.get('/discord/webhook/delete', async (c) => {
 
     c.header('X-Route', 'discord.com');
     
-    // @ts-ignore
-    return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'delete', webhookToken, webhookUrl }, []));
+    return await dispatch(c, () => DiscordWebhook(token, webhookId, { action: 'delete', webhookToken, webhookUrl }));
 });
 
 app.get('/discord/webhook/send', async (c) => {
@@ -75,7 +70,6 @@ app.get('/discord/webhook/send', async (c) => {
 
     c.header('X-Route', 'discord.com');
     
-    // @ts-ignore
     return await dispatch(c, () => DiscordWebhook(token, webhookId, {
         action: 'send',
         webhookToken,
@@ -83,7 +77,7 @@ app.get('/discord/webhook/send', async (c) => {
         content,
         username,
         avatar_url
-    }, []));
+    }));
 });
 
 app.get('/discord/webhook/list', async (c) => {
@@ -95,8 +89,7 @@ app.get('/discord/webhook/list', async (c) => {
 
     c.header('X-Route', 'discord.com');
     
-    // @ts-ignore
-    return await dispatch(c, () => DiscordWebhook(token, channelId, { action: 'list' }, []));
+    return await dispatch(c, () => DiscordWebhook(token, channelId, { action: 'list' }));
 });
 
 export default app;

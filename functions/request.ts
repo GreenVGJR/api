@@ -1,13 +1,10 @@
 import { type Context } from 'hono';
-import net from 'net';
 import { browserRequest } from './browserRequest.js';
 import { get as httpcloakGet } from 'httpcloak';
 
-const DEFAULT_TIMEOUT_MS = 60000;
-
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from 'linkedom';
-import { decodeHTML, decodeXML } from 'entities';
+import { decodeHTML } from 'entities';
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
 import emojibaseData from 'emojibase-data/en/data.json' with { type: 'json' };
@@ -3456,14 +3453,6 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!guildId) return { error: 'Missing guildId' };
 
-    let userId = '@me';
-    try {
-        const decoded = atob(token.split('.')[0]);
-        if (Number.isInteger(parseInt(decoded))) {
-            userId = decoded;
-        }
-    } catch { }
-
     const url = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
     try {
@@ -3587,7 +3576,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
     }
 };
 
-export const DiscordWebhook = async (token: string, guildId: string, payload: any, payloadError?: any) => {
+export const DiscordWebhook = async (token: string | null, guildId: string | null | undefined, payload: any) => {
     const action = payload.action;
 
     if (payload.webhookUrl) {
@@ -4099,11 +4088,14 @@ export const TiktokUser = async function TiktokUser(que: string) {
     }
 }
 
-export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code: any = '') {
-    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en`;
+export const TiktokFeed = async function TiktokFeed(region_code: any = '') {
+    const url = `https://www.tiktok.com/api/explore/item_list/?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en&screen_height=1440&screen_width=2560`;
     const headers = {
         ...commonHeaders,
-        'Referer': 'https://www.tiktok.com/explore'
+        'Referer': 'https://www.tiktok.com/explore',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
     };
 
     for (let i = 0; i < 3; i++) {
@@ -4143,9 +4135,9 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                     ((a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0))
                 );
 
-                const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
-                const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
-                const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=0') || null;
+                const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=1180') || null;
+                const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=1180') || null;
+                const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes('aweme/v1/play'))?.replace('faid=1988', 'faid=1180') || null;
 
                 const extractRedirect = async (url: string) => {
                     try {
@@ -4171,8 +4163,21 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                     videoId: item.video?.videoID,
                     url: "https://www.tiktok.com/@" + item.author?.uniqueId + "/video/" + item.id,
                     desc: item.desc,
+                    descLanguage: item?.textLanguage || null,
+                    challenges: item?.challenges || [],
                     create_time: item.createTime.toString(),
                     duration: item.video?.duration,
+                    video_url: finalVideoUrl,
+                    lowest_video_url: finalLowestVideoUrl || finalVideoUrl,
+                    highest_video_url: finalHighestVideoUrl || finalVideoUrl,
+                    bit_rate: sortedBitrateDesc.map((br: any) => ({
+                        gear: br.GearName,
+                        bitrate: br.Bitrate,
+                        res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+                        format: br.Format,
+                        codec: br.CodecType,
+                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('faid=1988', 'faid=1180')
+                    })),
                     author: {
                         url: "https://www.tiktok.com/@" + item.author?.uniqueId,
                         id: item.author?.id,
@@ -4205,17 +4210,6 @@ export const TiktokFeed = async function TiktokFeed(cursor: any = 0, region_code
                         play_count: item.stats?.playCount.toString(),
                         share_count: item.stats?.shareCount.toString()
                     },
-                    video_url: finalVideoUrl,
-                    lowest_video_url: finalLowestVideoUrl || finalVideoUrl,
-                    highest_video_url: finalHighestVideoUrl || finalVideoUrl,
-                    bit_rate: sortedBitrateDesc.map((br: any) => ({
-                        gear: br.GearName,
-                        bitrate: br.Bitrate,
-                        res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
-                        format: br.Format,
-                        codec: br.CodecType,
-                        play_url: br.PlayAddr?.UrlList?.[2]?.replace('faid=1988', 'faid=0')
-                    })),
                     cover: item.video?.cover,
                     origin_cover: item.video?.originCover,
                     dynamic_cover: item.video?.dynamicCover
@@ -4269,7 +4263,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
         return { error: e.message || "Failed to verify Discord resources" };
     }
 
-    const feed = await TiktokFeed(0, region_code);
+    const feed = await TiktokFeed(region_code);
     if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
 
     const item = feed.data;
@@ -4578,8 +4572,6 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
         } catch {
             return null;
         }
-        let pul2;
-        let pul3;
         let res2: any = {};
         let res3: any = {};
         if (res?.data?.user?.result?.rest_id) {
@@ -4681,30 +4673,6 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
     }
     catch (e) {
         console.error(e);
-        return null;
-    }
-}
-
-export const redditMedia = async function redditMedia(que: string) {
-    if (!que) return null;
-
-    try {
-        const req = await request(`https://old.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
-
-        if (req.statusCode === 403) {
-            return {
-                "error": "IP Blocked"
-            }
-        }
-
-        const res: any = await req.json();
-        return { data: res?.data?.children?.map((a: any) => a?.data) || null }
-    }
-    catch (e) {
         return null;
     }
 }
@@ -4969,40 +4937,62 @@ export const Capcut = async function Capcut(que: string) {
     }
 }
 
-export const redditSubreddit = async function redditSubreddit(que: string) {
+let redditCookies: string = '';
+
+export const refreshRedditAuth = async (force: boolean = false): Promise<string> => {
+    if (!force && redditCookies) return redditCookies;
+
+    try {
+        const loginRes = await fetch('https://old.reddit.com/login/', {
+            method: 'GET',
+            headers: { ...commonHeaders },
+            redirect: 'manual'
+        });
+
+        const cookieParts: string[] = [];
+        loginRes.headers.forEach((value, key) => {
+            if (key.toLowerCase() === 'set-cookie') {
+                const cookie = value.split(';')[0];
+                if (cookie) cookieParts.push(cookie);
+            }
+        });
+        redditCookies = cookieParts.length > 0 ? cookieParts.join('; ') : '';
+        return redditCookies;
+    } catch {
+        return redditCookies;
+    }
+};
+
+export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
     if (!que) return null;
 
     try {
-        const req = await request(`https://old.reddit.com/r/${que.toLowerCase()}/new.json`, {
-            headers: {
-                ...commonHeaders
-            }
-        });
+        if (refresh_auth || redditCookies === '') await refreshRedditAuth(refresh_auth);
+
+        const headers: any = { ...commonHeaders };
+        if (redditCookies) headers['Cookie'] = redditCookies;
+
+        const req = await request(`https://www.reddit.com/r/${que.toLowerCase()}/new.json`, { headers });
 
         if (req.statusCode === 451) {
-            return {
-                "error": "This subreddit is not available in your country"
-            }
+            return { "error": "This subreddit is not available in your country" }
         }
 
         if (req.statusCode === 403) {
-            return {
-                "error": "IP Blocked"
-            }
+            if (!refresh_auth) return redditSubreddit(que, true);
+            return { "error": "IP Blocked" };
         }
 
         const res: any = await req.json();
         const finalres: any = res?.data?.children?.map((a: any) => a?.data);
-        return { data: finalres?.[0] ? finalres : null }
+        return { _wafChallenge: redditCookies !== "", data: finalres?.[0] ? finalres : null }
     }
     catch {
         return null;
     }
 }
 
-let redditPostCookies: string = '';
-
-export const RedditPost = async (url: string, refreshCookies: boolean = false): Promise<any> => {
+export const RedditPost = async (url: string, refresh_auth: boolean = false): Promise<any> => {
     if (!url) return null;
 
     try {
@@ -5010,25 +5000,11 @@ export const RedditPost = async (url: string, refreshCookies: boolean = false): 
         try { urlObj = new URL(url); } catch { return { error: 'Invalid URL' }; }
         const pathname = urlObj.pathname.replace(/\/+$/, '');
         const jsonUrl = `https://www.reddit.com${pathname}.json`;
-        
-        if (refreshCookies || !redditPostCookies) {
-            const embedUrl = `https://embed.reddit.com${pathname}/?embed=true`;
-            const embedRes = await fetch(embedUrl, {
-                headers: { ...commonHeaders }
-            });
 
-            const cookieParts: string[] = [];
-            embedRes.headers.forEach((value, key) => {
-                if (key.toLowerCase() === 'set-cookie') {
-                    const cookie = value.split(';')[0];
-                    if (cookie) cookieParts.push(cookie);
-                }
-            });
-            redditPostCookies = cookieParts.length > 0 ? cookieParts.join('; ') : '';
-        }
+        if (refresh_auth || redditCookies === '') await refreshRedditAuth(refresh_auth);
 
         const headers: any = { ...commonHeaders };
-        if (redditPostCookies) headers['Cookie'] = redditPostCookies;
+        if (redditCookies) headers['Cookie'] = redditCookies;
 
         const req = await request(jsonUrl, { headers });
 
@@ -5037,9 +5013,7 @@ export const RedditPost = async (url: string, refreshCookies: boolean = false): 
         }
 
         if (req.statusCode === 403) {
-            if (!refreshCookies) {
-                return await RedditPost(url, true);
-            }
+            if (!refresh_auth) return RedditPost(url, true);
             return { error: "IP Blocked" };
         }
 
@@ -5048,15 +5022,47 @@ export const RedditPost = async (url: string, refreshCookies: boolean = false): 
             res = await req.json();
             res = Array.isArray(res) ? res.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : res;
         } catch {
-            if (!refreshCookies) return await RedditPost(url, true);
-            return { error: 'Invalid response. Probably anti-bot challenge return.' };
+            await refreshRedditAuth(true);
+            const retryReq2 = await request(jsonUrl, { headers: { ...headers, Cookie: redditCookies } });
+            let retryRes2;
+            try {
+                retryRes2 = await retryReq2.json();
+                retryRes2 = Array.isArray(retryRes2) ? retryRes2.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : retryRes2;
+            } catch {
+                return { error: 'Invalid response. Probably anti-bot challenge return.' };
+            }
+            return { _wafChallenge: redditCookies !== "", data: retryRes2 };
         }
 
-        return { _wafChallenge: redditPostCookies !== "", data: res };
+        return { _wafChallenge: redditCookies !== "", data: res };
     } catch (e: any) {
         return null;
     }
 };
+
+export const redditMedia = async function redditMedia(que: string, refresh_auth: boolean = false) {
+    if (!que) return null;
+
+    try {
+        if (refresh_auth || redditCookies === '') await refreshRedditAuth(refresh_auth);
+
+        const headers: any = { ...commonHeaders };
+        if (redditCookies) headers['Cookie'] = redditCookies;
+
+        const req = await request(`https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`, { headers });
+
+        if (req.statusCode === 403) {
+            if (!refresh_auth) return redditMedia(que, true);
+            return { "error": "IP Blocked" };
+        }
+
+        const res: any = await req.json();
+        return { _wafChallenge: redditCookies !== "", data: res?.data?.children?.map((a: any) => a?.data) || null }
+    }
+    catch (e) {
+        return null;
+    }
+}
 
 export const instagramUser = async function instagramUser(que: string) {
     if (!que) return null;
@@ -6513,7 +6519,7 @@ export async function GunsProfile(query: string): Promise<any> {
         if (secfinal?.config?.socials?.[0]) {
             secfinal.config.valid_socials = secfinal.config.socials?.map((a: any) => {
                 try {
-                    const lk = new URL(a.value);
+                    new URL(a.value);
                     return a;
                 }
                 catch { }
@@ -8130,7 +8136,6 @@ const processDiscordMessage = async (m: any, token?: string) => {
     m.emoji_items = emojiItems;
 
     const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
-    const bareUrlRegex = /https?:\/\/[^\s<]+[^<.,:;"')\]\s]/g;
     const hyperlinkItems: any[] = [];
     const seenUrls = new Set();
 
@@ -8772,9 +8777,6 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
         timeZoneName: 'longOffset',
     });
 
-    const dJan = new Date(d.getFullYear(), 0, 1);
-    const dJul = new Date(d.getFullYear(), 6, 1);
-
     function getOffsetMinutes(date: Date) {
         const parts = formatter.formatToParts(date);
         const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT';
@@ -9147,12 +9149,6 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
         }
         const body = res.status === 204 ? {} : await res.json();
         return { status: res.status, data: body };
-    };
-
-    const formatMemberData = (m: any) => {
-        const { guild: _g, ...member } = m;
-        const { guild: _vg, member: _vm, ...voiceState } = m.voice;
-        return { member, voiceState };
     };
 
     try {
@@ -10400,6 +10396,293 @@ export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) 
     }
 }
 
+const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<string, number> = {
+    KEYWORD: 1,
+    SPAM: 3,
+    KEYWORD_PRESET: 4,
+    MENTION_SPAM: 5,
+    MEMBER_PROFILE: 6
+};
+
+const DISCORD_AUTOMOD_EVENT_TYPES: Record<string, number> = {
+    MESSAGE_SEND: 1
+};
+
+const DISCORD_AUTOMOD_ACTION_TYPES: Record<string, number> = {
+    BLOCK_MESSAGE: 1,
+    SEND_ALERT_MESSAGE: 2,
+    TIMEOUT: 3,
+    BLOCK_MEMBER_INTERACTION: 4
+};
+
+const DISCORD_AUTOMOD_PRESET_TYPES: Record<string, number> = {
+    PROFANITY: 1,
+    SEXUAL_CONTENT: 2,
+    SLURS: 3
+};
+
+function discordAutomodName(map: Record<string, number>, value: number) {
+    return Object.entries(map).find(([, v]) => v === value)?.[0] || 'UNKNOWN';
+}
+
+function parseDiscordAutomodMappedNumber(value: any, map: Record<string, number>, label: string) {
+    if (value === undefined || value === null || value === '') return { value: undefined as number | undefined };
+    const raw = String(value).trim();
+    if (/^\d+$/.test(raw)) return { value: parseInt(raw, 10) };
+    const key = raw.toUpperCase().replace(/[\s-]+/g, '_');
+    if (map[key] !== undefined) return { value: map[key] };
+    return { error: `Invalid ${label}. Use: ${Object.keys(map).join(', ')} or numeric value` };
+}
+
+function parseDiscordAutomodBoolean(value: any, label: string) {
+    if (value === undefined || value === null || value === '') return { value: undefined as boolean | undefined };
+    const raw = String(value).trim().toLowerCase();
+    if (raw === 'true' || raw === '1' || raw === 'yes') return { value: true };
+    if (raw === 'false' || raw === '0' || raw === 'no') return { value: false };
+    return { error: `Invalid ${label}. Use true or false` };
+}
+
+function parseDiscordAutomodNumber(value: any, label: string) {
+    if (value === undefined || value === null || value === '') return { value: undefined as number | undefined };
+    const parsed = parseInt(String(value), 10);
+    if (!Number.isFinite(parsed)) return { error: `Invalid ${label}. Use a number` };
+    return { value: parsed };
+}
+
+function parseDiscordAutomodStringArray(value: any, label: string) {
+    if (value === undefined || value === null) return { value: undefined as string[] | undefined };
+    const raw = String(value).trim();
+    if (!raw) return { value: [] };
+    if (raw.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return { value: parsed.map(v => String(v)).filter(Boolean) };
+        } catch { }
+        return { error: `Invalid ${label}. Use JSON array or comma-separated values` };
+    }
+    return { value: raw.split(',').map(v => v.trim()).filter(Boolean) };
+}
+
+function parseDiscordAutomodPresetArray(value: any) {
+    const parsed = parseDiscordAutomodStringArray(value, 'presets');
+    if (parsed.error || parsed.value === undefined) return parsed as { value?: number[], error?: string };
+
+    const presets: number[] = [];
+    for (const item of parsed.value) {
+        const preset = parseDiscordAutomodMappedNumber(item, DISCORD_AUTOMOD_PRESET_TYPES, 'presets');
+        if (preset.error || preset.value === undefined) return { error: preset.error || 'Invalid presets' };
+        presets.push(preset.value);
+    }
+
+    return { value: presets };
+}
+
+function formatDiscordAutomodRule(rule: any) {
+    if (!rule || typeof rule !== 'object') return rule;
+    const formatted = { ...rule };
+    formatted.trigger_type_name = discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, formatted.trigger_type);
+    formatted.event_type_name = discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, formatted.event_type);
+    formatted.created_at = formatted.id ? String(getSnowflakeDate(formatted.id)) : null;
+
+    if (Array.isArray(formatted.actions)) {
+        formatted.actions = formatted.actions.map((action: any) => ({
+            ...action,
+            type_name: discordAutomodName(DISCORD_AUTOMOD_ACTION_TYPES, action.type)
+        }));
+    }
+
+    if (formatted.trigger_metadata?.presets) {
+        formatted.trigger_metadata = {
+            ...formatted.trigger_metadata,
+            presets_resolved: formatted.trigger_metadata.presets.map((p: number) => discordAutomodName(DISCORD_AUTOMOD_PRESET_TYPES, p))
+        };
+    }
+
+    return formatted;
+}
+
+function buildDiscordAutomodPayload(params: any, mode: 'set' | 'modify') {
+    const rawPayload = params.payload || params.body || params.rule;
+    if (rawPayload) {
+        try {
+            const parsed = JSON.parse(String(rawPayload));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return { payload: parsed };
+        } catch { }
+        return { error: 'Invalid payload. Use a JSON object' };
+    }
+
+    const payload: any = {};
+    const name = params.name;
+    if (name !== undefined) payload.name = String(name);
+
+    const eventRaw = params.eventType ?? params.event_type;
+    const eventType = parseDiscordAutomodMappedNumber(eventRaw ?? (mode === 'set' ? 'MESSAGE_SEND' : undefined), DISCORD_AUTOMOD_EVENT_TYPES, 'eventType');
+    if (eventType.error) return { error: eventType.error };
+    if (eventType.value !== undefined) payload.event_type = eventType.value;
+
+    const triggerRaw = params.triggerType ?? params.trigger_type;
+    const triggerType = parseDiscordAutomodMappedNumber(triggerRaw, DISCORD_AUTOMOD_TRIGGER_TYPES, 'triggerType');
+    if (triggerType.error) return { error: triggerType.error };
+    if (triggerType.value !== undefined) payload.trigger_type = triggerType.value;
+
+    const enabled = parseDiscordAutomodBoolean(params.enabled ?? (mode === 'set' ? 'true' : undefined), 'enabled');
+    if (enabled.error) return { error: enabled.error };
+    if (enabled.value !== undefined) payload.enabled = enabled.value;
+
+    const triggerMetadata: any = {};
+    const keywordFilter = parseDiscordAutomodStringArray(params.keywordFilter ?? params.keyword_filter, 'keywordFilter');
+    if (keywordFilter.error) return { error: keywordFilter.error };
+    if (keywordFilter.value !== undefined) triggerMetadata.keyword_filter = keywordFilter.value;
+
+    const regexPatterns = parseDiscordAutomodStringArray(params.regexPatterns ?? params.regex_patterns, 'regexPatterns');
+    if (regexPatterns.error) return { error: regexPatterns.error };
+    if (regexPatterns.value !== undefined) triggerMetadata.regex_patterns = regexPatterns.value;
+
+    const allowList = parseDiscordAutomodStringArray(params.allowList ?? params.allow_list, 'allowList');
+    if (allowList.error) return { error: allowList.error };
+    if (allowList.value !== undefined) triggerMetadata.allow_list = allowList.value;
+
+    const presets = parseDiscordAutomodPresetArray(params.presets);
+    if (presets.error) return { error: presets.error };
+    if (presets.value !== undefined) triggerMetadata.presets = presets.value;
+
+    const mentionTotalLimit = parseDiscordAutomodNumber(params.mentionTotalLimit ?? params.mention_total_limit, 'mentionTotalLimit');
+    if (mentionTotalLimit.error) return { error: mentionTotalLimit.error };
+    if (mentionTotalLimit.value !== undefined) triggerMetadata.mention_total_limit = mentionTotalLimit.value;
+
+    const mentionRaidProtection = parseDiscordAutomodBoolean(params.mentionRaidProtection ?? params.mention_raid_protection_enabled, 'mentionRaidProtection');
+    if (mentionRaidProtection.error) return { error: mentionRaidProtection.error };
+    if (mentionRaidProtection.value !== undefined) triggerMetadata.mention_raid_protection_enabled = mentionRaidProtection.value;
+
+    if (Object.keys(triggerMetadata).length || mode === 'set') payload.trigger_metadata = triggerMetadata;
+
+    if (params.actions) {
+        try {
+            const actions = JSON.parse(String(params.actions));
+            if (!Array.isArray(actions)) return { error: 'actions must be a JSON array' };
+            payload.actions = actions;
+        } catch {
+            return { error: 'Invalid actions. Use a JSON array' };
+        }
+    } else {
+        const hasActionInput = params.actionType !== undefined || params.action !== undefined || params.alertChannelId !== undefined || params.alert_channel_id !== undefined || params.timeoutSeconds !== undefined || params.duration_seconds !== undefined || params.customMessage !== undefined || params.custom_message !== undefined;
+        if (hasActionInput || mode === 'set') {
+            const actionType = parseDiscordAutomodMappedNumber(params.actionType ?? params.action ?? 'BLOCK_MESSAGE', DISCORD_AUTOMOD_ACTION_TYPES, 'actionType');
+            if (actionType.error || actionType.value === undefined) return { error: actionType.error || 'Invalid actionType' };
+
+            const action: any = { type: actionType.value };
+            const metadata: any = {};
+            const customMessage = params.customMessage ?? params.custom_message;
+            if (customMessage !== undefined) metadata.custom_message = String(customMessage);
+            const alertChannelId = params.alertChannelId ?? params.alert_channel_id;
+            if (alertChannelId !== undefined && alertChannelId !== '') metadata.channel_id = String(alertChannelId);
+            const timeoutSeconds = parseDiscordAutomodNumber(params.timeoutSeconds ?? params.duration_seconds, 'timeoutSeconds');
+            if (timeoutSeconds.error) return { error: timeoutSeconds.error };
+            if (timeoutSeconds.value !== undefined) metadata.duration_seconds = timeoutSeconds.value;
+            if (Object.keys(metadata).length) action.metadata = metadata;
+            payload.actions = [action];
+        }
+    }
+
+    const exemptRoles = parseDiscordAutomodStringArray(params.exemptRoles ?? params.exempt_roles, 'exemptRoles');
+    if (exemptRoles.error) return { error: exemptRoles.error };
+    if (exemptRoles.value !== undefined) payload.exempt_roles = exemptRoles.value;
+
+    const exemptChannels = parseDiscordAutomodStringArray(params.exemptChannels ?? params.exempt_channels, 'exemptChannels');
+    if (exemptChannels.error) return { error: exemptChannels.error };
+    if (exemptChannels.value !== undefined) payload.exempt_channels = exemptChannels.value;
+
+    if (mode === 'set') {
+        if (!payload.name) return { error: 'Missing name' };
+        if (!payload.trigger_type) return { error: 'Missing triggerType' };
+    }
+
+    return { payload };
+}
+
+async function fetchDiscordAutomodRule(ruleUrl: string, headers: any) {
+    const req = await fetch(ruleUrl, { method: 'GET', headers });
+    let data: any = null;
+    try { data = await req.json(); } catch { }
+    return { status: req.status, statusText: req.statusText, data };
+}
+
+export const DiscordSetAutomod = async (token: string, guildId: string, ruleId: string | undefined, params: any, mode: 'set' | 'modify') => {
+    if (!token || token === 'null') return { error: 'Missing token' };
+    if (!guildId) return { error: 'Missing guildId' };
+    if (mode === 'modify' && !ruleId) return { error: 'Missing ruleId' };
+
+    const headers: any = {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/discord-bot, 1.0.0)'
+    };
+    const reason = params.reason;
+    if (reason) headers['X-Audit-Log-Reason'] = encodeURIComponent(String(reason));
+
+    try {
+        const baseUrl = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
+        let existingRule: any = null;
+
+        if (ruleId) {
+            const existing = await fetchDiscordAutomodRule(`${baseUrl}/${ruleId}`, headers);
+            if (existing.status === 200) existingRule = existing.data;
+            else if (existing.status !== 404) {
+                return {
+                    data: null,
+                    error: existing.data || { status: existing.status, statusText: existing.statusText }
+                };
+            }
+        }
+
+        if (mode === 'set' && existingRule) {
+            return {
+                data: null,
+                error: { message: 'Automod rule already exists', ruleId, rule: formatDiscordAutomodRule(existingRule) }
+            };
+        }
+
+        if (mode === 'modify' && !existingRule) {
+            return { data: null, error: { message: 'Automod rule not found', ruleId } };
+        }
+
+        const built = buildDiscordAutomodPayload(params, mode);
+        if (built.error) return { error: built.error };
+        const payload = built.payload || {};
+
+        if (mode === 'modify' && Object.keys(payload).length === 0) {
+            return { data: [formatDiscordAutomodRule(existingRule), null, 204] };
+        }
+
+        const response = await fetch(mode === 'modify' ? `${baseUrl}/${ruleId}` : baseUrl, {
+            method: mode === 'modify' ? 'PATCH' : 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+
+        let result: any = null;
+        try { result = await response.json(); } catch { }
+
+        if (response.status < 200 || response.status >= 300) {
+            return {
+                data: mode === 'modify' ? [formatDiscordAutomodRule(existingRule), null, response.status] : null,
+                error: result || { status: response.status, statusText: response.statusText }
+            };
+        }
+
+        return {
+            data: [
+                mode === 'modify' ? formatDiscordAutomodRule(existingRule) : null,
+                formatDiscordAutomodRule(result),
+                response.status,
+                ...(reason ? [String(reason)] : [])
+            ]
+        };
+    } catch (e: any) {
+        return { error: e.message || 'Something just happened' };
+    }
+};
+
 export const DiscordInfoAutomod = async (token: string, guildId: string) => {
     if (!token || token === 'null') return { error: 'Missing token' };
     if (!guildId) return { error: 'Missing guildId' };
@@ -10602,11 +10885,76 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
                 musicVideo: lks5?.results || null,
                 audiobook: lks3?.results || null,
                 podcast: lks4?.results || null,
-                tvShow: lks5?.results || null
+                tvShow: lks6?.results || null
             },
             parselks2?.data?.[0]?.data?.sections || null
             ]
         };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const stockCake = async function stockCake(query: string) {
+    if (!query) return null;
+    try {
+        const req = await fetch(`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`, { headers: { ...commonHeaders } });
+
+        if (req.status === 403) {
+            return { "error": "Cloudflare Turnstile asking to verify you're not a bot" }
+        }
+
+        const res: any = await req.json();
+        return { total: res.total, data: res?.results || [] };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const Pixabay = async function Pixabay(query: string) {
+    if (!query) return null;
+    try {
+        const req = await fetch(`https://pixabay.com/en/images/search/${encodeURIComponent(query)}/?pagi=1`, { headers: { ...commonHeaders, 'Accept': 'application/json', 'x-fetch-bootstrap': '1', 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors', 'sec-fetch-site': 'same-origin', 'referer': `https://pixabay.com/id/images/search/${encodeURIComponent(query)}/`, 'user-agent': commonHeaders['User-Agent'] + " Pixabay" } });
+
+        if (req.status === 403) {
+            return { "error": "Cloudflare Turnstile asking to verify you're not a bot" }
+        }
+
+        const res: any = await req.json();
+        const res2: any = res.page.results?.map((a: any) => a?.mediaType === 'photo' ? a : null).filter(Boolean);
+        return { total: res.page.total, data: res2 || [] };
+    }
+    catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+export const vectorStock = async function vectorStock(query: string) {
+    if (!query) return null;
+    try {
+        const req = await fetch(`https://${atob("d3d3LnZlY3RvcnN0b2NrLmNvbS9hcGkvc2VhcmNo")}?keywords=${encodeURIComponent(query)}&page=1`, { headers: { ...commonHeaders, 'Accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' } });
+
+        if (req.status === 403) {
+            return { "error": "IP Blocked" }
+        }
+
+        const res: any = await req.json();
+        const items = (res.data.results || []).map((item: any) => {
+            const id = item.id;
+            const idStr = String(id);
+            const p1 = idStr.slice(-4, -2);
+            const p2 = idStr.slice(-2);
+            return {
+                ...item,
+                image: `https://cdn.vectorstock.com/i/750p/${p1}/${p2}/${id}.avif`
+            };
+        });
+        return { total: res.data.total, data: items };
     }
     catch (e) {
         console.error(e);

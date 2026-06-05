@@ -51,5 +51,8 @@ import googleImage from './googleImage.js';
 import googleImageV2 from './googleImageV2.js';
 import googleSearch from './googleSearch.js';
 import duckSearch from './duckSearch.js';
+import stockCake from './stockCake.js';
+import pixabay from './pixabay.js';
+import vectorStock from './vectorStock.js';
 
-export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, otodb, youtubePlaylist, tidalOpen, flickr, audiomack, cruncy, safebooru, konachan, giphyV2, tumblr, googleImage, googleImageV2, googleSearch, duckSearch] as any[];
+export default [youtubeVideo, youtubeMusic, soundcloud, spotify, shazamAmp, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, otodb, youtubePlaylist, tidalOpen, flickr, audiomack, cruncy, safebooru, konachan, giphyV2, tumblr, googleImage, googleImageV2, googleSearch, duckSearch, stockCake, pixabay, vectorStock] as any[];

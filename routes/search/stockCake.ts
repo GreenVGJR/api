@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 const app = new Hono();
 
-import { Shazam } from '../../functions/request.js';
+import { stockCake } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-app.get('/shazam', async (c) => {
+app.get('/stockcake', async (c) => {
     const query = c.req.query('q');
     if (query === undefined) {
         return c.json({ "error": "Missing parameter required" }, 202);
@@ -12,8 +12,8 @@ app.get('/shazam', async (c) => {
     else if (query === '') {
         return c.json({ "error": "Nothing to do" }, 202);
     }
-    c.header('X-Route', 'www.shazam.com');
-    return await dispatch(c, () => Shazam(query));
+    c.header('X-Route', 'stockcake.com');
+    return await dispatch(c, () => stockCake(query));
 });
 
 export default app;

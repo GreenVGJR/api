@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { dispatch } from '../../functions/httpRequest.js';
 const app = new Hono();
 import { YTMusic, YTLyrics } from '../../functions/request.js';
 

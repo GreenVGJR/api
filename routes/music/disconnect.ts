@@ -14,7 +14,6 @@ import {
 app.get('/disconnect', async (c) => {
     const token = c.req.query('token');
     const guildId = c.req.query('guildId');
-    const voiceId = c.req.query('voiceId');
 
     return await createMusicStream(c, async (log, s) => {
         if (!token || !guildId) {

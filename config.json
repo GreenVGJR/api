@@ -2,5 +2,6 @@
     "generate_hash": false,
     "buildId": false,
     "restrictLocal": false,
-    "useLocalLavalink": 1
+    "useLocalLavalink": 2,
+    "disableTLSMusic": false
 }

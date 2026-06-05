@@ -3,7 +3,7 @@ import { Hono, Context, Next } from 'hono';
 import { cors } from 'hono/cors';
 import { compress } from 'hono/compress';
 import { stream } from 'hono/streaming';
-import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { getCookie } from 'hono/cookie';
 import path from 'path';
 import fs from 'fs/promises';
 import crypto from 'crypto';
@@ -33,60 +33,63 @@ const startupDataPromise = Promise.all([
 
 const API_ROUTES = {
     search: [
+        ["/search/google?q=", "string"],
+        ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"],
+        ["/search/googleImage/cse?q=", "string"],
+        ["/search/duckduckgo?q=", "string"],
+        ["/search/duckduckgo/image?q=", "string"],
+        ["/search/duckduckgo/video?q=", "string"],
         ["/search/youtube/video?q=&mix=", "string", "boolean"],
         ["/search/youtube/music?q=&mix=", "string", "boolean"],
         ["/search/youtube/channel?q=", "string"],
         ["/search/youtube/playlist?q=", "string"],
-        ["/search/crunchyroll?q=", "string"],
         ["/search/soundcloud?q=", "string"],
         ["/search/spotify?q=", "string"],
         ["/search/applemusic?q=", "string"],
         ["/search/shazam?q=", "string"],
         ["/search/deezer?q=", "string"],
+        ["/search/jiosaavn?q=", "string"],
         ["/search/tidal?q=", "string"],
         ["/search/tidal/v2?q=", "string"],
         ["/search/genius?q=", "string"],
-        ["/search/audiomack?q=&type=", "string", "enum"],
+        ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"],
+        ["/search/bandcamp?q=", "string"],
+        ["/search/crunchyroll?q=", "string"],
+        ["/search/imdb?q=", "string"],
         ["/search/pinterest?q=", "string"],
-        ["/search/google?q=", "string"],
-        ["/search/googleImage?q=&sort=", "string", "enum"],
-        ["/search/googleImage/cse?q=", "string"],
-        ["/search/duckduckgo?q=", "string"],
-        ["/search/duckduckgo/image?q=", "string"],
-        ["/search/duckduckgo/video?q=", "string"],
         ["/search/safebooru?q=", "string"],
         ["/search/konachan?q=", "string"],
-        ["/search/imdb?q=", "string"],
         ["/search/tumblr?q=", "string"],
         ["/search/imgflip?q=", "string"],
+        ["/search/imgur/posts?q=", "string"],
         ["/search/flickr?q=", "string"],
         ["/search/istockphoto?q=", "string"],
-        ["/search/imgur/posts?q=", "string"],
+        ["/search/vectorstock?q=", "string"],
+        ["/search/stockcake?q=", "string"],
+        ["/search/pixabay?q=", "string"],
         ["/search/unsplash?q=", "string"],
+        ["/search/pexels?q=", "string"],
         ["/search/pixiv?q=", "string"],
         ["/search/otodb?q=", "string"],
+        ["/search/bilibili?q=", "string"],
+        ["/search/twitch?q=", "string"],
         ["/search/discord/discovery/apps?q=", "string"],
         ["/search/discord/discovery/servers?q=", "string"],
-        ["/search/bilibili?q=", "string"],
-        ["/search/jiosaavn?q=", "string"],
-        ["/search/twitch?q=", "string"],
-        ["/search/threads/users?q=", "string"],
-        ["/search/pexels?q=", "string"],
+        ["/search/capcut/templates?q=", "string"],
+        ["/search/tiktok/feed"],
         ["/search/tiktok/video?q=", "string"],
         ["/search/tiktok/music?q=", "string"],
         ["/search/tiktok/users?q=", "string"],
-        ["/search/tiktok/feed"],
         ["/search/reddit/media?q=", "string"],
         ["/search/roblox/games?q=", "string"],
         ["/search/roblox/audio?q=", "string"],
-        ["/search/bandcamp?q=", "string"],
-        ["/search/capcut/templates?q=", "string"],
-        ["/search/tenor?q=&type=", "string", "enum"],
-        ["/search/giphy?q=&type=", "string", "enum"],
-        ["/search/giphy/v2?q=&type=", "string", "enum"],
-        ["/search/klipy?q=&type=", "string", "enum"],
+        ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"],
+        ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"],
+        ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"],
+        ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"],
         ["/search/patreon?q=", "string"],
-        ["/search/trakteer?q=", "string"]
+        ["/search/trakteer?q=", "string"],
+        ["/search/threads/users?q=", "string"],
     ],
     profile: [
         ["/profile/guns?q=", "string"],
@@ -140,24 +143,26 @@ const API_ROUTES = {
                 ["/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=", "string", "number", "string", "string", "string", "number", "url", "url", "url"],
                 ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
                 ["/tools/discord/infoAutomod?token=&guildId=", "string", "number"],
+                ["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "string", "string", "enum:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
+                ["/tools/discord/modifyAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "string", "string", "enum:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
             ],
             member: [
                 ["/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "string", "url", "url", "string", "string"],
                 ["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
-                ["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum", "string"],
-                ["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum", "string"],
+                ["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
+                ["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],
             ],
             channel: [
-                ["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum"],
+                ["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],
                 ["/tools/discord/infoChannel?token=&channelId=&guildId=", "string", "number", "number"],
             ],
             role: [
-                ["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum", "string"],
+                ["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:all,oldest,newest", "string"],
                 ["/tools/discord/infoRole?token=&roleId=&guildId=", "string", "number", "number"],
             ],
             invite: [
                 ["/tools/discord/infoInvite?q=&token=&guildId=", "string", "string", "number"],
-                ["/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId=", "string", "number", "number", "enum", "number"]
+                ["/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId=", "string", "number", "number", "enum:user,bot,all,oldest,newest,temporary,permanent,has_expire", "number"]
             ],
             sticker: [
                 ["/tools/discord/infoSticker?token=&q=", "string", "string"],
@@ -169,11 +174,11 @@ const API_ROUTES = {
                 { delete: [["/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl=", "string", "number", "string", "url"]] },
                 { send: [["/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar=", "number", "string", "url", "string", "string", "url"]] },
                 { list: [["/tools/discord/webhook/list?token=&channelId=", "string", "number"]] },
-                { listGuild: [["/tools/discord/listWebhooks?token=&guildId=&type=", "string", "number", "enum"]] }
+                { listGuild: [["/tools/discord/listWebhooks?token=&guildId=&type=", "string", "number", "enum:all,oldest,newest"]] }
             ],
             message: [
                 ["/tools/discord/infoMessage?token=&channelId=&messageId=", "string", "number", "number"],
-                ["/tools/discord/infoMessages?token=&channelId=&sort=&limit=", "string", "number", "enum", "number"]
+                ["/tools/discord/infoMessages?token=&channelId=&sort=&limit=", "string", "number", "enum:asc,desc", "number"]
             ],
             voice: [
                 ["/tools/discord/voice/deafen?token=&guildId=&userId=", "string", "number", "number"],
@@ -216,14 +221,14 @@ const API_ROUTES = {
     music: [
         ["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
         ["/music/disconnect?token=&guildId=", "string", "number"],
-        ["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=", "string", "string", "enum", "number", "number", "number", "boolean", "boolean", "boolean"],
+        ["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=", "string", "string", "enum:youtube,youtubemusic,soundcloud,spotify,applemusic,deezer,tidal", "number", "number", "number", "boolean", "boolean", "boolean"],
         ["/music/pause?token=&guildId=", "string", "number"],
         ["/music/resume?token=&guildId=", "string", "number"],
         ["/music/skip?token=&guildId=&index=", "string", "number", "number"],
         ["/music/stop?token=&guildId=", "string", "number"],
         ["/music/seek?token=&guildId=&time=", "string", "number", "string"],
         ["/music/volume?token=&guildId=&value=", "string", "number", "number"],
-        ["/music/loop?token=&guildId=&mode=", "string", "number", "enum"],
+        ["/music/loop?token=&guildId=&mode=", "string", "number", "enum:off,track,queue,autoplay,toggle,0,1,2,3"],
         ["/music/shuffle?token=&guildId=", "string", "number"],
         ["/music/remove?token=&guildId=&index=", "string", "number", "number"],
         ["/music/clear?token=&guildId=", "string", "number"],
@@ -236,8 +241,8 @@ const API_ROUTES = {
         ["/music/nowplaying/lyrics?token=&guildId=", "string", "number"],
         ["/music/queue?token=&guildId=&limit=&offset=", "string", "number", "number", "number"],
         ["/music/stats?token=", "string"],
-        ["/music/filter?token=&guildId=&filter=", "string", "number", "enum"],
-        ["/music/voiceStatus?token=&guildId=&type=&status=&content=", "string", "number", "enum", "boolean", "string"],
+        ["/music/filter?token=&guildId=&filter=", "string", "number", "enum:nightcore,vaporwave,speed,slow,chipmunk,deep,bassboost,bassboostlow,bassboosthigh,soft,trebleboost,rock,pop,electronic,classical,vocal,vocalonly,fullsound,gaming,8d,karaoke,tremolo,pulse,vibrato,wobble,lowpass,muffled,rotation,spin,distortion,channelmix,mono,wide,surround,left,right,reset"],
+        ["/music/voiceStatus?token=&guildId=&type=&status=&content=", "string", "number", "enum:trackStart,queueEnd", "boolean", "string"],
     ]
 };
 
@@ -286,7 +291,7 @@ const PLAYGROUND_ENDPOINTS = {
     music: flattenRoutes(API_ROUTES.music)
 };
 
-import { setGlobalDispatcher, Agent, buildConnector } from 'undici';
+import { setGlobalDispatcher, Agent } from 'undici';
 
 setGlobalDispatcher(new Agent({
     connections: 100,           
@@ -294,35 +299,11 @@ setGlobalDispatcher(new Agent({
     pipelining: 1,              
 }));
 
-const { generate_hash, buildId: buildIdConfig, restrictLocal } = config;
+const { buildId: buildIdConfig, restrictLocal } = config;
 
 const app = new Hono({ strict: false });
 
 app.use('*', compress({ encoding: 'gzip' }));
-
-const challengeHtml = (verifyUrl: string) => `
-<!DOCTYPE html>
-<html style="background:#000">
-<head>
-    <title>Please wait</title>
-</head>
-<body style="background:#000;margin:0">
-    <script>
-    (function() {
-    if (document.readyState !== 'loading') {
-        executeChallenge();
-    } else {
-        document.addEventListener('DOMContentLoaded', executeChallenge);
-    }
-    function executeChallenge() {
-        fetch('${verifyUrl}', { method: 'POST' }).then((r) => r.ok ? window.location.href = window.location.pathname : null).catch();
-    }
-    })();
-    </script>
-</body>
-</html>
-`;
-const testhtml = `<!DOCTYPE html><html lang="en"><script>null</script><body>Please wait</body></html>`;
 
 app.use('*', async (c: Context, next: Next) => {
     if (restrictLocal) {
@@ -420,31 +401,6 @@ const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
 
-function encryptPayload(data: string, secret: string): string {
-    try {
-        const key = crypto.createHash('sha256').update(secret).digest();
-        const iv = crypto.randomBytes(12);
-        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-        const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
-        const tag = cipher.getAuthTag();
-        return Buffer.concat([iv, encrypted, tag]).toString('base64url');
-    } catch { return ""; }
-}
-
-function decryptPayload(payload: string, secret: string): string {
-    try {
-        const data = Buffer.from(payload, 'base64url');
-        if (data.length < 28) return "";
-        const key = crypto.createHash('sha256').update(secret).digest();
-        const iv = data.subarray(0, 12);
-        const tag = data.subarray(data.length - 16);
-        const encrypted = data.subarray(12, data.length - 16);
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-        decipher.setAuthTag(tag);
-        return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
-    } catch { return ""; }
-}
-
 function hostHeaderName(host: string | undefined): string {
     if (!host) return '';
     try { host = decodeURIComponent(host); } catch { }
@@ -522,8 +478,6 @@ app.get('/err/451', (c: Context) => {
 });
 
 app.get('/playground', (c: Context) => {
-    const host = (c.req.header('host') || '').toLowerCase();
-
     c.header('Content-Type', 'text/html');
     c.header('Cache-Control', 'public, no-transform, max-age=3600, stale-while-revalidate=86400');
 

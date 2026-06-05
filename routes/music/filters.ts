@@ -408,12 +408,12 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
     reset: {
         description: 'Removes all active filters and resets to default playback',
         requires: '',
-        isActive: (p) => false,
+        isActive: () => false,
         apply: async (p) => {
             await p.filterManager.clearEQ();
             await p.filterManager.resetFilters();
         },
-        disable: async (p) => { },
+        disable: async () => { },
     },
 };
 
@@ -426,7 +426,6 @@ app.get('/filter', async (c) => {
     return await createMusicStream(c, async (log, s) => {
         const token = c.req.query('token');
         const guildId = c.req.query('guildId');
-        const voiceId = c.req.query('voiceId');
         const filter = normalizeFilterName(c.req.query('filter') || '');
 
         if (!token || !guildId) {

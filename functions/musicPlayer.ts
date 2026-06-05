@@ -14,6 +14,7 @@ import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } f
  * break HTTP/2 fetch and other secure connections in the process.
  */
 function patchNodeTls(node: any) {
+    if (!config.disableTLSMusic) return;
     if (node.__tlsPatched) return;
     node.__tlsPatched = true;
     const origConnect = node.connect.bind(node);
@@ -611,7 +612,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             if (log) await log(`Successfully reconnected ${finalConnectedCount} Lavalink node(s).`);
         }
 
-        if (!existing.contextCached) ensureContextCached(existing, log);
+        if (!existing.contextCached) ensureContextCached(existing);
         return { client: existing.client, player: existing.player };
     }
 
@@ -622,7 +623,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
         // After waiting for the pending client, ensure the context is cached
         const managed = players.get(token);
         if (managed && !managed.contextCached) {
-            ensureContextCached(managed, log);
+            ensureContextCached(managed);
         }
         return result;
     }
@@ -798,8 +799,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
             manager.on('playerDestroy', (p) => {
                 // voiceChannelId may already be null by the time this fires, fall back to last known
                 const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
-                const settings = getVoiceStatusSettings(token, p.guildId);
-
                 if (get247(token, p.guildId)) {
                     // Do not update voice status here. We keep the current status (trackStart or queueEnd)
                     // so it persists smoothly through the reconnection.
@@ -905,7 +904,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                     lastVoiceChannel.set(`${token}:${newState.guild.id}`, newState.channelId);
                 }
                 if (oldState.channel && !newState.channel) {
-                    const settings = getVoiceStatusSettings(token, oldState.guild.id);
                     const is247 = get247(token, oldState.guild.id);
 
                     if (is247) {
@@ -969,7 +967,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
                     throw new Error('No Lavalink nodes available after connection');
                 }
 
-                ensureContextCached(managed, log);
+                ensureContextCached(managed);
                 startupResolve!();
                 initResolve!({ client, player: manager });
             } catch (err) {
@@ -1054,7 +1052,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
     return true;
 }
 
-async function ensureContextCached(managed: ManagedPlayer, log?: (msg: string) => Promise<void>) {
+async function ensureContextCached(managed: ManagedPlayer) {
     if (managed.contextCached) return;
     managed.contextCached = true;
 

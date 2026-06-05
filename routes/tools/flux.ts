@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { Buffer } from 'buffer';
 const app = new Hono();
 
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { blobDispatch } from '../../functions/httpRequest.js';
 import { commonHeaders, userAgent } from '../../functions/request.js';
 
 async function resizeImage(input: Buffer | ArrayBuffer) {

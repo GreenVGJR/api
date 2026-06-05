@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 const app = new Hono();
 
 import { PatreonSearch } from '../../functions/request.js';
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { dispatch } from '../../functions/httpRequest.js';
 
 app.get('/patreon', async (c) => {
     const query = c.req.query('q');

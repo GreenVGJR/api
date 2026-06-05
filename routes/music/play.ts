@@ -11,7 +11,6 @@ import {
     createMusicStream,
     checkVoicePermissions,
     formatDuration,
-    updateVoiceStatus,
     PLATFORM_SEARCH,
 } from '../../functions/musicPlayer.js';
 import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStreams, request, commonHeaders } from '../../functions/request.js';
@@ -53,11 +52,11 @@ function extractYouTubePlaylistUrl(url: string): string | null {
             // They're handled separately via fetchYouTubeMixTracks.
             if (listParam.startsWith('RD')) return null;
             urlObj.pathname = '/playlist';
-            urlObj.searchParams.forEach((value, key) => {
+            for (const key of [...urlObj.searchParams.keys()]) {
                 if (key !== 'list') {
                     urlObj.searchParams.delete(key);
                 }
-            });
+            }
             return urlObj.toString();
         }
     } catch { }
@@ -128,6 +127,14 @@ function getPlatformFromUrl(url: string): string | null {
     if (url.includes('deezer.com')) return 'deezer';
     if (url.includes('tidal.com')) return 'tidal';
     return null;
+}
+
+function isSoundCloudTrack(track: any): boolean {
+    const info = track?.info || {};
+    const sourceName = String(info.sourceName || '').toLowerCase();
+    const actualSourceName = String(info.actualSourceName || '').toLowerCase();
+    const uri = String(info.uri || '').toLowerCase();
+    return sourceName === 'soundcloud' || actualSourceName === 'soundcloud' || uri.includes('soundcloud.com');
 }
 
 async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
@@ -828,7 +835,7 @@ app.get('/play', async (c) => {
                 t.playlist = { name: playlistName, url: playlistUrl, tracks: playlistTracks };
             });
 
-            const filteredTracks = tracks.filter((t: any) => !t.info.isStream);
+            const filteredTracks = tracks.filter((t: any) => !t.info.isStream || isSoundCloudTrack(t));
             if (filteredTracks.length === 0) {
                 await log('No non-live tracks found in playlist');
                 await s.write(`],"data":${JSON.stringify({ status: false, message: 'Playlist contains only live tracks, which are not allowed', type: { primary: "error", alt: "invalid_query" } })}}`);
@@ -848,7 +855,7 @@ app.get('/play', async (c) => {
             }
         } else {
             const track = tracks[0];
-            if (track.info.isStream) {
+            if (track.info.isStream && !isSoundCloudTrack(track)) {
                 await log(`Live track blocked: "${track.info.title}"`);
                 await s.write(`],"data":${JSON.stringify({ status: false, message: 'Live tracks (streams) are not allowed', type: { primary: "error", alt: "invalid_query" } })}}`);
                 return;

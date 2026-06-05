@@ -4,8 +4,6 @@ const app = new Hono();
 import { DiscordVoice, getQuery, getToken } from '../../functions/request.js';
 import { dispatch } from '../../functions/httpRequest.js';
 
-import { Context } from 'hono';
-
 app.get('/discord/voice/deafen', async (c) => {
     const token = getToken(c);
     const guildId = getQuery(c, 'guildId');

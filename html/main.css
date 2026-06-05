@@ -265,7 +265,8 @@ body {
     transition: height 0.125s ease;
 }
 
-.params-body .param-input {
+.params-body .param-input,
+.params-body .param-enum-button {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid #3a3a3a;
     border-radius: 6px;
@@ -279,20 +280,91 @@ body {
 }
 
 @media (min-width: 640px) {
-    .params-body .param-input {
+    .params-body .param-input,
+    .params-body .param-enum-button {
         border-radius: 8px;
         padding: 6px 10px;
         font-size: 12px;
     }
 }
 
-.params-body .param-input:focus {
+.params-body .param-input:focus,
+.params-body .param-enum-button:focus,
+.param-enum.open .param-enum-button {
     border-color: #4ade80;
     box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
 }
 
 .params-body .param-input::placeholder {
     color: #6b7280;
+}
+
+.param-enum {
+    position: relative;
+    width: 100%;
+}
+
+.params-body .param-enum-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.param-enum-selected {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.param-enum-selected.is-placeholder,
+.param-enum-arrow {
+    color: #6b7280;
+}
+
+.param-enum-arrow {
+    flex-shrink: 0;
+    font-size: 10px;
+}
+
+.param-enum-menu {
+    width: 100%;
+    margin-top: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #0b0b0b;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.param-enum-option {
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #d1d5db;
+    cursor: pointer;
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.param-enum-option:hover,
+.param-enum-option:focus {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    outline: none;
+}
+
+.param-enum-option.selected {
+    background: rgba(74, 222, 128, 0.12);
+    color: #4ade80;
 }
 
 #paramsChevron.rotated {

@@ -8,6 +8,7 @@ Library:
 - [httpcloak](https://www.npmjs.com/package/httpcloak)
 - [lavalink-client](https://www.npmjs.com/package/lavalink-client)
 - [linkedom](https://www.npmjs.com/package/linkedom)
+- [sharp](https://www.npmjs.com/package/sharp)
 - [tslib](https://www.npmjs.com/package/tslib)
 - [undici](https://www.npmjs.com/package/undici)
 - [x-client-transaction-id](https://www.npmjs.com/package/x-client-transaction-id)

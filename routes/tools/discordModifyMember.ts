@@ -4,8 +4,6 @@ const app = new Hono();
 import { DiscordMember } from '../../functions/request.js';
 import { dispatch, processImage } from '../../functions/httpRequest.js';
 
-import { Context } from 'hono';
-
 app.get('/discord/modifyMemberServer', async (c) => {
     let token: string | null = null;
     try {

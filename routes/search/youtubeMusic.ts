@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 const app = new Hono();
 
 import { YTMusic } from '../../functions/request.js';
-import { dispatch, blobDispatch } from '../../functions/httpRequest.js';
+import { dispatch } from '../../functions/httpRequest.js';
 
 app.get('/youtube/music', async (c) => {
     const query = c.req.query('q');

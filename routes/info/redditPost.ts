@@ -13,7 +13,7 @@ app.get('/reddit/post', async (c) => {
         return c.json({ "error": "Nothing to do" }, 202);
     }
 
-    c.header('X-Route', 'www.reddit.com, embed.reddit.com');
+    c.header('X-Route', 'www.reddit.com');
     return await dispatch(c, () => RedditPost(url));
 });
 

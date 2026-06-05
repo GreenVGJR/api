@@ -180,6 +180,9 @@ const paramsContainer = document.getElementById('paramsContainer');
 const paramsCount = document.getElementById('paramsCount');
 const paramsChevron = document.getElementById('paramsChevron');
 
+document.addEventListener('click', () => closeEnumDropdowns());
+window.addEventListener('resize', () => closeEnumDropdowns());
+
 const legalPages = {
     terms: {
         title: 'Terms of Service',
@@ -824,14 +827,15 @@ function parseQueryParams(queryString, types = []) {
     const parts = raw.split('&');
     for (const part of parts) {
         const eqIdx = part.indexOf('=');
-        const type = normalizeParamType(types[params.length]);
+        const typeMeta = parseParamTypeSpec(types[params.length]);
         if (eqIdx === -1) {
-            params.push({ key: part, value: '', type });
+            params.push({ key: part, value: '', type: typeMeta.type, options: typeMeta.options });
         } else {
             params.push({
                 key: part.substring(0, eqIdx),
                 value: decodeURIComponent(part.substring(eqIdx + 1)),
-                type
+                type: typeMeta.type,
+                options: typeMeta.options
             });
         }
     }
@@ -847,10 +851,22 @@ function buildQueryString(params) {
     }).join('&');
 }
 
-const PARAM_TYPES = new Set(['string', 'number', 'boolean', 'url', 'enum']);
+const PARAM_TYPES = new Set(['string', 'number', 'boolean', 'url', 'enum', 'json']);
 
-function normalizeParamType(type) {
-    return PARAM_TYPES.has(type) ? type : 'string';
+function parseParamTypeSpec(typeSpec) {
+    const spec = String(typeSpec || '');
+    const separatorIndex = spec.indexOf(':');
+    const rawType = separatorIndex === -1 ? spec : spec.slice(0, separatorIndex);
+    const type = PARAM_TYPES.has(rawType) ? rawType : 'string';
+    const options = type === 'enum' && separatorIndex !== -1
+        ? spec.slice(separatorIndex + 1).split(',').map(option => option.trim()).filter(Boolean)
+        : [];
+
+    return { type, options };
+}
+
+function normalizeParamType(typeSpec) {
+    return parseParamTypeSpec(typeSpec).type;
 }
 
 function buildEndpointUrl(endpoint) {
@@ -863,6 +879,37 @@ function buildEndpointUrl(endpoint) {
 function renderParamControl(p, i) {
     const type = normalizeParamType(p.type);
     const value = String(p.value ?? '');
+    const enumOptions = Array.isArray(p.options) ? p.options : [];
+    const titleAttr = enumOptions.length ? ` title="${escapeAttribute(enumOptions.join(', '))}"` : '';
+
+    if (type === 'enum' && enumOptions.length) {
+        const optionValues = value && !enumOptions.includes(value) ? [value, ...enumOptions] : enumOptions;
+        return `
+            <div class="param-enum" data-param-index="${i}">
+                <input
+                    type="hidden"
+                    class="param-input param-enum-value-input"
+                    data-param-index="${i}"
+                    value="${escapeAttribute(value)}"
+                />
+                <button
+                    type="button"
+                    class="param-enum-button"
+                    data-param-index="${i}"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    ${titleAttr}
+                >
+                    <span class="param-enum-selected${value ? '' : ' is-placeholder'}">${escapeHTML(value || 'enum')}</span>
+                    <span class="param-enum-arrow" aria-hidden="true">v</span>
+                </button>
+                <div class="param-enum-menu no-scrollbar" role="listbox" hidden>
+                    <button type="button" class="param-enum-option${value === '' ? ' selected' : ''}" data-value="" role="option" aria-selected="${value === '' ? 'true' : 'false'}">enum</button>
+                    ${optionValues.map(option => `<button type="button" class="param-enum-option${option === value ? ' selected' : ''}" data-value="${escapeAttribute(option)}" role="option" aria-selected="${option === value ? 'true' : 'false'}">${escapeHTML(option)}</button>`).join('')}
+                </div>
+            </div>
+        `;
+    }
 
     return `
         <input
@@ -871,10 +918,124 @@ function renderParamControl(p, i) {
             data-param-index="${i}"
             value="${escapeAttribute(value)}"
             placeholder="${escapeAttribute(type)}"
+            ${titleAttr}
             spellcheck="false"
             autocomplete="off"
         />
     `;
+}
+
+function closeEnumDropdowns(exceptControl = null) {
+    let changed = false;
+    paramsContainer.querySelectorAll('.param-enum.open').forEach(control => {
+        if (control === exceptControl) return;
+        control.classList.remove('open');
+        control.querySelector('.param-enum-button')?.setAttribute('aria-expanded', 'false');
+        const menu = control.querySelector('.param-enum-menu');
+        if (menu) menu.hidden = true;
+        changed = true;
+    });
+    if (changed) requestAnimationFrame(updateParamsBodyHeight);
+}
+
+function updateParamsBodyHeight() {
+    if (!paramsOpen || currentParams.length === 0) return;
+    paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+}
+
+function setEnumControlValue(control, value, notify = true) {
+    const hiddenInput = control.querySelector('.param-enum-value-input');
+    const selected = control.querySelector('.param-enum-selected');
+    if (!hiddenInput || !selected) return;
+
+    hiddenInput.value = value;
+    selected.textContent = value || 'enum';
+    selected.classList.toggle('is-placeholder', value === '');
+
+    control.querySelectorAll('.param-enum-option').forEach(option => {
+        const isSelected = option.dataset.value === value;
+        option.classList.toggle('selected', isSelected);
+        option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    });
+
+    if (notify) hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function syncEnumControlsFromInputs() {
+    paramsContainer.querySelectorAll('.param-enum').forEach(control => {
+        const hiddenInput = control.querySelector('.param-enum-value-input');
+        if (hiddenInput) setEnumControlValue(control, hiddenInput.value, false);
+    });
+}
+
+function setupEnumControls() {
+    paramsContainer.querySelectorAll('.param-enum').forEach(control => {
+        const button = control.querySelector('.param-enum-button');
+        const menu = control.querySelector('.param-enum-menu');
+        if (!button || !menu) return;
+
+        const openMenu = () => {
+            closeEnumDropdowns(control);
+            control.classList.add('open');
+            button.setAttribute('aria-expanded', 'true');
+            menu.hidden = false;
+            requestAnimationFrame(updateParamsBodyHeight);
+        };
+
+        const closeMenu = () => {
+            control.classList.remove('open');
+            button.setAttribute('aria-expanded', 'false');
+            menu.hidden = true;
+            requestAnimationFrame(updateParamsBodyHeight);
+        };
+
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (control.classList.contains('open')) closeMenu();
+            else openMenu();
+        });
+
+        button.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                openMenu();
+                (menu.querySelector('.param-enum-option.selected') || menu.querySelector('.param-enum-option'))?.focus();
+            } else if (e.key === 'Escape') {
+                closeMenu();
+            }
+        });
+
+        menu.querySelectorAll('.param-enum-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setEnumControlValue(control, option.dataset.value || '');
+                closeMenu();
+                button.focus();
+            });
+
+            option.addEventListener('keydown', (e) => {
+                const options = Array.from(menu.querySelectorAll('.param-enum-option'));
+                const currentIndex = options.indexOf(option);
+
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setEnumControlValue(control, option.dataset.value || '');
+                    closeMenu();
+                    button.focus();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeMenu();
+                    button.focus();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    options[Math.min(currentIndex + 1, options.length - 1)]?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    options[Math.max(currentIndex - 1, 0)]?.focus();
+                }
+            });
+        });
+    });
 }
 
 function renderParams() {
@@ -929,6 +1090,8 @@ function renderParams() {
                 }
             });
         });
+
+        setupEnumControls();
     } else {
         paramsContainer.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">No parameters needed.</div>';
     }
@@ -940,7 +1103,7 @@ function renderParams() {
             if (window.innerWidth >= 768) {
                 paramsChevron.classList.add('rotated');
                 paramsOpen = true;
-                paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+                updateParamsBodyHeight();
             } else {
                 paramsChevron.classList.remove('rotated');
                 paramsOpen = false;
@@ -987,6 +1150,7 @@ function syncUrlToParams() {
                     input.value = currentParams[idx].value;
                 }
             });
+            syncEnumControlsFromInputs();
         }
     } catch { }
 }
@@ -996,8 +1160,9 @@ paramsToggle.addEventListener('click', () => {
     paramsChevron.classList.toggle('rotated', paramsOpen);
 
     if (paramsOpen) {
-        paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+        updateParamsBodyHeight();
     } else {
+        closeEnumDropdowns();
         paramsBody.style.height = null;
     }
 });

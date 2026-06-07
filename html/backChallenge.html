@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Checking Browser</title>
+</head>
+<body>
+    <script>(()=>{const n={{BACK_CHALLENGE_COOKIE}},v={{BACK_CHALLENGE_VALUE}},m={{BACK_CHALLENGE_MAX_AGE}},s={{BACK_CHALLENGE_SECURE}},h=()=>document.cookie.split(';').some(p=>p.trim().startsWith(`${n}=`));document.cookie=`${n}=${encodeURIComponent(v)}; Max-Age=${m}; Path=/; SameSite=Lax${s?'; Secure':''}`;h()?setTimeout(()=>location.replace(location.href),50):document.body.textContent='Cookie challenge failed. Enable cookies and refresh this page.';})();</script>
+    <noscript>Enable JavaScript and refresh this page.</noscript>
+</body>
+</html>

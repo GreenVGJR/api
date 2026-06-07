@@ -3,6 +3,8 @@ import { browserRequest } from './browserRequest.js';
 import { get as httpcloakGet } from 'httpcloak';
 
 import { ClientTransaction } from "x-client-transaction-id";
+import { Innertube, Log, ProtoUtils } from 'youtubei.js';
+import BG from 'bgutils-js';
 import { parseHTML } from 'linkedom';
 import { decodeHTML } from 'entities';
 import crypto from 'crypto';
@@ -11,6 +13,170 @@ import emojibaseData from 'emojibase-data/en/data.json' with { type: 'json' };
 import emojibaseGroups from 'emojibase-data/meta/groups.json' with { type: 'json' };
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+Log.setLevel(Log.Level.ERROR);
+
+let youtubeiPromise: Promise<any> | null = null;
+let poTokenCache: { po_token: string; visitor_data: string } | null = null;
+let botGuardChallengePromise: Promise<any> | null = null;
+const captionPoTokenCache = new Map<string, string>();
+const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || '';
+
+async function ensureBotGuardDom() {
+    if (typeof (globalThis as any).window !== 'undefined' && typeof (globalThis as any).document !== 'undefined') return;
+    const { JSDOM } = await import('jsdom');
+    const dom = new JSDOM('', { url: 'https://www.youtube.com/' });
+    Object.assign(globalThis, {
+        window: dom.window,
+        document: dom.window.document,
+    });
+}
+
+function getFallbackPoToken() {
+    const id = Math.random().toString(36).substring(2, 13);
+    const ts = Math.floor(Date.now() / 1000);
+    const visitorData = ProtoUtils.encodeVisitorData(id, ts);
+    return {
+        po_token: BG.PoToken.generateColdStartToken(id),
+        visitor_data: visitorData,
+    };
+}
+
+async function getBotGuardChallenge() {
+    if (botGuardChallengePromise) return botGuardChallengePromise;
+    botGuardChallengePromise = (async () => {
+        const session = await Innertube.create({ retrieve_player: false });
+        const visitorData = session.session.context.client.visitorData;
+        if (!visitorData) throw new Error('Could not get YouTube visitor data');
+
+        await ensureBotGuardDom();
+        const bgConfig = {
+            fetch: fetch as any,
+            globalObj: globalThis,
+            identifier: visitorData,
+            requestKey: YOUTUBE_PO_TOKEN_REQUEST_KEY,
+        };
+        const challenge = await BG.Challenge.create(bgConfig);
+        const interpreterJavascript = challenge?.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
+        if (!challenge || !interpreterJavascript) throw new Error('Could not load BotGuard challenge');
+
+        new Function(interpreterJavascript)();
+        return { visitorData, challenge, bgConfig };
+    })().catch((e) => {
+        botGuardChallengePromise = null;
+        throw e;
+    });
+    return botGuardChallengePromise;
+}
+
+async function mintYoutubePoToken(identifier: string) {
+    const { challenge, bgConfig } = await getBotGuardChallenge();
+    const result = await BG.PoToken.generate({
+        program: challenge.program,
+        globalName: challenge.globalName,
+        bgConfig: { ...bgConfig, identifier },
+    });
+    return result.poToken;
+}
+
+async function generateYoutubePoToken() {
+    const { visitorData } = await getBotGuardChallenge();
+    return {
+        po_token: await mintYoutubePoToken(visitorData),
+        visitor_data: visitorData,
+    };
+}
+
+async function getYoutubeCaptionPoToken(videoId: string) {
+    const cached = captionPoTokenCache.get(videoId);
+    if (cached) return cached;
+    try {
+        const token = await mintYoutubePoToken(videoId);
+        captionPoTokenCache.set(videoId, token);
+        return token;
+    } catch (e) {
+        console.error('Failed to generate YouTube caption PO token:', e);
+        const { po_token } = await getPoToken();
+        return po_token;
+    }
+}
+
+async function getPoToken() {
+    if (poTokenCache) return poTokenCache;
+    try {
+        poTokenCache = await generateYoutubePoToken();
+    } catch (e) {
+        console.error('Failed to generate YouTube PO token:', e);
+        poTokenCache = getFallbackPoToken();
+    }
+    return poTokenCache;
+}
+
+function withYoutubePoToken(baseUrl: any, poToken: string) {
+    if (!baseUrl) return null;
+    try {
+        const url = new URL(String(baseUrl));
+        url.searchParams.set('fmt', 'json3');
+        url.searchParams.set('potc', '1');
+        url.searchParams.set('pot', poToken);
+        url.searchParams.set('xorb', '2');
+        url.searchParams.set('xobt', '3');
+        url.searchParams.set('xovt', '3');
+        url.searchParams.set('cbr', 'Firefox');
+        url.searchParams.set('cbrver', '151.0');
+        url.searchParams.set('c', 'WEB');
+        return url.toString();
+    } catch {
+        const separator = String(baseUrl).includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=151.0&c=WEB`;
+    }
+}
+
+function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
+    let decodedVisitorData: any = null;
+    if (poTokenCache?.visitor_data) {
+        try {
+            decodedVisitorData = ProtoUtils.decodeVisitorData(poTokenCache.visitor_data);
+        } catch { }
+    }
+
+    return {
+        visitorData: poTokenCache?.visitor_data
+            ? [poTokenCache.visitor_data, decodedVisitorData?.id || null, decodedVisitorData?.timestamp ? String(decodedVisitorData.timestamp) : null]
+            : null,
+        sessionPoToken: poTokenCache?.po_token || null,
+        contentPoToken: {
+            poToken: captionPoToken,
+            targetId: videoId,
+        }
+    };
+}
+
+async function getYoutubei() {
+    if (!youtubeiPromise) {
+        const { po_token, visitor_data } = await getPoToken();
+        youtubeiPromise = Innertube.create({ po_token, visitor_data }).catch((e) => {
+            youtubeiPromise = null;
+            throw e;
+        });
+    }
+    return youtubeiPromise;
+}
+
+function warmupYoutube() {
+    const timer = setTimeout(() => {
+        Promise.allSettled([
+            getBotGuardChallenge(),
+            getYoutubei()
+        ]).then((results) => {
+            const failed = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined;
+            if (failed) console.error('YouTube warmup failed:', failed.reason);
+        });
+    }, 0);
+    (timer as any).unref?.();
+}
+
+warmupYoutube();
 
 export const userAgent = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
 
@@ -1580,16 +1746,12 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
             method: "POST"
         });
 
-        const [res2, otherinfo] = await Promise.all([
-            pull.json(),
-            infoYoutube(url)
+        const [res2] = await Promise.all([
+            pull.json()
         ]);
         const covermusic: any = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
 
-        responseBody['data'] = [
-            { ...(container || {}) },
-            { musicThumbnail: covermusic, ...(otherinfo?.data || {}) },
-        ];
+        responseBody['data'] = { ...(container || {}) };
         responseBody['lyrics'] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
         responseBody['footer'] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
 
@@ -2329,6 +2491,12 @@ export const Translate = async function Translate(que: string, from?: string, to
             }
         });
 
+        if (response.status !== 200) {
+            return {
+                error: `${response.status} - Can't process this`
+            }
+        }
+
         const data: any = await response.json();
 
         let translatedText = '';
@@ -2354,226 +2522,206 @@ export const Translate = async function Translate(que: string, from?: string, to
     }
 }
 
+function cleanTranscriptText(text: any) {
+    return decodeHTML(String(text || '').replace(/<[^>]+>/g, '').replace(/\n/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+function getYoutubeiText(value: any) {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value.text === 'string') return value.text;
+    if (Array.isArray(value.runs)) return value.runs.map((run: any) => run.text || '').join('');
+    if (typeof value.toString === 'function' && value.toString !== Object.prototype.toString) return value.toString();
+    return '';
+}
+
+function getYoutubeErrorMessage(e: any) {
+    return e?.info?.reason || e?.info?.status || e?.message || 'Video unavailable';
+}
+
+function mapYoutubeCommentThread(thread: any) {
+    const comment = thread?.comment;
+    if (!comment) return null;
+    return {
+        author: comment.author?.name || null,
+        authorThumbnail: comment.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
+        text: getYoutubeiText(comment.content),
+        publishedTimeText: comment.published_time || null,
+        likeCount: comment.like_count || "0",
+        commentId: comment.comment_id || null,
+        authorEndpoint: comment.author?.id || null,
+        channelUrl: comment.author?.url || (comment.author?.id ? "https://www.youtube.com/channel/" + comment.author.id : null)
+    };
+}
+
+function mapYoutubeLiveChatAction(action: any) {
+    const item = action?.item;
+    if (!item?.message) return null;
+    const authorUrl = item.author?.url && !String(item.author.url).includes('/undefined')
+        ? item.author.url
+        : item.author?.id
+            ? "https://www.youtube.com/channel/" + item.author.id
+            : null;
+
+    return {
+        author: item.author?.name || null,
+        authorThumbnail: item.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
+        text: getYoutubeiText(item.message),
+        publishedTimeText: item.timestamp_text || (item.timestamp ? new Date(Number(item.timestamp)).toLocaleTimeString() : null),
+        likeCount: "0",
+        commentId: item.id || null,
+        authorEndpoint: item.author?.id || null,
+        channelUrl: authorUrl
+    };
+}
+
+async function getYoutubeLiveChatComments(info: any) {
+    if (!info?.livechat?.continuation) return [];
+    const endpoint = info.livechat.is_replay ? 'live_chat/get_live_chat_replay' : 'live_chat/get_live_chat';
+    const response = await info.actions.execute(endpoint, {
+        continuation: info.livechat.continuation,
+        parse: true
+    });
+    return (response?.continuation_contents?.actions || [])
+        .map(mapYoutubeLiveChatAction)
+        .filter(Boolean);
+}
+
+async function getYoutubeComments(youtubei: any, info: any, videoId: string) {
+    if (info?.basic_info?.is_live || info?.livechat) return getYoutubeLiveChatComments(info);
+    const commentData = await youtubei.getComments(videoId);
+    return (commentData?.contents || []).map(mapYoutubeCommentThread).filter(Boolean);
+}
+
+function parseHlsAttributes(line: string) {
+    const attrs: Record<string, string> = {};
+    const re = /([A-Z0-9-]+)=("([^"]*)"|[^,]*)/g;
+    let match;
+    while ((match = re.exec(line)) !== null) {
+        attrs[match[1]] = match[3] ?? match[2];
+    }
+    return attrs;
+}
+
+async function getYoutubeLiveCaptions(info: any) {
+    const hlsUrl = info?.streaming_data?.hls_manifest_url;
+    if (!hlsUrl) return [];
+    try {
+        const response = await fetch(hlsUrl);
+        if (!response.ok) return [];
+        const manifest = await response.text();
+        return manifest.split('\n')
+            .filter((line) => line.includes('#EXT-X-MEDIA') && line.includes('TYPE=SUBTITLES'))
+            .map((line) => {
+                const attrs = parseHlsAttributes(line);
+                const uri = attrs.URI ? new URL(attrs.URI, hlsUrl).toString() : null;
+                return {
+                    name: attrs.NAME || attrs.LANGUAGE || null,
+                    languageCode: attrs.LANGUAGE || null,
+                    kind: 'live',
+                    isTranslatable: false,
+                    url: uri
+                };
+            })
+            .filter((track) => track.url);
+    } catch {
+        return [];
+    }
+}
+
+
+
 export const infoYoutube = async function infoYoutube(que: string, deepFetch: boolean = true) {
     let videoId = que.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
     videoId = videoId || undefined;
     if (!videoId) return null;
 
     try {
-        const res2 = await request(`https://www.youtube.com/watch?v=${videoId}`, {
-            method: "GET",
-            headers: {
-                ...commonHeaders,
-                'User-Agent': 'Bot'
-            },
-            useH2: true
-        });
+        const youtubeiPromise = getYoutubei();
+        const infoPromise = youtubeiPromise.then((youtubei: any) => youtubei.getInfo(videoId)).catch((e: any) => ({ __youtubeError: e }));
+        const [infoResult, poToken, comments] = await Promise.all([
+            infoPromise,
+            getYoutubeCaptionPoToken(videoId),
+            deepFetch
+                ? Promise.all([youtubeiPromise, infoPromise]).then(([youtubei, info]: any[]) => info?.__youtubeError ? [] : getYoutubeComments(youtubei, info, videoId)).catch(() => [])
+                : Promise.resolve([])
+        ]);
 
-        const pull2 = await res2.text;
+        const challenge = getYoutubeChallengeObject(videoId, poToken);
 
-        let testpar: any = parseYtInitial(pull2);
+        if (infoResult?.__youtubeError) {
+            return { "_challenge": challenge, error: getYoutubeErrorMessage(infoResult.__youtubeError) };
+        }
 
-        if (testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer) {
+        const info = infoResult;
+
+        if (info?.playability_status?.status && info.playability_status.status !== 'OK') {
+            return { "_challenge": challenge, error: info.playability_status.reason || info.playability_status.status };
+        }
+
+        let captions = (info?.captions?.caption_tracks || []).map((track: any) => ({
+            name: cleanTranscriptText(getYoutubeiText(track.name)),
+            languageCode: track.language_code || null,
+            kind: track.kind || null,
+            isTranslatable: !!track.is_translatable,
+            url: withYoutubePoToken(track.base_url, poToken)
+        }));
+
+        if (!captions.length && info?.basic_info?.is_live) {
+            captions = await getYoutubeLiveCaptions(info);
+        }
+
+        const basic = info.basic_info || {};
+        const primary = info.primary_info || {};
+        const secondary = info.secondary_info || {};
+        const owner = secondary.owner?.author || basic.channel || {};
+        const ownerUrls = owner.url ? [owner.url] : owner.id ? ["https://www.youtube.com/channel/" + owner.id] : [];
+        const ownerAvatars = (owner.thumbnails || []).map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean);
+        const feeds = (info.watch_next_feed || []).map((item: any) => {
+            const rId = item.content_id;
+            if (!rId || !/^[A-Za-z0-9_-]{11}$/.test(rId)) return null;
+            const feedOwner = item.metadata?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text?.text || null;
+            const feedOwnerPath = item.metadata?.image?.renderer_context?.command_context?.on_tap?.metadata?.url ||
+                item.metadata?.image?.renderer_context?.command_context?.on_tap?.payload?.canonicalBaseUrl;
+            const feedOwnerUrl = feedOwnerPath
+                ? [String(feedOwnerPath).startsWith('http') ? feedOwnerPath : "https://www.youtube.com" + feedOwnerPath]
+                : null;
+            const feedOwnerAvatar = item.metadata?.image?.avatar?.image
+                ?.map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0"))
+                .filter(Boolean) || null;
             return {
-                error: testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.backgroundPromoRenderer?.title?.runs?.[0]?.text || null
-            }
-        }
-
-        let commentToken: string | null = null;
-        let isLiveChat = false;
-        const visitorData: any = testpar?.responseContext?.webResponseContextExtensionData?.ytConfigData?.visitorData;
-        const findToken = (obj: any) => {
-            if (!obj || (commentToken && isLiveChat)) return;
-            if (typeof obj === "object") {
-                if (obj.liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation) {
-                    commentToken = obj.liveChatRenderer.continuations[0].reloadContinuationData.continuation;
-                    isLiveChat = true;
-                    return;
+                videoId: rId,
+                url: "https://www.youtube.com/watch?v=" + rId,
+                altUrl: "https://www.youtube.com/watch?v=" + rId,
+                title: item.metadata?.title?.text || null,
+                thumbnail: item.content_image?.image?.[0]?.url || "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+                owner: {
+                    name: feedOwner,
+                    url: feedOwnerUrl,
+                    avatar: feedOwnerAvatar?.length ? Array.from(new Set(feedOwnerAvatar)) : null,
                 }
-                if (obj.liveChatRenderer?.continuations?.[0]?.liveChatReplayContinuationData?.continuation) {
-                    commentToken = obj.liveChatRenderer.continuations[0].liveChatReplayContinuationData.continuation;
-                    isLiveChat = true;
-                    return;
-                }
-                if (!commentToken && obj.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token) {
-                    commentToken = obj.continuationItemRenderer.continuationEndpoint.continuationCommand.token;
-                }
-                for (const k in obj) findToken(obj[k]);
-            }
-        };
-        findToken(testpar);
-
-        let comments: any[] = [];
-        if (commentToken && deepFetch) {
-            try {
-                const endpoint = isLiveChat
-                    ? 'https://m.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false'
-                    : 'https://m.youtube.com/youtubei/v1/next?prettyPrint=false';
-
-                const commentRes = await request(endpoint, {
-                    method: "POST",
-                    body: JSON.stringify({
-                        context: { client: { clientName: 1, clientVersion: "2.20261231", visitorData: visitorData } },
-                        continuation: commentToken
-                    }),
-                    headers: {
-                        ...commonHeaders,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const commentData: any = await commentRes.json();
-
-                if (isLiveChat) {
-                    const actions = commentData?.continuationContents?.liveChatContinuation?.actions || [];
-                    comments = actions.map((a: any) => {
-                        const item = a.addChatItemAction?.item?.liveChatTextMessageRenderer;
-                        if (!item) return null;
-                        return {
-                            author: item.authorName?.simpleText,
-                            authorThumbnail: item.authorPhoto?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
-                            text: item.message?.runs?.map((r: any) => r.text).join(""),
-                            publishedTimeText: item.timestampUsec ? new Date(parseInt(item.timestampUsec) / 1000).toLocaleTimeString() : null,
-                            commentId: item.id,
-                            authorEndpoint: item.authorExternalChannelId,
-                            channelUrl: "https://www.youtube.com/channel/" + item.authorExternalChannelId
-                        };
-                    }).filter((c: any) => c !== null);
-                } else {
-                    const endpoints = commentData.onResponseReceivedEndpoints || [];
-                    const items = endpoints.flatMap((e: any) => {
-                        const action = e.appendContinuationItemsAction || e.reloadContinuationItemsCommand;
-                        return action?.continuationItems || [];
-                    });
-
-                    const mutations = commentData?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
-                    const entityMap: any = {};
-                    mutations.forEach((m: any) => {
-                        if (m.payload) {
-                            entityMap[m.entityKey] = m.payload;
-                        }
-                    });
-
-                    comments = items.map((i: any) => {
-                        const ctr = i?.commentThreadRenderer;
-                        if (!ctr) return null;
-
-                        if (ctr.comment?.commentRenderer) {
-                            const c = ctr.comment.commentRenderer;
-                            return {
-                                author: c.authorText?.simpleText || c.authorText?.runs?.[0]?.text,
-                                authorThumbnail: c.authorThumbnail?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
-                                text: c.contentText?.runs?.map((r: any) => r.text).join(""),
-                                publishedTimeText: c.publishedTimeText?.runs?.[0]?.text,
-                                likeCount: c.voteCount?.simpleText || "0",
-                                commentId: c.commentId,
-                                authorEndpoint: c.authorEndpoint?.browseEndpoint?.browseId,
-                                channelUrl: c.authorEndpoint?.browseEndpoint?.browseId ? "https://www.youtube.com/channel/" + c.authorEndpoint.browseEndpoint.browseId : null
-                            };
-                        }
-
-                        const cvm = ctr.commentViewModel?.commentViewModel;
-                        if (cvm) {
-                            const key = cvm.commentKey;
-                            const entity = entityMap[key]?.commentEntityPayload;
-                            if (entity) {
-                                return {
-                                    author: entity.author?.displayName,
-                                    authorThumbnail: entity.author?.avatarThumbnailUrl?.replace(/=s\d+.*/, "=s0"),
-                                    text: entity.properties?.content?.content,
-                                    publishedTimeText: entity.properties?.publishedTime,
-                                    likeCount: entity.toolbar?.likeCountNotliked || "0",
-                                    commentId: entity.properties?.commentId,
-                                    authorEndpoint: entity.author?.channelId,
-                                    channelUrl: entity.author?.channelId ? "https://www.youtube.com/channel/" + entity.author.channelId : null
-                                };
-                            }
-                        }
-
-                        return null;
-                    }).filter((c: any) => c !== null);
-                }
-            } catch (e) {
-                console.error("Error fetching comments:", e);
-            }
-        }
-
-        const first: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.find((a: any) => !!a?.videoPrimaryInfoRenderer)?.videoPrimaryInfoRenderer;
-        const second: any = testpar?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.find((a: any) => !!a?.videoSecondaryInfoRenderer)?.videoSecondaryInfoRenderer;
+            };
+        }).filter(Boolean);
 
         return {
+            "_challenge": challenge,
             "data": {
                 videoId: videoId,
                 thumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
                 previewThumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxres1.jpg",
-                title: first?.title?.runs?.[0]?.text || null,
-                description: second?.attributedDescription?.content || null,
-                releaseDate: (first?.dateText?.simpleText?.split('streaming on ')?.[1] || first?.dateText?.simpleText?.split('live on ')?.[1] || first?.dateText?.simpleText?.split('started streaming on ')?.[1] || first?.dateText?.simpleText?.split('Started streaming on ')?.[1] || first?.dateText?.simpleText?.split('started streaming ')?.[1] || first?.dateText?.simpleText?.split('Started streaming ')?.[1] || first?.dateText?.simpleText?.split('Streamed live on ')?.[1] || first?.dateText?.simpleText?.split('streamed live on ')?.[1] || first?.dateText?.simpleText?.split('Premiered on ')?.[1] || first?.dateText?.simpleText?.split('Premiered ')?.[1] || first?.dateText?.simpleText?.split('Broadcast live on ')?.[1] || first?.dateText?.simpleText?.split('broadcast live on ')?.[1] || first?.dateText?.simpleText) || null,
-                viewCount: String(parseAbbreviatedNumber(first?.viewCount?.videoViewCountRenderer?.viewCount?.simpleText?.split(' ')?.[0]) || 0),
+                title: basic.title || getYoutubeiText(primary.title) || null,
+                description: getYoutubeiText(secondary.description) || basic.short_description || null,
+                releaseDate: getYoutubeiText(primary.published) || null,
+                viewCount: String(basic.view_count || 0),
                 owners: {
-                    name: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.text || second?.owner?.videoOwnerRenderer?.attributedTitle?.content) || null,
-                    url: (second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
-                        ? ["https://www.youtube.com" + second?.owner?.videoOwnerRenderer?.title?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url]
-                        : second?.owner?.videoOwnerRenderer?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems?.map((d: any) => {
-                            const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
-                                d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ||
-                                d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-                            return u ? "https://www.youtube.com" + u : null;
-                        }).filter(Boolean)) || [],
-                    avatar: Array.from(new Set((second?.owner?.videoOwnerRenderer?.avatarStack?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) ||
-                        (second?.owner?.videoOwnerRenderer?.thumbnail?.thumbnails || second?.owner?.videoOwnerRenderer?.avatar?.thumbnails)?.map((k: any) => k?.url))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")) || []))
+                    name: owner.name || basic.author || null,
+                    url: ownerUrls,
+                    avatar: Array.from(new Set(ownerAvatars))
                 },
-                tags: (first?.superTitleLink?.runs?.map((a: any) => {
-                    const u = a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
-                    if (u) {
-                        return {
-                            text: a.text || "",
-                            url: "https://www.youtube.com" + u
-                        }
-                    }
-                    return null;
-                }) || []).filter(Boolean),
-                feeds: testpar?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents.filter((c: any) => c.lockupViewModel)?.map((c: any) => {
-                    const lvm = c.lockupViewModel;
-                    const meta = lvm?.metadata?.lockupMetadataViewModel;
-                    const img = meta?.image;
-
-                    const singleUrl = img?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-                    const stackItems = img?.avatarStackViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems;
-
-                    const ownerUrls: string[] | null = singleUrl
-                        ? ["https://www.youtube.com" + singleUrl]
-                        : stackItems
-                            ?.map((d: any) => {
-                                const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-                                return u ? "https://www.youtube.com" + u : null;
-                            }).filter(Boolean) || null;
-
-                    const ownerAvatars: string[] | string | null = img?.decoratedAvatarViewModel
-                        ? (img.decoratedAvatarViewModel.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0") ?? null)
-                            ? [img.decoratedAvatarViewModel.avatar.avatarViewModel.image.sources[0].url.replace(/=s\d+.*/, "=s0")]
-                            : null
-                        : stackItems
-                            ?.map((d: any) => {
-                                const u = d.listItemViewModel?.leadingAccessory?.avatarViewModel?.image?.sources?.[0]?.url;
-                                return u ? u.replace(/=s\d+.*/, "=s0") : null;
-                            }).filter(Boolean) || null;
-
-                    const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
-                    const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
-                    return {
-                        videoId: rId,
-                        url: "https://www.youtube.com/watch?v=" + rId,
-                        altUrl: "https://www.youtube.com" + nUrl,
-                        title: meta?.title?.content,
-                        thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
-                        owner: {
-                            name: meta?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
-                            url: ownerUrls,
-                            avatar: ownerAvatars,
-                        }
-                    };
-                }) || [],
-                "comments": comments
+                tags: (basic.tags || []).map((tag: string) => ({ text: tag, url: null })),
+                feeds,
+                "comments": comments,
+                "captions": captions
             }
         };
     }
@@ -10405,7 +10553,8 @@ const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<string, number> = {
 };
 
 const DISCORD_AUTOMOD_EVENT_TYPES: Record<string, number> = {
-    MESSAGE_SEND: 1
+    MESSAGE_SEND: 1,
+    GUILD_MEMBER_JOIN_OR_UPDATE: 2
 };
 
 const DISCORD_AUTOMOD_ACTION_TYPES: Record<string, number> = {
@@ -10529,6 +10678,11 @@ function buildDiscordAutomodPayload(params: any, mode: 'set' | 'modify') {
     if (enabled.error) return { error: enabled.error };
     if (enabled.value !== undefined) payload.enabled = enabled.value;
 
+    if (mode === 'set') {
+        if (!payload.name) return { error: 'Missing parameter: name' };
+        if (!payload.trigger_type) return { error: 'Missing parameter: triggerType' };
+    }
+
     const triggerMetadata: any = {};
     const keywordFilter = parseDiscordAutomodStringArray(params.keywordFilter ?? params.keyword_filter, 'keywordFilter');
     if (keywordFilter.error) return { error: keywordFilter.error };
@@ -10554,6 +10708,28 @@ function buildDiscordAutomodPayload(params: any, mode: 'set' | 'modify') {
     if (mentionRaidProtection.error) return { error: mentionRaidProtection.error };
     if (mentionRaidProtection.value !== undefined) triggerMetadata.mention_raid_protection_enabled = mentionRaidProtection.value;
 
+    const eventTypeName = eventType.value !== undefined ? discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, eventType.value) : undefined;
+    const triggerTypeName = triggerType.value !== undefined ? discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, triggerType.value) : undefined;
+
+    if (mode === 'set') {
+        if (eventTypeName === 'MESSAGE_SEND' && triggerTypeName === 'MEMBER_PROFILE') {
+            return { error: 'Invalid triggerType for eventType MESSAGE_SEND. Use KEYWORD, SPAM, KEYWORD_PRESET, or MENTION_SPAM' };
+        }
+        if (eventTypeName === 'GUILD_MEMBER_JOIN_OR_UPDATE' && triggerTypeName !== 'MEMBER_PROFILE') {
+            return { error: 'Invalid triggerType for eventType GUILD_MEMBER_JOIN_OR_UPDATE. Use MEMBER_PROFILE' };
+        }
+
+        if ((triggerTypeName === 'KEYWORD' || triggerTypeName === 'MEMBER_PROFILE') && !keywordFilter.value?.length && !regexPatterns.value?.length) {
+            return { error: 'Missing parameter: keywordFilter or regexPatterns' };
+        }
+        if (triggerTypeName === 'KEYWORD_PRESET' && !presets.value?.length) {
+            return { error: 'Missing parameter: presets' };
+        }
+        if (triggerTypeName === 'MENTION_SPAM' && mentionTotalLimit.value === undefined) {
+            return { error: 'Missing parameter: mentionTotalLimit' };
+        }
+    }
+
     if (Object.keys(triggerMetadata).length || mode === 'set') payload.trigger_metadata = triggerMetadata;
 
     if (params.actions) {
@@ -10569,15 +10745,27 @@ function buildDiscordAutomodPayload(params: any, mode: 'set' | 'modify') {
         if (hasActionInput || mode === 'set') {
             const actionType = parseDiscordAutomodMappedNumber(params.actionType ?? params.action ?? 'BLOCK_MESSAGE', DISCORD_AUTOMOD_ACTION_TYPES, 'actionType');
             if (actionType.error || actionType.value === undefined) return { error: actionType.error || 'Invalid actionType' };
+            const actionTypeName = discordAutomodName(DISCORD_AUTOMOD_ACTION_TYPES, actionType.value);
+
+            if (mode === 'set') {
+                if (triggerTypeName === 'MEMBER_PROFILE' && actionTypeName !== 'BLOCK_MEMBER_INTERACTION') {
+                    return { error: 'Invalid actionType for triggerType MEMBER_PROFILE. Use BLOCK_MEMBER_INTERACTION' };
+                }
+                if (triggerTypeName !== 'MEMBER_PROFILE' && actionTypeName === 'BLOCK_MEMBER_INTERACTION') {
+                    return { error: 'Invalid actionType. BLOCK_MEMBER_INTERACTION requires triggerType MEMBER_PROFILE' };
+                }
+            }
 
             const action: any = { type: actionType.value };
             const metadata: any = {};
             const customMessage = params.customMessage ?? params.custom_message;
             if (customMessage !== undefined) metadata.custom_message = String(customMessage);
             const alertChannelId = params.alertChannelId ?? params.alert_channel_id;
+            if (actionTypeName === 'SEND_ALERT_MESSAGE' && (alertChannelId === undefined || alertChannelId === '')) return { error: 'Missing parameter: alertChannelId' };
             if (alertChannelId !== undefined && alertChannelId !== '') metadata.channel_id = String(alertChannelId);
             const timeoutSeconds = parseDiscordAutomodNumber(params.timeoutSeconds ?? params.duration_seconds, 'timeoutSeconds');
             if (timeoutSeconds.error) return { error: timeoutSeconds.error };
+            if (actionTypeName === 'TIMEOUT' && timeoutSeconds.value === undefined) return { error: 'Missing parameter: timeoutSeconds' };
             if (timeoutSeconds.value !== undefined) metadata.duration_seconds = timeoutSeconds.value;
             if (Object.keys(metadata).length) action.metadata = metadata;
             payload.actions = [action];
@@ -10591,11 +10779,6 @@ function buildDiscordAutomodPayload(params: any, mode: 'set' | 'modify') {
     const exemptChannels = parseDiscordAutomodStringArray(params.exemptChannels ?? params.exempt_channels, 'exemptChannels');
     if (exemptChannels.error) return { error: exemptChannels.error };
     if (exemptChannels.value !== undefined) payload.exempt_channels = exemptChannels.value;
-
-    if (mode === 'set') {
-        if (!payload.name) return { error: 'Missing name' };
-        if (!payload.trigger_type) return { error: 'Missing triggerType' };
-    }
 
     return { payload };
 }
@@ -10725,7 +10908,8 @@ export const DiscordInfoAutomod = async (token: string, guildId: string) => {
             };
 
             const DISCORD_AUTOMOD_EVENT_TYPES: Record<number, string> = {
-                1: 'MESSAGE_SEND'
+                1: 'MESSAGE_SEND',
+                2: 'GUILD_MEMBER_JOIN_OR_UPDATE'
             };
 
             const DISCORD_AUTOMOD_ACTION_TYPES: Record<number, string> = {

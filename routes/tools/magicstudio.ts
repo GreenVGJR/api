@@ -1,19 +1,9 @@
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
-const commonHeaders = {
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-site',
-    'Sec-Fetch-User': '?1',
-    'User-Agent': userAgent
-}
-
 import crypto from 'crypto';
 import { Hono } from 'hono';
-const app = new Hono();
-
+import { commonHeaders } from '../../functions/request.js';
 import { blobDispatch } from '../../functions/httpRequest.js';
+
+const app = new Hono();
 
 app.get('/ai-image/magicstudio', async (c) => {
     const query = c.req.query('prompt');

@@ -2,17 +2,20 @@
   "type": "module",
   "dependencies": {
     "@hono/node-server": "^2.0.4",
+    "bgutils-js": "^3.2.0",
     "discord.js": "^14.26.4",
     "emojibase-data": "^17.0.0",
     "entities": "^8.0.0",
     "hono": "^4.12.23",
-    "httpcloak": "^1.6.7",
+    "httpcloak": "^1.6.8-beta.1",
+    "jsdom": "^29.1.1",
     "lavalink-client": "^2.10.2",
     "linkedom": "^0.18.12",
     "sharp": "^0.34.5",
     "tslib": "^2.8.1",
-    "undici": "^8.3.0",
-    "x-client-transaction-id": "^0.2.3"
+    "undici": "^8.4.0",
+    "x-client-transaction-id": "^0.2.3",
+    "youtubei.js": "^17.0.1"
   },
   "scripts": {
     "pm2-check": "command -v pm2 >/dev/null 2>&1 || npm install -g pm2",
@@ -22,11 +25,11 @@
     "stop": "npm run pm2-check && pm2 delete api 2>/dev/null && pm2 save --force",
     "gen": "bun gen-routes.ts",
     "browser-install": "python3 -m venv .venv && ./.venv/bin/pip install \"scrapling[ai]\" && ./.venv/bin/python -m playwright install chromium",
-    "gen-update": "rm -rf node_modules bun.lock functions routes && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && bun update --latest && npm install -g pm2 && bun run start && npm update -g",
+    "gen-update": "bun run stop; rm -rf node_modules bun.lock functions routes && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && bun update --latest && npm install -g pm2 && bun run start && npm update -g",
     "soft-update": "curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && bun update --latest && npm install -g pm2 && npm update -g"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "bun-types": "^1.3.14",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"

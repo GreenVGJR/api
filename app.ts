@@ -28,6 +28,7 @@ const startupDataPromise = Promise.all([
     fs.readFile(path.join(__dirname, 'html/main.js'), 'utf-8'),
     fs.readFile(path.join(__dirname, 'html/cf.js'), 'utf-8'),
     fs.readFile(path.join(__dirname, 'html/sw.js'), 'utf-8'),
+    fs.readFile(path.join(__dirname, 'html/backChallenge.html'), 'utf-8'),
     fs.readFile(path.join(__dirname, 'html/main.css'), 'utf-8'),
 ] as const);
 
@@ -143,8 +144,7 @@ const API_ROUTES = {
                 ["/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=", "string", "number", "string", "string", "string", "number", "url", "url", "url"],
                 ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
                 ["/tools/discord/infoAutomod?token=&guildId=", "string", "number"],
-                ["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "string", "string", "enum:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
-                ["/tools/discord/modifyAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "string", "string", "enum:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
+                ["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "string", "string", "enum:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
             ],
             member: [
                 ["/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "string", "url", "url", "string", "string"],
@@ -373,6 +373,7 @@ const [
     mainJs,
     cfJs,
     playgroundSwJs,
+    backChallengeTemplateSource,
     rawCss,
 ] = await startupDataPromise;
 
@@ -400,6 +401,42 @@ const mainCss = rawCss
 const BUILD_ID = buildIdConfig === true
     ? crypto.randomBytes(7).toString('base64url')
     : (typeof buildIdConfig === 'string' ? buildIdConfig : null);
+const backChallengeHtml = backChallengeTemplateSource.trim();
+const BACK_CHALLENGE_COOKIE = '_ftm';
+const BACK_CHALLENGE_MAX_AGE = 10;
+const BACK_CHALLENGE_PREFIXES = ['/search', '/profile', '/lyrics', '/tools', '/info', '/download', '/music'];
+
+function getBackChallengeValue(c: Context): string {
+    return crypto.createHash('md5').update(c.req.header('cf-connecting-ip') || '').digest('hex');
+}
+
+function getBackChallengeHtml(challengeValue: string, url: URL): string {
+    return backChallengeHtml
+        .replace('{{BACK_CHALLENGE_COOKIE}}', JSON.stringify(BACK_CHALLENGE_COOKIE))
+        .replace('{{BACK_CHALLENGE_VALUE}}', JSON.stringify(challengeValue))
+        .replace('{{BACK_CHALLENGE_MAX_AGE}}', String(BACK_CHALLENGE_MAX_AGE))
+        .replace('{{BACK_CHALLENGE_SECURE}}', url.protocol === 'https:' ? 'true' : 'false');
+}
+
+function isBackChallengePath(pathname: string): boolean {
+    let pathToCheck = pathname;
+    if (BUILD_ID && pathToCheck.startsWith(`/${BUILD_ID}/`)) {
+        pathToCheck = pathToCheck.slice(BUILD_ID.length + 1);
+    }
+
+    return BACK_CHALLENGE_PREFIXES.some((prefix) => pathToCheck === prefix || pathToCheck.startsWith(`${prefix}/`));
+}
+
+function isBrowserBackChallengeRequest(c: Context): boolean {
+    const userAgent = c.req.header('user-agent') || '';
+    const fetchMode = c.req.header('sec-fetch-mode');
+    const accept = c.req.header('accept') || '';
+
+    return c.req.method === 'GET'
+        && userAgent.startsWith('Mozilla/5.0')
+        && fetchMode !== 'same-origin'
+        && (fetchMode === 'navigate' || accept.includes('text/html'));
+}
 
 function hostHeaderName(host: string | undefined): string {
     if (!host) return '';
@@ -455,6 +492,23 @@ if (BUILD_ID) {
         await next();
     });
 }
+
+app.use('*', async (c: Context, next: Next) => {
+    const url = new URL(c.req.url);
+    if (!isBackChallengePath(url.pathname)) {
+        await next();
+        return;
+    }
+
+    const challengeValue = getBackChallengeValue(c);
+    if (getCookie(c, BACK_CHALLENGE_COOKIE) === challengeValue || !isBrowserBackChallengeRequest(c)) {
+        await next();
+        return;
+    }
+
+    c.header('Cache-Control', 'no-store');
+    return c.html(getBackChallengeHtml(challengeValue, url));
+});
 
 app.get('/favicon.ico', (c: Context) => {
     c.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');

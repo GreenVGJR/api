@@ -434,6 +434,7 @@ function isBrowserBackChallengeRequest(c: Context): boolean {
 
     return c.req.method === 'GET'
         && userAgent.startsWith('Mozilla/5.0')
+        && !userAgent.includes('Discordbot')
         && fetchMode !== 'same-origin'
         && (fetchMode === 'navigate' || accept.includes('text/html'));
 }

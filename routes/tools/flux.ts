@@ -1,79 +1,98 @@
-import { Hono } from 'hono';
-import { Buffer } from 'buffer';
+import { Hono } from "hono";
+import { Buffer } from "buffer";
 const app = new Hono();
 
-import { blobDispatch } from '../../functions/httpRequest.js';
-import { commonHeaders, userAgent } from '../../functions/request.js';
+import { blobDispatch } from "../../functions/httpRequest.js";
+import { commonHeaders, userAgent } from "../../functions/request.js";
 
 async function resizeImage(input: Buffer | ArrayBuffer) {
-    return await new Bun.Image(input)
-        .resize(1024, 1024, { filter: 'mks2021' })
-        .png({ compressionLevel: 9, palette: false })
-        .buffer();
+  return await new Bun.Image(input)
+    .resize(1024, 1024, { filter: "mks2021" })
+    .png({ compressionLevel: 9, palette: false })
+    .buffer();
 }
 
-app.get('/ai-image/flux_schnell', async (c) => {
-    const query = c.req.query('prompt');
-    if (query === undefined) {
-        return c.json({ "error": "Missing parameter required" }, 202);
-    }
-    else if (query === '') {
-        return c.json({ "error": "Nothing to do" }, 202);
-    }
-    const CF_AID = process.env.CF_AID;
-    const CF_TOKEN = process.env.CF_TOKEN;
+app.get("/ai-image/flux_schnell", async (c) => {
+  const query = c.req.query("prompt");
+  if (query === undefined) {
+    return c.json({ error: "Missing parameter required" }, 202);
+  } else if (query === "") {
+    return c.json({ error: "Nothing to do" }, 202);
+  }
+  const CF_AID = process.env.CF_AID;
+  const CF_TOKEN = process.env.CF_TOKEN;
 
-    c.header('X-Route', 'api.cloudflare.com, fast-flux-demo.replicate.workers.dev');
+  c.header(
+    "X-Route",
+    "api.cloudflare.com, fast-flux-demo.replicate.workers.dev",
+  );
 
-    if (CF_AID && CF_TOKEN) {
-        try {
-            const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_AID}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${CF_TOKEN}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    "prompt": query,
-                    "steps": 1,
-                    "width": 512,
-                    "height": 512
-                })
-            });
+  if (CF_AID && CF_TOKEN) {
+    try {
+      const cfResponse = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${CF_AID}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${CF_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: query,
+            steps: 1,
+            width: 512,
+            height: 512,
+          }),
+        },
+      );
 
-            if (cfResponse.ok) {
-                const json = await cfResponse.json() as any;
-                const base64Image = json?.result?.image;
-                if (base64Image) {
-                    const imageBuffer = Buffer.from(base64Image, 'base64');
-                    return await blobDispatch(c, await resizeImage(imageBuffer), { 'content-type': 'image/png' });
-                }
-            } else if (cfResponse.status === 429) {
-                console.warn('Cloudflare AI rate limited (429), falling back to Vercel');
-            } else {
-                const errorText = await cfResponse.text();
-                console.error(`Cloudflare AI error (${cfResponse.status}):`, errorText);
-            }
-        } catch (e) {
-            console.error('Cloudflare AI fetch error:', e);
+      if (cfResponse.ok) {
+        const json = (await cfResponse.json()) as any;
+        const base64Image = json?.result?.image;
+        if (base64Image) {
+          const imageBuffer = Buffer.from(base64Image, "base64");
+          return await blobDispatch(c, await resizeImage(imageBuffer), {
+            "content-type": "image/png",
+          });
         }
+      } else if (cfResponse.status === 429) {
+        console.warn(
+          "Cloudflare AI rate limited (429), falling back to Vercel",
+        );
+      } else {
+        const errorText = await cfResponse.text();
+        console.error(`Cloudflare AI error (${cfResponse.status}):`, errorText);
+      }
+    } catch (e) {
+      console.error("Cloudflare AI fetch error:", e);
     }
+  }
 
-    const fallbackResponse = await fetch(`https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`, {
-        method: "GET",
-        headers: {
-            ...commonHeaders,
-            'Accept': 'application/json, text/plain, */*',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-site',
-            'Sec-Fetch-User': '?1',
-            'User-Agent': userAgent
-        }
+  const fallbackResponse = await fetch(
+    `https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`,
+    {
+      method: "GET",
+      headers: {
+        ...commonHeaders,
+        Accept: "application/json, text/plain, */*",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "Sec-Fetch-User": "?1",
+        "User-Agent": userAgent,
+      },
+    },
+  );
+
+  if (!fallbackResponse.ok)
+    return await blobDispatch(c, fallbackResponse, {
+      "content-type": "image/png",
     });
-
-    if (!fallbackResponse.ok) return await blobDispatch(c, fallbackResponse, { 'content-type': 'image/png' });
-    return await blobDispatch(c, await resizeImage(await fallbackResponse.arrayBuffer()), { 'content-type': 'image/png' });
+  return await blobDispatch(
+    c,
+    await resizeImage(await fallbackResponse.arrayBuffer()),
+    { "content-type": "image/png" },
+  );
 });
 
 export default app;

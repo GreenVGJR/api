@@ -9,9 +9,7 @@
       "src": "index.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": [
-          "node_modules/@httpcloak/**"
-        ]
+        "includeFiles": ["node_modules/@httpcloak/**"]
       }
     }
   ],

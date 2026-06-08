@@ -1,6 +1,7 @@
 Nothing special here. Most of codes are vibecoded.
 
-Library: 
+Library:
+
 - [@hono/node-server](https://www.npmjs.com/package/@hono/node-server)
 - [bgutils-js](https://www.npmjs.com/package/bgutils-js)
 - [discord.js](https://www.npmjs.com/package/discord.js)
@@ -18,6 +19,7 @@ Library:
 - [youtubei.js](https://www.npmjs.com/package/youtubei.js)
 
 Reference:
+
 - [AMC](https://github.com/GreenVGJR/amc-discord-bot)
 - [Yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Downr](https://downr.org)

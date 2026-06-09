@@ -7,6 +7,7 @@ import { getCookie } from "hono/cookie";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 
@@ -181,7 +182,12 @@ const API_ROUTES = {
         ],
         ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
         ["/tools/discord/infoApp?token=&botId=", "string", "number"],
-        ["/tools/discord/infoAutomod?token=&guildId=", "string", "number"],
+        [
+          "/tools/discord/infoAutomod?token=&guildId=&ruleId=",
+          "string",
+          "number",
+          "number",
+        ],
         [
           "/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=",
           "string",
@@ -291,6 +297,7 @@ const API_ROUTES = {
       ],
       sticker: [
         ["/tools/discord/infoSticker?token=&q=", "string", "string"],
+        ["/tools/discord/deleteSticker?token=&stickerId=", "string", "number"],
         [
           "/tools/discord/sticker/create?token=&guildId=&url=&name=&description=&tags=&reason=",
           "string",
@@ -745,29 +752,13 @@ const honoVersion = (() => {
   }
 })();
 
-function shortAssetHash(content: string): string {
-  return crypto.createHash("sha256").update(content).digest("hex").slice(0, 6);
-}
-
 const mainCss = rawCss
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/\s+/g, " ")
   .replace(/\s*([{}:;,])\s*/g, "$1")
   .trim();
 
-const mainJsAssetPath = `/playground/main-${shortAssetHash(`${mainJs}:${JSON.stringify(PLAYGROUND_ENDPOINTS)}`)}.js`;
-const cfJsAssetPath = `/playground/cf-${shortAssetHash(cfJs)}.js`;
-const mainCssAssetPath = `/playground/main-${shortAssetHash(mainCss)}.css`;
-const playgroundAssetPaths = {
-  mainJs: mainJsAssetPath,
-  cfJs: cfJsAssetPath,
-  mainCss: mainCssAssetPath,
-};
-
 const playgroundTemplate = playgroundTemplateSource
-  .replaceAll("/playground/main.js", playgroundAssetPaths.mainJs)
-  .replaceAll("/playground/cf.js", playgroundAssetPaths.cfJs)
-  .replaceAll("/playground/main.css", playgroundAssetPaths.mainCss)
   .replace(/<!--[\s\S]*?-->/g, "")
   .replace(/\s+/g, " ")
   .replace(/>\s+</g, "><")
@@ -781,7 +772,45 @@ const BUILD_ID =
       : null;
 const backChallengeHtml = backChallengeTemplateSource.trim();
 const BACK_CHALLENGE_COOKIE = "_ftm";
-const BACK_CHALLENGE_MAX_AGE = 10;
+const BACK_CHALLENGE_MAX_AGE = 5;
+const BACK_CHALLENGE_ENCRYPTION_KEY = crypto.randomBytes(32);
+const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE * 1000 * 2;
+
+function encryptChallengeValue(value: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(
+    "aes-256-gcm",
+    BACK_CHALLENGE_ENCRYPTION_KEY,
+    iv,
+  );
+  const encrypted = Buffer.concat([
+    cipher.update(value, "utf8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+  return (
+    iv.toString("base64url") +
+    authTag.toString("base64url") +
+    encrypted.toString("base64url")
+  );
+}
+
+function decryptChallengeValue(encrypted: string): string | null {
+  try {
+    const iv = Buffer.from(encrypted.slice(0, 16), "base64url");
+    const authTag = Buffer.from(encrypted.slice(16, 38), "base64url");
+    const data = Buffer.from(encrypted.slice(38), "base64url");
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      BACK_CHALLENGE_ENCRYPTION_KEY,
+      iv,
+    );
+    decipher.setAuthTag(authTag);
+    return decipher.update(data) + decipher.final("utf8");
+  } catch {
+    return null;
+  }
+}
 const BACK_CHALLENGE_PREFIXES = [
   "/playground",
   "/terms",
@@ -796,21 +825,28 @@ const BACK_CHALLENGE_PREFIXES = [
 ];
 
 function getBackChallengeValue(c: Context): string {
-  return crypto
+  const ipHash = crypto
     .createHash("md5")
     .update(c.req.header("cf-connecting-ip") || "")
     .digest("hex");
+  return encryptChallengeValue(`${ipHash}:${Date.now()}`);
 }
 
-function getBackChallengeHtml(challengeValue: string, url: URL): string {
-  return backChallengeHtml
+function getBackChallengeHtml(challengeValue: string, url: URL): Buffer {
+  const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) =>
+    btoa("\u0000" + chunk),
+  );
+  const gzipBuffer = zlib.gzipSync(Buffer.from(JSON.stringify(valueArray)));
+  const arrayLiteral = `[${[...gzipBuffer].join(",")}]`;
+  const template = backChallengeHtml
     .replace("{{BACK_CHALLENGE_COOKIE}}", JSON.stringify(BACK_CHALLENGE_COOKIE))
-    .replace("{{BACK_CHALLENGE_VALUE}}", JSON.stringify(challengeValue))
+    .replace("{{BACK_CHALLENGE_VALUE}}", arrayLiteral)
     .replace("{{BACK_CHALLENGE_MAX_AGE}}", String(BACK_CHALLENGE_MAX_AGE))
     .replace(
       "{{BACK_CHALLENGE_SECURE}}",
       url.protocol === "https:" ? "true" : "false",
     );
+  return Buffer.from(template);
 }
 
 function isBackChallengePath(pathname: string): boolean {
@@ -834,7 +870,7 @@ function isBrowserBackChallengeRequest(c: Context): boolean {
     userAgent.startsWith("Mozilla/5.0") &&
     !userAgent.includes("Discordbot") &&
     fetchMode !== "same-origin" &&
-    (fetchMode === "navigate" || accept.includes("text/html"))
+    fetchMode === "navigate"
   );
 }
 
@@ -918,16 +954,35 @@ app.use("*", async (c: Context, next: Next) => {
   }
 
   const challengeValue = getBackChallengeValue(c);
-  if (
-    getCookie(c, BACK_CHALLENGE_COOKIE) === challengeValue ||
-    !isBrowserBackChallengeRequest(c)
-  ) {
+  const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
+  const isValid = (() => {
+    if (!cookieValue) return false;
+    const decrypted = decryptChallengeValue(cookieValue);
+    if (!decrypted) return false;
+    const colonIdx = decrypted.lastIndexOf(":");
+    if (colonIdx === -1) return false;
+    const cookieHash = decrypted.slice(0, colonIdx);
+    const cookieTs = Number(decrypted.slice(colonIdx + 1));
+    if (!cookieTs || Number.isNaN(cookieTs)) return false;
+    const ipHash = crypto
+      .createHash("md5")
+      .update(c.req.header("cf-connecting-ip") || "")
+      .digest("hex");
+    return (
+      cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
+    );
+  })();
+  if (isValid || !isBrowserBackChallengeRequest(c)) {
     await next();
     return;
   }
 
-  c.header("Cache-Control", "no-store");
-  return c.html(getBackChallengeHtml(challengeValue, url));
+  const htmlBuffer = getBackChallengeHtml(challengeValue, url);
+  const brotliData = zlib.brotliCompressSync(htmlBuffer);
+  c.header("Cache-Control", "no-store, no-transform");
+  c.header("Content-Encoding", "br");
+  c.header("Content-Type", "text/html");
+  return c.body(brotliData);
 });
 
 app.get("/favicon.ico", (c: Context) => {
@@ -972,13 +1027,9 @@ app.get("/playground", (c: Context) => {
 });
 
 function setPlaygroundAssetCache(c: Context) {
-  const pathname = new URL(c.req.url).pathname;
-  const isHashedAsset = Object.values(playgroundAssetPaths).includes(pathname);
   c.header(
     "Cache-Control",
-    isHashedAsset
-      ? "public, no-transform, max-age=31536000, immutable"
-      : "public, no-transform, max-age=3600, stale-while-revalidate=86400",
+    "public, no-transform, max-age=3600, stale-while-revalidate=86400",
   );
 }
 
@@ -998,7 +1049,6 @@ const servePlaygroundMainJs = (c: Context) =>
   });
 
 app.get("/playground/main.js", servePlaygroundMainJs);
-app.get(playgroundAssetPaths.mainJs, servePlaygroundMainJs);
 
 const servePlaygroundCfJs = (c: Context) =>
   stream(c, async (s) => {
@@ -1008,7 +1058,6 @@ const servePlaygroundCfJs = (c: Context) =>
   });
 
 app.get("/playground/cf.js", servePlaygroundCfJs);
-app.get(playgroundAssetPaths.cfJs, servePlaygroundCfJs);
 
 const servePlaygroundMainCss = (c: Context) =>
   stream(c, async (s) => {
@@ -1018,7 +1067,6 @@ const servePlaygroundMainCss = (c: Context) =>
   });
 
 app.get("/playground/main.css", servePlaygroundMainCss);
-app.get(playgroundAssetPaths.mainCss, servePlaygroundMainCss);
 
 ["/terms", "/privacy"].forEach((route) => {
   app.get(route, (c: Context) => {

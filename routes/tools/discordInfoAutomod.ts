@@ -14,13 +14,14 @@ const parseSnowflake = (value: string | undefined) =>
 app.get("/discord/infoAutomod", async (c) => {
   const token = getToken(c);
   const guildId = parseSnowflake(c.req.query("guildId"));
+  const ruleId = parseSnowflake(c.req.query("ruleId"));
 
   if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
   if (!guildId)
     return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
   c.header("X-Route", "discord.com");
-  return await dispatch(c, () => DiscordInfoAutomod(token!, guildId!));
+  return await dispatch(c, () => DiscordInfoAutomod(token!, guildId!, ruleId));
 });
 
 app.get("/discord/setAutomod", async (c) => {

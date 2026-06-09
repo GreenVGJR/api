@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   DiscordCreateSticker,
+  DiscordDeleteSticker,
   DiscordInfoSticker,
   getQuery,
   getToken,
@@ -67,6 +68,18 @@ app.get("/discord/sticker/create", async (c) => {
           : undefined,
     }),
   );
+});
+
+app.get("/discord/deleteSticker", async (c) => {
+  const token = getToken(c);
+  const stickerId = c.req.query("stickerId");
+
+  if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+  if (!stickerId || !/^\d+$/.test(stickerId))
+    return c.json({ error: "Missing valid parameter: stickerId" }, 202);
+
+  c.header("X-Route", "discord.com");
+  return await dispatch(c, () => DiscordDeleteSticker(token, stickerId));
 });
 
 export default app;

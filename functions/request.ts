@@ -10870,6 +10870,50 @@ export const DiscordCreateSticker = async (
   }
 };
 
+export const DiscordDeleteSticker = async (
+  token: string,
+  stickerId: string,
+) => {
+  if (!token || token === "null") return { error: "Missing token" };
+  if (!stickerId) return { error: "Missing stickerId" };
+  if (!/^\d+$/.test(stickerId)) return { error: "Invalid stickerId" };
+
+  try {
+    const response = await fetch(
+      `https://discord.com/api/v10/stickers/${stickerId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bot ${token}`,
+          "User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+        },
+      },
+    );
+
+    let result: any = null;
+    if (response.status !== 204) {
+      try {
+        result = await response.json();
+      } catch {}
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      return {
+        data: null,
+        error: result || {
+          status: response.status,
+          statusText: response.statusText,
+        },
+      };
+    }
+
+    stickerCache.delete(stickerId);
+    return { data: [result || true, null, response.status] };
+  } catch (e: any) {
+    return { error: e.message || "Something just happened" };
+  }
+};
+
 const processDiscordMessage = async (m: any, token?: string) => {
   if (!m) return m;
 
@@ -14186,7 +14230,11 @@ export const DiscordSetAutomod = async (
   }
 };
 
-export const DiscordInfoAutomod = async (token: string, guildId: string) => {
+export const DiscordInfoAutomod = async (
+  token: string,
+  guildId: string,
+  ruleId: string | null = null,
+) => {
   if (!token || token === "null") return { error: "Missing token" };
   if (!guildId) return { error: "Missing guildId" };
 
@@ -14197,7 +14245,9 @@ export const DiscordInfoAutomod = async (token: string, guildId: string) => {
   };
 
   try {
-    const urlRules = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
+    const urlRules = ruleId
+      ? `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}`
+      : `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
     const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
 
     const [rulesReq, guildReq] = await Promise.all([
@@ -14226,7 +14276,10 @@ export const DiscordInfoAutomod = async (token: string, guildId: string) => {
     }
 
     let formattedRules = rulesData;
-    if (Array.isArray(rulesData)) {
+    if (!Array.isArray(rulesData) && rulesData && ruleId) {
+      formattedRules = [rulesData];
+    }
+    if (Array.isArray(formattedRules)) {
       const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<number, string> = {
         1: "KEYWORD",
         3: "SPAM",
@@ -14251,7 +14304,7 @@ export const DiscordInfoAutomod = async (token: string, guildId: string) => {
         3: "SLURS",
       };
 
-      formattedRules = rulesData.map((rule: any) => {
+      formattedRules = formattedRules.map((rule: any) => {
         const triggerTypeName =
           DISCORD_AUTOMOD_TRIGGER_TYPES[rule.trigger_type] || "UNKNOWN";
         const eventTypeName =

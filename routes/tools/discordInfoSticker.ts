@@ -72,14 +72,17 @@ app.get("/discord/sticker/create", async (c) => {
 
 app.get("/discord/deleteSticker", async (c) => {
   const token = getToken(c);
+  const guildId = c.req.query("guildId");
   const stickerId = c.req.query("stickerId");
 
   if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+  if (!guildId || !/^\d+$/.test(guildId))
+    return c.json({ error: "Missing valid parameter: guildId" }, 202);
   if (!stickerId || !/^\d+$/.test(stickerId))
     return c.json({ error: "Missing valid parameter: stickerId" }, 202);
 
   c.header("X-Route", "discord.com");
-  return await dispatch(c, () => DiscordDeleteSticker(token, stickerId));
+  return await dispatch(c, () => DiscordDeleteSticker(token, guildId, stickerId));
 });
 
 export default app;

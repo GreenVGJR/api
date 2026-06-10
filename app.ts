@@ -297,7 +297,12 @@ const API_ROUTES = {
       ],
       sticker: [
         ["/tools/discord/infoSticker?token=&q=", "string", "string"],
-        ["/tools/discord/deleteSticker?token=&stickerId=", "string", "number"],
+        [
+          "/tools/discord/deleteSticker?token=&guildId=&stickerId=",
+          "string",
+          "number",
+          "number",
+        ],
         [
           "/tools/discord/sticker/create?token=&guildId=&url=&name=&description=&tags=&reason=",
           "string",

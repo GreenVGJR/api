@@ -10872,15 +10872,18 @@ export const DiscordCreateSticker = async (
 
 export const DiscordDeleteSticker = async (
   token: string,
+  guildId: string,
   stickerId: string,
 ) => {
   if (!token || token === "null") return { error: "Missing token" };
+  if (!guildId) return { error: "Missing guildId" };
   if (!stickerId) return { error: "Missing stickerId" };
-  if (!/^\d+$/.test(stickerId)) return { error: "Invalid stickerId" };
+  if (!/^\d+$/.test(guildId) || !/^\d+$/.test(stickerId))
+    return { error: "Invalid guildId or stickerId" };
 
   try {
     const response = await fetch(
-      `https://discord.com/api/v10/stickers/${stickerId}`,
+      `https://discord.com/api/v10/guilds/${guildId}/stickers/${stickerId}`,
       {
         method: "DELETE",
         headers: {

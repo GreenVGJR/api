@@ -1034,7 +1034,7 @@ app.get("/playground", (c: Context) => {
 function setPlaygroundAssetCache(c: Context) {
   c.header(
     "Cache-Control",
-    "public, no-transform, max-age=3600, stale-while-revalidate=86400",
+    "public, no-transform, max-age=60, stale-while-revalidate=86400",
   );
 }
 

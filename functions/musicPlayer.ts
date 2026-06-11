@@ -1620,6 +1620,14 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
         searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
       }
 
+      if (!player.node?.connected) {
+        try {
+          await player.moveNode();
+        } catch {
+          break;
+        }
+      }
+
       const res = await player.search(
         { query: searchStr },
         (track.requester as any)?.isAutoplay ? undefined : track.requester,

@@ -181,24 +181,23 @@ async function getYoutubei() {
   return youtubeiPromise;
 }
 
-function warmupYoutube() {
-  const timer = setTimeout(() => {
-    Promise.allSettled([getBotGuardChallenge(), getYoutubei()]).then(
-      (results) => {
-        const failed = results.find(
-          (result) => result.status === "rejected",
-        ) as PromiseRejectedResult | undefined;
-        if (failed) console.error("YouTube warmup failed:", failed.reason);
-      },
-    );
-  }, 0);
-  (timer as any).unref?.();
-}
-
-warmupYoutube();
+setTimeout(async () => {
+  try {
+    const results = await Promise.allSettled([
+      getBotGuardChallenge(),
+      getYoutubei(),
+    ]);
+    const failed = results.find(
+      (result) => result.status === "rejected",
+    ) as PromiseRejectedResult | undefined;
+    if (failed) console.error("YouTube warmup failed:", failed.reason);
+  } catch (err) {
+    console.error("YouTube warmup failed:", err);
+  }
+}, 0);
 
 export const userAgent =
-  "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0";
+  "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0";
 
 export async function request(
   url: string | URL,
@@ -212,6 +211,11 @@ export async function request(
   response.headers.forEach((value, key) => {
     headers[key.toLowerCase()] = value;
   });
+  // Set-Cookie must be captured separately: forEach only iterates the first value
+  const setCookies = response.headers.getSetCookie?.();
+  if (setCookies?.length) {
+    headers["set-cookie"] = setCookies.join("; ");
+  }
   return {
     statusCode: response.status,
     status: response.status,
@@ -229,14 +233,13 @@ export async function request(
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Encoding": "identity, gzip, br",
+  "Accept-Encoding": "gzip, br",
   "Accept-Language": "en-US,en;q=0.9",
   Connection: "keep-alive",
   Priority: "u=0, i",
   "Sec-Fetch-Dest": "document",
   "Sec-Fetch-Mode": "navigate",
   "Sec-Fetch-Site": "none",
-  "Upgrade-Insecure-Requests": "1",
   "User-Agent": userAgent,
 };
 
@@ -2989,10 +2992,30 @@ export function Number_random(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+const CONVO_KEY = crypto.createHash("sha256").update("gemini-3.5-flash").digest();
+
+function encryptConvo(data: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", CONVO_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, authTag, encrypted]).toString("base64url");
+}
+
+function decryptConvo(encoded: string): string {
+  const buf = Buffer.from(encoded, "base64url");
+  const iv = buf.subarray(0, 12);
+  const authTag = buf.subarray(12, 28);
+  const encrypted = buf.subarray(28);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", CONVO_KEY, iv);
+  decipher.setAuthTag(authTag);
+  return decipher.update(encrypted) + decipher.final("utf-8");
+}
+
 export const Gemini = async function Gemini(
   que: string,
   convo: any,
-  retry: boolean = false,
+  retry: number = 0,
 ) {
   if (!que) return null;
 
@@ -3001,13 +3024,9 @@ export const Gemini = async function Gemini(
 
   if (convo) {
     try {
-      parsebody = JSON.parse(
-        Buffer.from(convo.split("").reverse().join(""), "base64url").toString(
-          "utf-8",
-        ),
-      );
+      parsebody = JSON.parse(decryptConvo(convo));
     } catch {
-      return `["JSON Parsing Error"]`;
+      return { error: "JSON parsing error" };
     }
   }
 
@@ -3015,19 +3034,18 @@ export const Gemini = async function Gemini(
     objectbody["cid"] = parsebody?.cid;
     objectbody["rid"] = parsebody?.rid;
     objectbody["rcid"] = parsebody?.rcid;
-    objectbody["cookies"] = parsebody?.cookies;
+    objectbody["cookies"] = parsebody?.cookies ? filterSpecificCookies(parsebody.cookies, ["NID"]) : undefined;
   }
 
-  const qQue = encodeURIComponent(que.replaceAll('"', '\\\\\\"'));
-  const qCid = objectbody.cid ? objectbody.cid : "";
-  const qRid = objectbody.rid ? objectbody.rid : "";
-  const qRcid = objectbody.rcid ? objectbody.rcid : "";
-  const qCookies =
-    objectbody.cookies ??
-    (filterSpecificCookies(objectbody.cookies, ["NID", "__Secure-ENID"]) ||
-      null);
+  const qCookies = objectbody.cookies || null;
 
-  const reqPayload = `f.req=%5Bnull%2C%22%5B%5B%5C%22${qQue}%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22en-US%5C%22%5D%2C%5B%5C%22${qCid}%5C%22%2C%5C%22${qRid}%5C%22%2C%5C%22${qRcid}%5C%22%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5C%22%5C%22%5D%5D%22%5D%26`;
+  const inner = [
+    [que, 0, null, null, null, null, 0],
+    ["en-US"],
+    [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, null, ""],
+  ];
+  const reqPayload =
+    `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
   const req = await request(
     `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
@@ -3037,9 +3055,12 @@ export const Gemini = async function Gemini(
         ...commonHeaders,
         ...(qCookies ? { Cookie: qCookies } : {}),
         "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(reqPayload).toString(),
+      //  "Content-Length": Buffer.byteLength(reqPayload).toString(),
         "x-goog-ext-525001261-jspb":
-          '[1,null,null,null,"fbb127bbb056c959",null,null,0,[4],null,null,1]',
+          '[1,null,null,null,"fbb127bbb056c959",null,null,0,[],null,null,1,null,""]',
+        "x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
+        "x-goog-ext-73010989-jspb": "[0]",
+        "x-goog-ext-73010990-jspb": "[0,0,0]",
         Referer: "https://gemini.google.com",
         Origin: "https://gemini.google.com",
         "X-Same-Domain": "1",
@@ -3055,14 +3076,12 @@ export const Gemini = async function Gemini(
     };
   }
   if (req.statusCode === 400) {
-    return {
-      error: "Timeout / Bad Request",
-    };
+    if (retry >= 3) return { error: "Timeout / Bad Request" };
+    return await Gemini(que, convo, retry + 1);
   }
   if (req.statusCode === 429) {
-    return {
-      error: "Rate-limited",
-    };
+    if (retry >= 3) return { error: "Rate-limited" };
+    return await Gemini(que, convo, retry + 1);
   }
   if (req.statusCode === 403) {
     return {
@@ -3106,14 +3125,14 @@ export const Gemini = async function Gemini(
     });
 
     if (!innerData) {
-      if (retry) return { error: "Rate-limited" };
-      return await Gemini(que, convo, true);
+      if (retry >= 3) return { error: "Rate-limited" };
+      return await Gemini(que, convo, retry + 1);
     }
 
     objectbody.cid = (innerData as any)[1][0];
     objectbody.rid = (innerData as any)[1][1];
     objectbody.rcid = (innerData as any)[4][0][0];
-    objectbody.cookies = filterCookies(cookiess) || convo;
+    objectbody.cookies = filterSpecificCookies(cookiess, ["NID"]);
 
     const finalres = innerData as any;
 
@@ -3129,11 +3148,7 @@ export const Gemini = async function Gemini(
   const responseBody = {
     response: response,
     data: {
-      conversation: Buffer.from(JSON.stringify(objectbody))
-        .toString("base64url")
-        .split("")
-        .reverse()
-        .join(""),
+      conversation: encryptConvo(JSON.stringify(objectbody)),
       model: "gemini-3.5-flash",
     },
   };

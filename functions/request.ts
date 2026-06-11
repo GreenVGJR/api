@@ -3132,7 +3132,8 @@ export const Gemini = async function Gemini(
     objectbody.cid = (innerData as any)[1][0];
     objectbody.rid = (innerData as any)[1][1];
     objectbody.rcid = (innerData as any)[4][0][0];
-    objectbody.cookies = filterSpecificCookies(cookiess, ["NID"]);
+    const newCookies = filterSpecificCookies(cookiess, ["NID"]);
+    if (newCookies) objectbody.cookies = newCookies;
 
     const finalres = innerData as any;
 

@@ -187,9 +187,9 @@ setTimeout(async () => {
       getBotGuardChallenge(),
       getYoutubei(),
     ]);
-    const failed = results.find(
-      (result) => result.status === "rejected",
-    ) as PromiseRejectedResult | undefined;
+    const failed = results.find((result) => result.status === "rejected") as
+      | PromiseRejectedResult
+      | undefined;
     if (failed) console.error("YouTube warmup failed:", failed.reason);
   } catch (err) {
     console.error("YouTube warmup failed:", err);
@@ -1335,15 +1335,68 @@ export const YTVideo = async function YTVideo(
 ) {
   if (!que) return null;
   try {
-    const response = await request(
-      `https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`,
-      {
+    let response: any = null;
+    let currentUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`;
+    const seenRedirects = new Set<string>();
+    const cookieJar = new Map<string, string>([["CONSENT", "YES+1"]]);
+    const cookieAttributes = new Set([
+      "domain",
+      "expires",
+      "httponly",
+      "max-age",
+      "partitioned",
+      "path",
+      "priority",
+      "samesite",
+      "secure",
+    ]);
+
+    // Bun can loop when following YouTube's cookie-setting redirects without a jar.
+    for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
+      const cookieHeader = Array.from(cookieJar)
+        .map(([name, value]) => `${name}=${value}`)
+        .join("; ");
+
+      response = await request(currentUrl, {
         headers: {
           ...commonHeaders,
+          ...(cookieHeader ? { Cookie: cookieHeader } : {}),
         },
+        redirect: "manual" as const,
         useH2: true,
-      },
-    );
+      });
+
+      const setCookie = response.headers?.["set-cookie"];
+      if (setCookie) {
+        String(setCookie)
+          .split(";")
+          .forEach((part) => {
+            const trimmed = part.trim();
+            const equalIndex = trimmed.indexOf("=");
+            if (equalIndex <= 0) return;
+
+            const name = trimmed.slice(0, equalIndex);
+            if (cookieAttributes.has(name.toLowerCase())) return;
+
+            const value = trimmed.slice(equalIndex + 1);
+            if (value) cookieJar.set(name, value);
+            else cookieJar.delete(name);
+          });
+      }
+
+      if (![301, 302, 303, 307, 308].includes(response.statusCode)) break;
+
+      const location = response.headers?.location;
+      if (typeof location !== "string" || !location) break;
+
+      const nextUrl = new URL(location, currentUrl).toString();
+      if (seenRedirects.has(nextUrl)) break;
+
+      seenRedirects.add(currentUrl);
+      currentUrl = nextUrl;
+    }
+
+    if (!response) return { data: null };
 
     let res: any = await response.text;
 
@@ -2998,7 +3051,10 @@ const GEMINI_RETRY_COOLDOWN_MS = 1000;
 function encryptConvo(data: string): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", CONVO_KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(data, "utf-8"),
+    cipher.final(),
+  ]);
   const authTag = cipher.getAuthTag();
   return Buffer.concat([iv, authTag, encrypted]).toString("base64url");
 }
@@ -3035,7 +3091,9 @@ export const Gemini = async function Gemini(
     objectbody["cid"] = parsebody?.cid;
     objectbody["rid"] = parsebody?.rid;
     objectbody["rcid"] = parsebody?.rcid;
-    objectbody["cookies"] = parsebody?.cookies ? filterSpecificCookies(parsebody.cookies, ["NID"]) : undefined;
+    objectbody["cookies"] = parsebody?.cookies
+      ? filterSpecificCookies(parsebody.cookies, ["NID"])
+      : undefined;
   }
 
   const qCookies = objectbody.cookies || null;
@@ -3043,10 +3101,21 @@ export const Gemini = async function Gemini(
   const inner = [
     [que, 0, null, null, null, null, 0],
     ["en-US"],
-    [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, null, ""],
+    [
+      objectbody.cid || "",
+      objectbody.rid || "",
+      objectbody.rcid || "",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "",
+    ],
   ];
-  const reqPayload =
-    `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
+  const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
   const req = await request(
     `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
@@ -3056,9 +3125,8 @@ export const Gemini = async function Gemini(
         ...commonHeaders,
         ...(qCookies ? { Cookie: qCookies } : {}),
         "Content-Type": "application/x-www-form-urlencoded",
-      //  "Content-Length": Buffer.byteLength(reqPayload).toString(),
-        "x-goog-ext-525001261-jspb":
-          `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
+        //  "Content-Length": Buffer.byteLength(reqPayload).toString(),
+        "x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
         "x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
         "x-goog-ext-73010989-jspb": "[0]",
         "x-goog-ext-73010990-jspb": "[0,0,0]",

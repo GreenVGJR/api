@@ -2992,7 +2992,8 @@ export function Number_random(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const CONVO_KEY = crypto.createHash("sha256").update("gemini-3.5-flash").digest();
+const CONVO_KEY = crypto.createHash("sha256").update("conversation").digest();
+const GEMINI_RETRY_COOLDOWN_MS = 1000;
 
 function encryptConvo(data: string): string {
   const iv = crypto.randomBytes(12);
@@ -3057,7 +3058,7 @@ export const Gemini = async function Gemini(
         "Content-Type": "application/x-www-form-urlencoded",
       //  "Content-Length": Buffer.byteLength(reqPayload).toString(),
         "x-goog-ext-525001261-jspb":
-          '[1,null,null,null,"fbb127bbb056c959",null,null,0,[],null,null,1,null,""]',
+          `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
         "x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
         "x-goog-ext-73010989-jspb": "[0]",
         "x-goog-ext-73010990-jspb": "[0,0,0]",
@@ -3076,11 +3077,13 @@ export const Gemini = async function Gemini(
     };
   }
   if (req.statusCode === 400) {
-    if (retry >= 3) return { error: "Timeout / Bad Request" };
+    if (retry >= 7) return { error: "Timeout / Bad Request" };
+    await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
   if (req.statusCode === 429) {
-    if (retry >= 3) return { error: "Rate-limited" };
+    if (retry >= 7) return { error: "Rate-limited" };
+    await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
   if (req.statusCode === 403) {
@@ -3125,7 +3128,8 @@ export const Gemini = async function Gemini(
     });
 
     if (!innerData) {
-      if (retry >= 3) return { error: "Rate-limited" };
+      if (retry >= 7) return { error: "Rate-limited" };
+      await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
       return await Gemini(que, convo, retry + 1);
     }
 
@@ -7511,11 +7515,7 @@ export async function OpenRouterGPT(
 
   if (convo) {
     try {
-      const parsed = JSON.parse(
-        Buffer.from(convo.split("").reverse().join(""), "base64url").toString(
-          "utf-8",
-        ),
-      );
+      const parsed = JSON.parse(decryptConvo(convo));
       if (Array.isArray(parsed)) messages = parsed;
     } catch {
       messages = [];
@@ -7566,11 +7566,7 @@ export async function OpenRouterGPT(
       reasoning: reasoning || null,
       response: response || null,
       data: {
-        conversation: Buffer.from(JSON.stringify(messages))
-          .toString("base64url")
-          .split("")
-          .reverse()
-          .join(""),
+        conversation: encryptConvo(JSON.stringify(messages)),
         model: "gpt-oss-120b",
       },
     };

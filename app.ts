@@ -589,62 +589,6 @@ const API_ROUTES = {
   ],
 };
 
-function routeToEndpoint(route: string, types: string[] = []) {
-  const parts = route.split("?");
-  return {
-    path: parts[0],
-    query: parts.length > 1 ? "?" + parts[1] : "",
-    types,
-  };
-}
-
-function flattenRoutes(obj: any): any[] {
-  let flatResults: any[] = [];
-  if (Array.isArray(obj)) {
-    if (typeof obj[0] === "string") {
-      return [
-        routeToEndpoint(
-          obj[0],
-          obj.slice(1).filter((type: any) => typeof type === "string"),
-        ),
-      ];
-    }
-
-    return obj
-      .map((item) => {
-        if (typeof item === "string") {
-          return routeToEndpoint(item);
-        } else if (Array.isArray(item) && typeof item[0] === "string") {
-          return routeToEndpoint(
-            item[0],
-            item.slice(1).filter((type: any) => typeof type === "string"),
-          );
-        } else if (typeof item === "object" && item !== null) {
-          return flattenRoutes(item);
-        }
-        return null;
-      })
-      .flat()
-      .filter(Boolean);
-  } else if (typeof obj === "object" && obj !== null) {
-    for (const key in obj) {
-      const childResults = flattenRoutes(obj[key]);
-      flatResults = flatResults.concat(childResults);
-    }
-  }
-  return flatResults;
-}
-
-const PLAYGROUND_ENDPOINTS = {
-  search: flattenRoutes(API_ROUTES.search),
-  lyrics: flattenRoutes(API_ROUTES.lyrics),
-  tools: flattenRoutes(API_ROUTES.tools),
-  info: flattenRoutes(API_ROUTES.info),
-  profile: flattenRoutes(API_ROUTES.profile),
-  download: flattenRoutes(API_ROUTES.download),
-  music: flattenRoutes(API_ROUTES.music),
-};
-
 import { setGlobalDispatcher, Agent } from "undici";
 
 setGlobalDispatcher(
@@ -817,9 +761,6 @@ function decryptChallengeValue(encrypted: string): string | null {
   }
 }
 const BACK_CHALLENGE_PREFIXES = [
-  "/playground",
-  "/terms",
-  "/privacy",
   "/search",
   "/profile",
   "/lyrics",
@@ -1007,11 +948,6 @@ app.get("/robots.txt", (c: Context) => {
   return c.text(robots, 200);
 });
 
-app.get("/tools/health", (c: Context) => {
-  c.header("Cache-Control", "public, max-age=60");
-  return c.text("OK", 200);
-});
-
 app.get("/err/451", (c: Context) => {
   c.header(
     "Cache-Control",
@@ -1020,9 +956,16 @@ app.get("/err/451", (c: Context) => {
   return c.body(null, 451);
 });
 
+function setPlaygroundAssetCache(c: Context) {
+  c.header(
+    "Cache-Control",
+    "public, no-transform, max-age=3600, stale-while-revalidate=86400",
+  );
+}
+
 app.get("/playground", (c: Context) => {
   c.header("Content-Type", "text/html");
-  c.header("Cache-Control", "no-store");
+  setPlaygroundAssetCache(c);
 
   return stream(c, async (s) => {
     await s.write(""); // Initial flush
@@ -1030,13 +973,6 @@ app.get("/playground", (c: Context) => {
     await s.write(playgroundTemplate);
   });
 });
-
-function setPlaygroundAssetCache(c: Context) {
-  c.header(
-    "Cache-Control",
-    "public, no-transform, max-age=60, stale-while-revalidate=86400",
-  );
-}
 
 const servePlaygroundMainJs = (c: Context) =>
   stream(c, async (s) => {
@@ -1047,7 +983,7 @@ const servePlaygroundMainJs = (c: Context) =>
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : "https://api.vgjr.top";
 
-    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime}; window.SERVER_ENDPOINTS = ${JSON.stringify(PLAYGROUND_ENDPOINTS)};`;
+    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime};`;
     const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 
     await s.write(finalJs);
@@ -1095,7 +1031,7 @@ app.get("/", (c: Context) =>
       c.req.header("accept")?.includes("application/json");
     const typeRender = renderJson ? "application/json" : "text/plain";
     c.header("Content-Type", typeRender);
-    c.header("Cache-Control", "public, max-age=0, must-revalidate");
+    c.header("Cache-Control", "public, no-store, no-cache, max-age=0, must-revalidate");
     if (!renderJson) c.header("Location", "/playground");
 
     c.status(renderJson ? 200 : 302);

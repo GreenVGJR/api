@@ -149,11 +149,46 @@ let lastRawResponse = "";
 let isCoolingDown = false;
 
 const apiBaseUrl = window.API_BASE_URL || "https://api.vgjr.top";
+const endpointCategories = Object.keys(endpoints);
 
-if (window.SERVER_ENDPOINTS) {
-  try {
-    endpoints = window.SERVER_ENDPOINTS;
-  } catch {}
+function flattenRoutes(obj) {
+  let flatResults = [];
+  if (Array.isArray(obj)) {
+    return obj
+      .map((item) => {
+        if (Array.isArray(item) && typeof item[0] === "string") {
+          const [fullPath, ...types] = item;
+          const [path, query = ""] = fullPath.split("?");
+          return { path, query, types: types.filter((type) => typeof type === "string") };
+        }
+        if (typeof item === "object" && item !== null) return flattenRoutes(item);
+        return null;
+      })
+      .flat()
+      .filter(Boolean);
+  }
+  if (typeof obj === "object" && obj !== null) {
+    for (const key in obj) flatResults = flatResults.concat(flattenRoutes(obj[key]));
+  }
+  return flatResults;
+}
+
+function normalizeEndpointPayload(payload) {
+  const root = Array.isArray(payload)
+    ? payload.find((item) => item && typeof item === "object" && (item.routes || item.endpoints || item.playgroundRoutes))
+    : payload;
+  const raw = root?.playgroundRoutes || root?.endpoints || root?.routes || payload?.playgroundRoutes || payload?.endpoints || payload?.routes;
+  if (!raw || typeof raw !== "object") return null;
+
+  const normalized = {};
+  let found = false;
+  for (const category of endpointCategories) {
+    const categoryRoutes = raw[category];
+    const alreadyFlat = Array.isArray(categoryRoutes) && categoryRoutes.every((ep) => ep && typeof ep.path === "string");
+    normalized[category] = categoryRoutes ? (alreadyFlat ? categoryRoutes : flattenRoutes(categoryRoutes)) : [];
+    if (normalized[category].length > 0) found = true;
+  }
+  return found ? normalized : null;
 }
 
 const urlInput = document.getElementById("urlInput");
@@ -1326,7 +1361,7 @@ paramsToggle.addEventListener("click", () => {
   }
 });
 
-async function fetchInitialEndpoints() {
+function selectInitialEndpointFromCurrentCategory() {
   if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
     currentEndpoint = endpoints[currentCategory][0];
     urlInput.value = buildEndpointUrl(currentEndpoint);
@@ -1342,11 +1377,66 @@ async function fetchInitialEndpoints() {
     renderEndpoints();
     renderParams();
   }
+}
 
+function setActiveCategoryTab() {
+  tabBtns.forEach((btn) => btn.classList.remove("active"));
   const firstTab = document.querySelector(
     `.tab-btn[data-category="${currentCategory}"]`,
   );
   if (firstTab) firstTab.classList.add("active");
+}
+
+async function refreshEndpointsFromJson() {
+  try {
+    const res = await fetch("/?json", {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return false;
+
+    const freshEndpoints = normalizeEndpointPayload(await res.json());
+    if (!freshEndpoints) return false;
+
+    const previousPath = currentEndpoint?.path;
+    endpoints = freshEndpoints;
+    const categoryList = endpoints[currentCategory] || [];
+    currentEndpoint =
+      (previousPath && categoryList.find((ep) => ep.path === previousPath)) ||
+      categoryList[0] ||
+      null;
+
+    if (currentEndpoint) {
+      urlInput.value = buildEndpointUrl(currentEndpoint);
+      adjustHeight();
+      syncUrlToParams();
+      syncParamsToUrl();
+    }
+
+    renderEndpoints();
+    renderParams();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchInitialEndpoints() {
+  const hasInitialEndpoints =
+    endpoints[currentCategory] && endpoints[currentCategory].length > 0;
+
+  selectInitialEndpointFromCurrentCategory();
+  setActiveCategoryTab();
+
+  if (hasInitialEndpoints) {
+    refreshEndpointsFromJson().then((updated) => {
+      if (updated) setActiveCategoryTab();
+    });
+    return;
+  }
+
+  const updated = await refreshEndpointsFromJson();
+  if (!updated) selectInitialEndpointFromCurrentCategory();
+  setActiveCategoryTab();
 }
 
 let animationTimeout = null;

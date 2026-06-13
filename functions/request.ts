@@ -1336,7 +1336,7 @@ export const YTVideo = async function YTVideo(
   if (!que) return null;
   try {
     let response: any = null;
-    let currentUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`;
+    let currentUrl = `https://www.youtube.com/results?app=desktop&q=${encodeURIComponent(que)}`;
     const seenRedirects = new Set<string>();
     const cookieJar = new Map<string, string>([["CONSENT", "YES+1"]]);
     const cookieAttributes = new Set([

@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { compress } from "hono/compress";
 import { stream } from "hono/streaming";
 import { getCookie } from "hono/cookie";
+import { sign } from "hono/jwt";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
@@ -721,9 +722,16 @@ const BUILD_ID =
       : null;
 const backChallengeHtml = backChallengeTemplateSource.trim();
 const BACK_CHALLENGE_COOKIE = "_ftm";
-const BACK_CHALLENGE_MAX_AGE = 5;
+const BACK_CHALLENGE_MAX_AGE = 30;
+const BACK_CHALLENGE_DIFFICULTY = 10;
 const BACK_CHALLENGE_ENCRYPTION_KEY = crypto.randomBytes(32);
-const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE * 1000 * 2;
+const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE * 1000;
+
+function getBackChallengeJwtKey(): string {
+  const key = process.env.MD_KEY;
+  if (!key) throw new Error("Missing required environment variable: MD_KEY");
+  return key;
+}
 
 function encryptChallengeValue(value: string): string {
   const iv = crypto.randomBytes(12);
@@ -766,8 +774,6 @@ const BACK_CHALLENGE_PREFIXES = [
   "/lyrics",
   "/tools",
   "/info",
-  "/download",
-  "/music",
 ];
 
 function getBackChallengeValue(c: Context): string {
@@ -778,16 +784,90 @@ function getBackChallengeValue(c: Context): string {
   return encryptChallengeValue(`${ipHash}:${Date.now()}`);
 }
 
-function getBackChallengeHtml(challengeValue: string, url: URL): Buffer {
+function isBackChallengeProofValid(value: string, nonce: string): boolean {
+  if (!/^\d+$/.test(nonce)) return false;
+  const hash = crypto.createHash("sha512").update(value + nonce).digest();
+  let zeroBits = 0;
+  for (const byte of hash) {
+    if (byte === 0) {
+      zeroBits += 8;
+    } else {
+      let current = byte;
+      while ((current & 0x80) === 0) {
+        zeroBits++;
+        current <<= 1;
+      }
+      break;
+    }
+  }
+  return zeroBits >= BACK_CHALLENGE_DIFFICULTY;
+}
+
+function generateCanvasParams(): string {
+  const text = crypto.randomBytes(4).toString("hex");
+  const bg = "#" + crypto.randomBytes(3).toString("hex");
+  const fg = "#" + crypto.randomBytes(3).toString("hex");
+  const fontSize = 18 + crypto.randomInt(15);
+  const json = JSON.stringify([200, 50, text, fontSize, "sans-serif", bg, fg]);
+  return Buffer.from(json).toString("base64url");
+}
+
+async function createBackChallengeJwt(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  return sign(
+    {
+      sub: "back-challenge",
+      iat: now,
+      exp: now + BACK_CHALLENGE_MAX_AGE,
+      n: crypto.randomBytes(8).toString("base64url"),
+    },
+    getBackChallengeJwtKey(),
+  );
+}
+
+function encodeBackChallengePayload(
+  payload: Buffer,
+  userAgent: string,
+  jwtToken: string,
+): string {
+  const userAgentKey = crypto.createHash("sha512").update(userAgent).digest();
+  const jwtKey = crypto.createHash("sha512").update(jwtToken).digest();
+  return Buffer.from(
+    payload.map(
+      (byte, index) =>
+        byte ^
+        userAgentKey[index % userAgentKey.length] ^
+        jwtKey[index % jwtKey.length],
+    ),
+  ).toString("base64");
+}
+
+async function getBackChallengeHtml(
+  challengeValue: string,
+  url: URL,
+  userAgent: string,
+): Promise<Buffer> {
   const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) =>
     btoa("\u0000" + chunk),
   );
   const gzipBuffer = zlib.gzipSync(Buffer.from(JSON.stringify(valueArray)));
-  const arrayLiteral = `[${[...gzipBuffer].join(",")}]`;
+  const jwtToken = await createBackChallengeJwt();
+  const encodedPayload = encodeBackChallengePayload(
+    gzipBuffer,
+    userAgent,
+    jwtToken,
+  );
+  const canvasParams = generateCanvasParams();
   const template = backChallengeHtml
     .replace("{{BACK_CHALLENGE_COOKIE}}", JSON.stringify(BACK_CHALLENGE_COOKIE))
-    .replace("{{BACK_CHALLENGE_VALUE}}", arrayLiteral)
+    .replace("{{BACK_CHALLENGE_VALUE}}", JSON.stringify(encodedPayload))
+    .replace("{{BACK_CHALLENGE_JWT}}", JSON.stringify(jwtToken))
+    .replace("{{BACK_CHALLENGE_CANVAS}}", JSON.stringify(canvasParams))
     .replace("{{BACK_CHALLENGE_MAX_AGE}}", String(BACK_CHALLENGE_MAX_AGE))
+    .replace(
+      "{{BACK_CHALLENGE_DIFFICULTY}}",
+      String(BACK_CHALLENGE_DIFFICULTY),
+    )
     .replace(
       "{{BACK_CHALLENGE_SECURE}}",
       url.protocol === "https:" ? "true" : "false",
@@ -809,7 +889,6 @@ function isBackChallengePath(pathname: string): boolean {
 function isBrowserBackChallengeRequest(c: Context): boolean {
   const userAgent = c.req.header("user-agent") || "";
   const fetchMode = c.req.header("sec-fetch-mode");
-  const accept = c.req.header("accept") || "";
 
   return (
     c.req.method === "GET" &&
@@ -903,7 +982,22 @@ app.use("*", async (c: Context, next: Next) => {
   const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
   const isValid = (() => {
     if (!cookieValue) return false;
-    const decrypted = decryptChallengeValue(cookieValue);
+    const ua = c.req.header("user-agent") || "";
+    const key = crypto.createHash("sha512").update(ua).digest();
+    let decoded: string;
+    try {
+      const raw = Buffer.from(cookieValue, "base64url");
+      const unmasked = Buffer.from(raw.map((b, i) => b ^ key[i % key.length]));
+      decoded = unmasked.toString("utf8");
+    } catch {
+      return false;
+    }
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return false;
+    const [encrypted, nonce, canvasHash] = parts;
+    if (!/^[0-9a-f]{128}$/i.test(canvasHash)) return false;
+    if (!isBackChallengeProofValid(encrypted, nonce)) return false;
+    const decrypted = decryptChallengeValue(encrypted);
     if (!decrypted) return false;
     const colonIdx = decrypted.lastIndexOf(":");
     if (colonIdx === -1) return false;
@@ -923,12 +1017,17 @@ app.use("*", async (c: Context, next: Next) => {
     return;
   }
 
-  const htmlBuffer = getBackChallengeHtml(challengeValue, url);
-  const brotliData = zlib.brotliCompressSync(htmlBuffer);
+  const htmlBuffer = await getBackChallengeHtml(
+    challengeValue,
+    url,
+    c.req.header("user-agent") || "",
+  );
+  const deflateData = zlib.deflateSync(htmlBuffer);
   c.header("Cache-Control", "no-store, no-transform");
-  c.header("Content-Encoding", "br");
+  c.header("Content-Encoding", "deflate");
   c.header("Content-Type", "text/html");
-  return c.body(brotliData);
+  c.status(307);
+  return c.body(deflateData);
 });
 
 app.get("/favicon.ico", (c: Context) => {
@@ -983,7 +1082,7 @@ const servePlaygroundMainJs = (c: Context) =>
     const isLocal = isLocalRequest(host);
     const apiBaseUrl = isLocal ? `http://${host}` : "https://api.vgjr.top";
 
-    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}"; window.SERVER_STARTTIME = ${starttime};`;
+    const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";`;
     const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 
     await s.write(finalJs);

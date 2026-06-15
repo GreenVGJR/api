@@ -1018,6 +1018,22 @@ function buildQueryString(params) {
   );
 }
 
+function getEndpointPath(endpoint) {
+  const path = endpoint?.path || "/";
+  const qIdx = path.indexOf("?");
+  const cleanPath = qIdx === -1 ? path : path.slice(0, qIdx);
+  return cleanPath || "/";
+}
+
+function getEndpointQuery(endpoint) {
+  const query = endpoint?.query || "";
+  if (query) return query.startsWith("?") ? query : "?" + query;
+
+  const path = endpoint?.path || "";
+  const qIdx = path.indexOf("?");
+  return qIdx === -1 ? "" : path.slice(qIdx);
+}
+
 const PARAM_TYPES = new Set([
   "string",
   "number",
@@ -1051,10 +1067,11 @@ function normalizeParamType(typeSpec) {
 function buildEndpointUrl(endpoint) {
   if (!endpoint) return apiBaseUrl;
   const cleanBase = apiBaseUrl.replace(/\/$/, "");
-  const cleanPath = endpoint.path.startsWith("/")
-    ? endpoint.path
-    : "/" + endpoint.path;
-  return cleanBase + cleanPath + (endpoint.query || "");
+  const endpointPath = getEndpointPath(endpoint);
+  const cleanPath = endpointPath.startsWith("/")
+    ? endpointPath
+    : "/" + endpointPath;
+  return cleanBase + cleanPath + getEndpointQuery(endpoint);
 }
 
 function renderParamControl(p, i) {
@@ -1231,12 +1248,13 @@ function setupEnumControls() {
 
 function renderParams() {
   paramsPanel.classList.remove("hidden");
+  const endpointQuery = getEndpointQuery(currentEndpoint);
 
-  if (!currentEndpoint || !currentEndpoint.query) {
+  if (!currentEndpoint || !endpointQuery) {
     currentParams = [];
   } else {
     currentParams = parseQueryParams(
-      currentEndpoint.query,
+      endpointQuery,
       currentEndpoint.types || [],
     );
   }
@@ -1315,7 +1333,7 @@ function renderParams() {
 function syncParamsToUrl() {
   const queryString = buildQueryString(currentParams);
   const cleanBase = apiBaseUrl.replace(/\/$/, "");
-  const path = currentEndpoint ? currentEndpoint.path : "/";
+  const path = currentEndpoint ? getEndpointPath(currentEndpoint) : "/";
   const cleanPath = path.startsWith("/") ? path : "/" + path;
 
   urlInput.value = cleanBase + cleanPath + queryString;
@@ -1394,7 +1412,9 @@ async function refreshEndpointsFromJson() {
     });
     if (!res.ok) return false;
 
-    const freshEndpoints = normalizeEndpointPayload(await res.json());
+    const payload = await res.json();
+    setUptimeFromJsonPayload(payload);
+    const freshEndpoints = normalizeEndpointPayload(payload);
     if (!freshEndpoints) return false;
 
     const previousPath = currentEndpoint?.path;
@@ -1408,12 +1428,14 @@ async function refreshEndpointsFromJson() {
     if (currentEndpoint) {
       urlInput.value = buildEndpointUrl(currentEndpoint);
       adjustHeight();
-      syncUrlToParams();
-      syncParamsToUrl();
     }
 
     renderEndpoints();
     renderParams();
+    if (currentEndpoint) {
+      syncUrlToParams();
+      syncParamsToUrl();
+    }
     return true;
   } catch {
     return false;
@@ -1960,11 +1982,38 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("online", updateConnectionUI);
 window.addEventListener("offline", updateConnectionUI);
 
+let serverUptimeBaseSeconds = null;
+let serverUptimeSyncedAt = 0;
+
+function parseUptimeSeconds(value) {
+  if (typeof value !== "string") return null;
+  const parts = value.split(":").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
+}
+
+function setUptimeFromJsonPayload(payload) {
+  const info = Array.isArray(payload)
+    ? payload.find((item) => item && typeof item === "object" && item.uptime)
+    : payload;
+  const seconds = parseUptimeSeconds(info?.uptime);
+  if (seconds === null) return false;
+
+  serverUptimeBaseSeconds = seconds;
+  serverUptimeSyncedAt = Date.now();
+  updateUptime();
+  return true;
+}
+
 function updateUptime() {
   const uptimeDisplay = document.getElementById("uptimeDisplay");
-  if (!uptimeDisplay || !window.SERVER_STARTTIME) return;
+  if (!uptimeDisplay || serverUptimeBaseSeconds === null) return;
 
-  const diff = Math.floor((Date.now() - window.SERVER_STARTTIME) / 1000);
+  const diff =
+    serverUptimeBaseSeconds +
+    Math.floor((Date.now() - serverUptimeSyncedAt) / 1000);
   const h = Math.floor(diff / 3600);
   const m = Math.floor((diff % 3600) / 60);
   const s = diff % 60;
@@ -1975,7 +2024,6 @@ function updateUptime() {
 }
 
 setInterval(updateUptime, 1000);
-updateUptime();
 
 fetchInitialEndpoints().then(() => {
   renderCurrentPage();

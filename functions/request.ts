@@ -1193,6 +1193,18 @@ export const crunchyKey = async function crunchyKey() {
   }
 };
 
+export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string | undefined> {
+  const mainRes = await request("https://saweria.co", {
+    useH2: true,
+    echConfigDomain: "cloudflare-ech.com",
+    tlsOnly: false,
+    headers: { ...commonHeaders },
+  });
+
+  if (mainRes.statusCode === 403) return undefined;
+  return mainRes.text.split('"buildId":"')[1]?.split('"')[0];
+}
+
 export const Flickr = async function Flickr(
   que: string,
   refresh_auth?: boolean,
@@ -8173,74 +8185,50 @@ export async function PatreonProfile(query: string): Promise<any> {
   }
 }
 
-export async function SaweriaProfile(query: string): Promise<any> {
+export async function SaweriaProfile(
+  query: string,
+  refresh_auth: boolean = false,
+): Promise<any> {
   if (!query) return null;
   const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
   if (!username) return null;
 
   try {
-    let dataRes: any;
-    if (saweriaBuildId) {
-      dataRes = await request(
-        `https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`,
-        {
-          useH2: true,
-          echConfigDomain: "cloudflare-ech.com",
-          tlsOnly: false,
-          headers: { ...commonHeaders },
-        },
-      );
-
-      if (dataRes.statusCode === 403) {
-        return {
-          error: "Cloudflare Turnstile asking to verify you're not a bot",
-        };
-      }
-
-      if (dataRes.statusCode === 404) {
-        saweriaBuildId = undefined;
-      }
+    if (refresh_auth || !saweriaBuildId) {
+      saweriaBuildId = await saweriaBuildKey();
     }
 
     if (!saweriaBuildId) {
-      const mainRes = await request("https://saweria.co", {
+      return {
+        error: "Cloudflare Turnstile asking to verify you're not a bot",
+      };
+    }
+
+    const dataRes = await request(
+      `https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`,
+      {
         useH2: true,
         echConfigDomain: "cloudflare-ech.com",
         tlsOnly: false,
         headers: { ...commonHeaders },
-      });
+      },
+    );
 
-      if (mainRes.statusCode === 403) {
-        return {
-          error: "Cloudflare Turnstile asking to verify you're not a bot",
-        };
-      }
+    if (dataRes.statusCode === 403) {
+      return {
+        error: "Cloudflare Turnstile asking to verify you're not a bot",
+      };
+    }
 
-      const mainText = mainRes.text;
-      saweriaBuildId = mainText.split('"buildId":"')[1].split('"')[0];
-
-      dataRes = await request(
-        `https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`,
-        {
-          useH2: true,
-          echConfigDomain: "cloudflare-ech.com",
-          tlsOnly: false,
-          headers: { ...commonHeaders },
-        },
-      );
-
-      if (dataRes.statusCode === 403) {
-        return {
-          error: "Cloudflare Turnstile asking to verify you're not a bot",
-        };
-      }
+    if (dataRes.statusCode === 404 && !refresh_auth) {
+      return await SaweriaProfile(query, true);
     }
 
     if (dataRes.statusCode !== 200) {
       return { data: null };
     }
 
-    const dataJson: any = dataRes.json();
+    const dataJson: any = await dataRes.json();
     if (dataJson?.pageProps?.error) {
       return {
         error: dataJson.pageProps.error?.json?.message || null,
@@ -8719,9 +8707,22 @@ export async function HauntProfile(query: string): Promise<any> {
       "cdn-cgi",
       "terms",
       "privacy",
+      "copyright",
       "dashboard",
       "settings",
       "api",
+      "leaderboard",
+      "checkout",
+      "marketplace",
+      "redeem",
+      "en",
+      "de",
+      "ru",
+      "es",
+      "fr",
+      "pt",
+      "ar",
+      "it",
     ].includes(username.toLowerCase())
   )
     return null;
@@ -8760,7 +8761,104 @@ export async function HauntProfile(query: string): Promise<any> {
     const chunks = html.split("self.__next_f.push(");
     chunks.shift();
 
-    const dataResults: any[] = [];
+    const rscEntries: Record<string, any> = {};
+    let pendingText:
+      | { key: string; length: number; value: string; byteLength: number }
+      | null = null;
+
+    const parseRscValue = (value: string): any => {
+      try {
+        return JSON.parse(value);
+      } catch {}
+      if (/^[A-Z]/.test(value)) {
+        try {
+          return JSON.parse(value.slice(1));
+        } catch {}
+      }
+      return value;
+    };
+
+    const findProfile = (obj: any): any => {
+      if (!obj || typeof obj !== "object") return null;
+      if (obj.user && obj.links) return obj;
+
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const result = findProfile(item);
+          if (result) return result;
+        }
+      } else {
+        for (const key in obj) {
+          const result = findProfile(obj[key]);
+          if (result) return result;
+        }
+      }
+      return null;
+    };
+
+    const takeUtf8Prefix = (text: string, maxBytes: number) => {
+      let byteLength = 0;
+      let end = 0;
+      while (end < text.length) {
+        const codePoint = text.codePointAt(end);
+        if (codePoint === undefined) break;
+
+        const char = String.fromCodePoint(codePoint);
+        const charBytes = Buffer.byteLength(char, "utf8");
+        if (byteLength + charBytes > maxBytes) break;
+
+        byteLength += charBytes;
+        end += char.length;
+      }
+
+      return { value: text.slice(0, end), byteLength };
+    };
+
+    const processRscContent = (content: string) => {
+      let index = 0;
+      while (index < content.length) {
+        if (pendingText) {
+          const needed = pendingText.length - pendingText.byteLength;
+          const textChunk = takeUtf8Prefix(content.slice(index), needed);
+          if (!textChunk.value && needed > 0) break;
+          pendingText.value += textChunk.value;
+          pendingText.byteLength += textChunk.byteLength;
+          index += textChunk.value.length;
+
+          if (pendingText.byteLength >= pendingText.length) {
+            rscEntries[pendingText.key] = pendingText.value;
+            pendingText = null;
+          }
+          if (index >= content.length) break;
+        }
+
+        const nextLineIdx = content.indexOf("\n", index);
+        const line =
+          nextLineIdx === -1
+            ? content.slice(index)
+            : content.slice(index, nextLineIdx);
+        index = nextLineIdx === -1 ? content.length : nextLineIdx + 1;
+        if (!line.trim()) continue;
+
+        const colonIdx = line.indexOf(":");
+        if (colonIdx === -1) continue;
+
+        const key = line.slice(0, colonIdx);
+        const value = line.slice(colonIdx + 1);
+        const textMatch = value.match(/^T([0-9a-f]+),$/i);
+        if (textMatch) {
+          pendingText = {
+            key,
+            length: parseInt(textMatch[1], 16),
+            value: "",
+            byteLength: 0,
+          };
+          continue;
+        }
+
+        rscEntries[key] = parseRscValue(value);
+      }
+    };
 
     for (const chunk of chunks) {
       try {
@@ -8777,56 +8875,105 @@ export async function HauntProfile(query: string): Promise<any> {
         )
           continue;
 
-        const content = parsed[1];
-        const lines = content.split("\n").filter((l: string) => l.trim());
-
-        for (const line of lines) {
-          const colonIdx = line.indexOf(":");
-          if (colonIdx === -1) continue;
-
-          const jsonPart = line.substring(colonIdx + 1);
-          if (!jsonPart.includes('"user"') || !jsonPart.includes('"links"'))
-            continue;
-
-          try {
-            const innerParsed = JSON.parse(jsonPart);
-
-            const findProfile = (obj: any): any => {
-              if (!obj || typeof obj !== "object") return null;
-              if (obj.user && obj.links) return obj;
-
-              if (Array.isArray(obj)) {
-                for (const item of obj) {
-                  const result = findProfile(item);
-                  if (result) return result;
-                }
-              } else {
-                for (const key in obj) {
-                  const result = findProfile(obj[key]);
-                  if (result) return result;
-                }
-              }
-              return null;
-            };
-
-            const profile = findProfile(innerParsed);
-            if (profile) {
-              dataResults.push(profile);
-            }
-          } catch {}
-        }
+        processRscContent(parsed[1]);
       } catch {}
     }
+
+    const dataResults = Object.values(rscEntries)
+      .map((entry) => findProfile(entry))
+      .filter(Boolean);
 
     if (dataResults.length === 0) {
       return { data: null };
     }
 
-    const finalresult: any = dataResults[0];
+    const getRscPathValue = (value: any, pathParts: string[]): any => {
+      let current = value;
+      for (const part of pathParts) {
+        if (part === "props" && Array.isArray(current)) {
+          current = current[3];
+        } else if (/^\d+$/.test(part) && Array.isArray(current)) {
+          current = current[Number(part)];
+        } else if (current && typeof current === "object") {
+          current = current[part];
+        } else {
+          return undefined;
+        }
+      }
+      return current;
+    };
 
-    const { links, ...rest } = finalresult;
+    const resolveRscRefs = (
+      value: any,
+      depth = 0,
+      resolving = new Set<string>(),
+    ): any => {
+      if (depth > 80) return value;
+      if (typeof value === "string") {
+        const refMatch = value.match(/^\$([0-9a-f]+)(?::(.+))?$/i);
+        if (!refMatch) return value;
 
-    return { data: rest?.user || null };
+        const [, refKey, refPath] = refMatch;
+        const resolvingKey = `${refKey}:${refPath || ""}`;
+        if (!(refKey in rscEntries) || resolving.has(resolvingKey)) return value;
+
+        resolving.add(resolvingKey);
+        const target = refPath
+          ? getRscPathValue(rscEntries[refKey], refPath.split(":"))
+          : rscEntries[refKey];
+        const resolved =
+          target === undefined
+            ? value
+            : resolveRscRefs(target, depth + 1, resolving);
+        resolving.delete(resolvingKey);
+        return resolved;
+      }
+
+      if (Array.isArray(value))
+        return value.map((item) => resolveRscRefs(item, depth + 1, resolving));
+      if (value && typeof value === "object") {
+        const resolved: Record<string, any> = {};
+        for (const key of Object.keys(value)) {
+          resolved[key] = resolveRscRefs(value[key], depth + 1, resolving);
+        }
+        return resolved;
+      }
+      return value;
+    };
+
+    const counters: Record<string, number> = {};
+    const collectCounters = (obj: any) => {
+      if (!obj || typeof obj !== "object") return;
+      if (!Array.isArray(obj)) {
+        const label =
+          typeof obj.tooltipLabel === "string"
+            ? obj.tooltipLabel
+            : typeof obj.content === "string"
+              ? obj.content
+              : null;
+        if (label && typeof obj.count === "number") {
+          const key = label
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+([a-z0-9])/g, (_match: string, char: string) =>
+              char.toUpperCase(),
+            );
+          counters[key] = obj.count;
+        }
+      }
+
+      const values = Array.isArray(obj) ? obj : Object.values(obj);
+      for (const value of values) collectCounters(value);
+    };
+
+    for (const entry of Object.values(rscEntries)) collectCounters(entry);
+
+    const finalresult: any = resolveRscRefs(dataResults[0]);
+    if (!finalresult?.user) return { data: null };
+
+    return {
+      data: finalresult
+    };
   } catch (e) {
     console.error(e);
     return null;

@@ -976,6 +976,21 @@ export async function getOrCreatePlayer(
           reconnect247(p.guildId, p.voiceChannelId!, "queueEnd");
           return;
         }
+        if (p.connected && p.voiceChannelId) {
+          const voiceChannelId = p.voiceChannelId;
+          console.log(
+            `Queue empty for guild ${p.guildId}, disconnecting from VC ${voiceChannelId} (24/7 off)`,
+          );
+          setVoiceStatus(voiceChannelId, token, "").catch(() => {});
+          voiceStatusStore.delete(`${token}:${p.guildId}`);
+          lastVoiceChannel.delete(`${token}:${p.guildId}`);
+          p.destroy().catch((err: any) => {
+            console.error(
+              `Failed to destroy Lavalink player after queueEnd for guild ${p.guildId}:`,
+              err,
+            );
+          });
+        }
         console.log(
           `Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`,
         );

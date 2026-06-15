@@ -12,3 +12,4 @@ test
 database
 functions/__pycache__
 .venv
+AGENTS.md

@@ -27,7 +27,7 @@ for (const dir of routeDirs) {
     const name = file.replace(".ts", "");
 
     const safeName = name.replace(/[^a-zA-Z0-9_$]/g, "_");
-    imports.push(`import ${safeName} from './${name}.js';`);
+    imports.push(`import ${safeName} from "./${name}.js";`);
     names.push(safeName);
   }
 

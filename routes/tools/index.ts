@@ -32,37 +32,4 @@ import md5 from "./md5.js";
 import discordListMemberRole from "./discordListMemberRole.js";
 import discordInfoApp from "./discordInfoApp.js";
 
-export default [
-  geminiAmp,
-  translateAmp,
-  discordInfoMember,
-  discordInfoMessages,
-  timezone,
-  discordModifyMember,
-  discordModifyServer,
-  discordStream,
-  discordTiktokFeed,
-  discordWebhook,
-  magicstudio,
-  flux,
-  discordListMember,
-  discordVoice,
-  gpt,
-  discordListChannel,
-  discordInfoServer,
-  discordListRole,
-  discordInfoInvite,
-  discordInfoChannel,
-  discordInfoRole,
-  discordListWebhooks,
-  emoji,
-  discordInfoMessage,
-  discordInfoSticker,
-  db,
-  discordListInvite,
-  emojiKitchen,
-  discordInfoAutomod,
-  md5,
-  discordListMemberRole,
-  discordInfoApp,
-] as any[];
+export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, discordInfoSticker, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp] as any[];

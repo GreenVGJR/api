@@ -8,13 +8,4 @@ import voiceStatus from "./voiceStatus.js";
 import controls from "./controls.js";
 import play from "./play.js";
 
-export default [
-  connect,
-  disconnect,
-  filters,
-  queue,
-  stats,
-  voiceStatus,
-  controls,
-  play,
-] as any[];
+export default [connect, disconnect, filters, queue, stats, voiceStatus, controls, play] as any[];

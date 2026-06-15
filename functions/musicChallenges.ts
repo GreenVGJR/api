@@ -148,7 +148,7 @@ export function verifyChallenge(
     if (!magic.equals(CHALLENGE_MAGIC)) return false;
 
     const hashInputStr = challengeB64 + nonceStr;
-    const hash = crypto.createHash("sha256").update(hashInputStr).digest();
+    const hash = crypto.createHash("sha512").update(hashInputStr).digest();
 
     let zeroBits = 0;
     for (const byte of hash) {

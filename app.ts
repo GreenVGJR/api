@@ -590,16 +590,6 @@ const API_ROUTES = {
   ],
 };
 
-import { setGlobalDispatcher, Agent } from "undici";
-
-setGlobalDispatcher(
-  new Agent({
-    connections: 100,
-    keepAliveTimeout: 60_000,
-    pipelining: 1,
-  }),
-);
-
 const { buildId: buildIdConfig, restrictLocal } = config;
 
 const app = new Hono({ strict: false });
@@ -786,7 +776,10 @@ function getBackChallengeValue(c: Context): string {
 
 function isBackChallengeProofValid(value: string, nonce: string): boolean {
   if (!/^\d+$/.test(nonce)) return false;
-  const hash = crypto.createHash("sha512").update(value + nonce).digest();
+  const hash = crypto
+    .createHash("sha512")
+    .update(value + nonce)
+    .digest();
   let zeroBits = 0;
   for (const byte of hash) {
     if (byte === 0) {
@@ -864,10 +857,7 @@ async function getBackChallengeHtml(
     .replace("{{BACK_CHALLENGE_JWT}}", JSON.stringify(jwtToken))
     .replace("{{BACK_CHALLENGE_CANVAS}}", JSON.stringify(canvasParams))
     .replace("{{BACK_CHALLENGE_MAX_AGE}}", String(BACK_CHALLENGE_MAX_AGE))
-    .replace(
-      "{{BACK_CHALLENGE_DIFFICULTY}}",
-      String(BACK_CHALLENGE_DIFFICULTY),
-    )
+    .replace("{{BACK_CHALLENGE_DIFFICULTY}}", String(BACK_CHALLENGE_DIFFICULTY))
     .replace(
       "{{BACK_CHALLENGE_SECURE}}",
       url.protocol === "https:" ? "true" : "false",
@@ -1062,14 +1052,16 @@ function setPlaygroundAssetCache(c: Context) {
   );
 }
 
-app.get("/playground", (c: Context) => {
-  c.header("Content-Type", "text/html");
-  setPlaygroundAssetCache(c);
+["/playground", "/terms", "/privacy"].forEach((route) => {
+  app.get(route, (c: Context) => {
+    c.header("Content-Type", "text/html");
+    setPlaygroundAssetCache(c);
 
-  return stream(c, async (s) => {
-    await s.write(""); // Initial flush
+    return stream(c, async (s) => {
+      await s.write(""); // Initial flush
 
-    await s.write(playgroundTemplate);
+      await s.write(playgroundTemplate);
+    });
   });
 });
 
@@ -1108,19 +1100,6 @@ const servePlaygroundMainCss = (c: Context) =>
 
 app.get("/playground/main.css", servePlaygroundMainCss);
 
-["/terms", "/privacy"].forEach((route) => {
-  app.get(route, (c: Context) => {
-    c.header("Content-Type", "text/html");
-    c.header("Cache-Control", "no-store");
-
-    return stream(c, async (s) => {
-      await s.write("");
-
-      await s.write(playgroundTemplate);
-    });
-  });
-});
-
 app.get("/", (c: Context) =>
   stream(c, async (l) => {
     const isMozilla = c.req.header("user-agent")?.startsWith("Mozilla/5.0");
@@ -1130,7 +1109,10 @@ app.get("/", (c: Context) =>
       c.req.header("accept")?.includes("application/json");
     const typeRender = renderJson ? "application/json" : "text/plain";
     c.header("Content-Type", typeRender);
-    c.header("Cache-Control", "public, no-store, no-cache, max-age=0, must-revalidate");
+    c.header(
+      "Cache-Control",
+      "public, no-store, no-cache, max-age=0, must-revalidate",
+    );
     if (!renderJson) c.header("Location", "/playground");
 
     c.status(renderJson ? 200 : 302);

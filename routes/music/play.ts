@@ -25,7 +25,6 @@ import {
   infoITunes,
   infoSoundcloud,
   infoSoundcloudStreams,
-  request,
   commonHeaders,
 } from "../../functions/request.js";
 import { getActiveFilters } from "./filters.js";
@@ -111,11 +110,10 @@ interface YtMixResult {
 
 async function fetchYouTubeMixTracks(url: string): Promise<YtMixResult | null> {
   try {
-    const res = await request(url, {
+    const res = await fetch(url, {
       headers: { ...commonHeaders, "Accept-Language": "en-US,en;q=0.9" },
-      useH2: true,
     });
-    const html = res.text;
+    const html = await res.text();
     const ytInitialData = parseYtInitial(html);
     if (!ytInitialData) return null;
     const contents: any[] =
@@ -223,7 +221,7 @@ async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
     }
 
     if (endpoint) {
-      const res = await request(endpoint, { headers: commonHeaders });
+      const res = await fetch(endpoint, { headers: commonHeaders });
       const data: any = await res.json().catch(() => null);
       if (data && data.title) {
         return {
@@ -320,7 +318,7 @@ async function customSearch(
         };
       }
       case "applemusic": {
-        const amRes = await request(
+        const amRes = await fetch(
           `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(query)}`,
           { method: "GET", headers: commonHeaders },
         );

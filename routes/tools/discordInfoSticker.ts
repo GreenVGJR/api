@@ -82,7 +82,9 @@ app.get("/discord/deleteSticker", async (c) => {
     return c.json({ error: "Missing valid parameter: stickerId" }, 202);
 
   c.header("X-Route", "discord.com");
-  return await dispatch(c, () => DiscordDeleteSticker(token, guildId, stickerId));
+  return await dispatch(c, () =>
+    DiscordDeleteSticker(token, guildId, stickerId),
+  );
 });
 
 export default app;

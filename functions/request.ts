@@ -12,6 +12,12 @@ import { Buffer } from "buffer";
 import emojibaseData from "emojibase-data/en/data.json" with { type: "json" };
 import emojibaseGroups from "emojibase-data/meta/groups.json" with { type: "json" };
 
+declare global {
+  interface Response {
+    json(): Promise<any>;
+  }
+}
+
 const getRandomInt = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -197,39 +203,7 @@ setTimeout(async () => {
 }, 0);
 
 export const userAgent =
-  "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0";
-
-export async function request(
-  url: string | URL,
-  options: any = {},
-): Promise<any> {
-  const { useH2, useOwnTLS, ...fetchOptions } = options;
-  const response = await fetch(url, fetchOptions);
-  const body = Buffer.from(await response.arrayBuffer());
-  const text = body.toString("utf8");
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => {
-    headers[key.toLowerCase()] = value;
-  });
-  // Set-Cookie must be captured separately: forEach only iterates the first value
-  const setCookies = response.headers.getSetCookie?.();
-  if (setCookies?.length) {
-    headers["set-cookie"] = setCookies.join("; ");
-  }
-  return {
-    statusCode: response.status,
-    status: response.status,
-    ok: response.ok,
-    statusText: response.statusText,
-    url: response.url,
-    headers,
-    text,
-    json: async () => JSON.parse(text),
-    arrayBuffer: async () =>
-      body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-    blob: async () => new Blob([body]),
-  };
-}
+  "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -243,15 +217,24 @@ export const commonHeaders = {
   "User-Agent": userAgent,
 };
 
+const responseStatus = (response: any): number =>
+  response?.status ?? response?.statusCode ?? 0;
+
+const responseText = async (response: any): Promise<string> => {
+  if (!response) return "";
+  if (typeof response.text === "function") return await response.text();
+  if (typeof response.text === "string") return response.text;
+  return "";
+};
+
 let keyYoutubeVisitor: string | null = null;
 
 export async function youtubeVisitorKey(): Promise<string | null> {
   try {
-    const res = await request("https://www.youtube.com/", {
+    const res = await fetch("https://www.youtube.com/", {
       headers: commonHeaders,
-      useH2: true,
     });
-    const text = await res.text;
+    const text = await res.text();
     return text.split('"visitorData":"')[1]?.split('"')[0] || null;
   } catch (e) {
     console.error("Error fetching visitorData:", e);
@@ -669,17 +652,16 @@ function filterSpecificCookies(
 
 export const googleAuthKey = async function googleAuthKey() {
   try {
-    const res = await request(
+    const res = await fetch(
       `https://cse.google.com/cse.js?hpg=1&cx=${process.env.GOOG_CX}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
-    if (res.statusCode !== 200) return undefined;
-    const text = await res.text;
+    if (res.status !== 200) return undefined;
+    const text = await res.text();
     const extractObject = text?.split("})(")?.[1]?.slice(0, -2);
     return JSON.parse(extractObject);
   } catch {
@@ -689,25 +671,23 @@ export const googleAuthKey = async function googleAuthKey() {
 
 export const giphyKey = async function giphyKey() {
   try {
-    const res = await request("https://giphy.com/", {
+    const res = await fetch("https://giphy.com/", {
       headers: {
         ...commonHeaders,
       },
-      useH2: true,
     });
-    const text = await res.text;
+    const text = await res.text();
     const extractHash = text?.split("app/layout-")?.[1]?.split('"')?.[0];
     if (!extractHash) return undefined;
-    const res2 = await request(
+    const res2 = await fetch(
       `https://giphy.com/_next/static/chunks/app/layout-${extractHash}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
-    const text2 = await res2.text;
+    const text2 = await res2.text();
     return text2.split('mobileApiKey:"')[1].split('"')[0];
   } catch {
     return undefined;
@@ -716,12 +696,12 @@ export const giphyKey = async function giphyKey() {
 
 export const flickrKey = async function flickrKey() {
   try {
-    const res = await request("https://flickr.com/photos/", {
+    const res = await fetch("https://flickr.com/photos/", {
       headers: {
         ...commonHeaders,
       },
     });
-    const text = await res.text;
+    const text = await res.text();
     return text.split("flickr.api.site_key =")[1].split('"')[1];
   } catch {
     return undefined;
@@ -730,13 +710,13 @@ export const flickrKey = async function flickrKey() {
 
 export const soundcloudKey = async function soundcloudKey() {
   try {
-    const res = await request("https://m.soundcloud.com", {
+    const res = await fetch("https://m.soundcloud.com", {
       method: "GET",
       headers: {
         ...commonHeaders,
       },
     });
-    const text = await res.text;
+    const text = await res.text();
     return text.split('"clientId":"')[1].split('"')[0];
   } catch {
     return undefined;
@@ -793,15 +773,14 @@ async function ensureTotpSecrets(): Promise<void> {
     return;
 
   try {
-    const res = await request(
+    const res = await fetch(
       "https://raw.githubusercontent.com/xyloflake/spot-secrets-go/refs/heads/main/secrets/secretDict.json",
       {
         headers: { Accept: "application/json" },
-        useH2: true,
       },
     );
 
-    if (res.statusCode !== 200) throw new Error("Failed to fetch secrets");
+    if (res.status !== 200) throw new Error("Failed to fetch secrets");
 
     const secrets: any = await res.json();
     const versions = Object.keys(secrets).map(Number);
@@ -837,11 +816,10 @@ async function ensureTotpSecrets(): Promise<void> {
 async function performSpotifyTokenRequest(secretHex: string, version: string) {
   let serverTimeMs = Date.now();
   try {
-    const timeRes = await request("https://open.spotify.com/api/server-time", {
+    const timeRes = await fetch("https://open.spotify.com/api/server-time", {
       headers: { "User-Agent": userAgent },
-      useH2: true,
     });
-    if (timeRes.statusCode === 200) {
+    if (timeRes.status === 200) {
       const timeData: any = await timeRes.json();
       serverTimeMs = timeData.serverTime || Date.now();
     }
@@ -858,7 +836,7 @@ async function performSpotifyTokenRequest(secretHex: string, version: string) {
   url.searchParams.append("totpServer", totpServer);
   url.searchParams.append("totpVer", version);
 
-  const res = await request(url.toString(), {
+  const res = await fetch(url.toString(), {
     method: "GET",
     headers: {
       ...commonHeaders,
@@ -870,11 +848,9 @@ async function performSpotifyTokenRequest(secretHex: string, version: string) {
       Referer: "https://open.spotify.com/",
       Accept: "application/json",
     },
-    useH2: true,
   });
 
-  if (res.statusCode !== 200)
-    throw new Error(`Spotify Auth Error: ${res.statusCode}`);
+  if (res.status !== 200) throw new Error(`Spotify Auth Error: ${res.status}`);
 
   const data: any = await res.json();
   const token = data.accessToken;
@@ -950,7 +926,7 @@ export const spotifyKey = async function spotifyKey() {
     } catch {}
 
     try {
-      const res = await request(
+      const res = await fetch(
         `https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`,
         {
           headers: {
@@ -959,10 +935,9 @@ export const spotifyKey = async function spotifyKey() {
               ? { cookie: process.env.SPOTIFY_COOKIES }
               : {}),
           },
-          useH2: true,
         },
       );
-      const text = await res.text;
+      const text = await res.text();
       return text.split('"accessToken":"')[1].split('"')[0];
     } catch {
       return undefined;
@@ -986,23 +961,19 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
   };
 
   try {
-    const req = await request(
-      `https://clienttoken.spotify.com/v1/clienttoken`,
-      {
-        method: "POST",
-        body: JSON.stringify(bodyhttp),
-        headers: {
-          ...commonHeaders,
-          ...(process.env.SPOTIFY_COOKIES
-            ? { cookie: process.env.SPOTIFY_COOKIES }
-            : {}),
-          Origin: "https://clienttoken.spotify.com",
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        useH2: true,
+    const req = await fetch(`https://clienttoken.spotify.com/v1/clienttoken`, {
+      method: "POST",
+      body: JSON.stringify(bodyhttp),
+      headers: {
+        ...commonHeaders,
+        ...(process.env.SPOTIFY_COOKIES
+          ? { cookie: process.env.SPOTIFY_COOKIES }
+          : {}),
+        Origin: "https://clienttoken.spotify.com",
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
-    );
+    });
 
     const res: any = await req.json();
     return res.granted_token.token;
@@ -1013,7 +984,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
 
 export const tidalKeys = async function tidalKeys() {
   try {
-    const rest = await request(
+    const rest = await fetch(
       `https://embed.tidal.com/tracks/${[406956243, 1550546][Math.floor(Math.random() * 2)]}`,
       {
         method: "GET",
@@ -1022,8 +993,8 @@ export const tidalKeys = async function tidalKeys() {
         },
       },
     );
-    const rest_get = await rest.text;
-    const rest2 = await request(
+    const rest_get = await rest.text();
+    const rest2 = await fetch(
       "https://embed.tidal.com" +
         rest_get
           .split('type="module"')[0]
@@ -1035,7 +1006,7 @@ export const tidalKeys = async function tidalKeys() {
         },
       },
     );
-    const rest2_get = await rest2.text;
+    const rest2_get = await rest2.text();
     return rest2_get.split('"X-Tidal-Token","')[1].split('"')[0];
   } catch {
     return undefined;
@@ -1058,7 +1029,7 @@ export const tidalKeysToken = async function tidalKeysToken(
     );
     rt.append("grant_type", "client_credentials");
 
-    const rest = await request(`https://auth.tidal.com/v1/oauth2/token`, {
+    const rest = await fetch(`https://auth.tidal.com/v1/oauth2/token`, {
       method: "POST",
       body: rt.toString(),
       headers: {
@@ -1067,7 +1038,7 @@ export const tidalKeysToken = async function tidalKeysToken(
       },
     });
 
-    if (rest.statusCode === 400 || rest.statusCode === 401) {
+    if (rest.status === 400 || rest.status === 401) {
       return await tidalKeysToken(true);
     }
 
@@ -1080,7 +1051,7 @@ export const tidalKeysToken = async function tidalKeysToken(
 
 export const deezerKeys = async function deezerKeys() {
   try {
-    const rest = await request(
+    const rest = await fetch(
       "https://auth.deezer.com/login/anonymous?jo=p&rto=p",
       {
         headers: {
@@ -1088,7 +1059,7 @@ export const deezerKeys = async function deezerKeys() {
         },
       },
     );
-    let rest_get: any = await rest.text;
+    let rest_get: any = await rest.text();
     rest_get = JSON.parse(rest_get);
     return rest_get.jwt;
   } catch {
@@ -1098,24 +1069,23 @@ export const deezerKeys = async function deezerKeys() {
 
 export const twitterKey = async function twitterKey(typeName: string) {
   try {
-    const response = await request("https://x.com/", {
+    const response = await fetch("https://x.com/", {
       headers: { ...commonHeaders },
-      useH2: true,
     });
-    const html = await response.text;
+    const html = await response.text();
     const { document } = parseHTML(html);
     twitterDocument = document;
 
     twitterTransaction = new ClientTransaction(twitterDocument);
     await twitterTransaction.initialize();
 
-    const pul1 = await request(
+    const pul1 = await fetch(
       "https://abs.twimg.com/responsive-web/client-web/main" +
         html.split("client-web/main")[1].split('"')[0],
-      { headers: { ...commonHeaders }, useH2: true },
+      { headers: { ...commonHeaders } },
     );
 
-    const res1 = await pul1.text;
+    const res1 = await pul1.text();
 
     const queryId_user = res1
       .split("e.exports={queryId:")
@@ -1147,20 +1117,19 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
 export const imgurKey = async function imgurKey() {
   try {
-    const req = await request("https://imgur.com", {
+    const req = await fetch("https://imgur.com", {
       headers: { ...commonHeaders },
-      useH2: true,
     });
-    const res = await req.text;
+    const res = await req.text();
 
     const mainAssetPath = res.split("desktop-assets/js/main")[1]?.split(">")[0];
     if (!mainAssetPath) return undefined;
 
-    const req2 = await request(
+    const req2 = await fetch(
       "https://s.imgur.com/desktop-assets/js/main" + mainAssetPath,
-      { headers: { ...commonHeaders }, useH2: true },
+      { headers: { ...commonHeaders } },
     );
-    const res2 = await req2.text;
+    const res2 = await req2.text();
     return res2.split('apiClientId:"')[1]?.split('"')[0];
   } catch (e) {
     console.error("Imgur Key Error:", e);
@@ -1169,7 +1138,7 @@ export const imgurKey = async function imgurKey() {
 
 export const crunchyKey = async function crunchyKey() {
   try {
-    const req = await request(
+    const req = await fetch(
       atob("aHR0cHM6Ly93d3cuY3J1bmNoeXJvbGwuY29tL2F1dGgvdjEvdG9rZW4="),
       {
         headers: {
@@ -1182,10 +1151,9 @@ export const crunchyKey = async function crunchyKey() {
         },
         method: "POST",
         body: "grant_type=client_id",
-        useH2: true,
       },
     );
-    if (req.statusCode !== 200) return;
+    if (req.status !== 200) return;
     const res = await req.json();
     return res.access_token;
   } catch (e) {
@@ -1193,17 +1161,17 @@ export const crunchyKey = async function crunchyKey() {
   }
 };
 
-export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string | undefined> {
-  const mainRes = await request("https://saweria.co", {
-    useH2: true,
-    echConfigDomain: "cloudflare-ech.com",
-    tlsOnly: false,
+export const saweriaBuildKey = async function saweriaBuildKey(): Promise<
+  string | undefined
+> {
+  const mainRes = await fetch("https://saweria.co", {
     headers: { ...commonHeaders },
   });
 
-  if (mainRes.statusCode === 403) return undefined;
-  return mainRes.text.split('"buildId":"')[1]?.split('"')[0];
-}
+  if (mainRes.status === 403) return undefined;
+  const mainText = await mainRes.text();
+  return mainText.split('"buildId":"')[1]?.split('"')[0];
+};
 
 export const Flickr = async function Flickr(
   que: string,
@@ -1217,21 +1185,20 @@ export const Flickr = async function Flickr(
   }
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${encodeURIComponent(que)}&per_page=${limit_number}`,
       {
         headers: commonHeaders,
-        useH2: true,
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (per.statusCode === 401) {
+    if (per.status === 401) {
       return await Flickr(que, true);
     }
 
@@ -1244,20 +1211,18 @@ export const Flickr = async function Flickr(
     const listids: string[] = pes.photos.photo.map((a: any) => a.id);
 
     const [per2, sizesResults] = await Promise.all([
-      request(
+      fetch(
         `https://api.flickr.com/services/rest/?method=flickr.photos.getInfo&photo_ids=${listids}&api_key=${keyflickr}&format=json&nojsoncallback=1`,
         {
           headers: commonHeaders,
-          useH2: true,
         },
       ),
       Promise.all(
         listids.map((id) =>
-          request(
+          fetch(
             `https://api.flickr.com/services/rest/?method=flickr.photos.getSizes&photo_id=${id}&api_key=${keyflickr}&format=json&nojsoncallback=1`,
             {
               headers: commonHeaders,
-              useH2: true,
             },
           )
             .then((r) => r.json())
@@ -1266,7 +1231,7 @@ export const Flickr = async function Flickr(
       ),
     ]);
 
-    if (per2.statusCode === 403) {
+    if (per2.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
@@ -1369,13 +1334,12 @@ export const YTVideo = async function YTVideo(
         .map(([name, value]) => `${name}=${value}`)
         .join("; ");
 
-      response = await request(currentUrl, {
+      response = await fetch(currentUrl, {
         headers: {
           ...commonHeaders,
           ...(cookieHeader ? { Cookie: cookieHeader } : {}),
         },
         redirect: "manual" as const,
-        useH2: true,
       });
 
       const setCookie = response.headers?.["set-cookie"];
@@ -1396,7 +1360,7 @@ export const YTVideo = async function YTVideo(
           });
       }
 
-      if (![301, 302, 303, 307, 308].includes(response.statusCode)) break;
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
 
       const location = response.headers?.location;
       if (typeof location !== "string" || !location) break;
@@ -1410,7 +1374,7 @@ export const YTVideo = async function YTVideo(
 
     if (!response) return { data: null };
 
-    let res: any = await response.text;
+    let res: any = await response.text();
 
     res = parseYtInitial(res);
     if (!res) {
@@ -1444,15 +1408,14 @@ export const YTVideo = async function YTVideo(
 
       if (checkmix && deepSearch) {
         try {
-          const rlkreq = await request(
+          const rlkreq = await fetch(
             `https://www.youtube.com/watch?v=&list=${checkmix}`,
             {
               headers: { ...commonHeaders },
-              useH2: true,
             },
           );
 
-          let rlkresText = await rlkreq.text;
+          let rlkresText = await rlkreq.text();
           let rlkres: any = parseYtInitial(rlkresText);
 
           if (rlkres) {
@@ -1744,7 +1707,7 @@ export const YTMusic = async function YTMusic(
         },
       },
     });
-    const response = await request(
+    const response = await fetch(
       "https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents",
       {
         headers: {
@@ -1753,7 +1716,6 @@ export const YTMusic = async function YTMusic(
         },
         body: bodyload,
         method: "POST",
-        useH2: true,
       },
     );
 
@@ -1860,15 +1822,14 @@ export const YTMusic = async function YTMusic(
         let mixData: any = null;
         if (muspl && deepSearch) {
           try {
-            const rlkreq = await request(
+            const rlkreq = await fetch(
               `https://www.youtube.com/watch?v=&list=${muspl}`,
               {
                 headers: { ...commonHeaders },
-                useH2: true,
               },
             );
 
-            let rlkresText = await rlkreq.text;
+            let rlkresText = await rlkreq.text();
             let rlkres: any = parseYtInitial(rlkresText);
 
             if (rlkres) {
@@ -2047,7 +2008,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
       },
     });
 
-    const response = await request(
+    const response = await fetch(
       "https://m.youtube.com/youtubei/v1/search?prettyPrint=false",
       {
         headers: {
@@ -2056,7 +2017,6 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
         },
         body: bodyload,
         method: "POST",
-        useH2: true,
       },
     );
 
@@ -2180,7 +2140,7 @@ export const SCMusic = async function SCMusic(
 
   try {
     const [per, per2] = await Promise.all([
-      request(
+      fetch(
         `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`,
         {
           headers: {
@@ -2188,7 +2148,7 @@ export const SCMusic = async function SCMusic(
           },
         },
       ),
-      request(
+      fetch(
         `https://mobi.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}`,
         {
           headers: {
@@ -2198,13 +2158,13 @@ export const SCMusic = async function SCMusic(
       ),
     ]);
 
-    if (per.statusCode === 401) {
+    if (per.status === 401) {
       return await SCMusic(que, true);
     }
-    const pes = per.statusCode === 200 ? await per.json() : null;
+    const pes = per.status === 200 ? await per.json() : null;
     let testpes: any = null;
     try {
-      const per2Text = await per2.text;
+      const per2Text = await per2.text();
       testpes = JSON.parse(
         per2Text.split('type="application/json">')[1].split("</script>")[0],
       );
@@ -2255,7 +2215,7 @@ export const SPMusic = async function SPMusic(
         },
       },
     };
-    const per2 = await request(
+    const per2 = await fetch(
       `https://api-partner.spotify.com/pathfinder/v2/query`,
       {
         method: "POST",
@@ -2268,23 +2228,22 @@ export const SPMusic = async function SPMusic(
           "Client-Token": keysptoken || "",
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (per2.statusCode === 403) {
+    if (per2.status === 403) {
       return {
         error: "IP Blocked",
       };
     }
 
-    if (per2.statusCode === 429) {
+    if (per2.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    if ((per2.statusCode === 401 || per2.statusCode === 400) && !refresh_auth) {
+    if ((per2.status === 401 || per2.status === 400) && !refresh_auth) {
       return await SPMusic(que, true);
     } else {
       const pes2: any = await per2.json();
@@ -2336,7 +2295,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
         },
       },
     });
-    const response = await request(
+    const response = await fetch(
       "https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))",
       {
         headers: {
@@ -2364,7 +2323,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
       },
     });
 
-    const pull = await request(
+    const pull = await fetch(
       "https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents",
       {
         headers: {
@@ -2401,13 +2360,12 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 export const Shazam = async function Shazam(que: string) {
   if (!que) return null;
   try {
-    const pull = await request(
+    const pull = await fetch(
       `https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
     const res: any = await pull.json();
@@ -2417,10 +2375,254 @@ export const Shazam = async function Shazam(que: string) {
   }
 };
 
+export const ShazamLyrics = async function ShazamLyrics(
+  que: string,
+): Promise<any> {
+  if (!que) return null;
+  try {
+    const itunesRes = await fetch(
+      `https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`,
+      { method: "GET", headers: commonHeaders },
+    );
+    const itunesData: any = await itunesRes.json();
+    const tracks = itunesData?.results;
+
+    if (!tracks || tracks.length === 0) {
+      return { data: null };
+    }
+
+    const firstTrack = tracks[0];
+    const trackViewUrl: string = firstTrack.trackViewUrl || "";
+
+    let shazamUrl: string | null = null;
+    try {
+      const parsedUrl = new URL(trackViewUrl);
+      const iParam = parsedUrl.searchParams.get("i");
+      const pathSegments = parsedUrl.pathname.split("/").filter(Boolean);
+      const slugSegment = pathSegments.length >= 3 ? pathSegments[2] : null;
+
+      if (iParam && slugSegment) {
+        shazamUrl = `https://www.shazam.com/song/${iParam}/${slugSegment}`;
+      }
+    } catch {}
+
+    const trackInfo = { ...firstTrack };
+
+    let shazamInfo: any = null;
+    let lyrics: string | null = null;
+    let syncLyrics: string | null = null;
+
+    if (shazamUrl) {
+      try {
+        const shazamRes = await fetch(shazamUrl, {
+          headers: {
+            ...commonHeaders,
+          },
+        });
+
+        const html = await shazamRes.text();
+
+        try {
+          const ldJsonMatch = html.split('script type="application/ld+json">');
+          if (ldJsonMatch.length > 1) {
+            const ldJsonStr = ldJsonMatch[1].split("</script>")[0];
+            const ldJson = JSON.parse(ldJsonStr);
+
+            let parsedDuration: number | null = null;
+            if (ldJson.duration && ldJson.duration.startsWith("PT")) {
+              const match = ldJson.duration.match(
+                /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/,
+              );
+              if (match) {
+                const h = parseInt(match[1] || "0", 10);
+                const m = parseInt(match[2] || "0", 10);
+                const s = parseFloat(match[3] || "0");
+                parsedDuration = Math.round((h * 3600 + m * 60 + s) * 1000);
+              }
+            }
+
+            const byArtist =
+              typeof ldJson.byArtist === "string"
+                ? ldJson.byArtist
+                : ldJson.byArtist?.name || ldJson.creator?.name || null;
+
+            shazamInfo = {
+              trackName: ldJson.name || null,
+              trackUrl: ldJson.url || null,
+              thumbnailUrl:
+                ldJson.thumbnailUrl
+                  ?.replace(/\d+x\d+\w+/, "1x1ss")
+                  .replace(/\.\w+$/, ".png") || null,
+              durationTrack: parsedDuration,
+              genreTrack: ldJson.genre || null,
+              byArtist: byArtist,
+              albumName: ldJson.inAlbum?.name || null,
+              albumPublished: ldJson.datePublished || null,
+            };
+          } else {
+            shazamInfo = {
+              trackName: null,
+              trackUrl: null,
+              thumbnailUrl: null,
+              durationTrack: null,
+              genreTrack: null,
+              byArtist: null,
+              albumName: null,
+              albumPublished: null,
+            };
+          }
+
+          const artistMatch = html.match(
+            /TrackPageArtistLink_artistNameText[^>]*>([^<]+)<\/span>/,
+          );
+          if (artistMatch) shazamInfo.byArtist = decodeHTML(artistMatch[1]);
+
+          const albumMatch = html.match(
+            />Album<\/span>(?:<a[^>]*>)?<span[^>]*>([^<]+)<\/span>/,
+          );
+          if (albumMatch) shazamInfo.albumName = decodeHTML(albumMatch[1]);
+
+          const dateMatch = html.match(
+            />Release Date<\/span><span[^>]*>([^<]+)<\/span>/,
+          );
+          if (dateMatch) shazamInfo.albumPublished = dateMatch[1];
+
+          const labelMatch = html.match(
+            />Label<\/span><span[^>]*>([^<]+)<\/span>/,
+          );
+          shazamInfo.label = labelMatch ? decodeHTML(labelMatch[1]) : null;
+
+          const languageMatch = html.match(
+            />Language<\/span><span[^>]*>([^<]+)<\/span>/,
+          );
+          shazamInfo.language = languageMatch
+            ? decodeHTML(languageMatch[1])
+            : null;
+
+          const bpmMatch = html.match(/>BPM<\/span><span[^>]*>(\d+)<\/span>/);
+          shazamInfo.bpm = bpmMatch ? parseInt(bpmMatch[1], 10) : null;
+
+          const getAttribute = (name: string) => {
+            const regex = new RegExp(
+              `>${name}<\\/span><\\/div><div[^>]*><div[^>]*><div[^>]*style="left:(\\d+)%"`,
+            );
+            const match = html.match(regex);
+            return match ? parseInt(match[1], 10) : null;
+          };
+
+          shazamInfo.melodicness = getAttribute("Melodicness");
+          shazamInfo.acousticness = getAttribute("Acousticness");
+          shazamInfo.valence = getAttribute("Valence");
+          shazamInfo.danceability = getAttribute("Danceability");
+          shazamInfo.energy = getAttribute("Energy");
+        } catch {}
+
+        try {
+          const rx = /\\\\?"lyricLines\\\\?":(\[.*?\])\}/g;
+          const matches = [...html.matchAll(rx)];
+
+          if (matches.length > 0) {
+            const parseTime = (str: string) => {
+              if (str.includes(":")) {
+                const parts = str.split(":");
+                if (parts.length === 3) {
+                  return (
+                    parseFloat(parts[0]) * 3600 +
+                    parseFloat(parts[1]) * 60 +
+                    parseFloat(parts[2])
+                  );
+                } else if (parts.length === 2) {
+                  return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+                }
+              }
+              return parseFloat(str);
+            };
+
+            const syncedLines: string[] = [];
+            matches.forEach((m) => {
+              try {
+                const raw = m[1].replace(/\\"/g, '"');
+                const arr = JSON.parse(raw);
+
+                arr.forEach((l: any) => {
+                  const time = parseTime(l.startTimeInSeconds || "0");
+                  const mins = Math.floor(time / 60)
+                    .toString()
+                    .padStart(2, "0");
+                  const secs = (time % 60).toFixed(2).padStart(5, "0");
+                  syncedLines.push(`[${mins}:${secs}] ${l.content}`);
+                });
+              } catch {}
+            });
+
+            if (syncedLines.length > 0) {
+              syncLyrics = syncedLines.join("\n");
+            }
+          }
+        } catch {}
+
+        if (!lyrics) {
+          try {
+            const lyricParts = html.split("LyricsContent_");
+            if (lyricParts.length > 1) {
+              const lyricLines: string[] = [];
+              for (let i = 1; i < lyricParts.length; i++) {
+                const part = lyricParts[i];
+                if (
+                  part.startsWith("sectionTitle") ||
+                  part.startsWith("lyricLine")
+                ) {
+                  const text = part
+                    .split('">')[1]
+                    ?.split("</div>")[0]
+                    ?.replace(/<[^>]*>/g, "");
+                  if (text) {
+                    lyricLines.push(text);
+                  }
+                }
+              }
+
+              if (lyricLines.length > 0) {
+                lyrics = decodeHTML(lyricLines.join("\n"));
+              }
+            }
+          } catch {}
+        }
+
+        if (!lyrics) {
+          try {
+            const ldJsonMatch = html.split(
+              'script type="application/ld+json">',
+            );
+            if (ldJsonMatch.length > 1) {
+              const ldJsonStr = ldJsonMatch[1].split("</script>")[0];
+              const ldJson = JSON.parse(ldJsonStr);
+              if (ldJson?.recordingOf?.lyrics?.text) {
+                lyrics = ldJson.recordingOf.lyrics.text;
+              }
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.error("Shazam fetch error:", e);
+      }
+    }
+
+    return {
+      data: [trackInfo, shazamInfo],
+      lyrics: lyrics,
+      syncLyrics: syncLyrics || null,
+    };
+  } catch (e) {
+    console.error("Shazam lyrics error:", e);
+    return null;
+  }
+};
+
 export const Deezer = async function Deezer(que: string, limits: number = 10) {
   if (!que) return null;
   try {
-    const pull = await request(
+    const pull = await fetch(
       `https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -2442,15 +2644,15 @@ async function resolveTikTokRedirect(
   let currentUrl = url;
 
   for (let i = 0; i < maxRedirects; i++) {
-    const res = await request(currentUrl, {
+    const res = await fetch(currentUrl, {
       method: "GET",
       redirect: "manual" as const,
       headers: commonHeaders,
     });
 
-    if (![301, 302, 303, 307, 308].includes(res.statusCode)) break;
+    if (![301, 302, 303, 307, 308].includes(res.status)) break;
 
-    const location = res.headers["location"];
+    const location = res.headers.get("location");
     if (typeof location !== "string" || !location) break;
 
     const nextUrl = new URL(location, currentUrl).toString();
@@ -2492,7 +2694,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
   try {
     const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
     const [response, savetikData] = await Promise.all([
-      request(targetUrl, {
+      fetch(targetUrl, {
         headers: {
           ...commonHeaders,
         },
@@ -2500,7 +2702,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
       SavetikVideo(targetUrl),
     ]);
 
-    const html = await response.text;
+    const html = await response.text();
     const scriptContent = html
       .split(
         '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
@@ -2630,7 +2832,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 async function SavetikVideo(url: string) {
   if (!url) return null;
   try {
-    const response = await request("https://savetik.io/api/ajaxSearch", {
+    const response = await fetch("https://savetik.io/api/ajaxSearch", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -2730,7 +2932,7 @@ export const deezerLyrics = async function deezerLyrics(
       lyrics: null,
     };
 
-    const pull = await request(`https://pipe.deezer.com/api`, {
+    const pull = await fetch(`https://pipe.deezer.com/api`, {
       method: "POST",
       headers: {
         ...commonHeaders,
@@ -2765,7 +2967,7 @@ export const deezerLyrics = async function deezerLyrics(
           "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }",
       };
 
-      const pull2 = await request(`https://pipe.deezer.com/api`, {
+      const pull2 = await fetch(`https://pipe.deezer.com/api`, {
         method: "POST",
         headers: {
           ...commonHeaders,
@@ -2807,7 +3009,7 @@ export const tidalLyrics = async function tidalLyrics(
       return { data: null };
     }
 
-    const pull = await request(
+    const pull = await fetch(
       `https://openapi.tidal.com/v2/tracks/${trackid}?countryCode=US&include=lyrics`,
       {
         headers: {
@@ -2819,11 +3021,11 @@ export const tidalLyrics = async function tidalLyrics(
       },
     );
 
-    if (pull.statusCode === 429) {
+    if (pull.status === 429) {
       return { error: "Rate-limited" };
     }
 
-    if (pull.statusCode === 400 || pull.statusCode === 401) {
+    if (pull.status === 400 || pull.status === 401) {
       return await tidalLyrics(que, true);
     }
 
@@ -2869,7 +3071,7 @@ export const SPLyrics = async function SPLyrics(
     const l = await infoSpotify("https://open.spotify.com/track/" + trackId);
     trackData = l?.data;
 
-    const pull = await request(
+    const pull = await fetch(
       `https://spclient.wg.spotify.com/color-lyrics/v2/track/${trackId}?format=json&vnext=true`,
       {
         headers: {
@@ -2877,19 +3079,18 @@ export const SPLyrics = async function SPLyrics(
           Authorization: "Bearer " + keysp,
           "App-Platform": "WebPlayer",
         },
-        useH2: true,
       },
     );
 
-    if (pull.statusCode === 401 && !refresh_auth) {
+    if (pull.status === 401 && !refresh_auth) {
       return await SPLyrics(que, true);
     }
 
-    if (pull.statusCode === 400 && !process.env.SPOTIFY_COOKIES) {
+    if (pull.status === 400 && !process.env.SPOTIFY_COOKIES) {
       return {
         error: "Sign in to use this feature",
       };
-    } else if (pull.statusCode === 403 || pull.statusCode === 400) {
+    } else if (pull.status === 403 || pull.status === 400) {
       return {
         error: "IP Blocked / Cookies no longer active",
       };
@@ -2936,7 +3137,7 @@ export const Tidal = async function Tidal(
   }
 
   try {
-    const pull = await request(
+    const pull = await fetch(
       `https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=${limits}&offset=0&query=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -2946,7 +3147,7 @@ export const Tidal = async function Tidal(
       },
     );
 
-    if (pull.statusCode === 400 || pull.statusCode === 401) {
+    if (pull.status === 400 || pull.status === 401) {
       return await Tidal(que, true);
     }
 
@@ -2969,7 +3170,7 @@ export const TidalOpen = async function TidalOpen(
   }
 
   try {
-    const pull = await request(
+    const pull = await fetch(
       `https://tidal.com/v2/client-search/?includeContributors=true&includeDidYouMean=true&includeUserPlaylists=true&limit=${limits}&query=${encodeURIComponent(que)}&supportsUserData=true&countryCode=US&locale=en_US&deviceType=BROWSER`,
       {
         headers: {
@@ -2981,11 +3182,11 @@ export const TidalOpen = async function TidalOpen(
       },
     );
 
-    if (pull.statusCode === 429) {
+    if (pull.status === 429) {
       return { error: "Rate-limited" };
     }
 
-    if (pull.statusCode === 400 || pull.statusCode === 401) {
+    if (pull.status === 400 || pull.status === 401) {
       return await TidalOpen(que, true);
     }
 
@@ -3005,29 +3206,27 @@ export const Genius = async function Genius(que: string) {
   if (!que) return null;
   try {
     const [per, per2] = await Promise.all([
-      request(
+      fetch(
         `https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`,
         {
           headers: {
             ...commonHeaders,
           },
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`,
         {
           headers: {
             ...commonHeaders,
           },
-          useH2: true,
         },
       ),
     ]);
 
     const [data, data2] = await Promise.all([
-      per.statusCode === 200 ? per.json() : Promise.resolve(null),
-      per2.statusCode === 200 ? per2.json() : Promise.resolve(null),
+      per.status === 200 ? per.json() : Promise.resolve(null),
+      per2.status === 200 ? per2.json() : Promise.resolve(null),
     ]);
 
     const hits =
@@ -3129,7 +3328,7 @@ export const Gemini = async function Gemini(
   ];
   const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
-  const req = await request(
+  const req = await fetch(
     `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
     {
       method: "POST",
@@ -3147,7 +3346,6 @@ export const Gemini = async function Gemini(
         "X-Same-Domain": "1",
       },
       body: reqPayload,
-      useH2: true,
     },
   );
 
@@ -3156,24 +3354,25 @@ export const Gemini = async function Gemini(
       error: "Google asking to verify you're not a bot",
     };
   }
-  if (req.statusCode === 400) {
+  if (req.status === 400) {
     if (retry >= 7) return { error: "Timeout / Bad Request" };
     await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
-  if (req.statusCode === 429) {
+  if (req.status === 429) {
     if (retry >= 7) return { error: "Rate-limited" };
     await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
-  if (req.statusCode === 403) {
+  if (req.status === 403) {
     return {
       error: "Blocked / Geo-restricted",
     };
   }
 
-  const cookiess: any = req.headers?.["set-cookie"];
-  const resText = await req.text;
+  const cookiess: any =
+    req.headers.getSetCookie?.().join("; ") ?? req.headers.get("set-cookie");
+  const resText = await req.text();
   let response;
 
   let data: any[] = [];
@@ -3271,7 +3470,7 @@ export const Translate = async function Translate(
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&dt=bd&dj=1&q=${encodeURIComponent(que)}`;
 
   try {
-    const response = await request(url, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         ...commonHeaders,
@@ -3619,13 +3818,13 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
   const requestUrl = `https://www.youtube.com/${prefix}${identifier}`;
 
   try {
-    const response = await request(requestUrl, {
+    const response = await fetch(requestUrl, {
       method: "GET",
       headers: {
         ...commonHeaders,
       },
     });
-    const html = await response.text;
+    const html = await response.text();
     let data: any = parseYtInitial(html);
 
     if (!data) return { data: null };
@@ -4009,7 +4208,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
     if (continuationToken) {
       try {
-        const continuationReq = await request(
+        const continuationReq = await fetch(
           "https://m.youtube.com/youtubei/v1/browse?prettyPrint=false",
           {
             method: "POST",
@@ -4110,7 +4309,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
             },
           });
 
-          const req = await request(
+          const req = await fetch(
             "https://m.youtube.com/youtubei/v1/browse?prettyPrint=false",
             {
               method: "POST",
@@ -4331,7 +4530,7 @@ export const infoSoundcloud = async function infoSoundcloud(
     if (!test.host.endsWith("soundcloud.com")) return null;
 
     const [res, res2] = await Promise.all([
-      request(
+      fetch(
         `https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`,
         {
           headers: {
@@ -4339,21 +4538,21 @@ export const infoSoundcloud = async function infoSoundcloud(
           },
         },
       ),
-      request("https://mobi.soundcloud.com" + test.pathname, {
+      fetch("https://mobi.soundcloud.com" + test.pathname, {
         headers: {
           ...commonHeaders,
         },
       }),
     ]);
 
-    if (res.statusCode === 401) {
+    if (res.status === 401) {
       return await infoSoundcloud(que, true);
     }
-    const pull = res.statusCode === 200 ? await res.json() : null;
+    const pull = res.status === 200 ? await res.json() : null;
 
     let pull2: any = null;
     try {
-      const res2Text = await res2.text;
+      const res2Text = await res2.text();
       pull2 = JSON.parse(
         res2Text.split('type="application/json">')[1].split("</script>")[0],
       );
@@ -4386,15 +4585,15 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(
     keysc = await soundcloudKey();
   }
   try {
-    const res = await request(
+    const res = await fetch(
       `https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`,
       {
         headers: { ...commonHeaders },
       },
     );
-    if (res.statusCode === 401) return await infoSoundcloudStreams(url, true);
+    if (res.status === 401) return await infoSoundcloudStreams(url, true);
 
-    const data: any = res.statusCode === 200 ? await res.json() : null;
+    const data: any = res.status === 200 ? await res.json() : null;
     if (!data) return [];
 
     const transcodings: any[] = Array.isArray(data.media?.transcodings)
@@ -4415,11 +4614,11 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(
       try {
         const streamUrl = new URL(transcoding.url);
         streamUrl.searchParams.set("client_id", keysc || "");
-        const streamRes = await request(streamUrl.toString(), {
+        const streamRes = await fetch(streamUrl.toString(), {
           headers: { ...commonHeaders },
         });
         const streamData: any =
-          streamRes.statusCode === 200 ? await streamRes.json() : null;
+          streamRes.status === 200 ? await streamRes.json() : null;
         if (streamData?.url) {
           candidates.push({
             protocol: transcoding.format?.protocol || "unknown",
@@ -4451,7 +4650,7 @@ export const infoSpotify = async function infoSpotify(que: string) {
     const test = new URL(que);
     if (test.host !== "open.spotify.com") return null;
 
-    const res = await request(
+    const res = await fetch(
       `https://open.spotify.com/oembed?url=${encodeURIComponent(que)}`,
       {
         method: "GET",
@@ -4463,7 +4662,7 @@ export const infoSpotify = async function infoSpotify(que: string) {
 
     const pull: any = await res.json();
 
-    const res2 = await request(pull.iframe_url, {
+    const res2 = await fetch(pull.iframe_url, {
       method: "GET",
       headers: {
         ...commonHeaders,
@@ -4471,7 +4670,7 @@ export const infoSpotify = async function infoSpotify(que: string) {
       },
     });
 
-    const pull2 = await res2.text;
+    const pull2 = await res2.text();
     const test2 = JSON.parse(
       pull2.split('type="application/json">')[1].split("</script>")[0],
     );
@@ -4525,7 +4724,7 @@ export const pinterest = async function pinterest(que: string) {
   if (!que) return null;
   try {
     const feat = { options: { query: que, scope: "pins" }, context: {} };
-    const req = await request(
+    const req = await fetch(
       `https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`,
       {
         method: "GET",
@@ -4554,13 +4753,13 @@ export const infoPinterest = async function infoPinterest(que: string) {
     if (!test.host.includes("pinterest.") && !test.host.includes("pin.it"))
       return null;
 
-    const res = await request(que, {
+    const res = await fetch(que, {
       headers: {
         ...commonHeaders,
       },
     });
 
-    const html = await res.text;
+    const html = await res.text();
 
     const data: any[] = [];
     const scriptRegex =
@@ -5053,7 +5252,7 @@ export const DiscordWebhook = async (
 export const GettyImage = async function GettyImage(que: string) {
   if (!que) return null;
   try {
-    const req = await request(
+    const req = await fetch(
       `https://www.istockphoto.com/en/search/2/image?phrase=${encodeURIComponent(que)}&page=1`,
       {
         headers: {
@@ -5076,17 +5275,16 @@ export const Unsplash = async function Unsplash(que: string) {
   if (!que) return null;
 
   try {
-    const pull = await request(
+    const pull = await fetch(
       `https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (pull.statusCode === 403) {
+    if (pull.status === 403) {
       return {
         error: "IP Blocked",
       };
@@ -5110,7 +5308,7 @@ export const Pixiv = async function Pixiv(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`,
       {
         headers: {
@@ -5142,7 +5340,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://discord.com/api/v10/discovery/search?query=${encodeURIComponent(que)}&limit=10`,
       {
         headers: {
@@ -5151,7 +5349,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
@@ -5169,7 +5367,7 @@ export const Bilibili = async function Bilibili(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${encodeURIComponent(que)}&highlight=1&pn=1&ps=10&qid=&sort=0`,
       {
         headers: {
@@ -5178,7 +5376,7 @@ export const Bilibili = async function Bilibili(que: string) {
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Akamai Captcha asking to verify you're not a bot",
       };
@@ -5201,7 +5399,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`,
       {
         headers: {
@@ -5210,7 +5408,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
@@ -5228,7 +5426,7 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -5286,7 +5484,7 @@ export const Twitch = async function Twitch(que: string) {
         },
       },
     ];
-    const per = await request(`https://gql.twitch.tv/gql`, {
+    const per = await fetch(`https://gql.twitch.tv/gql`, {
       method: "POST",
       body: JSON.stringify(bodyhttp),
       headers: {
@@ -5324,7 +5522,7 @@ export const ThreadUser = async function ThreadUser(que: string) {
       __relay_internal__pv__BarcelonaIsCrawlerrelayprovider: false,
       __relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider: false,
     };
-    const per = await request(
+    const per = await fetch(
       `https://www.threads.com/graphql/query?doc_id=24871030029227550&variables=${JSON.stringify(bodyhttp)}`,
       {
         headers: {
@@ -5354,30 +5552,29 @@ export const Pexels = async function Pexels(que: string) {
   if (!que) return null;
 
   try {
-    const response = await request(
+    const response = await fetch(
       `https://api.pexels.com/en-us/api/v2/search?per_page=20&query=${encodeURIComponent(que)}`,
       {
         headers: {
           ...commonHeaders,
           "Secret-Key": process.env.PEXELS || "",
         },
-        useH2: true,
       },
     );
 
-    if (response.statusCode === 403) {
+    if (response.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (response.statusCode === 429) {
+    if (response.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    const html = await response.text;
+    const html = await response.text();
     let pull = null;
     try {
       pull = JSON.parse(html);
@@ -5393,7 +5590,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
   if (!que) return null;
 
   try {
-    const pul = await request(
+    const pul = await fetch(
       `https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`,
       {
         headers: {
@@ -5403,7 +5600,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
       },
     );
 
-    const res = await pul.text;
+    const res = await pul.text();
     if (res === "") {
       return {
         error: "Akamai Captcha asking to verify you're not a bot",
@@ -5423,7 +5620,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
   if (!que) return null;
 
   try {
-    const pul = await request(
+    const pul = await fetch(
       `https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -5432,7 +5629,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
       },
     );
 
-    const res = await pul.text;
+    const res = await pul.text();
     if (res === "") {
       return {
         error: "Akamai Captcha asking to verify you're not a bot",
@@ -5452,7 +5649,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
   if (!que) return null;
 
   try {
-    const pul = await request(
+    const pul = await fetch(
       `https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`,
       {
         headers: {
@@ -5461,7 +5658,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
       },
     );
 
-    const res = await pul.text;
+    const res = await pul.text();
     if (res === "") {
       return {
         error: "Akamai Captcha asking to verify you're not a bot",
@@ -5489,10 +5686,10 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 
   for (let i = 0; i < 3; i++) {
     try {
-      const pul = await request(url, { headers, useH2: true, useOwnTLS: true });
-      const res = await pul.text;
+      const pul = await fetch(url, { headers });
+      const res = await pul.text();
 
-      if (res === "" || pul.statusCode !== 200) {
+      if (res === "" || pul.status !== 200) {
         if (i === 2)
           return { error: "Akamai Captcha asking to verify you're not a bot" };
         await new Promise((r) => setTimeout(r, 1000));
@@ -5651,7 +5848,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
   if (!channelId) return { error: "Missing channelId" };
 
   try {
-    const channelCheck = await request(
+    const channelCheck = await fetch(
       `https://discord.com/api/v10/channels/${channelId}`,
       {
         headers: {
@@ -5664,12 +5861,12 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 
     const channelData: any = await channelCheck.json();
 
-    if (channelCheck.statusCode !== 200) {
+    if (channelCheck.status !== 200) {
       return { error: channelData || "Channel verification failed" };
     }
 
     if (messageId) {
-      const messageCheck = await request(
+      const messageCheck = await fetch(
         `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
         {
           headers: {
@@ -5682,7 +5879,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 
       const messageData: any = await messageCheck.json();
 
-      if (messageCheck.statusCode !== 200) {
+      if (messageCheck.status !== 200) {
         return { error: messageData || "Message verification failed" };
       }
     }
@@ -5821,7 +6018,7 @@ export const DiscordStream = async function DiscordStream(
   let messageData: any = null;
 
   try {
-    const channelCheck = await request(
+    const channelCheck = await fetch(
       `https://discord.com/api/v10/channels/${channelId}`,
       {
         headers: {
@@ -5833,12 +6030,12 @@ export const DiscordStream = async function DiscordStream(
 
     const channelData: any = await channelCheck.json();
 
-    if (channelCheck.statusCode !== 200) {
+    if (channelCheck.status !== 200) {
       return { error: channelData || "Channel verification failed" };
     }
 
     if (messageId) {
-      const messageCheck = await request(
+      const messageCheck = await fetch(
         `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
         {
           headers: {
@@ -5850,7 +6047,7 @@ export const DiscordStream = async function DiscordStream(
 
       messageData = await messageCheck.json();
 
-      if (messageCheck.statusCode !== 200) {
+      if (messageCheck.status !== 200) {
         return { error: messageData || "Message verification failed" };
       }
     }
@@ -6033,7 +6230,7 @@ export const infoTwitterUser = async function infoTwitterUser(
       withAuxiliaryUserLabels: true,
     });
 
-    const pul = await request(
+    const pul = await fetch(
       `https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`,
       {
         headers: {
@@ -6042,20 +6239,19 @@ export const infoTwitterUser = async function infoTwitterUser(
           authorization: "Bearer " + twitterAuth,
           "x-client-transaction-id": twitterObj?.UserByScreenName?.[2],
         },
-        useH2: true,
       },
     );
 
-    if (pul.statusCode === 403) {
+    if (pul.status === 403) {
       return {
         error: "Bad auth",
       };
     }
 
-    if (pul.statusCode === 401 || pul.statusCode === 400)
+    if (pul.status === 401 || pul.status === 400)
       return await infoTwitterUser(que, true);
 
-    const responseText = await pul.text;
+    const responseText = await pul.text();
     let res;
     try {
       res = JSON.parse(responseText);
@@ -6165,7 +6361,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(
     });
 
     const [pul, pul2] = await Promise.all([
-      request(
+      fetch(
         `https://api.x.com/graphql/${queryId}/TweetResultByRestId?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`,
         {
           headers: {
@@ -6175,7 +6371,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(
           },
         },
       ),
-      request(
+      fetch(
         `https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(que)}&lang=en&token=abc`,
         {
           headers: {
@@ -6185,11 +6381,11 @@ export const infoTwitterTweet = async function infoTwitterTweet(
       ),
     ]);
 
-    if (pul.statusCode === 401 || pul.statusCode === 400)
+    if (pul.status === 401 || pul.status === 400)
       return await infoTwitterTweet(que, true);
 
     const tryParseJson = async (p: any) => {
-      if (p.statusCode !== 200) return null;
+      if (p.status !== 200) return null;
       try {
         return await p.json();
       } catch {
@@ -6198,7 +6394,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(
     };
 
     const [res, res2] = await Promise.all([
-      pul.statusCode === 403
+      pul.status === 403
         ? Promise.resolve({ error: "Bad auth" })
         : tryParseJson(pul),
       tryParseJson(pul2),
@@ -6215,7 +6411,7 @@ export const robloxGames = async function robloxGames(que: string) {
   if (!que) return null;
 
   try {
-    const pul1 = await request(
+    const pul1 = await fetch(
       `https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(que)}&sessionId=abc`,
       {
         headers: {
@@ -6234,7 +6430,7 @@ export const robloxGames = async function robloxGames(que: string) {
 
     if (!restIds) return { data: gamesList };
 
-    const pul2 = await request(
+    const pul2 = await fetch(
       `https://games.roblox.com/v1/games?universeIds=${restIds}`,
       {
         headers: {
@@ -6273,7 +6469,7 @@ export const YTChannel = async function YTChannel(que: string) {
       },
     });
 
-    const response = await request(
+    const response = await fetch(
       "https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer",
       {
         headers: {
@@ -6282,7 +6478,6 @@ export const YTChannel = async function YTChannel(que: string) {
         },
         body: bodyload,
         method: "POST",
-        useH2: true,
       },
     );
 
@@ -6357,7 +6552,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
   if (!que) return null;
 
   try {
-    const pul1 = await request(
+    const pul1 = await fetch(
       `https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -6373,7 +6568,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
     if (!assetIds) return { data: null };
 
     const [pul2, pul3] = await Promise.all([
-      request(
+      fetch(
         `https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`,
         {
           headers: {
@@ -6381,7 +6576,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
           },
         },
       ),
-      request(
+      fetch(
         `https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`,
         {
           headers: {
@@ -6428,7 +6623,7 @@ export const Bandcamp = async function Bandcamp(que: string) {
       full_page: false,
     };
 
-    const pul = await request(
+    const pul = await fetch(
       `https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic`,
       {
         method: "POST",
@@ -6484,7 +6679,7 @@ export const Capcut = async function Capcut(que: string) {
       search_version: 2,
     };
 
-    const pul = await request(linkhost, {
+    const pul = await fetch(linkhost, {
       method: "POST",
       body: JSON.stringify(body),
       headers: {
@@ -6563,16 +6758,16 @@ export const redditSubreddit = async function redditSubreddit(
     const headers: any = { ...commonHeaders };
     if (redditCookies) headers["Cookie"] = redditCookies;
 
-    const req = await request(
+    const req = await fetch(
       `https://www.reddit.com/r/${que.toLowerCase()}/new.json`,
       { headers },
     );
 
-    if (req.statusCode === 451) {
+    if (req.status === 451) {
       return { error: "This subreddit is not available in your country" };
     }
 
-    if (req.statusCode === 403) {
+    if (req.status === 403) {
       if (!refresh_auth) return redditSubreddit(que, true);
       return { error: "IP Blocked" };
     }
@@ -6610,13 +6805,13 @@ export const RedditPost = async (
     const headers: any = { ...commonHeaders };
     if (redditCookies) headers["Cookie"] = redditCookies;
 
-    const req = await request(jsonUrl, { headers });
+    const req = await fetch(jsonUrl, { headers });
 
-    if (req.statusCode === 451) {
+    if (req.status === 451) {
       return { error: "This subreddit is not available in your country" };
     }
 
-    if (req.statusCode === 403) {
+    if (req.status === 403) {
       if (!refresh_auth) return RedditPost(url, true);
       return { error: "IP Blocked" };
     }
@@ -6631,7 +6826,7 @@ export const RedditPost = async (
         : res;
     } catch {
       await refreshRedditAuth(true);
-      const retryReq2 = await request(jsonUrl, {
+      const retryReq2 = await fetch(jsonUrl, {
         headers: { ...headers, Cookie: redditCookies },
       });
       let retryRes2;
@@ -6669,12 +6864,12 @@ export const redditMedia = async function redditMedia(
     const headers: any = { ...commonHeaders };
     if (redditCookies) headers["Cookie"] = redditCookies;
 
-    const req = await request(
+    const req = await fetch(
       `https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`,
       { headers },
     );
 
-    if (req.statusCode === 403) {
+    if (req.status === 403) {
       if (!refresh_auth) return redditMedia(que, true);
       return { error: "IP Blocked" };
     }
@@ -6693,7 +6888,7 @@ export const instagramUser = async function instagramUser(que: string) {
   if (!que) return null;
 
   try {
-    const testreq = await request(
+    const testreq = await fetch(
       `https://www.instagram.com/${encodeURIComponent(que)}/embed`,
       {
         headers: {
@@ -6713,7 +6908,7 @@ export const instagramUser = async function instagramUser(que: string) {
       };
     }
 
-    const resreq = await testreq.text;
+    const resreq = await testreq.text();
     const profile_id = resreq.split('owner-id="')[1]?.split('"')?.[0];
 
     if (!profile_id) {
@@ -6731,7 +6926,7 @@ export const instagramUser = async function instagramUser(que: string) {
       __relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider: false,
     };
 
-    const req = await request(
+    const req = await fetch(
       `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`,
       {
         headers: {
@@ -6741,22 +6936,21 @@ export const instagramUser = async function instagramUser(que: string) {
           "X-IG-WWW-Claim": "0",
           Origin: "https://www.instagram.com",
         },
-        useH2: true,
       },
     );
 
     let a: any = null;
     let b: any = null;
     try {
-      const text = await req.text;
+      const text = await req.text();
       if (text && text.trim() !== "") {
-        const res = await req.json();
+        const res = JSON.parse(text);
         a = res?.data?.user;
       }
     } catch {}
 
     if (!a) {
-      const req2 = await request(
+      const req2 = await fetch(
         `https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`,
         {
           headers: {
@@ -6852,7 +7046,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
     };
 
     const [per, per2] = await Promise.all([
-      request(
+      fetch(
         `https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`,
         {
           headers: {
@@ -6864,13 +7058,13 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
           },
         },
       ),
-      request(`https://www.threads.com/@${encodeURIComponent(que)}`, {
+      fetch(`https://www.threads.com/@${encodeURIComponent(que)}`, {
         headers: { ...commonHeaders },
       }),
     ]);
 
     const [res, resText2]: [any, string] = await Promise.all([
-      per.statusCode === 200
+      per.status === 200
         ? (async () => {
             try {
               return await per.json();
@@ -6879,9 +7073,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
             }
           })()
         : Promise.resolve(null),
-      per2.statusCode === 200
-        ? Promise.resolve(per2.text)
-        : Promise.resolve(""),
+      per2.status === 200 ? per2.text() : Promise.resolve(""),
     ]);
 
     let webData: any[] = [];
@@ -6920,7 +7112,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 
     if (finalres) {
       bodyhttp2.userID = finalres.id;
-      const per3 = await request(
+      const per3 = await fetch(
         `https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`,
         {
           headers: {
@@ -6933,7 +7125,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
         },
       );
 
-      if (per3.statusCode === 200) {
+      if (per3.status === 200) {
         const res3 = (await per3.json()) as any;
         edges =
           res3?.data?.mediaData?.edges?.map(
@@ -6986,7 +7178,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
   try {
     const [apiRes, apiRes2, apiRes3] = await Promise.all([
-      request(
+      fetch(
         `https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`,
         {
           headers: {
@@ -6997,7 +7189,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
           },
         },
       ),
-      request(
+      fetch(
         `https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`,
         {
           headers: {
@@ -7008,7 +7200,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
           },
         },
       ),
-      request(
+      fetch(
         `https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`,
         {
           headers: {
@@ -7021,7 +7213,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
       ),
     ]);
 
-    if (apiRes.statusCode === 200) {
+    if (apiRes.status === 200) {
       const apiData: any = await apiRes.json();
       const apiData2: any = await apiRes2.json();
       const apiData3: any = await apiRes3.json();
@@ -7037,7 +7229,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
   try {
     const formatQuery = getFormatQuery(type);
-    const webRes = await request(
+    const webRes = await fetch(
       `https://tenor.com/search/${encodeURIComponent(que.toLowerCase())}-gifs${formatQuery}`,
       {
         headers: {
@@ -7046,11 +7238,11 @@ export const Tenor = async function Tenor(que: string, type?: string) {
       },
     );
 
-    if (webRes.statusCode !== 200) {
-      return { error: `${webRes.statusCode} - Can't process this` };
+    if (webRes.status !== 200) {
+      return { error: `${webRes.status} - Can't process this` };
     }
 
-    const html = await webRes.text;
+    const html = await webRes.text();
 
     if (html.includes('form id="captcha-form"')) {
       return { error: "Blocked recaptcha" };
@@ -7103,17 +7295,17 @@ export const infoTenor = async function infoTenor(url: string) {
       return { error: "Invalid Tenor post ID" };
     }
 
-    const res = await request(`https://tenor.com/embed/${postId}`, {
+    const res = await fetch(`https://tenor.com/embed/${postId}`, {
       headers: {
         ...commonHeaders,
       },
     });
 
-    if (res.statusCode !== 200) {
-      return { error: `${res.statusCode} - Can't process this` };
+    if (res.status !== 200) {
+      return { error: `${res.status} - Can't process this` };
     }
 
-    const html = await res.text;
+    const html = await res.text();
     const gifMatch = html.match(
       /<script id="gif-json"[^>]*>([\s\S]*?)<\/script>/,
     );
@@ -7139,18 +7331,17 @@ export const infoGiphy = async function infoGiphy(url: string) {
       return { error: "Invalid Giphy URL" };
     }
 
-    const res = await request(url, {
+    const res = await fetch(url, {
       headers: {
         ...commonHeaders,
       },
-      useH2: true,
     });
 
-    if (res.statusCode !== 200) {
-      return { error: `${res.statusCode} - Can't process this` };
+    if (res.status !== 200) {
+      return { error: `${res.status} - Can't process this` };
     }
 
-    const html = await res.text;
+    const html = await res.text();
 
     const keywordsMatch = html.match(
       /<meta\s+name="keywords"\s+content="([^"]*)"/i,
@@ -7225,19 +7416,18 @@ export const Giphy = async function Giphy(que: string, type?: string) {
   };
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`,
       {
         headers: { ...commonHeaders },
-        useH2: true,
       },
     );
 
-    if (res.statusCode !== 200) {
-      return { error: `${res.statusCode} - Can't process this` };
+    if (res.status !== 200) {
+      return { error: `${res.status} - Can't process this` };
     }
 
-    const html = await res.text;
+    const html = await res.text();
     const chunks = html.split("self.__next_f.push(");
     chunks.shift();
 
@@ -7295,30 +7485,27 @@ export const GiphyAPI = async function GiphyAPI(
     }
 
     const [res, res2, res3] = await Promise.all([
-      request(
+      fetch(
         `https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
         {
           headers: { ...commonHeaders },
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
         {
           headers: { ...commonHeaders },
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
         {
           headers: { ...commonHeaders },
-          useH2: true,
         },
       ),
     ]);
 
-    if (res.statusCode === 401) {
+    if (res.status === 401) {
       return await GiphyAPI(que, type, true);
     }
 
@@ -7334,11 +7521,10 @@ export const GiphyAPI = async function GiphyAPI(
     } catch {}
     try {
       if (jl.data?.[0]?.id) {
-        const fetchRelated = await request(
+        const fetchRelated = await fetch(
           `https://api.giphy.com/v1/${getTypeQuery(type)}/related?gif_id=${jl.data[0].id}&limit=25&api_key=${keygiphy}`,
           {
             headers: { ...commonHeaders },
-            useH2: true,
           },
         );
         jl3 = await fetchRelated.json();
@@ -7454,15 +7640,14 @@ export async function googleWeather(query: string): Promise<any> {
   if (!query) return null;
 
   try {
-    const l = await request(
+    const l = await fetch(
       `https://www.bing.com/api/v6/Places/AutoSuggest?q=${encodeURIComponent(query)}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`,
       {
         headers: { ...commonHeaders },
-        useH2: true,
       },
     );
 
-    let ls: any = await l.text;
+    let ls: any = await l.text();
 
     try {
       ls = JSON.parse(ls);
@@ -7475,7 +7660,7 @@ export async function googleWeather(query: string): Promise<any> {
     if (!datageo) return { data: null };
     const coords = datageo.geo.latitude + "," + datageo.geo.longitude;
 
-    const k = await request(
+    const k = await fetch(
       `https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`,
       {
         headers: {
@@ -7483,11 +7668,10 @@ export async function googleWeather(query: string): Promise<any> {
           Referer: "https://storage.googleapis.com/",
           "X-Goog-Api-Key": process.env.GOOG_WEATHER || "",
         },
-        useH2: true,
       },
     );
 
-    if (k.statusCode !== 200) return { data: null };
+    if (k.status !== 200) return { data: null };
 
     const finalk = await k.json();
     return {
@@ -7531,7 +7715,7 @@ export async function GrokAI(query: string): Promise<any> {
   };
 
   try {
-    const req = await request("https://docs.x.ai/api/chat", {
+    const req = await fetch("https://docs.x.ai/api/chat", {
       method: "POST",
       body: JSON.stringify(bodyhttp),
       headers: {
@@ -7543,21 +7727,21 @@ export async function GrokAI(query: string): Promise<any> {
       },
     });
 
-    if (req.statusCode === 429) {
+    if (req.status === 429) {
       return {
         error: "Rate-limited",
       };
-    } else if (req.statusCode === 403) {
+    } else if (req.status === 403) {
       return {
         error: "Blocked",
       };
-    } else if (req.statusCode !== 200) {
+    } else if (req.status !== 200) {
       return {
         data: null,
       };
     }
 
-    const res = await req.text;
+    const res = await req.text();
     const response = res
       .split("\n")
       .filter((line: string) => line.startsWith("data: "))
@@ -7681,17 +7865,14 @@ export async function DriftProfile(query: string): Promise<any> {
 
   for (let attempts = 0; attempts < 3; attempts++) {
     try {
-      res = await request(filterurl.toString(), {
-        useH2: true,
-        echConfigDomain: "cloudflare-ech.com",
-        tlsOnly: true,
+      res = await fetch(filterurl.toString(), {
         headers: {
           ...commonHeaders,
           ...(driftCookies ? { cookie: driftCookies } : {}),
         },
       });
 
-      if (res.statusCode !== 403) {
+      if (responseStatus(res) !== 403) {
         break;
       }
 
@@ -7718,7 +7899,7 @@ export async function DriftProfile(query: string): Promise<any> {
         }
 
         res = {
-          statusCode: browserRes.status ?? 200,
+          status: browserRes.status ?? 200,
           text: browserRes.html ?? "",
           url: browserRes.url ?? filterurl.toString(),
           headers: browserRes.headers ?? {},
@@ -7730,7 +7911,7 @@ export async function DriftProfile(query: string): Promise<any> {
   }
 
   try {
-    let test = res.text;
+    let test = await responseText(res);
     if (res.url?.includes("/message")) {
       return {
         data: null,
@@ -8098,20 +8279,19 @@ export async function PatreonProfile(query: string): Promise<any> {
   if (!username) return null;
 
   try {
-    const res = await request(`https://www.patreon.com/cw/${username}`, {
-      useH2: true,
+    const res = await fetch(`https://www.patreon.com/cw/${username}`, {
       headers: { ...commonHeaders },
     });
 
-    if (res.statusCode === 404) {
+    if (res.status === 404) {
       return { error: "User not found" };
     }
 
-    if (res.statusCode !== 200) {
+    if (res.status !== 200) {
       return { data: null };
     }
 
-    const html = res.text;
+    const html = await res.text();
     const chunks = html.split("self.__next_f.push(");
     chunks.shift();
 
@@ -8204,27 +8384,24 @@ export async function SaweriaProfile(
       };
     }
 
-    const dataRes = await request(
+    const dataRes = await fetch(
       `https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`,
       {
-        useH2: true,
-        echConfigDomain: "cloudflare-ech.com",
-        tlsOnly: false,
         headers: { ...commonHeaders },
       },
     );
 
-    if (dataRes.statusCode === 403) {
+    if (dataRes.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (dataRes.statusCode === 404 && !refresh_auth) {
+    if (dataRes.status === 404 && !refresh_auth) {
       return await SaweriaProfile(query, true);
     }
 
-    if (dataRes.statusCode !== 200) {
+    if (dataRes.status !== 200) {
       return { data: null };
     }
 
@@ -8267,30 +8444,27 @@ export async function TrakteerProfile(query: string): Promise<any> {
     return null;
 
   try {
-    const res = await request(`https://trakteer.id/${username}`, {
-      useH2: true,
-      echConfigDomain: "cloudflare-ech.com",
-      tlsOnly: false,
+    const res = await fetch(`https://trakteer.id/${username}`, {
       headers: {
         ...commonHeaders,
       },
     });
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (res.statusCode === 404) {
+    if (res.status === 404) {
       return { error: "User not found" };
     }
 
-    if (res.statusCode !== 200) {
+    if (res.status !== 200) {
       return { data: null };
     }
 
-    const html = res.text;
+    const html = await res.text();
     const { document } = parseHTML(html);
     const appDiv = document.querySelector("#app");
     const dataPage = appDiv?.getAttribute("data-page");
@@ -8324,31 +8498,28 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
   if (!username) return null;
 
   try {
-    const res = await request(`https://sociabuzz.com/${username}/tribe`, {
-      useH2: true,
-      echConfigDomain: "cloudflare-ech.com",
-      tlsOnly: false,
-      allowRedirects: false,
+    const res = await fetch(`https://sociabuzz.com/${username}/tribe`, {
+      redirect: "manual" as const,
       headers: {
         ...commonHeaders,
       },
     });
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (res.statusCode === 307) {
+    if (res.status === 307) {
       return { error: "User not found" };
     }
 
-    if (res.statusCode !== 200) {
+    if (res.status !== 200) {
       return { data: null };
     }
 
-    const html = res.text;
+    const html = await res.text();
     const match = html.match(/const userdata = (\{[\s\S]*?\});/);
     const userDataStr = match ? match[1] : null;
     if (!userDataStr) return { data: null };
@@ -8399,7 +8570,6 @@ export async function GunsProfile(query: string): Promise<any> {
   for (let attempts = 0; attempts < 3; attempts++) {
     try {
       res = await (httpcloakGet as any)(`https://guns.lol/${username}`, {
-        useH2: true,
         echConfigDomain: "cloudflare-ech.com",
         tlsOnly: true,
         headers: {
@@ -8408,16 +8578,17 @@ export async function GunsProfile(query: string): Promise<any> {
         },
       });
 
-      if (res.statusCode === 429) {
+      const status = responseStatus(res);
+
+      if (status === 429) {
         return { error: "IP Blocked" };
       }
 
-      const { document: doc } = parseHTML(res.text || "");
+      const html = await responseText(res);
+      const { document: doc } = parseHTML(html);
       const pageTitle = doc.querySelector("title")?.textContent?.trim() || "";
       const isChallenge =
-        res.statusCode === 401 ||
-        res.statusCode === 403 ||
-        pageTitle === "Just a moment...";
+        status === 401 || status === 403 || pageTitle === "Just a moment...";
 
       if (!isChallenge) {
         break;
@@ -8453,7 +8624,7 @@ export async function GunsProfile(query: string): Promise<any> {
         }
 
         res = {
-          statusCode: browserRes.status ?? 200,
+          status: browserRes.status ?? 200,
           text: browserRes.html ?? "",
           url: browserRes.url ?? `https://guns.lol/${username}`,
           headers: browserRes.headers ?? {},
@@ -8468,8 +8639,8 @@ export async function GunsProfile(query: string): Promise<any> {
   }
 
   try {
-    const html = res.text;
-    if (res.statusCode !== 200) {
+    const html = await responseText(res);
+    if (responseStatus(res) !== 200) {
       return { data: null };
     }
 
@@ -8591,16 +8762,13 @@ export async function RageProfile(query: string): Promise<any> {
 
   for (let attempts = 0; attempts < 3; attempts++) {
     try {
-      res = await request(`https://rage.wtf/${username}`, {
-        useH2: true,
-        echConfigDomain: "cloudflare-ech.com",
-        tlsOnly: true,
+      res = await fetch(`https://rage.wtf/${username}`, {
         headers: {
           ...commonHeaders,
         },
       });
 
-      if (res.statusCode !== 403) {
+      if (res.status !== 403) {
         break;
       }
 
@@ -8613,8 +8781,8 @@ export async function RageProfile(query: string): Promise<any> {
   }
 
   try {
-    const html = res.text;
-    if (res.statusCode !== 200) {
+    const html = await res.text();
+    if (res.status !== 200) {
       return { data: null };
     }
 
@@ -8731,16 +8899,13 @@ export async function HauntProfile(query: string): Promise<any> {
 
   for (let attempts = 0; attempts < 3; attempts++) {
     try {
-      res = await request(`https://haunt.gg/${username}`, {
-        useH2: true,
-        echConfigDomain: "cloudflare-ech.com",
-        tlsOnly: true,
+      res = await fetch(`https://haunt.gg/${username}`, {
         headers: {
           ...commonHeaders,
         },
       });
 
-      if (res.statusCode !== 403) {
+      if (res.status !== 403) {
         break;
       }
 
@@ -8753,8 +8918,8 @@ export async function HauntProfile(query: string): Promise<any> {
   }
 
   try {
-    const html = res.text;
-    if (res.statusCode !== 200) {
+    const html = await res.text();
+    if (res.status !== 200) {
       return { data: null };
     }
 
@@ -8762,9 +8927,12 @@ export async function HauntProfile(query: string): Promise<any> {
     chunks.shift();
 
     const rscEntries: Record<string, any> = {};
-    let pendingText:
-      | { key: string; length: number; value: string; byteLength: number }
-      | null = null;
+    let pendingText: {
+      key: string;
+      length: number;
+      value: string;
+      byteLength: number;
+    } | null = null;
 
     const parseRscValue = (value: string): any => {
       try {
@@ -8915,7 +9083,8 @@ export async function HauntProfile(query: string): Promise<any> {
 
         const [, refKey, refPath] = refMatch;
         const resolvingKey = `${refKey}:${refPath || ""}`;
-        if (!(refKey in rscEntries) || resolving.has(resolvingKey)) return value;
+        if (!(refKey in rscEntries) || resolving.has(resolvingKey))
+          return value;
 
         resolving.add(resolvingKey);
         const target = refPath
@@ -8972,7 +9141,7 @@ export async function HauntProfile(query: string): Promise<any> {
     if (!finalresult?.user) return { data: null };
 
     return {
-      data: finalresult
+      data: finalresult,
     };
   } catch (e) {
     console.error(e);
@@ -11769,11 +11938,11 @@ export const ImgurPost = async (
   }
 
   try {
-    const req = await request(
+    const req = await fetch(
       `https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`,
-      { headers: { ...commonHeaders }, timeout: 90000 },
+      { headers: { ...commonHeaders }, signal: AbortSignal.timeout(90000) },
     );
-    if (req.statusCode === 401 || req.statusCode === 400)
+    if (req.status === 401 || req.status === 400)
       return await ImgurPost(query, true);
     const res: any = await req.json();
     return { data: res?.posts || null };
@@ -11796,7 +11965,7 @@ export const Klipy = async function Klipy(que: string, type?: string) {
   try {
     const queryType = getQueryType(type);
     const [req, req2, req3] = await Promise.all([
-      request(
+      fetch(
         `https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`,
         {
           headers: {
@@ -11804,10 +11973,9 @@ export const Klipy = async function Klipy(que: string, type?: string) {
             Referer: "https://klipy.com",
             Origin: "https://klipy.com",
           },
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`,
         {
           headers: {
@@ -11815,10 +11983,9 @@ export const Klipy = async function Klipy(que: string, type?: string) {
             Referer: "https://klipy.com",
             Origin: "https://klipy.com",
           },
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`,
         {
           headers: {
@@ -11826,7 +11993,6 @@ export const Klipy = async function Klipy(que: string, type?: string) {
             Referer: "https://klipy.com",
             Origin: "https://klipy.com",
           },
-          useH2: true,
         },
       ),
     ]);
@@ -11840,7 +12006,7 @@ export const Klipy = async function Klipy(que: string, type?: string) {
       res3 = await req3.json();
     } catch {}
 
-    if (req.statusCode === 200) {
+    if (req.status === 200) {
       const res: any = await req.json();
       return {
         suggestion: res2?.data || null,
@@ -11849,7 +12015,7 @@ export const Klipy = async function Klipy(que: string, type?: string) {
       };
     }
 
-    return { error: `${req.statusCode} - Can't process this` };
+    return { error: `${req.status} - Can't process this` };
   } catch (e) {
     console.error(e);
     return null;
@@ -11870,26 +12036,25 @@ export const infoKlipy = async function infoKlipy(url: string) {
       return { error: "Invalid Klipy URL path" };
     }
 
-    const req = await request(
+    const req = await fetch(
       `https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (req.statusCode === 404) {
-      return { error: `${req.statusCode} - Not found` };
+    if (req.status === 404) {
+      return { error: `${req.status} - Not found` };
     }
 
-    if (req.statusCode === 200) {
+    if (req.status === 200) {
       const res: any = await req.json();
       return { data: res?.data || null };
     }
 
-    return { error: `${req.statusCode} - Can't process this` };
+    return { error: `${req.status} - Can't process this` };
   } catch (e) {
     console.error(e);
     return null;
@@ -12066,7 +12231,7 @@ export const PatreonSearch = async (query: string): Promise<any> => {
   if (!query) return null;
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://www.patreon.com/api/search?q=${encodeURIComponent(query)}`,
       {
         headers: {
@@ -12093,7 +12258,7 @@ export const Trakteer = async (query: string): Promise<any> => {
   if (!query) return null;
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://api.trakteer.id/v3/discover/search?limit=10&keywords=${encodeURIComponent(query)}`,
       {
         headers: {
@@ -12137,7 +12302,7 @@ export const IMDB = async (query: string): Promise<any> => {
         version: 1,
       },
     };
-    const res = await request(
+    const res = await fetch(
       `https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`,
       {
         headers: {
@@ -12226,14 +12391,14 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
   };
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://imgflip.com/search?q=${encodeURIComponent(query)}`,
       {
         headers: { ...commonHeaders },
       },
     );
 
-    const html: string = await res.text;
+    const html: string = await res.text();
 
     const { document } = parseHTML(html);
     const container = document.querySelector("#s-results");
@@ -12308,7 +12473,7 @@ export const OtoDB = async (query: string): Promise<any> => {
   if (!query) return null;
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`,
       {
         headers: {
@@ -12723,17 +12888,16 @@ export const Audiomack = async function Audiomack(
       ),
     );
 
-    const pull = await request(
+    const pull = await fetch(
       `https://api.audiomack.com/v1/search?${searchParams}`,
       {
         headers: { ...commonHeaders },
-        useH2: true,
       },
     );
 
-    if (pull.statusCode !== 200) {
+    if (pull.status !== 200) {
       return {
-        error: `${pull.statusCode} - Can't process this`,
+        error: `${pull.status} - Can't process this`,
       };
     }
 
@@ -12756,7 +12920,7 @@ export const CrunchySearch = async function CrunchySearch(
       keycrunchy = await crunchyKey();
     }
 
-    const per = await request(
+    const per = await fetch(
       `https://beta-api.crunchyroll.com/content/v2/discover/search?q=${encodeURIComponent(que)}&n=20&type=series,episode,top_results&ratings=true&locale=en`,
       {
         headers: {
@@ -12764,17 +12928,16 @@ export const CrunchySearch = async function CrunchySearch(
           Accept: "application/json",
           Authorization: "Bearer " + keycrunchy,
         },
-        useH2: true,
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    if (per.statusCode === 400 || per.statusCode === 401) {
+    if (per.status === 400 || per.status === 401) {
       return await CrunchySearch(que, true);
     }
 
@@ -12795,23 +12958,22 @@ export const SafeBooru = async function SafeBooru(que: string) {
   if (!que) return null;
 
   try {
-    const per = await request(
+    const per = await fetch(
       `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (per.statusCode === 403) {
+    if (per.status === 403) {
       return {
         error: "Cloudflare Turnstile asking to verify you're not a bot",
       };
     }
 
-    const res: any = await per.text;
+    const res: any = await per.text();
     let parseres: any = {};
     try {
       parseres = JSON.parse(res);
@@ -12825,13 +12987,12 @@ export const SafeBooru = async function SafeBooru(que: string) {
 
     const finalres = await Promise.allSettled(
       parseres.map(async (e: any) => {
-        const req2 = await request(
+        const req2 = await fetch(
           `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(e.value)}&limit=100`,
           {
             headers: {
               ...commonHeaders,
             },
-            useH2: true,
           },
         );
 
@@ -12864,11 +13025,10 @@ export const Konachan = async function Konachan(que: string) {
 
   try {
     if (!konaSummary || konaSummary.length === 0) {
-      const pullinfo = await request(`https://konachan.net/tag/summary.json`, {
+      const pullinfo = await fetch(`https://konachan.net/tag/summary.json`, {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       });
 
       const lookinfo: any = await pullinfo.json();
@@ -12891,13 +13051,12 @@ export const Konachan = async function Konachan(que: string) {
 
     const finalres = await Promise.allSettled(
       specificTags.map(async (tag: string) => {
-        const req2 = await request(
+        const req2 = await fetch(
           `https://konachan.net/post.json?limit=20&tags=${encodeURIComponent(tag)}`,
           {
             headers: {
               ...commonHeaders,
             },
-            useH2: true,
           },
         );
 
@@ -12925,18 +13084,17 @@ export const Tumblr = async (query: string): Promise<any> => {
   if (!query) return null;
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://api.tumblr.com/v2/timeline/search?limit=40&query=${encodeURIComponent(query)}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`,
       {
         headers: {
           ...commonHeaders,
           Authorization: "Bearer " + keytumblr,
         },
-        useH2: true,
       },
     );
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
@@ -12968,7 +13126,7 @@ export const googleImgSearch = async (
     const dateRestrictParam = sort === "latest" ? "&dateRestrict=d1" : "";
 
     const fetchPage = (start: number) => {
-      return request(
+      return fetch(
         `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&prettyPrint=false&searchType=image&num=10&start=${start}${dateRestrictParam}&cx=${process.env.GOOG_CX}`,
         {
           headers: {
@@ -12976,43 +13134,41 @@ export const googleImgSearch = async (
             Referer: process.env.GOOG_RX || "",
             "X-Goog-Api-Key": process.env.GOOG_EX || "",
           },
-          useH2: true,
         },
       );
     };
 
     const [res1, res2] = await Promise.all([
       fetchPage(1).catch(
-        () => ({ statusCode: 500, json: async () => ({}) }) as any,
+        () => ({ status: 500, json: async () => ({}) }) as any,
       ),
       fetchPage(11).catch(
-        () => ({ statusCode: 500, json: async () => ({}) }) as any,
+        () => ({ status: 500, json: async () => ({}) }) as any,
       ),
     ]);
 
-    const isOk1 = res1.statusCode === 200;
-    const isOk2 = res2.statusCode === 200;
+    const isOk1 = res1.status === 200;
+    const isOk2 = res2.status === 200;
 
     if (!isOk1 && !isOk2) {
-      if (res1.statusCode === 503) return { error: "Service unavailable" };
-      if (res1.statusCode === 429) return { error: "Rate-limited" };
+      if (res1.status === 503) return { error: "Service unavailable" };
+      if (res1.status === 429) return { error: "Rate-limited" };
       return null;
     }
 
-    const response1 = isOk1 ? await res1.json() : {};
-    const response2 = isOk2 ? await res2.json() : {};
+    const response1: any = isOk1 ? await res1.json() : {};
+    const response2: any = isOk2 ? await res2.json() : {};
 
-    const res = await request(
+    const res = await fetch(
       `https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    const resText = res.text;
+    const resText = await res.text();
     let suggestions: string[] = [];
     try {
       const jsonString = resText
@@ -13070,29 +13226,28 @@ export const googleImgSearchV2 = async (
       googleImgSpAuth = await googleAuthKey();
     }
 
-    const res = await request(
+    const res = await fetch(
       `https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&searchtype=image&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Google asking to verify you're not a bot",
       };
     }
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    let raw = res.text;
+    let raw = await res.text();
 
     if (!raw) {
       return { data: null };
@@ -13112,8 +13267,8 @@ export const googleImgSearchV2 = async (
     if (
       response?.error?.code === 400 ||
       response?.error?.code === 401 ||
-      res.statusCode === 400 ||
-      res.statusCode === 401
+      res.status === 400 ||
+      res.status === 401
     ) {
       return await googleImgSearchV2(query, true);
     }
@@ -13123,17 +13278,16 @@ export const googleImgSearchV2 = async (
       return await googleImgSearchV2(query);
     }
 
-    const res2 = await request(
+    const res2 = await fetch(
       `https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    const resText = res2.text;
+    const resText = await res2.text();
     let suggestions: string[] = [];
     try {
       const jsonString = resText
@@ -13178,29 +13332,28 @@ export const googleSearch = async (
       googleImgSpAuth = await googleAuthKey();
     }
 
-    const res = await request(
+    const res = await fetch(
       `https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Google asking to verify you're not a bot",
       };
     }
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    let raw = res.text;
+    let raw = await res.text();
 
     if (!raw) {
       return { data: null };
@@ -13220,8 +13373,8 @@ export const googleSearch = async (
     if (
       response?.error?.code === 400 ||
       response?.error?.code === 401 ||
-      res.statusCode === 400 ||
-      res.statusCode === 401
+      res.status === 400 ||
+      res.status === 401
     ) {
       return await googleSearch(query, true);
     }
@@ -13231,17 +13384,16 @@ export const googleSearch = async (
       return await googleSearch(query);
     }
 
-    const res2 = await request(
+    const res2 = await fetch(
       `https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    const resText = res2.text;
+    const resText = await res2.text();
     let suggestions: string[] = [];
     try {
       const jsonString = resText
@@ -13283,31 +13435,31 @@ export const duckSearch = async (query: string): Promise<any> => {
   if (!query) return null;
 
   try {
-    const res = await request(
+    const res = await fetch(
       `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    const linkstarget = res.text.split("initialize('")?.[1]?.split("',")?.[0];
+    const duckHtml = await res.text();
+    const linkstarget = duckHtml.split("initialize('")?.[1]?.split("',")?.[0];
 
-    const res2 = await request(`https://links.duckduckgo.com${linkstarget}`, {
+    const res2 = await fetch(`https://links.duckduckgo.com${linkstarget}`, {
       headers: {
         ...commonHeaders,
         Accept: "*/*",
@@ -13316,28 +13468,27 @@ export const duckSearch = async (query: string): Promise<any> => {
         "Sec-Fetch-Mode": "no-cors",
         "Sec-Fetch-Site": "same-site",
       },
-      useH2: true,
     });
 
-    if (res2.statusCode === 403) {
+    if (res2.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res2.statusCode === 429) {
+    if (res2.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    if (res2.statusCode === 202) {
+    if (res2.status === 202) {
       return {
         error: "Can't process due unusual requests",
       };
     }
 
-    const final = res2.text;
+    const final = await res2.text();
 
     let instantAnswers: any = null;
     try {
@@ -13413,20 +13564,19 @@ export const duckSearch = async (query: string): Promise<any> => {
       }
     } catch {}
 
-    const res3 = await request(
+    const res3 = await fetch(
       `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`,
       {
         headers: {
           ...commonHeaders,
         },
-        useH2: true,
       },
     );
 
     let autotext: any = {};
 
     try {
-      autotext = JSON.parse(res3.text);
+      autotext = JSON.parse(await res3.text());
     } catch {}
 
     return {
@@ -13455,26 +13605,26 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 
   try {
     const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`;
-    const res = await request(landingUrl, {
+    const res = await fetch(landingUrl, {
       headers: {
         ...commonHeaders,
       },
-      useH2: true,
     });
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    const vqd = res.text.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
+    const duckHtml = await res.text();
+    const vqd = duckHtml.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
     if (!vqd) {
       return {
         error: "Can't get vqd token",
@@ -13490,47 +13640,45 @@ export const duckImageSearch = async (query: string): Promise<any> => {
     };
 
     const [res2, res3] = await Promise.all([
-      request(
+      fetch(
         `https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1`,
         {
           headers: imageHeaders,
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`,
         {
           headers: {
             ...commonHeaders,
           },
-          useH2: true,
         },
       ).catch(() => null),
     ]);
 
-    if (res2.statusCode === 403) {
+    if (res2.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res2.statusCode === 429) {
+    if (res2.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    if (res2.statusCode === 202) {
+    if (res2.status === 202) {
       return {
         error: "Can't process due unusual requests",
       };
     }
 
-    const response = JSON.parse(res2.text);
+    const response = JSON.parse(await res2.text());
     let autotext: any = [];
 
     try {
-      autotext = res3 ? JSON.parse(res3.text) : [];
+      autotext = res3 ? JSON.parse(await res3.text()) : [];
     } catch {}
 
     return {
@@ -13551,26 +13699,26 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 
   try {
     const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=videos&ia=videos`;
-    const res = await request(landingUrl, {
+    const res = await fetch(landingUrl, {
       headers: {
         ...commonHeaders,
       },
-      useH2: true,
     });
 
-    if (res.statusCode === 403) {
+    if (res.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res.statusCode === 429) {
+    if (res.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    const vqd = res.text.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
+    const duckHtml = await res.text();
+    const vqd = duckHtml.match(/vqd=['"]?([^'"&<>\\]+)/)?.[1];
     if (!vqd) {
       return {
         error: "Can't get vqd token",
@@ -13586,47 +13734,45 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
     };
 
     const [res2, res3] = await Promise.all([
-      request(
+      fetch(
         `https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2`,
         {
           headers: videoHeaders,
-          useH2: true,
         },
       ),
-      request(
+      fetch(
         `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`,
         {
           headers: {
             ...commonHeaders,
           },
-          useH2: true,
         },
       ).catch(() => null),
     ]);
 
-    if (res2.statusCode === 403) {
+    if (res2.status === 403) {
       return {
         error: "Blocked / Challenge",
       };
     }
 
-    if (res2.statusCode === 429) {
+    if (res2.status === 429) {
       return {
         error: "Rate-limited",
       };
     }
 
-    if (res2.statusCode === 202) {
+    if (res2.status === 202) {
       return {
         error: "Can't process due unusual requests",
       };
     }
 
-    const response = JSON.parse(res2.text);
+    const response = JSON.parse(await res2.text());
     let autotext: any = [];
 
     try {
-      autotext = res3 ? JSON.parse(res3.text) : [];
+      autotext = res3 ? JSON.parse(await res3.text()) : [];
     } catch {}
 
     return {
@@ -13895,13 +14041,12 @@ export const EmojiKitchen = async function EmojiKitchen(
 
   const fetchEmoji = async (query: string) => {
     const url = `https://tenor.googleapis.com/v2/featured?key=${process.env.GOOG_TENOR_EMOJI}&client_key=emoji_kitchen_funbox&q=${encodeURIComponent(query)}&collection=emoji_kitchen_v6`;
-    const res = await request(url, {
+    const res = await fetch(url, {
       headers: {
         ...commonHeaders,
       },
-      useH2: true,
     });
-    if (res.statusCode === 200) {
+    if (res.status === 200) {
       const data = (await res.json()) as any;
       if (data.results && data.results.length > 0) {
         return data.results[0];
@@ -14647,42 +14792,42 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
   if (!query) return null;
   try {
     const [res, res2, res3, res4, res5, res6] = await Promise.all([
-      request(
+      fetch(
         `https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`,
         {
           method: "GET",
           headers: commonHeaders,
         },
       ),
-      request(
+      fetch(
         `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`,
         {
           method: "GET",
           headers: commonHeaders,
         },
       ),
-      request(
+      fetch(
         `https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`,
         {
           method: "GET",
           headers: commonHeaders,
         },
       ),
-      request(
+      fetch(
         `https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`,
         {
           method: "GET",
           headers: commonHeaders,
         },
       ),
-      request(
+      fetch(
         `https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`,
         {
           method: "GET",
           headers: commonHeaders,
         },
       ),
-      request(
+      fetch(
         `https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`,
         {
           method: "GET",
@@ -14693,7 +14838,7 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
 
     const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([
       res.json(),
-      res2.text,
+      res2.text(),
       res3.json(),
       res4.json(),
       res5.json(),

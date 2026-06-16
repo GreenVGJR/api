@@ -24,6 +24,7 @@ const initSPA = () => {
                     <a href="/playground" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="playground">Playground</a>
                     <a href="/terms" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="terms">Terms</a>
                     <a href="/privacy" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="privacy">Privacy</a>
+                    <a href="/logs" target="_blank" rel="noopener noreferrer" class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors">Logs</a>
                 </nav>
             </aside>
 

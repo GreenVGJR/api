@@ -11,6 +11,7 @@ import crypto from "crypto";
 import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
+import { getLastRequestedLogs } from "./functions/logs.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -764,6 +765,7 @@ const BACK_CHALLENGE_PREFIXES = [
   "/lyrics",
   "/tools",
   "/info",
+  "/logs",
 ];
 
 function getBackChallengeValue(c: Context): string {
@@ -961,6 +963,39 @@ if (BUILD_ID) {
   });
 }
 
+function cookieChallengeIsValid(c: Context, cookieValue: any) {
+  if (!cookieValue) return false;
+  const ua = c.req.header("user-agent") || "";
+  const key = crypto.createHash("sha512").update(ua).digest();
+  let decoded: string;
+  try {
+    const raw = Buffer.from(cookieValue, "base64url");
+    const unmasked = Buffer.from(raw.map((b, i) => b ^ key[i % key.length]));
+    decoded = unmasked.toString("utf8");
+  } catch {
+    return false;
+  }
+  const parts = decoded.split(".");
+  if (parts.length !== 3) return false;
+  const [encrypted, nonce, canvasHash] = parts;
+  if (!/^[0-9a-f]{128}$/i.test(canvasHash)) return false;
+  if (!isBackChallengeProofValid(encrypted, nonce)) return false;
+  const decrypted = decryptChallengeValue(encrypted);
+  if (!decrypted) return false;
+  const colonIdx = decrypted.lastIndexOf(":");
+  if (colonIdx === -1) return false;
+  const cookieHash = decrypted.slice(0, colonIdx);
+  const cookieTs = Number(decrypted.slice(colonIdx + 1));
+  if (!cookieTs || Number.isNaN(cookieTs)) return false;
+  const ipHash = crypto
+    .createHash("md5")
+    .update(c.req.header("cf-connecting-ip") || "")
+    .digest("hex");
+  return (
+    cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
+  );
+};
+
 app.use("*", async (c: Context, next: Next) => {
   const url = new URL(c.req.url);
   if (!isBackChallengePath(url.pathname)) {
@@ -970,38 +1005,7 @@ app.use("*", async (c: Context, next: Next) => {
 
   const challengeValue = getBackChallengeValue(c);
   const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
-  const isValid = (() => {
-    if (!cookieValue) return false;
-    const ua = c.req.header("user-agent") || "";
-    const key = crypto.createHash("sha512").update(ua).digest();
-    let decoded: string;
-    try {
-      const raw = Buffer.from(cookieValue, "base64url");
-      const unmasked = Buffer.from(raw.map((b, i) => b ^ key[i % key.length]));
-      decoded = unmasked.toString("utf8");
-    } catch {
-      return false;
-    }
-    const parts = decoded.split(".");
-    if (parts.length !== 3) return false;
-    const [encrypted, nonce, canvasHash] = parts;
-    if (!/^[0-9a-f]{128}$/i.test(canvasHash)) return false;
-    if (!isBackChallengeProofValid(encrypted, nonce)) return false;
-    const decrypted = decryptChallengeValue(encrypted);
-    if (!decrypted) return false;
-    const colonIdx = decrypted.lastIndexOf(":");
-    if (colonIdx === -1) return false;
-    const cookieHash = decrypted.slice(0, colonIdx);
-    const cookieTs = Number(decrypted.slice(colonIdx + 1));
-    if (!cookieTs || Number.isNaN(cookieTs)) return false;
-    const ipHash = crypto
-      .createHash("md5")
-      .update(c.req.header("cf-connecting-ip") || "")
-      .digest("hex");
-    return (
-      cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
-    );
-  })();
+  const isValid = cookieChallengeIsValid(c, cookieValue);
   if (isValid || !isBrowserBackChallengeRequest(c)) {
     await next();
     return;
@@ -1043,6 +1047,26 @@ app.get("/err/451", (c: Context) => {
     "public, max-age=3600, stale-while-revalidate=86400",
   );
   return c.body(null, 451);
+});
+
+app.get("/logs", async (c: Context) => {
+  const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
+  if(!cookieChallengeIsValid(c, cookieValue)) return c.body(null, 403);
+  c.header("Refresh", "3");
+  c.header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  c.header("Content-Type", "text/plain");
+
+  return stream(c, async (s) => {
+    await s.write(""); // Initial flush
+
+    await s.write(
+      JSON.stringify({
+        _message: "Experimental endpoint. Refreshing every 3 seconds.",
+        limit: 30,
+        requested: getLastRequestedLogs(),
+      }, null, 1),
+    );
+  });
 });
 
 function setPlaygroundAssetCache(c: Context) {

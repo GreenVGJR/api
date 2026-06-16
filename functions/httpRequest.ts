@@ -5,18 +5,28 @@ import crypto from "crypto";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import config from "../config.json" with { type: "json" };
 import { commonHeaders } from "./request.js";
+import { recordRequestLog } from "./logs.js";
 
 const { generate_hash } = config;
 
+const logResponse = <T extends Response>(
+  c: Context,
+  response: T,
+  statusCode = response.status,
+) => {
+  recordRequestLog(c, statusCode);
+  return response;
+};
+
 export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   try {
-    if (c.req.method !== "GET") return c.text("", 200);
+    if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
   } catch {
-    return c.text("", 200);
+    return logResponse(c, c.text("", 200));
   }
 
   if (Object.entries(c.req.queries()).length >= 3) {
-    return c.text("Forbidden", 403);
+    return logResponse(c, c.text("Forbidden", 403));
   }
 
   c.header("X-Enc-Route", "v2");
@@ -42,49 +52,52 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   c.header("Content-Type", contentType);
   c.header("Cache-Control", "public, max-age=30, must-revalidate");
 
-  return stream(c, async (s) => {
-    s.onAbort(() => {
-      return;
-    });
+  return logResponse(
+    c,
+    stream(c, async (s) => {
+      s.onAbort(() => {
+        return;
+      });
 
-    await s.write(new Uint8Array());
-
-    if (c.req.raw.signal.aborted) return;
-
-    try {
-      let resolvedBody = typeof body === "function" ? body() : body;
-      if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+      await s.write(new Uint8Array());
 
       if (c.req.raw.signal.aborted) return;
 
-      if (resolvedBody?.ok === false) {
-        console.error(
-          `blobDispatch: Upstream returned status ${resolvedBody.status}`,
-        );
-        return;
-      }
+      try {
+        let resolvedBody = typeof body === "function" ? body() : body;
+        if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
 
-      const dataToPipe = resolvedBody?.body || resolvedBody;
-      if (dataToPipe) {
-        if (dataToPipe.getReader || dataToPipe.pipeTo) {
-          await s.pipe(dataToPipe);
-        } else if (dataToPipe.pipe) {
-          const { Readable } = await import("stream");
+        if (c.req.raw.signal.aborted) return;
 
-          await s.pipe(Readable.toWeb(dataToPipe));
-        } else {
-          await s.write(dataToPipe);
+        if (resolvedBody?.ok === false) {
+          console.error(
+            `blobDispatch: Upstream returned status ${resolvedBody.status}`,
+          );
+          return;
         }
-      }
-    } catch (err) {}
-  });
+
+        const dataToPipe = resolvedBody?.body || resolvedBody;
+        if (dataToPipe) {
+          if (dataToPipe.getReader || dataToPipe.pipeTo) {
+            await s.pipe(dataToPipe);
+          } else if (dataToPipe.pipe) {
+            const { Readable } = await import("stream");
+
+            await s.pipe(Readable.toWeb(dataToPipe));
+          } else {
+            await s.write(dataToPipe);
+          }
+        }
+      } catch (err) {}
+    }),
+  );
 };
 
 export const dispatch = async (c: Context, promiseFactory: any) => {
   try {
-    if (c.req.method !== "GET") return c.text("", 200);
+    if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
   } catch {
-    return c.text("", 200);
+    return logResponse(c, c.text("", 200));
   }
 
   if (generate_hash) {
@@ -128,7 +141,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
         (providedQHash !== qHash &&
           (isNaN(ts) || new String(ts).length !== 13)))
     ) {
-      return c.text("Forbidden", 403);
+      return logResponse(c, c.text("Forbidden", 403));
     }
 
     if (
@@ -153,9 +166,9 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
       });
       if (c.req.header("sec-fetch-site") === "none") {
         c.header("Refresh", "0, url=" + newUrl);
-        return c.text("", 303);
+        return logResponse(c, c.text("", 303));
       } else {
-        return c.redirect(newUrl, 302);
+        return logResponse(c, c.redirect(newUrl, 302));
       }
     }
 
@@ -170,16 +183,19 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
         checkcookie !== letSh.split("").reverse().join("") &&
         c.req.header("referer")
       ) {
-        return c.json(
-          ["Signature mismatch", "Refresh this page for gain access"],
-          200,
+        return logResponse(
+          c,
+          c.json(
+            ["Signature mismatch", "Refresh this page for gain access"],
+            200,
+          ),
         );
       }
     }
 
     if (timeDiff > 1000 && !isForceRefresh) {
       c.header("X-If-Cache", "true");
-      return c.body(null, 304);
+      return logResponse(c, c.body(null, 304));
     }
   }
 
@@ -195,37 +211,40 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
       : "public, max-age=10, must-revalidate",
   );
 
-  return stream(c, async (stream) => {
-    stream.onAbort(() => {
-      return;
-    });
+  return logResponse(
+    c,
+    stream(c, async (stream) => {
+      stream.onAbort(() => {
+        return;
+      });
 
-    if (c.req.raw.signal.aborted) return;
+      if (c.req.raw.signal.aborted) return;
 
-    const [data] = await Promise.all([
-      Promise.resolve()
-        .then(() =>
-          typeof promiseFactory === "function"
-            ? promiseFactory()
-            : promiseFactory,
-        )
-        .catch((err) => {
-          console.error("Promise error:", err);
-          return null;
-        }),
-      stream.write(""),
-    ]);
+      const [data] = await Promise.all([
+        Promise.resolve()
+          .then(() =>
+            typeof promiseFactory === "function"
+              ? promiseFactory()
+              : promiseFactory,
+          )
+          .catch((err) => {
+            console.error("Promise error:", err);
+            return null;
+          }),
+        stream.write(""),
+      ]);
 
-    if (c.req.raw.signal.aborted) return;
+      if (c.req.raw.signal.aborted) return;
 
-    if (!data) {
-      await stream.write("null");
-    } else if (typeof data === "object") {
-      await stream.write(JSON.stringify(data));
-    } else {
-      await stream.write(String(data));
-    }
-  });
+      if (!data) {
+        await stream.write("null");
+      } else if (typeof data === "object") {
+        await stream.write(JSON.stringify(data));
+      } else {
+        await stream.write(String(data));
+      }
+    }),
+  );
 };
 
 export const processImage = async (c: Context, url?: string) => {

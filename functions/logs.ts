@@ -31,25 +31,10 @@ function maskConnectingIp(ip?: string): string {
   return rawIp.length <= 4 ? "xxx" : `${rawIp.slice(0, 4)}xxx`;
 }
 
-export function recordRequestLog(
-  c: Context,
-  statusCode: number,
-  allowedQueryKeys?: Set<string>,
-) {
+export function recordRequestLog(c: Context, statusCode: number) {
   const country = c.req.header("cf-ipcountry") || "null";
   const requester = `${country}-${maskConnectingIp(c.req.header("cf-connecting-ip"))}`;
-  const path = (() => {
-    try {
-      const url = new URL(c.req.url);
-      const query = Array.from(url.searchParams.keys())
-        .filter((key) => !allowedQueryKeys || allowedQueryKeys.has(key))
-        .map((key) => `${encodeURIComponent(key)}=...`)
-        .join("&");
-      return `${url.pathname}${query ? `?${query}` : ""}`;
-    } catch {
-      return c.req.path;
-    }
-  })();
+  const path = c.req.path;
   const UA = c.req.header("user-agent") || "null";
 
   requestLogs.unshift({

@@ -23,28 +23,6 @@ import {
 } from "./musicChallenges.ts";
 import { recordRequestLog } from "./logs.js";
 
-const MUSIC_LOG_QUERY_KEYS = new Set([
-  "token",
-  "guildId",
-  "voiceId",
-  "authorId",
-  "q",
-  "platform",
-  "isDeaf",
-  "247",
-  "force",
-  "fallback",
-  "list",
-  "index",
-  "position",
-  "value",
-  "filter",
-  "type",
-  "status",
-  "content",
-  "limit",
-  "offset",
-]);
 // import { Number_random } from './request.ts';
 
 /**
@@ -296,7 +274,7 @@ export async function createMusicStream(
         await logPromise;
         if (!loggedSuccessfulRequest && data.includes('"status":true')) {
           loggedSuccessfulRequest = true;
-          recordRequestLog(c, 200, MUSIC_LOG_QUERY_KEYS);
+          recordRequestLog(c, 200);
         }
         await safeWrite(data);
       },

@@ -9,7 +9,7 @@ const initSPA = () => {
   const fontsLink = document.createElement("link");
   fontsLink.rel = "stylesheet";
   fontsLink.href =
-    "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap";
+    "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap";
   document.head.appendChild(fontsLink);
 
   // Build the UI structure
@@ -29,9 +29,9 @@ const initSPA = () => {
             </aside>
 
             <div class="flex flex-col flex-1 min-h-0 min-w-0">
-                <div id="urlBar" class="relative mb-3 sm:mb-4 flex-shrink-0">
+                <div id="urlBar" class="relative mb-3 sm:mb-2 flex-shrink-0">
                     <div class="flex items-center bg-black/60 rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
-                        <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" placeholder="https://api.vgjr.top/search/youtube/video?q=" spellcheck="false" autocomplete="off" rows="1"></textarea>
+                        <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" spellcheck="false" autocomplete="off" rows="1"></textarea>
                         <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -40,15 +40,18 @@ const initSPA = () => {
                     </div>
                 </div>
 
-                <div id="categoryTabs" class="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 flex-shrink-0 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar" aria-label="Endpoint categories">
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
-                    <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
-                </div>
+                <aside id="categoryTabsMobile" class="block xl:hidden category-tabs overflow-x-auto flex-shrink-0 min-h-0 border-b border-dark-700 pb-1.5 mb-1.5 no-scrollbar">
+                    <nav class="flex gap-1.5" aria-label="Endpoint categories">
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="discord_tools">Discord</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
+                    </nav>
+                </aside>
 
                 <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[260px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
                     <div id="endpointPane" class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
@@ -57,8 +60,11 @@ const initSPA = () => {
 
                     <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[6] md:flex-[7]">
                         <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
-                            <div id="responseHeader" class="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
-                                <span class="text-xs text-gray-500 font-mono"><span id="responseTitle" class="font-semibold text-gray-400">Response</span> | <span id="uptimeDisplay" class="text-gray-500">00:00:00</span></span>
+                            <div id="responseHeader" class="flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                                <span class="text-xs text-gray-500 font-mono inline-flex items-center">
+                                    <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span> 
+                                    <span id="responseTitle" class="font-semibold text-gray-400">Idle</span>&nbsp;|&nbsp;<span id="uptimeDisplay" class="text-gray-500">00:00:00</span>
+                                </span>
                                 <div id="responseActions" class="flex items-center gap-3">
                                     <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -75,7 +81,7 @@ const initSPA = () => {
                                 </div>
                             </div>
                             <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-3 sm:p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
-                                <span class="text-white-500">What you gonna try?</span>
+                                ${getDefaultResponseHTML()}
                             </div>
                         </div>
 
@@ -101,40 +107,64 @@ const initSPA = () => {
                             <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
                                 <span class="send-label">Send</span><span class="send-arrow">➜</span>
                             </button>
-                            <div id="statusIndicator" class="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-mono w-full md:w-auto">
-                                <span class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500"></span><span id="statusText" class="text-gray-500">Ready</span>
-                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="hidden xl:block" aria-hidden="true"></div>
+            <aside id="categoryTabsDesktop" class="hidden xl:block category-tabs overflow-y-auto flex-shrink-0 xl:h-full min-h-0 border-l border-dark-700 xl:pl-3 pb-1.5 no-scrollbar">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-1 mb-2 flex items-center" style="height: var(--url-bar-h, 44px); align-items: flex-end; padding-bottom: 6px;">Category</div>
+                <nav class="flex flex-col gap-1.5" aria-label="Endpoint categories">
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="search">Search</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="profile">Profile</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="lyrics">Lyrics</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="tools">Tools</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="discord_tools">Discord</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="info">Info</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="download">Download</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="music">Music</button>
+                </nav>
+            </aside>
         </div>
         </section>
-
-        <footer class="mt-3 sm:mt-4 flex flex-col items-center md:flex-row md:items-center md:justify-between text-gray-600 text-xs flex-shrink-0 gap-1.5 sm:gap-2 md:gap-0 pb-1 sm:pb-2 w-full max-w-5xl mx-auto">
-            <div class="flex flex-col items-center md:items-start space-y-0.5 sm:space-y-1">
-                <p>Built with <span class="text-mint-400">♥</span></p>
-                <p class="flex items-center gap-1 sm:gap-1.5">
-                    <span>Made with <a href="https://antigravity.google" target="_blank" class="inline-flex items-center gap-1 hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="inline-flex items-center gap-1 hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></span>
-                </p>
-            </div>
-            <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-gray-500">
-                <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
-            </div>
-        </footer>
     </div>`;
 };
 
+const DEFAULT_PHRASES = ["What you gonna try?", "Hmmm...", "Hello!", "What's on your mind?"];
+function getDefaultResponseHTML() {
+  const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
+  return `<div class="flex flex-col items-center justify-center">
+    <div class="text-white-500 text-m">${randomPhrase}</div>
+    <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
+    <div class="flex items-center gap-2 mt-1 text-dark-500 text-xs flex-wrap justify-center">
+      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
+    </div>
+  </div>`;
+}
+const DEFAULT_RESPONSE_HTML = getDefaultResponseHTML();
+
 // Start SPA immediately
 initSPA();
+
+// Sync --url-bar-h so the right sidebar "Categories" label fills the same
+// vertical space as the URL bar (desktop view gap fix).
+requestAnimationFrame(() => {
+  const _urlBarEl = document.getElementById("urlBar");
+  if (_urlBarEl) {
+    const syncUrlBarH = () => {
+      document.documentElement.style.setProperty("--url-bar-h", _urlBarEl.getBoundingClientRect().height + "px");
+    };
+    syncUrlBarH();
+    new ResizeObserver(syncUrlBarH).observe(_urlBarEl);
+  }
+});
 
 let endpoints = {
   search: [],
   profile: [],
   lyrics: [],
   tools: [],
+  discord_tools: [],
   info: [],
   download: [],
   music: [],
@@ -196,13 +226,18 @@ const clearResponseBtn = document.getElementById("clearResponseBtn");
 const sendBtn = document.getElementById("sendBtn");
 const sendBtnLabel = sendBtn.querySelector(".send-label");
 const responseArea = document.getElementById("responseArea");
-const statusIndicator = document.getElementById("statusIndicator");
-const statusText = document.getElementById("statusText");
+const statusDotEl = document.getElementById("statusDot");
+const statusText = { textContent: "", className: "" };
+
+function setStatusDotColor(colorClass, pulse = false) {
+  if (!statusDotEl) return;
+  statusDotEl.className = `w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full mr-3 bg-${colorClass}${pulse ? " animate-pulse" : ""}`;
+}
 const workspaceGrid = document.getElementById("workspaceGrid");
 const endpointPane = document.getElementById("endpointPane");
 const endpointsList = document.getElementById("endpointsList");
 const tabBtns = document.querySelectorAll(".tab-btn");
-const categoryTabs = document.getElementById("categoryTabs");
+const categoryTabs = document.querySelectorAll(".category-tabs");
 const urlBar = document.getElementById("urlBar");
 const responseHeader = document.getElementById("responseHeader");
 const responseTitle = document.getElementById("responseTitle");
@@ -346,7 +381,7 @@ function renderLegalPage(page) {
     `;
 
   urlBar.classList.add("hidden");
-  categoryTabs.classList.add("hidden");
+  categoryTabs.forEach(el => el.classList.add("tabs-hidden"));
   endpointPane.classList.add("hidden");
   workspaceGrid.style.gridTemplateColumns = "minmax(0, 1fr)";
   responseHeader.classList.add("hidden");
@@ -365,34 +400,29 @@ function renderLegalPage(page) {
 
 function renderPlaygroundPage() {
   urlBar.classList.remove("hidden");
-  categoryTabs.classList.remove("hidden");
+  categoryTabs.forEach(el => el.classList.remove("tabs-hidden"));
   endpointPane.classList.remove("hidden");
   workspaceGrid.style.gridTemplateColumns = "";
   responseHeader.classList.remove("hidden");
   responseActions.classList.remove("hidden");
   sendRow.classList.remove("hidden");
-  responseTitle.textContent = "Response";
+  responseTitle.textContent = "Idle";
   responseArea.classList.add("font-mono");
   responseArea.classList.remove("font-sans");
 
   if (activePage && activePage !== "playground") {
     lastRawResponse = "";
     responseArea.classList.add("empty-state");
-    responseArea.innerHTML =
-      '<span class="text-white-500">What you gonna try?</span>';
-    statusIndicator.querySelector("span:first-child").className =
-      "w-2 h-2 rounded-full bg-gray-500";
-    statusText.textContent = "Ready";
+    responseArea.innerHTML = getDefaultResponseHTML();
+    setStatusDotColor("gray-500");
+    statusText.textContent = "Idle";
     statusText.className = "text-gray-500";
+    responseTitle.textContent = statusText.textContent;
   }
 
   renderEndpoints();
   renderParams();
-  tabBtns.forEach((btn) => btn.classList.remove("active"));
-  const activeTab = document.querySelector(
-    `.tab-btn[data-category="${currentCategory}"]`,
-  );
-  if (activeTab) activeTab.classList.add("active");
+  setActiveCategoryTab();
   activePage = "playground";
 }
 
@@ -455,14 +485,15 @@ urlInput.addEventListener("focus", () => setTimeout(adjustHeight, 0));
 window.addEventListener("resize", adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
-  const statusDot = statusIndicator.querySelector("span:first-child");
+  const statusDot = statusDotEl;
+  responseTitle.textContent = `${status} • ${duration}ms`;
   if (ok) {
-    statusDot.className = "w-2 h-2 rounded-full bg-mint-400";
-    statusText.textContent = `${status} • ${duration}ms`;
+    setStatusDotColor("mint-400");
+    statusText.textContent = "OK";
     statusText.className = "text-mint-400";
   } else {
-    statusDot.className = "w-2 h-2 rounded-full bg-red-500";
-    statusText.textContent = `${status} • ${duration}ms`;
+    setStatusDotColor("red-500");
+    statusText.textContent = "Error";
     statusText.className = "text-red-400";
   }
 }
@@ -614,7 +645,7 @@ function hasConnection() {
 }
 
 function updateConnectionUI() {
-  const statusDot = statusIndicator.querySelector("span:first-child");
+  const statusDot = statusDotEl;
 
   if (!hasConnection()) {
     setSendButtonLabel("No Connection");
@@ -622,9 +653,10 @@ function updateConnectionUI() {
     sendBtn.classList.remove("opacity-70");
 
     if (!isLoading) {
-      statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+      setStatusDotColor("red-500");
       statusText.textContent = "Offline";
       statusText.className = "text-red-400";
+      responseTitle.textContent = statusText.textContent;
     }
     return false;
   }
@@ -634,9 +666,10 @@ function updateConnectionUI() {
     sendBtn.classList.remove("opacity-50", "cursor-not-allowed", "opacity-70");
 
     if (statusText.textContent === "Offline") {
-      statusDot.className = "w-2 h-2 rounded-full bg-gray-500";
-      statusText.textContent = "Ready";
+      setStatusDotColor("gray-500");
+      statusText.textContent = "Idle";
       statusText.className = "text-gray-500";
+      responseTitle.textContent = statusText.textContent;
     }
   }
   return true;
@@ -746,10 +779,10 @@ async function performRequest(targetUrl, retryCount = 0) {
     responseArea.innerHTML =
       '<span class="text-gray-500 flex h-full items-center justify-center">Fetching...</span>';
 
-    statusIndicator.querySelector("span:first-child").className =
-      "w-2 h-2 rounded-full bg-yellow-400 animate-pulse";
+    setStatusDotColor("yellow-400", true);
     statusText.textContent = "Fetching";
     statusText.className = "text-yellow-400";
+    responseTitle.textContent = statusText.textContent;
   }
 
   let resultData = null;
@@ -789,6 +822,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     verboseFetch.response(response);
 
     statusText.textContent = "Fetching";
+    responseTitle.textContent = statusText.textContent;
 
     const contentType = response.headers.get("content-type") || "";
     let duration;
@@ -948,10 +982,10 @@ async function performRequest(targetUrl, retryCount = 0) {
     verboseFetch?.fail(err);
     responseArea.classList.remove("empty-state");
     responseArea.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
-    statusIndicator.querySelector("span:first-child").className =
-      "w-2 h-2 rounded-full bg-red-500";
+    setStatusDotColor("red-500");
     statusText.textContent = "Failed";
     statusText.className = "text-red-400";
+    responseTitle.textContent = statusText.textContent;
   } finally {
     if (retryCount === 0) {
       isLoading = false;
@@ -1397,10 +1431,9 @@ function selectInitialEndpointFromCurrentCategory() {
 
 function setActiveCategoryTab() {
   tabBtns.forEach((btn) => btn.classList.remove("active"));
-  const firstTab = document.querySelector(
-    `.tab-btn[data-category="${currentCategory}"]`,
-  );
-  if (firstTab) firstTab.classList.add("active");
+  document.querySelectorAll(
+    `.tab-btn[data-category="${currentCategory}"]`
+  ).forEach((btn) => btn.classList.add("active"));
 }
 
 async function refreshEndpointsFromJson() {
@@ -1535,11 +1568,7 @@ function attachEndpointListeners() {
       renderEndpoints();
       renderParams();
 
-      tabBtns.forEach((b) => b.classList.remove("active"));
-      const activeTab = document.querySelector(
-        `.tab-btn[data-category="${currentCategory}"]`,
-      );
-      if (activeTab) activeTab.classList.add("active");
+      setActiveCategoryTab();
     });
   });
 }
@@ -1564,9 +1593,8 @@ tabBtns.forEach((btn) => {
       () => {
         if (wasLegalPage) history.pushState({}, "", "/playground");
 
-        tabBtns.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
         currentCategory = nextCategory;
+        setActiveCategoryTab();
         const categoryList = endpoints[currentCategory] || [];
         if (categoryList.length > 0) {
           currentEndpoint = categoryList[0];
@@ -1817,12 +1845,11 @@ copyResponseBtn.addEventListener("click", async () => {
 clearResponseBtn.addEventListener("click", () => {
   lastRawResponse = "";
   responseArea.classList.add("empty-state");
-  responseArea.innerHTML =
-    '<span class="text-white-500">What you gonna try?</span>';
-  statusIndicator.querySelector("span:first-child").className =
-    "w-2 h-2 rounded-full bg-gray-500";
-  statusText.textContent = "Ready";
+  responseArea.innerHTML = getDefaultResponseHTML();
+  setStatusDotColor("gray-500");
+  statusText.textContent = "Idle";
   statusText.className = "text-gray-500";
+  responseTitle.textContent = statusText.textContent;
   updateConnectionUI();
 });
 

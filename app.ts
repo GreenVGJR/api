@@ -38,12 +38,12 @@ const startupDataPromise = Promise.all([
 
 const API_ROUTES = {
   search: [
-    ["/search/google?q=", "string"],
-    ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"],
-    ["/search/googleImage/cse?q=", "string"],
     ["/search/duckduckgo?q=", "string"],
     ["/search/duckduckgo/image?q=", "string"],
     ["/search/duckduckgo/video?q=", "string"],
+    ["/search/google?q=", "string"],
+    ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"],
+    ["/search/googleImage/cse?q=", "string"],
     ["/search/youtube/video?q=&mix=", "string", "boolean"],
     ["/search/youtube/music?q=&mix=", "string", "boolean"],
     ["/search/youtube/channel?q=", "string"],
@@ -105,10 +105,15 @@ const API_ROUTES = {
     ["/profile/drift?q=", "string"],
     ["/profile/haunt?q=", "string"],
     ["/profile/rage?q=", "string"],
+    ["/profile/snapchat?q=", "string"],
+    ["/profile/twitter?q=", "string"],
+    ["/profile/instagram?q=", "string"],
+    ["/profile/threads?q=", "string"],
     ["/profile/saweria?q=", "string"],
     ["/profile/trakteer?q=", "string"],
     ["/profile/sociabuzz?q=", "string"],
     ["/profile/patreon?q=", "string"],
+
   ],
   lyrics: [
     ["/lyrics/youtube?q=", "string"],
@@ -146,7 +151,8 @@ const API_ROUTES = {
       ["/tools/db/delete?q=&hash=", "string", "string"],
       ["/tools/db/set?name=&value=&hash=", "string", "string", "string"],
     ],
-    discord: {
+  },
+  discord_tools: {
       stream: [
         [
           "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=",
@@ -492,26 +498,22 @@ const API_ROUTES = {
           "string",
         ],
       ],
-    },
   },
   info: [
+    ["/info/weather?q=", "string"],
     ["/info/youtube/video?url=", "url"],
     ["/info/youtube/channel?url=", "url"],
     ["/info/soundcloud?url=", "url"],
     ["/info/spotify?url=", "url"],
     ["/info/applemusic?url=", "url"],
-    ["/info/twitter/user?q=", "string"],
     ["/info/twitter/tweet?url=", "url"],
     ["/info/reddit/subreddit?q=", "string"],
     ["/info/reddit/post?url=", "url"],
-    ["/info/instagram/user?q=", "string"],
-    ["/info/threads/user?q=", "string"],
+    ["/info/tiktok/video?q=", "string"],
     ["/info/tenor?url=", "url"],
     ["/info/giphy?url=", "url"],
-    ["/info/tiktok/video?q=", "string"],
-    ["/info/weather?q=", "string"],
-    ["/info/pinterest?url=", "url"],
     ["/info/klipy?url=", "url"],
+    ["/info/pinterest?url=", "url"],
   ],
   download: [],
   music: [

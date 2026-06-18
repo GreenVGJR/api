@@ -187,28 +187,23 @@ async function getYoutubei() {
   return youtubeiPromise;
 }
 
-setTimeout(async () => {
-  try {
-    const results = await Promise.allSettled([
-      getBotGuardChallenge(),
-      getYoutubei(),
-    ]);
+Promise.allSettled([getBotGuardChallenge(), getYoutubei()])
+  .then((results) => {
     const failed = results.find((result) => result.status === "rejected") as
       | PromiseRejectedResult
       | undefined;
     if (failed) console.error("YouTube warmup failed:", failed.reason);
-  } catch (err) {
+  })
+  .catch((err) => {
     console.error("YouTube warmup failed:", err);
-  }
-}, 0);
+  });
 
-export const userAgent =
-  "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Encoding": "gzip, br",
-  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Language": "en-US",
   Connection: "keep-alive",
   Priority: "u=0, i",
   "Sec-Fetch-Dest": "document",
@@ -2691,25 +2686,31 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
   if (!videoId) return null;
 
-  try {
-    const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
-    const [response, savetikData] = await Promise.all([
-      fetch(targetUrl, {
-        headers: {
-          ...commonHeaders,
-        },
-      }),
-      SavetikVideo(targetUrl),
-    ]);
+    try {
+      const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
+      let scriptContent: string | undefined;
+      let savetikData: any = null;
+      for (let i = 0; i < 3; i++) {
+        try {
+          const [response, svData] = await Promise.all([
+            fetch(targetUrl, { headers: { ...commonHeaders } }),
+            SavetikVideo(targetUrl),
+          ]);
+          const html = await response.text();
+          scriptContent = html
+            .split(
+              '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
+            )[1]
+            ?.split("</script>")[0];
+          savetikData = svData;
+          if (scriptContent) break;
+        } catch (e) {
+          // ignore and retry
+        }
+        if (i < 2) await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (!scriptContent) return { error: "WAF Challenge" };
 
-    const html = await response.text();
-    const scriptContent = html
-      .split(
-        '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
-      )[1]
-      ?.split("</script>")[0];
-
-    if (!scriptContent) return { error: "WAF Challenge" };
 
     const json = JSON.parse(scriptContent);
     const videoDetail =
@@ -13440,7 +13441,7 @@ export const duckSearch = async (query: string): Promise<any> => {
       {
         headers: {
           ...commonHeaders,
-        },
+        }
       },
     );
 
@@ -14963,6 +14964,38 @@ export const vectorStock = async function vectorStock(query: string) {
       };
     });
     return { total: res.data.total, data: items };
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+};
+
+export const SnapchatProfile = async function SnapchatProfile(query: string) {
+  if (!query) return null;
+  try {
+    const req = await fetch(
+      `https://www.snapchat.com/@${encodeURIComponent(query)}`,
+      {
+        headers: {
+          ...commonHeaders
+        },
+      },
+    );
+
+    if (req.status === 403) {
+      return { error: "IP Blocked" };
+    }
+
+    const res: any = await req.text();
+    let finalres: any;
+    try {
+      finalres = JSON.parse(res.split('script id="__NEXT_DATA__" type="application/json">')?.[1]?.split("</script>")?.[0]);
+    }
+    catch {}
+
+    if(finalres?.props?.pageProps?.status) return { data: null }
+    const { viewerInfo, localization, showSnapExpiredToast, lensCursor, curatedHighlightsCursor, spotlightHighlightsCursor, gaid, locale, messages, serverSideConfigs, ...secres } = finalres.props.pageProps;
+    return { data: { ...secres, ...(secres?.encodedSpotlightComments ? { encodedSpotlightComments: JSON.parse(secres.encodedSpotlightComments).flat(Infinity) } : {}), userProfile: secres?.userProfile?.publicProfileInfo || null } };
   } catch (e) {
     console.error(e);
     return null;

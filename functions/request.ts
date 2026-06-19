@@ -2830,7 +2830,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
     return null;
   }
 };
-async function SavetikVideo(url: string) {
+export async function SavetikVideo(url: string) {
   if (!url) return null;
   try {
     const response = await fetch("https://savetik.io/api/ajaxSearch", {

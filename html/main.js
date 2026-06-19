@@ -815,17 +815,66 @@ async function performRequest(targetUrl, retryCount = 0) {
       headers["x-challenge"] = formatChallengeHash(md5(solvedChallengeCode));
     }
 
-    const fetchOptions = { headers, mode: "same-origin" };
-    verboseFetch = createVerboseFetchView(targetUrl, fetchOptions);
+    let fetchUrl = targetUrl;
+    const isDownload = parseUrl.pathname.startsWith("/download/");
+    if (isDownload) {
+      const url = new URL(targetUrl);
+      url.searchParams.set('json', '1');
+      fetchUrl = url.toString();
+    }
+    const fetchOptions = { headers, mode: "same-origin", redirect: isDownload ? "manual" : undefined };
+    verboseFetch = createVerboseFetchView(fetchUrl, fetchOptions);
     verboseFetch.line("Waiting for response headers...");
-    const response = await fetch(targetUrl, fetchOptions);
+    const response = await fetch(fetchUrl, fetchOptions);
     verboseFetch.response(response);
+
+    let duration;
+
+    if (isDownload) {
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType === "application/json") {
+        try {
+          const text = await response.clone().text();
+          const json = JSON.parse(text);
+          if (json.url && json.type) {
+            const mediaUrl = json.url;
+            const isVideo = json.type === "video";
+
+            duration = Math.round(performance.now() - startTime);
+            updateStatusUI(true, 200, duration);
+            verboseFetch.done(`Media URL received (${json.type})`);
+
+            isLoading = false;
+            setSendButtonLabel("Send");
+            sendBtn.classList.remove("opacity-70");
+            setStatusDotColor("mint-400");
+            statusText.textContent = response.status.toString();
+            statusText.className = "text-mint-400";
+            lastRawResponse = "";
+
+            responseArea.classList.add("empty-state");
+            if (isVideo) {
+              responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                  <video src="${encodeURI(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
+                </div>`;
+            } else {
+              responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                  <img src="${encodeURI(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
+                </div>`;
+            }
+            return null;
+          }
+        } catch (e) {}
+      }
+    }
 
     statusText.textContent = "Fetching";
     responseTitle.textContent = statusText.textContent;
 
     const contentType = response.headers.get("content-type") || "";
-    let duration;
 
     if (contentType.startsWith("image/")) {
       verboseFetch.line("Reading image body...");

@@ -515,7 +515,10 @@ const API_ROUTES = {
     ["/info/klipy?url=", "url"],
     ["/info/pinterest?url=", "url"],
   ],
-  download: [],
+  download: [
+    ["/download/tiktok/video?url=", "url"],
+    ["/download/pinterest?url=", "url"],
+  ],
   music: [
     [
       "/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=",
@@ -922,7 +925,7 @@ app.use(
   cors({
     origin: (origin) => origin,
     credentials: true,
-    exposeHeaders: ["X-Route"],
+      exposeHeaders: ["X-Route"],
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["*"],
   }),

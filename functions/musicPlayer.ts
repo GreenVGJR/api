@@ -170,7 +170,9 @@ export async function createMusicStream(
   c.header("Content-Type", "application/json");
   c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
-  const lookExistChallengeC = c.req.header("cf-ipcountry") || "DEA";
+  // temp allowed for all countries
+  // c.req.header("cf-ipcountry")
+  const lookExistChallengeC = "DE";
   if (["DE"].includes(lookExistChallengeC) === false) {
     const checkAccept = c.req.header("accept") === "application/json";
     let checkReferer = false;

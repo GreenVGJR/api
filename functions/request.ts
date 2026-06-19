@@ -3330,7 +3330,7 @@ export const Gemini = async function Gemini(
   const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
   const req = await fetch(
-    `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
+    `https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
     {
       method: "POST",
       headers: {
@@ -3338,12 +3338,12 @@ export const Gemini = async function Gemini(
         ...(qCookies ? { Cookie: qCookies } : {}),
         "Content-Type": "application/x-www-form-urlencoded",
         //  "Content-Length": Buffer.byteLength(reqPayload).toString(),
-        "x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
+        "x-goog-ext-525001261-jspb": `[1,null,null,null,"",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
         "x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
         "x-goog-ext-73010989-jspb": "[0]",
         "x-goog-ext-73010990-jspb": "[0,0,0]",
-        Referer: "https://gemini.google.com",
-        Origin: "https://gemini.google.com",
+        Referer: "https://bard.google.com",
+        Origin: "https://bard.google.com",
         "X-Same-Domain": "1",
       },
       body: reqPayload,
@@ -7553,21 +7553,31 @@ export async function googleWeather(query: string): Promise<any> {
 
   try {
     const l = await fetch(
-      `https://www.bing.com/api/v6/Places/AutoSuggest?q=${encodeURIComponent(query)}&appid=D41D8CD98F00B204E9800998ECF8427E1FBE79C2&count=1&structuredaddress=true`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`,
       {
         headers: { ...commonHeaders },
       },
     );
 
-    let ls: any = await l.text();
+    let ls: any = await l.json();
 
-    try {
-      ls = JSON.parse(ls);
-    } catch {
-      return { data: null };
-    }
+    const item = ls?.[0];
 
-    const datageo: any = ls?.value?.[0];
+    if (!item) return { data: null };
+
+    const datageo: any = {
+      geo: { latitude: item.lat, longitude: item.lon },
+      address: {
+        ...item.address,
+        display_name: item.display_name,
+        place_id: item.place_id,
+        osm_type: item.osm_type,
+        osm_id: item.osm_id,
+        boundingbox: item.boundingbox,
+        type: item.type,
+        addresstype: item.addresstype,
+      },
+    };
 
     if (!datageo) return { data: null };
     const coords = datageo.geo.latitude + "," + datageo.geo.longitude;
@@ -7627,7 +7637,7 @@ export async function OpenRouterGPT(
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b:free",
+        model: "openai/gpt-oss-20b:free",
         messages: messages,
         reasoning: { enabled: true },
       }),
@@ -7666,7 +7676,7 @@ export async function OpenRouterGPT(
       response: response || null,
       data: {
         conversation: encryptConvo(JSON.stringify(messages)),
-        model: "gpt-oss-120b",
+        model: "gpt-oss-20b",
       },
     };
   } catch {

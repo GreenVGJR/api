@@ -170,7 +170,7 @@ export async function createMusicStream(
   c.header("Content-Type", "application/json");
   c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
-  const lookExistChallengeC = c.req.header("cf-ipcountry") || "DE";
+  const lookExistChallengeC = c.req.header("cf-ipcountry") || "DEA";
   if (["DE"].includes(lookExistChallengeC) === false) {
     const checkAccept = c.req.header("accept") === "application/json";
     let checkReferer = false;
@@ -219,7 +219,7 @@ export async function createMusicStream(
           c: parts,
           d: challengeData.difficulty,
         });
-        const gzipData = zlib.gzipSync(Buffer.from(payload));
+        const gzipData = zlib.deflateSync(Buffer.from(payload));
         return stream(c, async (s: any) => {
           await s.write(gzipData);
         });

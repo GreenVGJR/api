@@ -137,12 +137,12 @@ function withYoutubePoToken(baseUrl: any, poToken: string) {
     url.searchParams.set("xobt", "3");
     url.searchParams.set("xovt", "3");
     url.searchParams.set("cbr", "Firefox");
-    url.searchParams.set("cbrver", "151.0");
+    url.searchParams.set("cbrver", "153.0");
     url.searchParams.set("c", "WEB");
     return url.toString();
   } catch {
     const separator = String(baseUrl).includes("?") ? "&" : "?";
-    return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=151.0&c=WEB`;
+    return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=153.0&c=WEB`;
   }
 }
 
@@ -198,7 +198,8 @@ Promise.allSettled([getBotGuardChallenge(), getYoutubei()])
     console.error("YouTube warmup failed:", err);
   });
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent =
+  "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1017,7 +1018,7 @@ export const tidalKeysToken = async function tidalKeysToken(
     }
 
     const rt = new URLSearchParams();
-    rt.append("client_id", "txNoH4kkV41MfH25");
+    rt.append("client_id", keytidalopen);
     rt.append(
       "client_secret",
       decodeURIComponent("dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98%3D"),
@@ -2686,31 +2687,30 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 
   if (!videoId) return null;
 
-    try {
-      const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
-      let scriptContent: string | undefined;
-      let savetikData: any = null;
-      for (let i = 0; i < 3; i++) {
-        try {
-          const [response, svData] = await Promise.all([
-            fetch(targetUrl, { headers: { ...commonHeaders } }),
-            SavetikVideo(targetUrl),
-          ]);
-          const html = await response.text();
-          scriptContent = html
-            .split(
-              '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
-            )[1]
-            ?.split("</script>")[0];
-          savetikData = svData;
-          if (scriptContent) break;
-        } catch (e) {
-          // ignore and retry
-        }
-        if (i < 2) await new Promise((r) => setTimeout(r, 1000));
+  try {
+    const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
+    let scriptContent: string | undefined;
+    let savetikData: any = null;
+    for (let i = 0; i < 3; i++) {
+      try {
+        const [response, svData] = await Promise.all([
+          fetch(targetUrl, { headers: { ...commonHeaders } }),
+          SavetikVideo(targetUrl),
+        ]);
+        const html = await response.text();
+        scriptContent = html
+          .split(
+            '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
+          )[1]
+          ?.split("</script>")[0];
+        savetikData = svData;
+        if (scriptContent) break;
+      } catch (e) {
+        // ignore and retry
       }
-      if (!scriptContent) return { error: "WAF Challenge" };
-
+      if (i < 2) await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!scriptContent) return { error: "WAF Challenge" };
 
     const json = JSON.parse(scriptContent);
     const videoDetail =
@@ -6673,7 +6673,7 @@ export const Capcut = async function Capcut(que: string) {
 
     const body = {
       sdk_version: "100.0.0",
-      count: 10,
+      count: 25,
       cursor: "0",
       query: que,
       scene: 1,
@@ -7548,95 +7548,6 @@ export const GiphyAPI = async function GiphyAPI(
   }
 };
 
-export const setKeys = (
-  sc: string,
-  sp: string,
-  tidal: string,
-  deezer: string,
-) => {
-  keysc = sc;
-  keysp = sp;
-  keytidal = tidal;
-  keydeezer = deezer;
-};
-
-export async function MetaAI(query: string, convo: any = null): Promise<any> {
-  if (!query) return null;
-  return {
-    error: "Service unavailable",
-  };
-
-  let messages: any[] = [];
-
-  if (convo) {
-    try {
-      const parsed = JSON.parse(
-        Buffer.from(convo.split("").reverse().join(""), "base64url").toString(
-          "utf-8",
-        ),
-      );
-      if (Array.isArray(parsed)) messages = parsed;
-    } catch (e) {
-      console.error("[MetaAI] Convo parse error:", e);
-    }
-  }
-
-  messages.push({ role: "user", content: query });
-
-  try {
-    const body = JSON.stringify({
-      model: "meta-llama/llama-3.3-70b-instruct:free",
-      messages: messages,
-    });
-
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      body: body,
-      headers: {
-        Authorization: `Bearer ${process.env.OPEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (res.status === 429) {
-      return {
-        error: "Rate-limited",
-      };
-    }
-
-    if (!res.ok) {
-      return {
-        error: "Service unavailable",
-      };
-    }
-
-    const data: any = await res.json();
-    const response = data.choices?.[0]?.message?.content;
-
-    if (response) {
-      messages.push({ role: "assistant", content: response });
-    }
-
-    if (messages.length > 20) {
-      messages = messages.slice(-20);
-    }
-
-    return {
-      response: response || null,
-      data: {
-        conversation: Buffer.from(JSON.stringify(messages))
-          .toString("base64url")
-          .split("")
-          .reverse()
-          .join(""),
-        model: "llama-3.3-70b-instruct",
-      },
-    };
-  } catch (e: any) {
-    return { error: e.message || null };
-  }
-}
-
 export async function googleWeather(query: string): Promise<any> {
   if (!query) return null;
 
@@ -7687,83 +7598,6 @@ export async function googleWeather(query: string): Promise<any> {
         },
         finalk,
       ],
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function GrokAI(query: string): Promise<any> {
-  if (!query) return null;
-  const convoId = crypto.randomBytes(12).toString("base64url");
-  const msgId = crypto.randomBytes(12).toString("base64url");
-
-  const bodyhttp = {
-    id: convoId,
-    messages: [
-      {
-        parts: [
-          {
-            type: "text",
-            text: query,
-          },
-        ],
-        id: msgId,
-        role: "user",
-      },
-    ],
-    trigger: "submit-message",
-  };
-
-  try {
-    const req = await fetch("https://docs.x.ai/api/chat", {
-      method: "POST",
-      body: JSON.stringify(bodyhttp),
-      headers: {
-        ...commonHeaders,
-        "Content-Type": "application/json",
-        Origin: "https://docs.x.ai",
-        Referer: "https://docs.x.ai/developers/models/grok-4.3",
-        "User-Agent": "ai-sdk/6.0.38 runtime/browser",
-      },
-    });
-
-    if (req.status === 429) {
-      return {
-        error: "Rate-limited",
-      };
-    } else if (req.status === 403) {
-      return {
-        error: "Blocked",
-      };
-    } else if (req.status !== 200) {
-      return {
-        data: null,
-      };
-    }
-
-    const res = await req.text();
-    const response = res
-      .split("\n")
-      .filter((line: string) => line.startsWith("data: "))
-      .map((line: string) => {
-        try {
-          const parsed = JSON.parse(line.substring(6));
-          if (parsed.type === "text-delta") {
-            return parsed.delta || "";
-          }
-        } catch {
-          return "";
-        }
-        return "";
-      })
-      .join("");
-
-    return {
-      response: response || null,
-      data: {
-        model: "developers-grok-4.3",
-      },
     };
   } catch {
     return null;
@@ -8565,148 +8399,178 @@ export async function GunsProfile(query: string): Promise<any> {
   )
     return null;
 
-  let res: any;
   let browserGuns: boolean = false;
-
-  for (let attempts = 0; attempts < 3; attempts++) {
-    try {
-      res = await (httpcloakGet as any)(`https://guns.lol/${username}`, {
-        echConfigDomain: "cloudflare-ech.com",
-        tlsOnly: true,
-        headers: {
-          ...commonHeaders,
-          ...(gunsCookies ? { cookie: gunsCookies } : {}),
-        },
-      });
-
-      const status = responseStatus(res);
-
-      if (status === 429) {
-        return { error: "IP Blocked" };
-      }
-
-      const html = await responseText(res);
-      const { document: doc } = parseHTML(html);
-      const pageTitle = doc.querySelector("title")?.textContent?.trim() || "";
-      const isChallenge =
-        status === 401 || status === 403 || pageTitle === "Just a moment...";
-
-      if (!isChallenge) {
-        break;
-      }
-
-      if (attempts === 2) {
-        const browserRes = await browserRequest({
-          url: `https://guns.lol/${username}`,
-          fetcherType: "stealthy",
-          headers: {
-            ...commonHeaders,
-          },
-          extractHtml: true,
-        });
-
-        if (browserRes.status === 429) {
-          return { error: "IP Blocked" };
-        }
-
-        const browserChallenge =
-          !browserRes.success ||
-          browserRes.status === 401 ||
-          browserRes.status === 403;
-
-        if (browserChallenge) {
-          return { error: "Guns.lol asking to verify you're not a bot" };
-        }
-
-        if (browserRes.cookies && Object.keys(browserRes.cookies).length > 0) {
-          gunsCookies = Object.entries(browserRes.cookies)
-            .map(([key, val]) => `${key}=${val}`)
-            .join("; ");
-        }
-
-        res = {
-          status: browserRes.status ?? 200,
-          text: browserRes.html ?? "",
-          url: browserRes.url ?? `https://guns.lol/${username}`,
-          headers: browserRes.headers ?? {},
-        };
-
-        browserGuns = true;
-      }
-    } catch (e) {
-      console.error(e);
-      if (attempts === 2) throw e;
-    }
-  }
+  let dataResults: any[] = [];
 
   try {
-    const html = await responseText(res);
-    if (responseStatus(res) !== 200) {
-      return { data: null };
-    }
+    for (let retry = 0; retry < 2; retry++) {
+      let res: any;
+      browserGuns = false;
 
-    // Split on self.__next_f.push( to get all RSC chunks
-    const chunks = html.split("self.__next_f.push(");
-    chunks.shift(); // Remove the part before the first push
+      for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+          res = await (httpcloakGet as any)(`https://guns.lol/${username}`, {
+            echConfigDomain: "cloudflare-ech.com",
+            tlsOnly: true,
+            headers: {
+              ...commonHeaders,
+              ...(gunsCookies ? { cookie: gunsCookies } : {}),
+            },
+          });
 
-    const dataResults: any[] = [];
+          const status = responseStatus(res);
 
-    for (const chunk of chunks) {
-      try {
-        // Each chunk looks like: [1,"ID:content\n"])</script>
+          if (status === 429) {
+            return { error: "IP Blocked" };
+          }
 
-        const endIdx = chunk.lastIndexOf(")</script>");
-        if (endIdx === -1) continue;
+          const html = await responseText(res);
+          const { document: doc } = parseHTML(html);
+          const pageTitle =
+            doc.querySelector("title")?.textContent?.trim() || "";
+          const isChallenge =
+            status === 401 ||
+            status === 403 ||
+            pageTitle === "Just a moment...";
 
-        const pushArg = chunk.substring(0, endIdx);
-        const parsed = JSON.parse(pushArg);
+          if (!isChallenge) {
+            break;
+          }
 
-        if (
-          !Array.isArray(parsed) ||
-          parsed[0] !== 1 ||
-          typeof parsed[1] !== "string"
-        )
-          continue;
+          if (attempts === 2) {
+            const browserRes = await browserRequest({
+              url: `https://guns.lol/${username}`,
+              fetcherType: "stealthy",
+              headers: {
+                ...commonHeaders,
+              },
+              extractHtml: true,
+            });
 
-        const content = parsed[1];
+            if (browserRes.status === 429) {
+              return { error: "IP Blocked" };
+            }
 
-        const lines = content.split("\n").filter((l: string) => l.trim());
+            const browserChallenge =
+              !browserRes.success ||
+              browserRes.status === 401 ||
+              browserRes.status === 403;
 
-        for (const line of lines) {
-          const colonIdx = line.indexOf(":");
-          if (colonIdx === -1) continue;
+            if (browserChallenge) {
+              return { error: "Guns.lol asking to verify you're not a bot" };
+            }
 
-          const jsonPart = line.substring(colonIdx + 1);
-          if (!jsonPart.includes('"data"')) continue;
-
-          try {
-            const innerParsed = JSON.parse(jsonPart);
-
-            if (Array.isArray(innerParsed)) {
-              for (const item of innerParsed) {
-                if (
-                  item &&
-                  typeof item === "object" &&
-                  !Array.isArray(item) &&
-                  "data" in item
-                ) {
-                  dataResults.push(item.data);
-                }
-              }
-            } else if (
-              innerParsed &&
-              typeof innerParsed === "object" &&
-              "data" in innerParsed
+            if (
+              browserRes.cookies &&
+              Object.keys(browserRes.cookies).length > 0
             ) {
-              dataResults.push(innerParsed.data);
+              gunsCookies = Object.entries(browserRes.cookies)
+                .map(([key, val]) => `${key}=${val}`)
+                .join("; ");
+            }
+
+            res = {
+              status: browserRes.status ?? 200,
+              text: browserRes.html ?? "",
+              url: browserRes.url ?? `https://guns.lol/${username}`,
+              headers: browserRes.headers ?? {},
+            };
+
+            browserGuns = true;
+          }
+        } catch (e) {
+          console.error(e);
+          if (attempts === 2) throw e;
+        }
+      }
+
+      try {
+        const html = await responseText(res);
+        if (responseStatus(res) !== 200) {
+          if (retry === 0) {
+            continue;
+          }
+          return { data: null };
+        }
+
+        // Split on self.__next_f.push( to get all RSC chunks
+        const chunks = html.split("self.__next_f.push(");
+        chunks.shift(); // Remove the part before the first push
+
+        dataResults = [];
+
+        for (const chunk of chunks) {
+          try {
+            // Each chunk looks like: [1,"ID:content\n"])</script>
+
+            const endIdx = chunk.lastIndexOf(")</script>");
+            if (endIdx === -1) continue;
+
+            const pushArg = chunk.substring(0, endIdx);
+            const parsed = JSON.parse(pushArg);
+
+            if (
+              !Array.isArray(parsed) ||
+              parsed[0] !== 1 ||
+              typeof parsed[1] !== "string"
+            )
+              continue;
+
+            const content = parsed[1];
+
+            const lines = content.split("\n").filter((l: string) => l.trim());
+
+            for (const line of lines) {
+              const colonIdx = line.indexOf(":");
+              if (colonIdx === -1) continue;
+
+              const jsonPart = line.substring(colonIdx + 1);
+              if (!jsonPart.includes('"data"')) continue;
+
+              try {
+                const innerParsed = JSON.parse(jsonPart);
+
+                if (Array.isArray(innerParsed)) {
+                  for (const item of innerParsed) {
+                    if (
+                      item &&
+                      typeof item === "object" &&
+                      !Array.isArray(item) &&
+                      "data" in item
+                    ) {
+                      dataResults.push(item.data);
+                    }
+                  }
+                } else if (
+                  innerParsed &&
+                  typeof innerParsed === "object" &&
+                  "data" in innerParsed
+                ) {
+                  dataResults.push(innerParsed.data);
+                }
+              } catch {}
             }
           } catch {}
         }
-      } catch {}
-    }
 
-    if (dataResults.length === 0 && browserGuns) {
-      return { error: "Can't process this due Guns.lol sent empty response" };
+        if (dataResults.length === 0 && browserGuns) {
+          if (retry === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
+          return {
+            error: "Can't process this due Guns.lol sent empty response",
+          };
+        }
+
+        break;
+      } catch (e) {
+        console.error(e);
+        if (retry === 0) {
+          continue;
+        }
+        throw e;
+      }
     }
 
     if (dataResults.length === 0) {
@@ -13441,7 +13305,7 @@ export const duckSearch = async (query: string): Promise<any> => {
       {
         headers: {
           ...commonHeaders,
-        }
+        },
       },
     );
 
@@ -14977,7 +14841,7 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
       `https://www.snapchat.com/@${encodeURIComponent(query)}`,
       {
         headers: {
-          ...commonHeaders
+          ...commonHeaders,
         },
       },
     );
@@ -14989,13 +14853,40 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
     const res: any = await req.text();
     let finalres: any;
     try {
-      finalres = JSON.parse(res.split('script id="__NEXT_DATA__" type="application/json">')?.[1]?.split("</script>")?.[0]);
-    }
-    catch {}
+      finalres = JSON.parse(
+        res
+          .split('script id="__NEXT_DATA__" type="application/json">')?.[1]
+          ?.split("</script>")?.[0],
+      );
+    } catch {}
 
-    if(finalres?.props?.pageProps?.status) return { data: null }
-    const { viewerInfo, localization, showSnapExpiredToast, lensCursor, curatedHighlightsCursor, spotlightHighlightsCursor, gaid, locale, messages, serverSideConfigs, ...secres } = finalres.props.pageProps;
-    return { data: { ...secres, ...(secres?.encodedSpotlightComments ? { encodedSpotlightComments: JSON.parse(secres.encodedSpotlightComments).flat(Infinity) } : {}), userProfile: secres?.userProfile?.publicProfileInfo || null } };
+    if (finalres?.props?.pageProps?.status) return { data: null };
+    const {
+      viewerInfo,
+      localization,
+      showSnapExpiredToast,
+      lensCursor,
+      curatedHighlightsCursor,
+      spotlightHighlightsCursor,
+      gaid,
+      locale,
+      messages,
+      serverSideConfigs,
+      ...secres
+    } = finalres.props.pageProps;
+    return {
+      data: {
+        ...secres,
+        ...(secres?.encodedSpotlightComments
+          ? {
+              encodedSpotlightComments: JSON.parse(
+                secres.encodedSpotlightComments,
+              ).flat(Infinity),
+            }
+          : {}),
+        userProfile: secres?.userProfile?.publicProfileInfo || null,
+      },
+    };
   } catch (e) {
     console.error(e);
     return null;

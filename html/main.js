@@ -874,19 +874,24 @@ async function performRequest(targetUrl, retryCount = 0) {
       const arrayBuffer = await response.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let text;
-      const isGzip =
-        bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-      if (isGzip) {
-        verboseFetch.line("Decompressing gzip body...");
-        text = await new Response(
-          new Blob([arrayBuffer])
-            .stream()
-            .pipeThrough(new DecompressionStream("gzip")),
-        ).text();
-        verboseFetch.done(
-          `Decompressed body received (${text.length.toLocaleString()} chars)`,
-        );
-      } else {
+      try {
+        if (bytes[0] === 0x78) {
+          verboseFetch.line("Decompressing deflate body...");
+          text = await new Response(
+            new Blob([arrayBuffer])
+              .stream()
+              .pipeThrough(new DecompressionStream("deflate")),
+          ).text();
+          verboseFetch.done(
+            `Decompressed body received (${text.length.toLocaleString()} chars)`,
+          );
+        } else {
+          text = new TextDecoder().decode(arrayBuffer);
+          verboseFetch.done(
+            `Text body received (${text.length.toLocaleString()} chars)`,
+          );
+        }
+      } catch {
         text = new TextDecoder().decode(arrayBuffer);
         verboseFetch.done(
           `Text body received (${text.length.toLocaleString()} chars)`,

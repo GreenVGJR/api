@@ -130,6 +130,7 @@ const API_ROUTES = {
       ],
       image_generation: [
         ["/tools/ai-image/flux_schnell?prompt=", "string"],
+        ["/tools/ai-image/flux_klein?prompt=", "string"],
         ["/tools/ai-image/magicstudio?prompt=", "string"],
       ],
     },

@@ -321,7 +321,7 @@ export const parseYtInitial = (html: any) => {
 
     return JSON.parse(jsonStr);
   } catch (e) {
-    console.error("YouTube Parse Error:", e);
+    console.error(e);
     return null;
   }
 };
@@ -2830,6 +2830,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
     return null;
   }
 };
+
 export async function SavetikVideo(url: string) {
   if (!url) return null;
   try {

@@ -94,6 +94,11 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 };
 
 export const dispatch = async (c: Context, promiseFactory: any) => {
+  const ua = c.req.header("user-agent") || "";
+  if (ua.toLowerCase().includes("bot")) {
+    return logResponse(c, c.text("", 403));
+  }
+
   try {
     if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
   } catch {
@@ -102,7 +107,6 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
   if (generate_hash) {
     const sh = c.req.query("sh") || "";
-    const ua = c.req.header("user-agent") || "";
     const uaHash = crypto
       .createHash("md5")
       .update(ua)

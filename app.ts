@@ -34,6 +34,7 @@ const startupDataPromise = Promise.all([
   fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"),
   fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"),
   fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"),
+  fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8"),
 ] as const);
 
 const API_ROUTES = {
@@ -682,6 +683,7 @@ const [
   cfJs,
   backChallengeTemplateSource,
   rawCss,
+  amcTemplateSource,
 ] = await startupDataPromise;
 
 const reqs = reqsModule.default;
@@ -703,6 +705,12 @@ const mainCss = rawCss
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/\s+/g, " ")
   .replace(/\s*([{}:;,])\s*/g, "$1")
+  .trim();
+
+const amcTemplate = amcTemplateSource
+  .replace(/<!--[\s\S]*?-->/g, "")
+  .replace(/\s+/g, " ")
+  .replace(/>\s+</g, "><")
   .trim();
 
 const playgroundTemplate = playgroundTemplateSource
@@ -921,16 +929,19 @@ function isLocalRequest(host: string | undefined): boolean {
   );
 }
 
-app.use(
-  "*",
-  cors({
+app.use("*", async (c: Context, next: Next) => {
+  if (c.req.path.startsWith("/amc")) {
+    await next();
+    return;
+  }
+  return cors({
     origin: (origin) => origin,
     credentials: true,
       exposeHeaders: ["X-Route"],
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["*"],
-  }),
-);
+  })(c, next);
+});
 
 if (BUILD_ID) {
   const apiPrefixes = ["search", "lyrics", "tools", "info", "music"];
@@ -1082,7 +1093,13 @@ function setPlaygroundAssetCache(c: Context) {
   );
 }
 
-["/playground", "/terms", "/privacy"].forEach((route) => {
+[
+  "/playground",
+  "/terms",
+  "/privacy",
+  "/amc/terms",
+  "/amc/privacy",
+].forEach((route) => {
   app.get(route, (c: Context) => {
     c.header("Content-Type", "text/html");
     setPlaygroundAssetCache(c);
@@ -1090,7 +1107,11 @@ function setPlaygroundAssetCache(c: Context) {
     return stream(c, async (s) => {
       await s.write(""); // Initial flush
 
-      await s.write(playgroundTemplate);
+      if (route.startsWith("/amc")) {
+        await s.write(amcTemplate);
+      } else {
+        await s.write(playgroundTemplate);
+      }
     });
   });
 });

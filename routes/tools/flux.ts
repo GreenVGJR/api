@@ -68,18 +68,31 @@ app.get("/ai-image/flux_schnell", async (c) => {
           let loggedAsWarning = false;
           try {
             const errorJson = await cfResponse.json();
-            if (errorJson && typeof errorJson === "object" && Array.isArray(errorJson.errors)) {
-              const messages = errorJson.errors.map((e: any) => e.message).join("; ");
-              if (/Length of '\/prompt' must be <= 2048/.test(messages) || /Input prompt contains NSFW content/.test(messages)) {
-                console.warn(`Cloudflare AI validation error (${cfResponse.status}): ${messages}`);
+            if (
+              errorJson &&
+              typeof errorJson === "object" &&
+              Array.isArray(errorJson.errors)
+            ) {
+              const messages = errorJson.errors
+                .map((e: any) => e.message)
+                .join("; ");
+              if (
+                /Length of '\/prompt' must be <= 2048/.test(messages) ||
+                /Input prompt contains NSFW content/.test(messages)
+              ) {
+                console.warn(
+                  `Cloudflare AI validation error (${cfResponse.status}): ${messages}`,
+                );
                 loggedAsWarning = true;
               }
             }
-          } catch (_) {
-          }
+          } catch (_) {}
           if (!loggedAsWarning) {
             const errorText = await cfResponse.text();
-            console.error(`Cloudflare AI error (${cfResponse.status}):`, errorText);
+            console.error(
+              `Cloudflare AI error (${cfResponse.status}):`,
+              errorText,
+            );
           }
         }
       } catch (e) {
@@ -97,7 +110,7 @@ app.get("/ai-image/flux_schnell", async (c) => {
         Accept: "application/json, text/plain, */*",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site"
+        "Sec-Fetch-Site": "same-site",
       },
     },
   );
@@ -128,24 +141,27 @@ app.get("/ai-image/flux_klein", async (c) => {
   formData.append("steps", "1");
   formData.append("guidance", "2");
 
-  const response = await fetch("https://multi-modal.ai.cloudflare.com/api/inference?model=@cf/black-forest-labs/flux-2-klein-9b", {
-    body: formData,
-    method: "POST",
-    headers: {
-      Origin: "https://multi-modal.ai.cloudflare.com",
-      Referer: "https://multi-modal.ai.cloudflare.com",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
+  const response = await fetch(
+    "https://multi-modal.ai.cloudflare.com/api/inference?model=@cf/black-forest-labs/flux-2-klein-9b",
+    {
+      body: formData,
+      method: "POST",
+      headers: {
+        Origin: "https://multi-modal.ai.cloudflare.com",
+        Referer: "https://multi-modal.ai.cloudflare.com",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     return c.json({ error: `Upstream returned ${response.status}` }, 502);
   }
 
   const json = (await response.json()) as any;
-  if(json?.response?.httpCode) {
+  if (json?.response?.httpCode) {
     return c.json({ error: json.response }, 502);
   }
   const base64Image = json?.response?.image;

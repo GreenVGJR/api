@@ -307,7 +307,9 @@ body {
   padding: 4px 8px;
   font-size: 11px;
   color: #ffffff;
-  font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
+    "Liberation Mono", "Courier New", monospace;
   outline: none;
   width: 100%;
   transition:
@@ -385,7 +387,9 @@ body {
   color: #d1d5db;
   cursor: pointer;
   display: block;
-  font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
+    "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   padding: 6px 8px;
   text-align: left;
@@ -418,7 +422,9 @@ body {
   min-width: 60px;
   max-width: 100px;
   font-size: 10px;
-  font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
+    "Liberation Mono", "Courier New", monospace;
   color: #4ade80;
   text-align: right;
   overflow: hidden;

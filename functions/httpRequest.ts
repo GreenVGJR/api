@@ -19,6 +19,8 @@ const logResponse = <T extends Response>(
 };
 
 export const blobDispatch = async (c: Context, body: any, headers?: any) => {
+  await rateLimit();
+
   try {
     if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
   } catch {
@@ -93,11 +95,38 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
   );
 };
 
+// Rate limiting config and state
+const MAX_REQUESTS_PER_SECOND = 10;
+let requestCount = 0;
+const queue: (() => void)[] = [];
+
+setInterval(() => {
+  requestCount = 0;
+  while (queue.length > 0 && requestCount < MAX_REQUESTS_PER_SECOND) {
+    const resolve = queue.shift();
+    if (resolve) {
+      resolve();
+      requestCount++;
+    }
+  }
+}, 1000);
+
+export async function rateLimit(): Promise<void> {
+  if (requestCount >= MAX_REQUESTS_PER_SECOND) {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+    });
+  }
+  requestCount++;
+}
+
 export const dispatch = async (c: Context, promiseFactory: any) => {
   const ua = c.req.header("user-agent") || "";
   if (ua.toLowerCase().includes("bot")) {
     return logResponse(c, c.text("", 403));
   }
+
+  await rateLimit();
 
   try {
     if (c.req.method !== "GET") return logResponse(c, c.text("", 200));

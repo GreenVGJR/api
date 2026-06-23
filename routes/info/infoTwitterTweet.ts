@@ -15,7 +15,7 @@ app.get("/twitter/tweet", async (c) => {
   if (query === "" || query === undefined) {
     return c.json({ error: "Nothing to do" }, 202);
   }
-  c.header("X-Route", "api.x.com, cdn.syndication.twimg.com");
+  c.header("X-Route", "x.com");
   return await dispatch(c, () => infoTwitterTweet(query));
 });
 

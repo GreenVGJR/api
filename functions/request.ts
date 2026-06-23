@@ -2,7 +2,6 @@ import { type Context } from "hono";
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
 
-import { ClientTransaction } from "x-client-transaction-id";
 import { Innertube, Log, ProtoUtils } from "youtubei.js";
 import BG from "bgutils-js";
 import { parseHTML } from "linkedom";
@@ -572,11 +571,7 @@ let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
 let keytumblr: string | undefined = process.env.TUMBLR;
 let saweriaBuildId: string | undefined;
-let twitterDocument: any;
-let twitterTransaction: any;
-let twitterAuth: string | undefined =
-  "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
-let twitterObj: any = {};
+
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
 type DiscordListCacheEntry = {
   expiresAt: number;
@@ -1063,53 +1058,75 @@ export const deezerKeys = async function deezerKeys() {
   }
 };
 
-export const twitterKey = async function twitterKey(typeName: string) {
+// Helper to extract SSR data from Twitter's HTML
+function extractTwitterSSR(html: string): any {
+  const match = html.match(
+    /<script[^>]*class="\$tsr"[^>]*id="\$tsr-stream-barrier"[^>]*>([\s\S]*?)<\/script>/,
+  );
+  if (!match) return null;
+  const scriptContent = match[1];
+  const $R: any = { tsr: [] };
+  const self: any = { $R };
+  const document = { currentScript: { remove: () => {} } };
+  const $_TSR: any = {};
+  const ReadableStream = (globalThis as any).ReadableStream;
   try {
-    const response = await fetch("https://x.com/", {
-      headers: { ...commonHeaders },
-    });
-    const html = await response.text();
-    const { document } = parseHTML(html);
-    twitterDocument = document;
-
-    twitterTransaction = new ClientTransaction(twitterDocument);
-    await twitterTransaction.initialize();
-
-    const pul1 = await fetch(
-      "https://abs.twimg.com/responsive-web/client-web/main" +
-        html.split("client-web/main")[1].split('"')[0],
-      { headers: { ...commonHeaders } },
+    const fn = new Function(
+      "self",
+      "document",
+      "$_TSR",
+      "ReadableStream",
+      "$R",
+      scriptContent + "; return self.$R.tsr[0];",
     );
-
-    const res1 = await pul1.text();
-
-    const queryId_user = res1
-      .split("e.exports={queryId:")
-      .find((e: any) => e.includes(`operationName:"${typeName}"`))
-      ?.split('"')[1];
-    const features_user = JSON.parse(
-      res1
-        .split("e.exports={queryId:")
-        .find((e: any) => e.includes(`operationName:"${typeName}"`))
-        ?.split("featureSwitches:")[1]
-        .split(",field")[0] || "{}",
-    ).reduce((acc: any, key: any) => {
-      acc[key] = true;
-      return acc;
-    }, {});
-
-    twitterObj[typeName] = [
-      queryId_user,
-      features_user,
-      await twitterTransaction.generateTransactionId(
-        "GET",
-        "/graphql/" + queryId_user + "/" + typeName,
-      ),
-    ];
+    return fn(self, document, $_TSR, ReadableStream, self.$R);
   } catch (e) {
-    console.error(e);
+    console.error("Failed to evaluate Twitter SSR script", e);
+    return null;
   }
-};
+}
+
+// Extract user profile from SSR data
+// Resolve __ref pointers within relay records (with cycle detection via visited set)
+function resolveRefs(
+  obj: any,
+  records: Record<string, any>,
+  visited: Set<string> = new Set(),
+): any {
+  if (!obj || typeof obj !== "object") return obj;
+  if (obj.__ref) {
+    if (visited.has(obj.__ref)) return `[ref] ${obj.__ref}`;
+    visited.add(obj.__ref);
+    return resolveRefs(records[obj.__ref], records, visited);
+  }
+  if (obj.__refs)
+    return (obj.__refs as string[]).map((ref: string) => {
+      if (visited.has(ref)) return `[ref] ${ref}`;
+      visited.add(ref);
+      return resolveRefs(records[ref], records, visited);
+    });
+  if (Array.isArray(obj))
+    return obj.map((item) => resolveRefs(item, records, new Set(visited)));
+  const resolved: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (key === "__id" || key === "__typename") continue;
+    resolved[key] = resolveRefs(val, records, new Set(visited));
+  }
+  return resolved;
+}
+
+// Extract and resolve tweet from SSR data (relayRecords)
+function parseTweetFromSSR(ssr: any): any {
+  const records = ssr?.dehydratedData?.relayRecords;
+  if (!records) return null;
+  for (const key of Object.keys(records)) {
+    const rec = records[key];
+    if (rec && rec.__typename === "Tweet") {
+      return resolveRefs(rec, records);
+    }
+  }
+  return null;
+}
 
 export const imgurKey = async function imgurKey() {
   try {
@@ -3331,7 +3348,7 @@ export const Gemini = async function Gemini(
   const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
   const req = await fetch(
-    `https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
+    `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
     {
       method: "POST",
       headers: {
@@ -3343,8 +3360,8 @@ export const Gemini = async function Gemini(
         "x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
         "x-goog-ext-73010989-jspb": "[0]",
         "x-goog-ext-73010990-jspb": "[0,0,0]",
-        Referer: "https://bard.google.com",
-        Origin: "https://bard.google.com",
+        Referer: "https://gemini.google.com",
+        Origin: "https://gemini.google.com",
         "X-Same-Domain": "1",
       },
       body: reqPayload,
@@ -6207,135 +6224,44 @@ export const DiscordStream = async function DiscordStream(
 
 export const infoTwitterUser = async function infoTwitterUser(
   que: string,
-  refresh_auth?: boolean,
 ): Promise<any> {
   if (!que) return null;
-  if (
-    refresh_auth ||
-    !twitterAuth ||
-    !twitterObj?.UserByScreenName ||
-    !twitterObj?.UserTweets
-  ) {
-    await twitterKey("UserByScreenName");
-    await twitterKey("UserTweets");
-  }
-
   try {
-    const queryId = twitterObj?.UserByScreenName?.[0];
-    const features = JSON.stringify(twitterObj?.UserByScreenName?.[1]);
-    const variables = JSON.stringify({
-      screen_name: que,
-      withGrokTranslatedBio: true,
-    });
-    const fieldToggles = JSON.stringify({
-      withPayments: true,
-      withAuxiliaryUserLabels: true,
-    });
-
-    const pul = await fetch(
-      `https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`,
-      {
-        headers: {
-          ...commonHeaders,
-          "content-type": "application/json",
-          authorization: "Bearer " + twitterAuth,
-          "x-client-transaction-id": twitterObj?.UserByScreenName?.[2],
-        },
+    const res = await fetch(`https://x.com/${que}`, {
+      headers: {
+        ...commonHeaders,
       },
+    });
+    if (!res.ok) return { data: null };
+    const html = await res.text();
+    const ssr = extractTwitterSSR(html);
+    const records = ssr?.dehydratedData?.relayRecords;
+    let user: any = null;
+    if (records) {
+      for (const key of Object.keys(records)) {
+        const rec = records[key];
+        if (rec && rec.__typename === "User") {
+          user = resolveRefs(rec, records);
+          break;
+        }
+      }
+    }
+    // Merge flat profile fields from matches.l (snake_case/simple names) into resolved user
+    const profileMatch = ssr?.matches?.find(
+      (m: any) =>
+        typeof m.i === "string" &&
+        m.i.replace(/\0/g, "").includes("$username_profile"),
     );
-
-    if (pul.status === 403) {
-      return {
-        error: "Bad auth",
-      };
-    }
-
-    if (pul.status === 401 || pul.status === 400)
-      return await infoTwitterUser(que, true);
-
-    const responseText = await pul.text();
-    let res;
-    try {
-      res = JSON.parse(responseText);
-    } catch {
-      return null;
-    }
-    let res2: any = {};
-    let res3: any = {};
-    if (res?.data?.user?.result?.rest_id) {
-      const queryId2 = twitterObj?.UserTweets?.[0];
-      const features2 = JSON.stringify(twitterObj?.UserTweets?.[1]);
-      const variables2 = JSON.stringify({
-        userId: res?.data?.user?.result?.rest_id,
-        includePromotedContent: true,
-        withQuickPromoteEligibilityTweetFields: true,
-        withVoice: true,
-      });
-      const fieldToggles2 = JSON.stringify({ withArticlePlainText: true });
-      const [pul2, pul3] = await Promise.all([
-        fetch(
-          `https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`,
-          {
-            headers: {
-              ...commonHeaders,
-            },
-          },
-        ),
-        fetch(
-          `https://api.x.com/graphql/${queryId2}/UserTweets?variables=${encodeURIComponent(variables2)}&features=${encodeURIComponent(features2)}&fieldToggles=${encodeURIComponent(fieldToggles2)}`,
-          {
-            headers: {
-              ...commonHeaders,
-              "content-type": "application/json",
-              authorization: "Bearer " + twitterAuth,
-              "x-client-transaction-id": twitterObj?.UserTweets?.[2],
-            },
-          },
-        ),
-      ]);
-      try {
-        const body2 = await pul2.text();
-        if (body2 && body2.includes('type="application/json">')) {
-          res2 = JSON.parse(
-            body2.split('type="application/json">')[1].split("</script>")[0],
-          );
+    const flat = profileMatch?.l || null;
+    if (flat && typeof flat === "object") {
+      for (const key of Object.keys(flat)) {
+        if (key === "__id" || key === "__typename") continue;
+        if (user && user[key] === undefined) {
+          user[key] = flat[key];
         }
-      } catch (e) {
-        console.error("Twitter Syndication Parse Error:", e);
-      }
-
-      try {
-        if (pul3.status === 200) {
-          const res3_raw: any = await pul3.json();
-          res3 =
-            res3_raw?.data?.user?.result?.timeline?.timeline?.instructions?.flatMap(
-              (f: any) => f?.entries || (f?.entry ? [f.entry] : []),
-            );
-        } else {
-          res3 = {
-            error: await pul3.text(),
-          };
-        }
-      } catch (e) {
-        console.error("Twitter API JSON Parse Error:", e);
       }
     }
-
-    const finalres = {
-      ...(res?.data?.user?.result || null),
-      timeline: {
-        page: res3?.[0] ? res3 : { error: "Not available / Geo-restrict" },
-        embed: res2?.props?.pageProps?.timeline?.entries?.[0]
-          ? res2?.props?.pageProps?.timeline?.entries?.map(
-              (k: any) => k.content.tweet,
-            )
-          : res2?.props?.pageProps?.contextProvider?.hasResults
-            ? { error: "Not available / Geo-restrict" }
-            : null,
-      },
-    };
-
-    return { data: finalres?.rest_id ? finalres : null };
+    return { data: user || flat };
   } catch (e) {
     console.error(e);
     return null;
@@ -6344,65 +6270,19 @@ export const infoTwitterUser = async function infoTwitterUser(
 
 export const infoTwitterTweet = async function infoTwitterTweet(
   que: string,
-  refresh_auth?: boolean,
 ): Promise<any> {
   if (!que) return null;
-  if (refresh_auth || !twitterAuth || !twitterObj?.TweetResultByRestId) {
-    await twitterKey("TweetResultByRestId");
-  }
-
   try {
-    const queryId = twitterObj?.TweetResultByRestId?.[0];
-    const features = JSON.stringify(twitterObj?.TweetResultByRestId?.[1]);
-    const variables = JSON.stringify({
-      tweetId: que,
-      includePromotedContent: true,
-      withBirdwatchNotes: true,
-      withVoice: true,
-      withCommunity: true,
+    const res = await fetch(`https://x.com/i/status/${que}`, {
+      headers: {
+        ...commonHeaders,
+      },
     });
-
-    const [pul, pul2] = await Promise.all([
-      fetch(
-        `https://api.x.com/graphql/${queryId}/TweetResultByRestId?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`,
-        {
-          headers: {
-            ...commonHeaders,
-            "content-type": "application/json",
-            authorization: "Bearer " + twitterAuth,
-          },
-        },
-      ),
-      fetch(
-        `https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(que)}&lang=en&token=abc`,
-        {
-          headers: {
-            ...commonHeaders,
-          },
-        },
-      ),
-    ]);
-
-    if (pul.status === 401 || pul.status === 400)
-      return await infoTwitterTweet(que, true);
-
-    const tryParseJson = async (p: any) => {
-      if (p.status !== 200) return null;
-      try {
-        return await p.json();
-      } catch {
-        return null;
-      }
-    };
-
-    const [res, res2] = await Promise.all([
-      pul.status === 403
-        ? Promise.resolve({ error: "Bad auth" })
-        : tryParseJson(pul),
-      tryParseJson(pul2),
-    ]);
-
-    return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
+    if (!res.ok) return { data: null };
+    const html = await res.text();
+    const ssr = extractTwitterSSR(html);
+    const tweet = parseTweetFromSSR(ssr);
+    return { data: tweet || null };
   } catch (e) {
     console.error(e);
     return null;
@@ -6994,7 +6874,7 @@ export const instagramUser = async function instagramUser(que: string) {
           }
         : null;
 
-    return { data: [formatted || null, a || b || null] };
+    return { isFallback: !!b, data: [formatted || null, a || b || null] };
   } catch (e) {
     console.error(e);
     return null;

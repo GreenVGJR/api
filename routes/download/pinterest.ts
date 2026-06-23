@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 import { infoPinterest } from "../../functions/request.js";
+import { rateLimit } from "../../functions/httpRequest.js";
 
 app.get("/pinterest", async (c) => {
   const query = c.req.query("url");
@@ -9,6 +10,7 @@ app.get("/pinterest", async (c) => {
   } else if (query === "") {
     return c.json({ error: "Nothing to do" }, 202);
   }
+  await rateLimit();
   const result = await infoPinterest(query);
   if (!result || !result.data) {
     return c.json({ error: "Pin not found" }, 404);
@@ -17,10 +19,11 @@ app.get("/pinterest", async (c) => {
   if (!first) {
     return c.json({ error: "Pin not found" }, 404);
   }
-  const videoUrl = first.videos?.video_list?.V_720P?.url
-    || first.videos?.video_list?.V_HLSV4?.url
-    || first.videos?.video_list?.V_480P?.url
-    || null;
+  const videoUrl =
+    first.videos?.video_list?.V_720P?.url ||
+    first.videos?.video_list?.V_HLSV4?.url ||
+    first.videos?.video_list?.V_480P?.url ||
+    null;
   const imageUrl = first.images_orig?.url || first.imageLargeUrl || null;
   const target = videoUrl || imageUrl;
   const mediaType = videoUrl ? "video" : imageUrl ? "image" : null;
@@ -31,7 +34,7 @@ app.get("/pinterest", async (c) => {
   if (c.req.query("json") === "1") {
     return c.json({ url: target, type: mediaType });
   }
-  return c.text(target, 302, { "Location": target });
+  return c.text(target, 302, { Location: target });
 });
 
 export default app;

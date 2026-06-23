@@ -13,8 +13,7 @@ const globalStore = globalThis as typeof globalThis & {
   __vgjr_logs?: RequestLogEntry[];
 };
 
-const requestLogs =
-  globalStore.__vgjr_logs || (globalStore.__vgjr_logs = []);
+const requestLogs = globalStore.__vgjr_logs || (globalStore.__vgjr_logs = []);
 
 function maskConnectingIp(ip?: string): string {
   const rawIp = ip?.split(",")[0]?.trim();

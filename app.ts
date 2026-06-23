@@ -114,7 +114,6 @@ const API_ROUTES = {
     ["/profile/trakteer?q=", "string"],
     ["/profile/sociabuzz?q=", "string"],
     ["/profile/patreon?q=", "string"],
-
   ],
   lyrics: [
     ["/lyrics/youtube?q=", "string"],
@@ -155,351 +154,347 @@ const API_ROUTES = {
     ],
   },
   discord_tools: {
-      stream: [
-        [
-          "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=",
-          "string",
-          "number",
-          "number",
-          "url",
-          "string",
-          "boolean",
-          "boolean",
-          "boolean",
-        ],
+    stream: [
+      [
+        "/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=",
+        "string",
+        "number",
+        "number",
+        "url",
+        "string",
+        "boolean",
+        "boolean",
+        "boolean",
       ],
-      tiktok: [
-        [
-          "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code=",
-          "string",
-          "number",
-          "number",
-          "string",
-        ],
+    ],
+    tiktok: [
+      [
+        "/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code=",
+        "string",
+        "number",
+        "number",
+        "string",
       ],
-      server: [
-        [
-          "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
-          "string",
-          "number",
-          "string",
-          "string",
-          "string",
-          "number",
-          "url",
-          "url",
-          "url",
-        ],
-        ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
-        ["/tools/discord/infoApp?token=&botId=", "string", "number"],
-        [
-          "/tools/discord/infoAutomod?token=&guildId=&ruleId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=",
-          "string",
-          "number",
-          "number",
-          "string",
-          "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE",
-          "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE",
-          "boolean",
-          "json",
-          "string",
-          "enum:PROFANITY,SEXUAL_CONTENT,SLURS",
-          "string",
-          "number",
-          "boolean",
-          "json",
-          "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION",
-          "number",
-          "number",
-          "string",
-          "string",
-          "string",
-          "string",
-          "json",
-        ],
+    ],
+    server: [
+      [
+        "/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=",
+        "string",
+        "number",
+        "string",
+        "string",
+        "string",
+        "number",
+        "url",
+        "url",
+        "url",
       ],
-      member: [
-        [
-          "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
-          "string",
-          "number",
-          "string",
-          "url",
-          "url",
-          "string",
-          "string",
-        ],
-        [
-          "/tools/discord/infoMember?token=&userId=&guildId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/listMember?token=&guildId=&limit=&type=&permission=",
-          "string",
-          "number",
-          "number",
-          "enum:user,bot,all,oldest,newest,no_role,has_role,banned",
-          "string",
-        ],
-        [
-          "/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=",
-          "string",
-          "number",
-          "number",
-          "enum:user,bot,all,oldest,newest,oldest_position,newest_position",
-          "string",
-        ],
+      ["/tools/discord/infoServer?token=&guildId=", "string", "number"],
+      ["/tools/discord/infoApp?token=&botId=", "string", "number"],
+      [
+        "/tools/discord/infoAutomod?token=&guildId=&ruleId=",
+        "string",
+        "number",
+        "number",
       ],
-      channel: [
-        [
-          "/tools/discord/listChannel?token=&guildId=&limit=&type=",
-          "string",
-          "number",
-          "number",
-          "enum:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all",
-        ],
-        [
-          "/tools/discord/infoChannel?token=&channelId=&guildId=",
-          "string",
-          "number",
-          "number",
-        ],
+      [
+        "/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=",
+        "string",
+        "number",
+        "number",
+        "string",
+        "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE",
+        "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE",
+        "boolean",
+        "json",
+        "string",
+        "enum:PROFANITY,SEXUAL_CONTENT,SLURS",
+        "string",
+        "number",
+        "boolean",
+        "json",
+        "enum:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION",
+        "number",
+        "number",
+        "string",
+        "string",
+        "string",
+        "string",
+        "json",
       ],
-      role: [
-        [
-          "/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=",
-          "string",
-          "number",
-          "number",
-          "enum:all,oldest,newest",
-          "string",
-        ],
-        [
-          "/tools/discord/infoRole?token=&roleId=&guildId=",
-          "string",
-          "number",
-          "number",
-        ],
+    ],
+    member: [
+      [
+        "/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=",
+        "string",
+        "number",
+        "string",
+        "url",
+        "url",
+        "string",
+        "string",
       ],
-      invite: [
-        [
-          "/tools/discord/infoInvite?q=&token=&guildId=",
-          "string",
-          "string",
-          "number",
-        ],
-        [
-          "/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId=",
-          "string",
-          "number",
-          "number",
-          "enum:user,bot,all,oldest,newest,temporary,permanent,has_expire",
-          "number",
-        ],
+      [
+        "/tools/discord/infoMember?token=&userId=&guildId=",
+        "string",
+        "number",
+        "number",
       ],
-      sticker: [
-        ["/tools/discord/infoSticker?token=&q=", "string", "string"],
-        [
-          "/tools/discord/deleteSticker?token=&guildId=&stickerId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/sticker/create?token=&guildId=&url=&name=&description=&tags=&reason=",
-          "string",
-          "number",
-          "url",
-          "string",
-          "string",
-          "string",
-          "string",
-        ],
+      [
+        "/tools/discord/listMember?token=&guildId=&limit=&type=&permission=",
+        "string",
+        "number",
+        "number",
+        "enum:user,bot,all,oldest,newest,no_role,has_role,banned",
+        "string",
       ],
-      webhook: [
-        {
-          create: [
-            [
-              "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
-              "string",
-              "number",
-              "string",
-              "url",
-            ],
+      [
+        "/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=",
+        "string",
+        "number",
+        "number",
+        "enum:user,bot,all,oldest,newest,oldest_position,newest_position",
+        "string",
+      ],
+    ],
+    channel: [
+      [
+        "/tools/discord/listChannel?token=&guildId=&limit=&type=",
+        "string",
+        "number",
+        "number",
+        "enum:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all",
+      ],
+      [
+        "/tools/discord/infoChannel?token=&channelId=&guildId=",
+        "string",
+        "number",
+        "number",
+      ],
+    ],
+    role: [
+      [
+        "/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=",
+        "string",
+        "number",
+        "number",
+        "enum:all,oldest,newest",
+        "string",
+      ],
+      [
+        "/tools/discord/infoRole?token=&roleId=&guildId=",
+        "string",
+        "number",
+        "number",
+      ],
+    ],
+    invite: [
+      [
+        "/tools/discord/infoInvite?q=&token=&guildId=",
+        "string",
+        "string",
+        "number",
+      ],
+      [
+        "/tools/discord/listInvite?token=&guildId=&limit=&type=&authorId=",
+        "string",
+        "number",
+        "number",
+        "enum:user,bot,all,oldest,newest,temporary,permanent,has_expire",
+        "number",
+      ],
+    ],
+    sticker: [
+      ["/tools/discord/infoSticker?token=&q=", "string", "string"],
+      [
+        "/tools/discord/deleteSticker?token=&guildId=&stickerId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/sticker/create?token=&guildId=&url=&name=&description=&tags=&reason=",
+        "string",
+        "number",
+        "url",
+        "string",
+        "string",
+        "string",
+        "string",
+      ],
+    ],
+    webhook: [
+      {
+        create: [
+          [
+            "/tools/discord/webhook/create?token=&channelId=&name=&avatar=",
+            "string",
+            "number",
+            "string",
+            "url",
           ],
-        },
-        {
-          info: [
-            [
-              "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl=",
-              "string",
-              "number",
-              "string",
-              "url",
-            ],
+        ],
+      },
+      {
+        info: [
+          [
+            "/tools/discord/webhook/info?token=&webhookId=&webhookToken=&webhookUrl=",
+            "string",
+            "number",
+            "string",
+            "url",
           ],
-        },
-        {
-          delete: [
-            [
-              "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl=",
-              "string",
-              "number",
-              "string",
-              "url",
-            ],
+        ],
+      },
+      {
+        delete: [
+          [
+            "/tools/discord/webhook/delete?token=&webhookId=&webhookToken=&webhookUrl=",
+            "string",
+            "number",
+            "string",
+            "url",
           ],
-        },
-        {
-          send: [
-            [
-              "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar=",
-              "number",
-              "string",
-              "url",
-              "string",
-              "string",
-              "url",
-            ],
+        ],
+      },
+      {
+        send: [
+          [
+            "/tools/discord/webhook/send?webhookId=&webhookToken=&webhookUrl=&content=&username=&avatar=",
+            "number",
+            "string",
+            "url",
+            "string",
+            "string",
+            "url",
           ],
-        },
-        {
-          list: [
-            [
-              "/tools/discord/webhook/list?token=&channelId=",
-              "string",
-              "number",
-            ],
+        ],
+      },
+      {
+        list: [
+          ["/tools/discord/webhook/list?token=&channelId=", "string", "number"],
+        ],
+      },
+      {
+        listGuild: [
+          [
+            "/tools/discord/listWebhooks?token=&guildId=&type=",
+            "string",
+            "number",
+            "enum:all,oldest,newest",
           ],
-        },
-        {
-          listGuild: [
-            [
-              "/tools/discord/listWebhooks?token=&guildId=&type=",
-              "string",
-              "number",
-              "enum:all,oldest,newest",
-            ],
-          ],
-        },
+        ],
+      },
+    ],
+    message: [
+      [
+        "/tools/discord/infoMessage?token=&channelId=&messageId=",
+        "string",
+        "number",
+        "number",
       ],
-      message: [
-        [
-          "/tools/discord/infoMessage?token=&channelId=&messageId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/infoMessages?token=&channelId=&sort=&limit=",
-          "string",
-          "number",
-          "enum:asc,desc",
-          "number",
-        ],
+      [
+        "/tools/discord/infoMessages?token=&channelId=&sort=&limit=",
+        "string",
+        "number",
+        "enum:asc,desc",
+        "number",
       ],
-      voice: [
-        [
-          "/tools/discord/voice/deafen?token=&guildId=&userId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/undeafen?token=&guildId=&userId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/mute?token=&guildId=&userId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/unmute?token=&guildId=&userId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/kick?token=&guildId=&userId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/move?token=&guildId=&userId=&toChannelId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/muteall?token=&guildId=&channelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/unmuteall?token=&guildId=&channelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/deafall?token=&guildId=&channelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/undeafall?token=&guildId=&channelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=",
-          "string",
-          "number",
-          "number",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/list?token=&guildId=&channelId=",
-          "string",
-          "number",
-          "number",
-        ],
-        [
-          "/tools/discord/voice/setStatus?token=&channelId=&content=",
-          "string",
-          "number",
-          "string",
-        ],
+    ],
+    voice: [
+      [
+        "/tools/discord/voice/deafen?token=&guildId=&userId=",
+        "string",
+        "number",
+        "number",
       ],
+      [
+        "/tools/discord/voice/undeafen?token=&guildId=&userId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/mute?token=&guildId=&userId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/unmute?token=&guildId=&userId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/kick?token=&guildId=&userId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/move?token=&guildId=&userId=&toChannelId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/muteall?token=&guildId=&channelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/unmuteall?token=&guildId=&channelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/deafall?token=&guildId=&channelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/undeafall?token=&guildId=&channelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/kickall?token=&guildId=&channelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/moveall?token=&guildId=&channelId=&toChannelId=&authorId=",
+        "string",
+        "number",
+        "number",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/list?token=&guildId=&channelId=",
+        "string",
+        "number",
+        "number",
+      ],
+      [
+        "/tools/discord/voice/setStatus?token=&channelId=&content=",
+        "string",
+        "number",
+        "string",
+      ],
+    ],
   },
   info: [
     ["/info/weather?q=", "string"],
@@ -727,10 +722,10 @@ const BUILD_ID =
       : null;
 const backChallengeHtml = backChallengeTemplateSource.trim();
 const BACK_CHALLENGE_COOKIE = "_ftm";
-const BACK_CHALLENGE_MAX_AGE = 30;
-const BACK_CHALLENGE_DIFFICULTY = 10;
+const BACK_CHALLENGE_MAX_AGE_UPPER = 30;
+const BACK_CHALLENGE_MIN_DIFFICULTY = 10;
 const BACK_CHALLENGE_ENCRYPTION_KEY = crypto.randomBytes(32);
-const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE * 1000;
+const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE_UPPER * 1000;
 
 function getBackChallengeJwtKey(): string {
   const key = process.env.MD_KEY;
@@ -809,7 +804,7 @@ function isBackChallengeProofValid(value: string, nonce: string): boolean {
       break;
     }
   }
-  return zeroBits >= BACK_CHALLENGE_DIFFICULTY;
+  return zeroBits >= BACK_CHALLENGE_MIN_DIFFICULTY;
 }
 
 function generateCanvasParams(): string {
@@ -821,13 +816,13 @@ function generateCanvasParams(): string {
   return Buffer.from(json).toString("base64url");
 }
 
-async function createBackChallengeJwt(): Promise<string> {
+async function createBackChallengeJwt(maxAge: number): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   return sign(
     {
       sub: "back-challenge",
       iat: now,
-      exp: now + BACK_CHALLENGE_MAX_AGE,
+      exp: now + maxAge,
       n: crypto.randomBytes(8).toString("base64url"),
     },
     getBackChallengeJwtKey(),
@@ -856,28 +851,43 @@ async function getBackChallengeHtml(
   url: URL,
   userAgent: string,
 ): Promise<Buffer> {
+  const randomMaxAge = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
+  const randomDifficulty = Math.floor(Math.random() * (14 - 10 + 1)) + 10;
+
   const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) =>
     btoa("\u0000" + chunk),
   );
   const gzipBuffer = zlib.gzipSync(Buffer.from(JSON.stringify(valueArray)));
-  const jwtToken = await createBackChallengeJwt();
+  const jwtToken = await createBackChallengeJwt(randomMaxAge);
   const encodedPayload = encodeBackChallengePayload(
     gzipBuffer,
     userAgent,
     jwtToken,
   );
   const canvasParams = generateCanvasParams();
-  const template = backChallengeHtml
-    .replace("{{BACK_CHALLENGE_COOKIE}}", JSON.stringify(BACK_CHALLENGE_COOKIE))
-    .replace("{{BACK_CHALLENGE_VALUE}}", JSON.stringify(encodedPayload))
-    .replace("{{BACK_CHALLENGE_JWT}}", JSON.stringify(jwtToken))
-    .replace("{{BACK_CHALLENGE_CANVAS}}", JSON.stringify(canvasParams))
-    .replace("{{BACK_CHALLENGE_MAX_AGE}}", String(BACK_CHALLENGE_MAX_AGE))
-    .replace("{{BACK_CHALLENGE_DIFFICULTY}}", String(BACK_CHALLENGE_DIFFICULTY))
-    .replace(
-      "{{BACK_CHALLENGE_SECURE}}",
-      url.protocol === "https:" ? "true" : "false",
-    );
+  const destructVars = [
+    { key: "c", val: JSON.stringify(BACK_CHALLENGE_COOKIE) },
+    { key: "m", val: String(randomMaxAge) },
+    { key: "s", val: url.protocol === "https:" ? "true" : "false" },
+    { key: "d", val: String(randomDifficulty) },
+    { key: "p", val: JSON.stringify(encodedPayload) },
+    { key: "j", val: JSON.stringify(jwtToken) },
+    { key: "x", val: JSON.stringify(canvasParams) },
+  ];
+
+  for (let i = destructVars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [destructVars[i], destructVars[j]] = [destructVars[j], destructVars[i]];
+  }
+
+  const keys = destructVars.map((v) => v.key).join(",");
+  const vals = destructVars.map((v) => v.val).join(",");
+  const destructuringString = `[${keys}]=[${vals}]`;
+
+  const template = backChallengeHtml.replace(
+    "{{BACK_CHALLENGE_DESTRUCTURING}}",
+    destructuringString,
+  );
   return Buffer.from(template);
 }
 
@@ -937,7 +947,7 @@ app.use("*", async (c: Context, next: Next) => {
   return cors({
     origin: (origin) => origin,
     credentials: true,
-      exposeHeaders: ["X-Route"],
+    exposeHeaders: ["X-Route"],
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["*"],
   })(c, next);
@@ -1011,7 +1021,7 @@ function cookieChallengeIsValid(c: Context, cookieValue: any) {
   return (
     cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
   );
-};
+}
 
 app.use("*", async (c: Context, next: Next) => {
   const url = new URL(c.req.url);
@@ -1068,7 +1078,7 @@ app.get("/err/451", (c: Context) => {
 
 app.get("/logs", async (c: Context) => {
   const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
-  if(!cookieChallengeIsValid(c, cookieValue)) return c.body(null, 403);
+  if (!cookieChallengeIsValid(c, cookieValue)) return c.body(null, 403);
   c.header("Refresh", "3");
   c.header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
   c.header("Content-Type", "text/plain");
@@ -1077,11 +1087,15 @@ app.get("/logs", async (c: Context) => {
     await s.write(""); // Initial flush
 
     await s.write(
-      JSON.stringify({
-        _message: "Experimental endpoint. Refreshing every 3 seconds.",
-        limit: 30,
-        requested: getLastRequestedLogs(),
-      }, null, 1),
+      JSON.stringify(
+        {
+          _message: "Experimental endpoint. Refreshing every 3 seconds.",
+          limit: 30,
+          requested: getLastRequestedLogs(),
+        },
+        null,
+        1,
+      ),
     );
   });
 });
@@ -1093,28 +1107,24 @@ function setPlaygroundAssetCache(c: Context) {
   );
 }
 
-[
-  "/playground",
-  "/terms",
-  "/privacy",
-  "/amc/terms",
-  "/amc/privacy",
-].forEach((route) => {
-  app.get(route, (c: Context) => {
-    c.header("Content-Type", "text/html");
-    setPlaygroundAssetCache(c);
+["/playground", "/terms", "/privacy", "/amc/terms", "/amc/privacy"].forEach(
+  (route) => {
+    app.get(route, (c: Context) => {
+      c.header("Content-Type", "text/html");
+      setPlaygroundAssetCache(c);
 
-    return stream(c, async (s) => {
-      await s.write(""); // Initial flush
+      return stream(c, async (s) => {
+        await s.write(""); // Initial flush
 
-      if (route.startsWith("/amc")) {
-        await s.write(amcTemplate);
-      } else {
-        await s.write(playgroundTemplate);
-      }
+        if (route.startsWith("/amc")) {
+          await s.write(amcTemplate);
+        } else {
+          await s.write(playgroundTemplate);
+        }
+      });
     });
-  });
-});
+  },
+);
 
 const servePlaygroundMainJs = (c: Context) =>
   stream(c, async (s) => {

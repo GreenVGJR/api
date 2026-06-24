@@ -12,6 +12,7 @@ import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/logs.js";
+import { rateLimit } from "./functions/httpRequest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1297,6 +1298,7 @@ app.use("*", async (c: Context, next: Next) => {
   const checkexists = c.notFound();
 
   if (checkexists) {
+    await rateLimit();
     return c.body(null, 404);
   }
   await next();

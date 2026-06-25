@@ -14372,7 +14372,7 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 
   try {
     const res = await fetch(
-      "https://multi-modal.ai.cloudflare.com/api/inference",
+      atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl"),
       {
         method: "POST",
         headers: { ...commonHeaders, "Content-Type": "application/json" },

@@ -143,7 +143,7 @@ app.get("/ai-image/flux_klein", async (c) => {
   formData.append("guidance", "2");
 
   const response = await fetch(
-    "https://multi-modal.ai.cloudflare.com/api/inference?model=@cf/black-forest-labs/flux-2-klein-9b",
+    `${atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl")}?model=@cf/black-forest-labs/flux-2-klein-9b`,
     {
       body: formData,
       method: "POST",

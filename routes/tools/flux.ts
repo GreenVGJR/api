@@ -8,7 +8,6 @@ import { commonHeaders, userAgent } from "../../functions/request.js";
 async function resizeImage(input: Buffer | ArrayBuffer) {
   return await new Bun.Image(input)
     .resize(1024, 1024, { filter: "mks2021" })
-    .png({ compressionLevel: 9, palette: false })
     .buffer();
 }
 
@@ -26,6 +25,7 @@ app.get("/ai-image/flux_schnell", async (c) => {
     "X-Route",
     "api.cloudflare.com, fast-flux-demo.replicate.workers.dev",
   );
+  c.header("X-Enc-Data", "model:flux-1-schnell");
 
   if (CF_AID && CF_TOKEN) {
     if (query.length > 2048) {
@@ -45,8 +45,8 @@ app.get("/ai-image/flux_schnell", async (c) => {
             body: JSON.stringify({
               prompt: query,
               steps: 1,
-              width: 512,
-              height: 512,
+              width: 768,
+              height: 768,
             }),
           },
         );
@@ -135,6 +135,7 @@ app.get("/ai-image/flux_klein", async (c) => {
   }
 
   c.header("X-Route", "multi-modal.ai.cloudflare.com");
+  c.header("X-Enc-Data", "model:@cf/black-forest-labs/flux-2-klein-9b");
 
   const formData = new FormData();
   formData.append("prompt", query);

@@ -215,7 +215,7 @@ export const userAgent =
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Encoding": "gzip, br",
+  "Accept-Encoding": "gzip, deflate, br, zstd",
   "Accept-Language": "en-US",
   Connection: "keep-alive",
   Priority: "u=0, i",
@@ -2896,7 +2896,7 @@ export const Gemini = async function Gemini(
   const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
   const req = await fetch(
-    `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c`,
+    `https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=0`,
     {
       method: "POST",
       headers: {
@@ -2941,6 +2941,7 @@ export const Gemini = async function Gemini(
     req.headers.getSetCookie?.().join("; ") ?? req.headers.get("set-cookie");
   const resText = await req.text();
   let response;
+  let finalres;
 
   let data: any[] = [];
   try {
@@ -2985,7 +2986,7 @@ export const Gemini = async function Gemini(
     const newCookies = filterSpecificCookies(cookiess, ["NID"]);
     if (newCookies) objectbody.cookies = newCookies;
 
-    const finalres = innerData as any;
+    finalres = innerData as any;
 
     response =
       (finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ??
@@ -2997,8 +2998,13 @@ export const Gemini = async function Gemini(
   }
 
   const responseBody = {
+    isFallback: retry !== 0,
     response: response,
     data: {
+      responseInfo: {
+        id: finalres[4]?.[0]?.[0]?.split("_")?.[1] || null,
+        language: finalres[4]?.[0]?.[9] || null,
+      },
       conversation: encryptConvo(JSON.stringify(objectbody)),
       model: "gemini-3.5-flash",
     },
@@ -14354,6 +14360,54 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
           : {}),
         userProfile: secres?.userProfile?.publicProfileInfo || null,
       },
+    };
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+};
+
+export const GoogleGemma = async function GoogleGemma(query: string) {
+  if (!query) return null;
+
+  try {
+    const res = await fetch(
+      "https://multi-modal.ai.cloudflare.com/api/inference",
+      {
+        method: "POST",
+        headers: { ...commonHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "@hf/google/gemma-7b-it",
+          prompt: query,
+          max_tokens: 256,
+          stream: true,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      return { error: `${res.status} - Can't process this` };
+    }
+
+    const text = await res.text();
+    let response = "";
+    let usage = null;
+
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") break;
+      try {
+        const json = JSON.parse(payload);
+        if (json.response) response += json.response;
+        if (json.usage) usage = json.usage;
+      } catch {}
+    }
+
+    return {
+      response: response || null,
+      data: { model: "gemma-7b-it", ...(usage || {}) },
     };
   } catch (e) {
     console.error(e);

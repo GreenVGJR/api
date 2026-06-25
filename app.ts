@@ -123,21 +123,22 @@ const API_ROUTES = {
   ],
   lyrics: [
     ["/lyrics/youtube?q=", "string"],
-    ["/lyrics/deezer?q=", "string"],
+    ["/lyrics/spotify?q=", "string"],
     ["/lyrics/shazam?q=", "string"],
     ["/lyrics/tidal?q=", "string"],
-    ["/lyrics/spotify?q=", "string"],
+    ["/lyrics/deezer?q=", "string"],
   ],
   tools: {
     ai: {
       chat: [
+        ["/tools/chat/gemma?prompt=", "string"],
         ["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
         ["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
       ],
       image_generation: [
+        ["/tools/ai-image/magicstudio?prompt=", "string"],
         ["/tools/ai-image/flux_schnell?prompt=", "string"],
         ["/tools/ai-image/flux_klein?prompt=", "string"],
-        ["/tools/ai-image/magicstudio?prompt=", "string"],
       ],
     },
     misc: [
@@ -983,7 +984,7 @@ app.get("/logs", async (c: Context) => {
   const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
   if (!cookieChallengeIsValid(c, cookieValue)) return c.body(null, 403);
   c.header("Refresh", "3");
-  c.header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  c.header("Cache-Control", "no-store, no-cache, max-age=2, must-revalidate");
   c.header("Content-Type", "text/plain");
 
   return stream(c, async (s) => {
@@ -1075,7 +1076,7 @@ app.get("/", (c: Context) =>
     c.header("Content-Type", typeRender);
     c.header(
       "Cache-Control",
-      "public, no-store, no-cache, max-age=0, must-revalidate",
+      "public, no-store, no-cache, max-age=1, must-revalidate",
     );
     if (!renderJson) c.header("Location", "/playground");
 

@@ -31,7 +31,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
     return logResponse(c, c.text("Forbidden", 403));
   }
 
-  c.header("X-Enc-Route", "v2");
+  c.header("X-Enc-Route", "v3");
 
   const type = headers?.get
     ? headers.get("content-type")

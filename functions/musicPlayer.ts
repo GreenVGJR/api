@@ -122,7 +122,7 @@ export async function setVoiceStatus(
         return;
       }
 
-      const delay = 750 * (i + 1);
+      const delay = 1000 * (i + 1);
       console.warn(
         `Voice Status Fetch Retry (${i + 1}/${retries}): ${getFetchErrorCode(err) || "network error"}, retrying in ${delay}ms`,
       );
@@ -232,7 +232,7 @@ export async function createMusicStream(
   }
 
   c.header("X-Player", "lavalink");
-  c.header("X-Enc-Route", "v4-beta");
+  c.header("X-Enc-Route", "v4");
   c.header("X-Route", "LIVE");
 
   return stream(c, async (s: any) => {

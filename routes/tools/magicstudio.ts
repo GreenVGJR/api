@@ -12,7 +12,9 @@ app.get("/ai-image/magicstudio", async (c) => {
   } else if (query === "") {
     return c.json({ error: "Nothing to do" }, 202);
   }
+  const genuuid = crypto.randomUUID();
   c.header("X-Route", "ai-api.magicstudio.com");
+  c.header("X-Enc-Data", "model:unknown,id:" + genuuid);
 
   const formq = new FormData();
   formq.append("prompt", query);
@@ -20,7 +22,7 @@ app.get("/ai-image/magicstudio", async (c) => {
   formq.append("request_timestamp", String(new Date().getTime() / 1000));
   formq.append("user_is_subscribed", "false");
   formq.append("user_profile_id", "null");
-  formq.append("anonymous_user_id", crypto.randomUUID());
+  formq.append("anonymous_user_id", genuuid);
 
   return await blobDispatch(
     c,

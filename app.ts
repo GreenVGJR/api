@@ -13,6 +13,11 @@ import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/logs.js";
 import { rateLimit } from "./functions/httpRequest.js";
+import {
+  BACK_CHALLENGE_COOKIE,
+  getBackChallengeValue,
+  cookieChallengeIsValid,
+} from "./functions/backChallenge.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -722,11 +727,6 @@ const BUILD_ID =
       ? buildIdConfig
       : null;
 const backChallengeHtml = backChallengeTemplateSource.trim();
-const BACK_CHALLENGE_COOKIE = "_ftm";
-const BACK_CHALLENGE_MAX_AGE_UPPER = 30;
-const BACK_CHALLENGE_MIN_DIFFICULTY = 10;
-const BACK_CHALLENGE_ENCRYPTION_KEY = crypto.randomBytes(32);
-const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE_UPPER * 1000;
 
 function getBackChallengeJwtKey(): string {
   const key = process.env.MD_KEY;
@@ -734,41 +734,6 @@ function getBackChallengeJwtKey(): string {
   return key;
 }
 
-function encryptChallengeValue(value: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv(
-    "aes-256-gcm",
-    BACK_CHALLENGE_ENCRYPTION_KEY,
-    iv,
-  );
-  const encrypted = Buffer.concat([
-    cipher.update(value, "utf8"),
-    cipher.final(),
-  ]);
-  const authTag = cipher.getAuthTag();
-  return (
-    iv.toString("base64url") +
-    authTag.toString("base64url") +
-    encrypted.toString("base64url")
-  );
-}
-
-function decryptChallengeValue(encrypted: string): string | null {
-  try {
-    const iv = Buffer.from(encrypted.slice(0, 16), "base64url");
-    const authTag = Buffer.from(encrypted.slice(16, 38), "base64url");
-    const data = Buffer.from(encrypted.slice(38), "base64url");
-    const decipher = crypto.createDecipheriv(
-      "aes-256-gcm",
-      BACK_CHALLENGE_ENCRYPTION_KEY,
-      iv,
-    );
-    decipher.setAuthTag(authTag);
-    return decipher.update(data) + decipher.final("utf8");
-  } catch {
-    return null;
-  }
-}
 const BACK_CHALLENGE_PREFIXES = [
   "/search",
   "/profile",
@@ -777,36 +742,6 @@ const BACK_CHALLENGE_PREFIXES = [
   "/info",
   "/logs",
 ];
-
-function getBackChallengeValue(c: Context): string {
-  const ipHash = crypto
-    .createHash("md5")
-    .update(c.req.header("cf-connecting-ip") || "")
-    .digest("hex");
-  return encryptChallengeValue(`${ipHash}:${Date.now()}`);
-}
-
-function isBackChallengeProofValid(value: string, nonce: string): boolean {
-  if (!/^\d+$/.test(nonce)) return false;
-  const hash = crypto
-    .createHash("sha512")
-    .update(value + nonce)
-    .digest();
-  let zeroBits = 0;
-  for (const byte of hash) {
-    if (byte === 0) {
-      zeroBits += 8;
-    } else {
-      let current = byte;
-      while ((current & 0x80) === 0) {
-        zeroBits++;
-        current <<= 1;
-      }
-      break;
-    }
-  }
-  return zeroBits >= BACK_CHALLENGE_MIN_DIFFICULTY;
-}
 
 function generateCanvasParams(): string {
   const text = crypto.randomBytes(4).toString("hex");
@@ -991,39 +926,6 @@ if (BUILD_ID) {
   });
 }
 
-function cookieChallengeIsValid(c: Context, cookieValue: any) {
-  if (!cookieValue) return false;
-  const ua = c.req.header("user-agent") || "";
-  const key = crypto.createHash("sha512").update(ua).digest();
-  let decoded: string;
-  try {
-    const raw = Buffer.from(cookieValue, "base64url");
-    const unmasked = Buffer.from(raw.map((b, i) => b ^ key[i % key.length]));
-    decoded = unmasked.toString("utf8");
-  } catch {
-    return false;
-  }
-  const parts = decoded.split(".");
-  if (parts.length !== 3) return false;
-  const [encrypted, nonce, canvasHash] = parts;
-  if (!/^[0-9a-f]{128}$/i.test(canvasHash)) return false;
-  if (!isBackChallengeProofValid(encrypted, nonce)) return false;
-  const decrypted = decryptChallengeValue(encrypted);
-  if (!decrypted) return false;
-  const colonIdx = decrypted.lastIndexOf(":");
-  if (colonIdx === -1) return false;
-  const cookieHash = decrypted.slice(0, colonIdx);
-  const cookieTs = Number(decrypted.slice(colonIdx + 1));
-  if (!cookieTs || Number.isNaN(cookieTs)) return false;
-  const ipHash = crypto
-    .createHash("md5")
-    .update(c.req.header("cf-connecting-ip") || "")
-    .digest("hex");
-  return (
-    cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
-  );
-}
-
 app.use("*", async (c: Context, next: Next) => {
   const url = new URL(c.req.url);
   if (!isBackChallengePath(url.pathname)) {
@@ -1090,7 +992,7 @@ app.get("/logs", async (c: Context) => {
     await s.write(
       JSON.stringify(
         {
-          _message: "Experimental endpoint. Refreshing every 3 seconds.",
+          _message: "Refreshing every 3 seconds.",
           limit: 30,
           requested: getLastRequestedLogs(),
         },
@@ -1299,6 +1201,10 @@ app.use("*", async (c: Context, next: Next) => {
 
   if (checkexists) {
     await rateLimit();
+    c.header(
+      "Cache-Control",
+      "public, max-age=3600, stale-while-revalidate=86400",
+    );
     return c.body(null, 404);
   }
   await next();

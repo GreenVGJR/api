@@ -6,6 +6,10 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import config from "../config.json" with { type: "json" };
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./logs.js";
+import {
+  cookieChallengeIsValid,
+  BACK_CHALLENGE_COOKIE,
+} from "./backChallenge.js";
 
 const { generate_hash } = config;
 
@@ -241,8 +245,11 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
     requrl.pathname?.startsWith("/tools/discord/") ||
       requrl.pathname?.startsWith("/tools/db/")
       ? "public, max-age=0, must-revalidate"
-      : "public, max-age=10, must-revalidate",
+      : "public, max-age=5, must-revalidate",
   );
+
+  const checkcookieApp = getCookie(c, BACK_CHALLENGE_COOKIE);
+  c.status(cookieChallengeIsValid(c, checkcookieApp) ? 307 : 200);
 
   return logResponse(
     c,

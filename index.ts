@@ -1,4 +1,5 @@
 import app from "./app.js";
+import { getBotGuardChallenge, getYoutubei } from "./functions/request.js";
 
 const port = 3000;
 const g = globalThis as any;
@@ -15,6 +16,17 @@ if (!g.__vgjr_initialized) {
       .then(({ autoInit }) => autoInit())
       .catch(() => {});
   }, 0);
+
+  Promise.allSettled([getBotGuardChallenge(), getYoutubei()])
+    .then((results) => {
+      const failed = results.find((result) => result.status === "rejected") as
+        | PromiseRejectedResult
+        | undefined;
+      if (failed) console.error("YouTube warmup failed:", failed.reason);
+    })
+    .catch((err) => {
+      console.error("YouTube warmup failed:", err);
+    });
 
   console.log(`\n🚀 Bun Server is running!`);
   console.log(`🏠 Local:    http://localhost:${port}/playground`);

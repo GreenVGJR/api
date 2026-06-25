@@ -13,7 +13,6 @@ app.get("/google", async (c) => {
     return c.json({ error: "Nothing to do" }, 202);
   }
   c.header("X-Route", "cse.google.com, www.google.com");
-  c.header("X-Warning", "You are using experimental endpoint. Expect errors");
   return await dispatch(c, () => googleSearch(query));
 });
 

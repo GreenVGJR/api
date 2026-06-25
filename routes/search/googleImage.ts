@@ -17,7 +17,6 @@ app.get("/googleImage", async (c) => {
     return c.json({ error: "Nothing to do" }, 202);
   }
   c.header("X-Route", "www.googleapis.com, www.google.com");
-  c.header("X-Warning", "You are using experimental endpoint. Expect errors");
   return await dispatch(c, () => googleImgSearch(query, sort));
 });
 

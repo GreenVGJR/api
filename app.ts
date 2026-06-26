@@ -987,8 +987,6 @@ app.get("/err/451", (c: Context) => {
 });
 
 app.get("/logs", async (c: Context) => {
-  const cookieValue = getCookie(c, BACK_CHALLENGE_COOKIE);
-  if (!cookieChallengeIsValid(c, cookieValue)) return c.body(null, 403);
   c.header("Refresh", "3");
   c.header("Cache-Control", "no-store, no-cache, max-age=2, must-revalidate");
   c.header("Content-Type", "text/plain");

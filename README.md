@@ -13,6 +13,7 @@ Library:
 - [lavalink-client](https://www.npmjs.com/package/lavalink-client)
 - [linkedom](https://www.npmjs.com/package/linkedom)
 - [sharp](https://www.npmjs.com/package/sharp)
+- [tesseract.js](https://www.npmjs.com/package/tesseract.js)
 - [tslib](https://www.npmjs.com/package/tslib)
 - [youtubei.js](https://www.npmjs.com/package/youtubei.js)
 

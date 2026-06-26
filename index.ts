@@ -1,5 +1,6 @@
 import app from "./app.js";
 import { getBotGuardChallenge, getYoutubei } from "./functions/request.js";
+import { getOCRWorker } from "./functions/ocrWorker.js";
 
 const port = 3000;
 const g = globalThis as any;
@@ -17,15 +18,15 @@ if (!g.__vgjr_initialized) {
       .catch(() => {});
   }, 0);
 
-  Promise.allSettled([getBotGuardChallenge(), getYoutubei()])
+  Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getOCRWorker()])
     .then((results) => {
       const failed = results.find((result) => result.status === "rejected") as
         | PromiseRejectedResult
         | undefined;
-      if (failed) console.error("YouTube warmup failed:", failed.reason);
+      if (failed) console.error("YouTube/OCR warmup failed:", failed.reason);
     })
     .catch((err) => {
-      console.error("YouTube warmup failed:", err);
+      console.error("YouTube/OCR warmup failed:", err);
     });
 
   console.log(`\n🚀 Bun Server is running!`);

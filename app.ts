@@ -142,6 +142,7 @@ const API_ROUTES = {
       ],
     },
     misc: [
+      ["/tools/ocr?imageUrl=", "string"],
       ["/tools/translate?q=&from=&to=", "string", "string", "string"],
       ["/tools/timezone?q=", "string"],
       ["/tools/emoji?q=&limit=", "string", "number"],
@@ -741,7 +742,7 @@ const BACK_CHALLENGE_PREFIXES = [
   "/lyrics",
   "/tools",
   "/info",
-  "/logs",
+  "/download",
 ];
 
 function generateCanvasParams(): string {
@@ -789,7 +790,7 @@ async function getBackChallengeHtml(
   userAgent: string,
 ): Promise<Buffer> {
   const randomMaxAge = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
-  const randomDifficulty = Math.floor(Math.random() * (14 - 10 + 1)) + 10;
+  const randomDifficulty = Math.floor(Math.random() * (12 - 10 + 1)) + 10;
 
   const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) =>
     btoa("\u0000" + chunk),
@@ -947,12 +948,17 @@ app.use("*", async (c: Context, next: Next) => {
     url,
     c.req.header("user-agent") || "",
   );
-  const deflateData = zlib.deflateSync(htmlBuffer);
-  c.header("Cache-Control", "no-store, no-transform");
-  c.header("Content-Encoding", "deflate");
+  const gzipData = zlib.gzipSync(htmlBuffer);
+  const deflateData = zlib.deflateSync(gzipData);
+  const brData = zlib.brotliCompressSync(deflateData);
+  const zstdData = Bun.zstdCompressSync(brData);
+
+  c.header("Content-Encoding", "gzip, deflate, br, zstd");
   c.header("Content-Type", "text/html");
+  c.header("Cache-Control", "public, no-store, max-age=0");
+  c.header("X-Message", "Verifying your browser first before processing");
   c.status(307);
-  return c.body(deflateData);
+  return c.body(Buffer.from(zstdData));
 });
 
 app.get("/favicon.ico", (c: Context) => {

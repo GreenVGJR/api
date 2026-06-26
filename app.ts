@@ -955,7 +955,7 @@ app.use("*", async (c: Context, next: Next) => {
 
   c.header("Content-Encoding", "gzip, deflate, br, zstd");
   c.header("Content-Type", "text/html");
-  c.header("Cache-Control", "public, no-store, max-age=0");
+  c.header("Cache-Control", "public, no-store, max-age=0, no-transform");
   c.header("X-Message", "Verifying your browser first before processing");
   c.status(307);
   return c.body(Buffer.from(zstdData));

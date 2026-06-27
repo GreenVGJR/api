@@ -89,9 +89,11 @@ export function cookieChallengeIsValid(c: Context, cookieValue: any) {
     return false;
   }
   const parts = decoded.split(".");
-  if (parts.length !== 3) return false;
-  const [encrypted, nonce, canvasHash] = parts;
-  if (!/^[0-9a-f]{128}$/i.test(canvasHash)) return false;
+  if (parts.length < 2) return false;
+  const [encrypted, nonce, ...hashes] = parts;
+  for (const h of hashes) {
+    if (h !== "" && !/^[0-9a-f]{128}$/i.test(h)) return false;
+  }
   if (!isBackChallengeProofValid(encrypted, nonce)) return false;
   const decrypted = decryptChallengeValue(encrypted);
   if (!decrypted) return false;

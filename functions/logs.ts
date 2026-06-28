@@ -2,7 +2,6 @@ import { Context } from "hono";
 
 type RequestLogEntry = {
   path: [string, number];
-  requester: string;
   UA: string;
   timestamp: string;
 };
@@ -31,15 +30,12 @@ function maskConnectingIp(ip?: string): string {
 }
 
 export function recordRequestLog(c: Context, statusCode: number) {
-  const country = c.req.header("cf-ipcountry") || "null";
-  const requester = `${country}-${maskConnectingIp(c.req.header("cf-connecting-ip"))}`;
   const path = c.req.path;
   const UA = c.req.header("user-agent") || "null";
 
   requestLogs.unshift({
     timestamp: new Date().toISOString(),
     path: [path, statusCode],
-    requester,
     UA,
   });
 

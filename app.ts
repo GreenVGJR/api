@@ -743,6 +743,7 @@ const BACK_CHALLENGE_PREFIXES = [
   "/tools",
   "/info",
   "/download",
+  "/music",
 ];
 
 function generateCanvasParams(): string {
@@ -1019,15 +1020,17 @@ function setPlaygroundAssetCache(c: Context) {
   (route) => {
     app.get(route, (c: Context) => {
       c.header("Content-Type", "text/html");
+      c.header("Content-Encoding", "gzip");
+      c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
       setPlaygroundAssetCache(c);
 
       return stream(c, async (s) => {
         await s.write(""); // Initial flush
 
         if (route.startsWith("/amc")) {
-          await s.write(amcTemplate);
+          await s.write(zlib.gzipSync(amcTemplate));
         } else {
-          await s.write(playgroundTemplate);
+          await s.write(zlib.gzipSync(playgroundTemplate));
         }
       });
     });
@@ -1038,6 +1041,7 @@ const servePlaygroundMainJs = (c: Context) =>
   stream(c, async (s) => {
     setPlaygroundAssetCache(c);
     c.header("Content-Type", "application/javascript");
+    c.header("Content-Encoding", "gzip");
 
     const host = (c.req.header("host") || "").toLowerCase();
     const isLocal = isLocalRequest(host);
@@ -1046,7 +1050,7 @@ const servePlaygroundMainJs = (c: Context) =>
     const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";`;
     const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 
-    await s.write(finalJs);
+    await s.write(zlib.gzipSync(finalJs));
   });
 
 app.get("/playground/main.js", servePlaygroundMainJs);
@@ -1055,7 +1059,8 @@ const servePlaygroundCfJs = (c: Context) =>
   stream(c, async (s) => {
     setPlaygroundAssetCache(c);
     c.header("Content-Type", "application/javascript");
-    await s.write(cfJs);
+    c.header("Content-Encoding", "gzip");
+    await s.write(zlib.gzipSync(cfJs));
   });
 
 app.get("/playground/cf.js", servePlaygroundCfJs);
@@ -1064,7 +1069,8 @@ const servePlaygroundMainCss = (c: Context) =>
   stream(c, async (s) => {
     setPlaygroundAssetCache(c);
     c.header("Content-Type", "text/css");
-    await s.write(mainCss);
+    c.header("Content-Encoding", "gzip");
+    await s.write(zlib.gzipSync(mainCss));
   });
 
 app.get("/playground/main.css", servePlaygroundMainCss);

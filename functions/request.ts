@@ -216,7 +216,7 @@ export async function getYoutubei() {
 }
 
 export const userAgent =
-  "Mozilla/5.0 (X11; Linux x86_64; rv:153.0; VGJR Client+http://vgjr.top) Gecko/20100101 Firefox/153.0";
+  "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 
 export const commonHeaders = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

@@ -21,8 +21,7 @@ if (!g.__vgjr_initialized) {
   Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getOCRWorker()])
     .then((results) => {
       const failed = results.find((result) => result.status === "rejected") as
-        | PromiseRejectedResult
-        | undefined;
+        PromiseRejectedResult | undefined;
       if (failed) console.error("YouTube/OCR warmup failed:", failed.reason);
     })
     .catch((err) => {

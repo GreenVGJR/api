@@ -52,7 +52,10 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
     : type || "application/octet-stream";
 
   c.header("Content-Type", contentType);
-  c.header("Cache-Control", "public, max-age=30, must-revalidate");
+  c.header(
+    "Cache-Control",
+    "public, max-age=30, must-revalidate, no-transform",
+  );
 
   return logResponse(
     c,

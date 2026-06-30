@@ -822,7 +822,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       url.searchParams.set('json', '1');
       fetchUrl = url.toString();
     }
-    const fetchOptions = { headers, mode: "same-origin", redirect: isDownload ? "manual" : undefined };
+    const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
     verboseFetch = createVerboseFetchView(fetchUrl, fetchOptions);
     verboseFetch.line("Waiting for response headers...");
     const response = await fetch(fetchUrl, fetchOptions);

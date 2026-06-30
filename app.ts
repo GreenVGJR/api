@@ -885,7 +885,6 @@ app.use("*", async (c: Context, next: Next) => {
   }
   return cors({
     origin: (origin) => origin,
-    credentials: true,
     exposeHeaders: ["X-Route"],
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["*"],
@@ -1021,7 +1020,10 @@ function setPlaygroundAssetCache(c: Context) {
     app.get(route, (c: Context) => {
       c.header("Content-Type", "text/html");
       c.header("Content-Encoding", "gzip");
-      c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
+      c.header(
+        "Link",
+        "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload",
+      );
       setPlaygroundAssetCache(c);
 
       return stream(c, async (s) => {

@@ -39,6 +39,7 @@ const startupDataPromise = Promise.all([
   fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"),
   fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"),
   fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"),
+  fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"),
   fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"),
   fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8"),
 ] as const);
@@ -229,6 +230,12 @@ const API_ROUTES = {
         "string",
         "string",
         "json",
+      ],
+      [
+        "/tools/discord/deleteAutomod?token=&guildId=&ruleId=",
+        "string",
+        "number",
+        "number",
       ],
     ],
     member: [
@@ -685,6 +692,7 @@ const [
   mainJs,
   cfJs,
   backChallengeTemplateSource,
+  challengeTemplateSource,
   rawCss,
   amcTemplateSource,
 ] = await startupDataPromise;
@@ -729,6 +737,7 @@ const BUILD_ID =
       ? buildIdConfig
       : null;
 const backChallengeHtml = backChallengeTemplateSource.trim();
+const challengeHtml = challengeTemplateSource.trim();
 
 function getBackChallengeJwtKey(): string {
   const key = process.env.MD_KEY;
@@ -1015,29 +1024,54 @@ function setPlaygroundAssetCache(c: Context) {
   );
 }
 
-["/playground", "/terms", "/privacy", "/amc/terms", "/amc/privacy"].forEach(
-  (route) => {
-    app.get(route, (c: Context) => {
-      c.header("Content-Type", "text/html");
-      c.header("Content-Encoding", "gzip");
-      c.header(
-        "Link",
-        "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload",
-      );
-      setPlaygroundAssetCache(c);
+const PLAYGROUND_CHALLENGE = crypto.randomBytes(32).toString("hex");
 
-      return stream(c, async (s) => {
-        await s.write(""); // Initial flush
+const CHALLENGE_ROUTES = ["/playground", "/terms", "/privacy"];
 
-        if (route.startsWith("/amc")) {
-          await s.write(zlib.gzipSync(amcTemplate));
-        } else {
-          await s.write(zlib.gzipSync(playgroundTemplate));
-        }
-      });
+app.on(["GET", "POST"], CHALLENGE_ROUTES, async (c: Context) => {
+  if (c.req.method === "GET") {
+    const body = challengeHtml.replace("{{CHALLENGE}}", PLAYGROUND_CHALLENGE);
+    setPlaygroundAssetCache(c);
+    const gzipData = zlib.gzipSync(body);
+
+    c.header("Content-Type", "text/html");
+    c.header("Content-Encoding", "gzip");
+    c.status(403);
+    return c.body(gzipData);
+  }
+
+  const form = await c.req.parseBody();
+  const fm = form.fm;
+  if (typeof fm !== "string" || fm !== PLAYGROUND_CHALLENGE) {
+    return c.redirect(c.req.path, 302);
+  }
+  c.header("Content-Type", "text/html");
+  c.header("Content-Encoding", "gzip");
+  c.header(
+    "Link",
+    "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload",
+  );
+  setPlaygroundAssetCache(c);
+
+  return stream(c, async (s) => {
+    await s.write("");
+    await s.write(zlib.gzipSync(playgroundTemplate));
+  });
+});
+
+["/amc/terms", "/amc/privacy"].forEach((route) => {
+  app.get(route, (c: Context) => {
+    c.header("Content-Type", "text/html");
+    c.header("Content-Encoding", "gzip");
+    setPlaygroundAssetCache(c);
+
+    return stream(c, async (s) => {
+      await s.write(""); // Initial flush
+
+      await s.write(zlib.gzipSync(amcTemplate));
     });
-  },
-);
+  });
+});
 
 const servePlaygroundMainJs = (c: Context) =>
   stream(c, async (s) => {

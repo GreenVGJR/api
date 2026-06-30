@@ -1092,11 +1092,12 @@ function parseQueryParams(queryString, types = []) {
 
 function buildQueryString(params) {
   if (params.length === 0) return "";
+  const nonEmpty = params.filter((p) => p.value !== "");
+  if (nonEmpty.length === 0) return "";
   return (
     "?" +
-    params
+    nonEmpty
       .map((p) => {
-        // Ensure values are fully encoded (slashes, colons, etc)
         const encodedValue = encodeURIComponent(decodeURIComponent(p.value));
         return `${encodeURIComponent(p.key)}=${encodedValue}`;
       })
@@ -1157,7 +1158,7 @@ function buildEndpointUrl(endpoint) {
   const cleanPath = endpointPath.startsWith("/")
     ? endpointPath
     : "/" + endpointPath;
-  return cleanBase + cleanPath + getEndpointQuery(endpoint);
+  return cleanBase + cleanPath;
 }
 
 function renderParamControl(p, i) {

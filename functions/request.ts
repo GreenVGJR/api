@@ -17,10 +17,15 @@ import {
   keytidal,
   keytidalopen,
   setKeyTidal,
+  instagramKey,
 } from "./authRequest.js";
 
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
+// @ts-expect-error no types
+import signBogus from "./tiktok_signature/xbogus.mjs";
+// @ts-expect-error no types
+import signGnarly from "./tiktok_signature/xgnarly.mjs";
 
 import { Innertube, Log, ProtoUtils } from "youtubei.js";
 import BG from "bgutils-js";
@@ -573,6 +578,7 @@ let keyimgur: string | undefined;
 let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
 let keytumblr: string | undefined = process.env.TUMBLR;
+let keyInstagram: string | null = null;
 let saweriaBuildId: string | undefined;
 
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
@@ -5337,8 +5343,9 @@ export const TiktokUser = async function TiktokUser(que: string) {
   }
 };
 
+// Have TLS Fingerprint, require http2 or above
 export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
-  const url = `https://www.tiktok.com/api/explore/item_list/?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=mp4&webcast_language=en&screen_height=1440&screen_width=2560`;
+  const url = `https://www.tiktok.com/api/explore/item_list/?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
   const headers = {
     ...commonHeaders,
     Referer: "https://www.tiktok.com/explore",
@@ -5347,9 +5354,19 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
     "Sec-Fetch-Site": "same-origin",
   };
 
+  const queryString = url.split("?")[1] || "";
+  const xBogus = signBogus(
+    queryString,
+    "",
+    userAgent,
+    Math.floor(Date.now() / 1000),
+  );
+  const xGnarly = signGnarly(queryString, "", userAgent);
+  const signedUrl = `${url}&X-Bogus=${xBogus}&X-Gnarly=${xGnarly}`;
+
   for (let i = 0; i < 3; i++) {
     try {
-      const pul = await fetch(url, { headers });
+      const pul = await fetch(signedUrl, { headers });
       const res = await pul.text();
 
       if (res === "" || pul.status !== 200) {
@@ -6422,8 +6439,13 @@ export const redditMedia = async function redditMedia(
   }
 };
 
+// Have TLS Fingerprint, require http2 or above
 export const instagramUser = async function instagramUser(que: string) {
   if (!que) return null;
+
+  if (!keyInstagram) {
+    keyInstagram = await instagramKey();
+  }
 
   try {
     const testreq = await fetch(
@@ -6431,6 +6453,7 @@ export const instagramUser = async function instagramUser(que: string) {
       {
         headers: {
           ...commonHeaders,
+          ...(keyInstagram ? { Cookie: keyInstagram } : {}),
           "Sec-Fetch-Dest": "iframe",
         },
       },
@@ -6464,47 +6487,55 @@ export const instagramUser = async function instagramUser(que: string) {
       __relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider: false,
     };
 
-    const req = await fetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`,
-      {
-        headers: {
-          ...commonHeaders,
-          "X-IG-App-ID": "936619743392459",
-          "X-ASBD-ID": "198387",
-          "X-IG-WWW-Claim": "0",
-          Origin: "https://www.instagram.com",
-        },
-      },
-    );
-
     let a: any = null;
     let b: any = null;
-    try {
-      const text = await req.text();
-      if (text && text.trim() !== "") {
-        const res = JSON.parse(text);
-        a = res?.data?.user;
-      }
-    } catch {}
 
-    if (!a) {
-      const req2 = await fetch(
-        `https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`,
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const req = await fetch(
+        `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`,
         {
           headers: {
             ...commonHeaders,
+            ...(keyInstagram ? { Cookie: keyInstagram } : {}),
+            "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "198387",
+            "X-IG-WWW-Claim": "0",
             Origin: "https://www.instagram.com",
-            "X-Ig-App-Id": "936619743392459",
-            "X-Asbd-Id": "198387",
-            "X-Ig-Www-Claim": "0",
           },
         },
       );
+
       try {
-        const res2 = await req2.json();
-        b = res2?.data?.user || res2?.data || res2;
-        a = b?.user ? b.user : b;
+        const text = await req.text();
+        if (text && text.trim() !== "") {
+          const res = JSON.parse(text);
+          a = res?.data?.user;
+        }
       } catch {}
+
+      if (!a) {
+        const req2 = await fetch(
+          `https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`,
+          {
+            headers: {
+              ...commonHeaders,
+              ...(keyInstagram ? { Cookie: keyInstagram } : {}),
+              Origin: "https://www.instagram.com",
+              "X-Ig-App-Id": "936619743392459",
+              "X-Asbd-Id": "198387",
+              "X-Ig-Www-Claim": "0",
+            },
+          },
+        );
+        try {
+          const res2 = await req2.json();
+          b = res2?.data?.user || res2?.data || res2;
+          a = b?.user ? b.user : b;
+        } catch {}
+      }
+
+      if (a) break;
+      if (keyInstagram) keyInstagram = await instagramKey();
     }
 
     const source = a;
@@ -6632,7 +6663,9 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
                 for (const arg of args) {
                   const innerReqs = arg?.__bbox?.require || [];
                   for (const innerReq of innerReqs) {
-                    if (innerReq?.[0] === "RelayPrefetchedStreamCache") {
+                    if (
+                      innerReq?.[0]?.startsWith("RelayPrefetchedStreamCache")
+                    ) {
                       const data = innerReq?.[3]?.[1]?.__bbox?.result?.data;
                       if (data) webData.push(data);
                     }
@@ -13971,6 +14004,23 @@ export const DiscordSetAutomod = async (
     if (built.error) return { error: built.error };
     const payload = built.payload || {};
 
+    if (operationMode === "modify" && existingRule) {
+      for (const field of [
+        "name",
+        "event_type",
+        "trigger_type",
+        "enabled",
+        "trigger_metadata",
+        "actions",
+        "exempt_roles",
+        "exempt_channels",
+      ] as const) {
+        if (payload[field] === undefined && existingRule[field] !== undefined) {
+          payload[field] = existingRule[field];
+        }
+      }
+    }
+
     if (operationMode === "modify" && Object.keys(payload).length === 0) {
       return { data: [formatDiscordAutomodRule(existingRule), null, 204] };
     }
@@ -14487,5 +14537,45 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
   } catch (e) {
     console.error(e);
     return null;
+  }
+};
+
+export const DiscordDeleteAutomod = async (
+  token: string,
+  guildId: string,
+  ruleId: string,
+) => {
+  if (!token || token === "null") return { error: "Missing token" };
+  if (!guildId) return { error: "Missing guildId" };
+  if (!ruleId) return { error: "Missing ruleId" };
+
+  const headers: any = {
+    Authorization: `Bot ${token}`,
+    "Content-Type": "application/json",
+    "User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+  };
+
+  try {
+    const ruleUrl = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}`;
+    const req = await fetch(ruleUrl, { method: "DELETE", headers });
+
+    if (req.status === 204 || req.status === 200) {
+      return { data: [null, req.status] };
+    }
+
+    let data: any = null;
+    try {
+      data = await req.json();
+    } catch {}
+
+    return {
+      data: null,
+      error: data || {
+        status: req.status,
+        statusText: req.statusText,
+      },
+    };
+  } catch (e: any) {
+    return { error: e.message || "Something just happened" };
   }
 };

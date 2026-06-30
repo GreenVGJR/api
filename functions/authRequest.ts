@@ -507,3 +507,20 @@ export const saweriaBuildKey = async function saweriaBuildKey(): Promise<
   const mainText = await mainRes.text();
   return mainText.split('"buildId":"')[1]?.split('"')[0];
 };
+
+export const instagramKey = async function instagramKey(): Promise<
+  string | null
+> {
+  try {
+    const res = await fetch("https://www.instagram.com/", {
+      headers: commonHeaders,
+    });
+    if (res.headers.getSetCookie) {
+      return res.headers.getSetCookie().join("; ");
+    }
+    return res.headers.get("set-cookie") || null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+};

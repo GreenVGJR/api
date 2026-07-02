@@ -3001,12 +3001,17 @@ export const Gemini = async function Gemini(
     };
   }
   if (req.status === 400) {
-    if (retry >= 7) return { error: "Timeout / Bad Request" };
+    if (retry >= 2) {
+      if (convo) {
+        return await Gemini(que, null, retry);
+      }
+      return { error: "Timeout / Bad Request" };
+    }
     await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
   if (req.status === 429) {
-    if (retry >= 7) return { error: "Rate-limited" };
+    if (retry >= 2) return { error: "Rate-limited" };
     await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
     return await Gemini(que, convo, retry + 1);
   }
@@ -3021,40 +3026,61 @@ export const Gemini = async function Gemini(
   const resText = await req.text();
   let response;
   let finalres;
+  let errorCode: number | null = null;
 
-  let data: any[] = [];
   try {
     const lines = resText.split("\n");
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("[")) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) {
-            if (Array.isArray(parsed[0])) {
-              data.push(...parsed);
-            } else {
-              data.push(parsed);
-            }
-          }
-        } catch {}
-      }
-    }
-
     let innerData;
 
-    data.forEach((dt: any) => {
-      let check;
-      if (dt?.[0] === "wrb.fr") {
-        check = JSON.parse(dt[2]);
-        if (check?.[4]?.[0]?.[8]?.[0] === 2) {
-          innerData = check;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("[")) continue;
+      try {
+        const parsed = JSON.parse(trimmed);
+        const items = Array.isArray(parsed[0]) ? parsed : [parsed];
+        for (const dt of items) {
+          if (dt?.[0] !== "wrb.fr") continue;
+          const check = JSON.parse(dt[2]);
+          if (check?.[4]?.[0]?.[8]?.[0] === 2) {
+            innerData = check;
+          }
+          if (!errorCode) {
+            errorCode = check?.[5]?.[2]?.[0]?.[1]?.[0] ?? null;
+          }
+          if (innerData) break;
         }
-      }
-    });
+      } catch {}
+      if (innerData) break;
+    }
 
     if (!innerData) {
-      if (retry >= 7) return { error: "Rate-limited" };
+      if (retry >= 2) {
+        if (convo) {
+          return await Gemini(que, null, retry);
+        }
+        if (errorCode == 13) {
+          return {
+            error:
+              "Can't process this due high-demand model, rate-limited or bad request",
+          };
+        }
+        if (errorCode == 1097) {
+          return {
+            error:
+              "Can't continue this conversation. Gemini might block this request",
+          };
+        }
+        if (errorCode == 1076) {
+          return { error: "Timeout / Bad Request" };
+        }
+        if (["1096", "1100", "1152"].includes(String(errorCode))) {
+          return {
+            error:
+              "Can't continue this conversation. Try again but without conversation id",
+          };
+        }
+        return { error: "Rate-limited" };
+      }
       await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
       return await Gemini(que, convo, retry + 1);
     }

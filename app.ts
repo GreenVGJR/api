@@ -784,14 +784,14 @@ function encodeBackChallengePayload(
 ): string {
   const userAgentKey = crypto.createHash("sha512").update(userAgent).digest();
   const jwtKey = crypto.createHash("sha512").update(jwtToken).digest();
-  return Buffer.from(
-    payload.map(
-      (byte, index) =>
-        byte ^
-        userAgentKey[index % userAgentKey.length] ^
-        jwtKey[index % jwtKey.length],
-    ),
-  ).toString("base64");
+  const result = Buffer.alloc(payload.length);
+  for (let i = 0; i < payload.length; i++) {
+    result[i] =
+      payload[i] ^
+      userAgentKey[i % userAgentKey.length] ^
+      jwtKey[i % jwtKey.length];
+  }
+  return result.toString("base64");
 }
 
 async function getBackChallengeHtml(
@@ -1028,35 +1028,31 @@ const PLAYGROUND_CHALLENGE = crypto.randomBytes(32).toString("hex");
 
 const CHALLENGE_ROUTES = ["/playground", "/terms", "/privacy"];
 
-app.on(["GET", "POST"], CHALLENGE_ROUTES, async (c: Context) => {
-  if (c.req.method === "GET") {
-    const body = challengeHtml.replace("{{CHALLENGE}}", PLAYGROUND_CHALLENGE);
-    setPlaygroundAssetCache(c);
-    const gzipData = zlib.gzipSync(body);
-
-    c.header("Content-Type", "text/html");
-    c.header("Content-Encoding", "gzip");
-    c.status(403);
-    return c.body(gzipData);
-  }
-
-  const form = await c.req.parseBody();
-  const fm = form.fm;
-  if (typeof fm !== "string" || fm !== PLAYGROUND_CHALLENGE) {
-    return c.redirect(c.req.path, 302);
-  }
+app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
+  const fm = c.req.query("fm");
+  setPlaygroundAssetCache(c);
   c.header("Content-Type", "text/html");
   c.header("Content-Encoding", "gzip");
-  c.header(
-    "Link",
-    "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload",
-  );
-  setPlaygroundAssetCache(c);
+  if (typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) {
+    c.header(
+      "Link",
+      "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload",
+    );
 
-  return stream(c, async (s) => {
-    await s.write("");
-    await s.write(zlib.gzipSync(playgroundTemplate));
-  });
+    return stream(c, async (s) => {
+      await s.write("");
+      await s.write(zlib.gzipSync(playgroundTemplate));
+    });
+  }
+
+  if (fm) {
+    c.status(403);
+    return c.body(null);
+  }
+
+  c.header("Refresh", `0; url=${c.req.path}?fm=${PLAYGROUND_CHALLENGE}`);
+  c.status(200);
+  return c.body(zlib.gzipSync(challengeHtml));
 });
 
 ["/amc/terms", "/amc/privacy"].forEach((route) => {

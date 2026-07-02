@@ -29,6 +29,9 @@
         --color-dark-500: #3a3a3a;
       }
     </style>
+    <script>
+      if (location.search) history.replaceState(null, "", location.pathname);
+    </script>
     <script defer>
       document.write('<link rel="stylesheet" href="/playground/main.css">');
     </script>

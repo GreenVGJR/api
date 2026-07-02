@@ -83,7 +83,10 @@ export function cookieChallengeIsValid(c: Context, cookieValue: any) {
   let decoded: string;
   try {
     const raw = Buffer.from(cookieValue, "base64url");
-    const unmasked = Buffer.from(raw.map((b, i) => b ^ key[i % key.length]));
+    const unmasked = Buffer.alloc(raw.length);
+    for (let i = 0; i < raw.length; i++) {
+      unmasked[i] = raw[i] ^ key[i % key.length];
+    }
     decoded = unmasked.toString("utf8");
   } catch {
     return false;

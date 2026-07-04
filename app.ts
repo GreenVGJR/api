@@ -13,6 +13,7 @@ import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/logs.js";
 import { rateLimit } from "./functions/httpRequest.js";
+import { commonHeaders } from "./functions/request.js";
 import {
   BACK_CHALLENGE_COOKIE,
   getBackChallengeValue,
@@ -49,9 +50,6 @@ const API_ROUTES = {
     ["/search/duckduckgo?q=", "string"],
     ["/search/duckduckgo/image?q=", "string"],
     ["/search/duckduckgo/video?q=", "string"],
-    ["/search/google?q=", "string"],
-    ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"],
-    ["/search/googleImage/cse?q=", "string"],
     ["/search/youtube/video?q=&mix=", "string", "boolean"],
     ["/search/youtube/music?q=&mix=", "string", "boolean"],
     ["/search/youtube/channel?q=", "string"],
@@ -59,6 +57,7 @@ const API_ROUTES = {
     ["/search/soundcloud?q=", "string"],
     ["/search/spotify?q=", "string"],
     ["/search/applemusic?q=", "string"],
+    ["/search/radio?q=", "string"],
     ["/search/shazam?q=", "string"],
     ["/search/deezer?q=", "string"],
     ["/search/jiosaavn?q=", "string"],
@@ -74,6 +73,9 @@ const API_ROUTES = {
     ["/search/crunchyroll?q=", "string"],
     ["/search/imdb?q=", "string"],
     ["/search/pinterest?q=", "string"],
+    ["/search/google?q=", "string"],
+    ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"],
+    ["/search/googleImage/cse?q=", "string"],
     ["/search/safebooru?q=", "string"],
     ["/search/konachan?q=", "string"],
     ["/search/tumblr?q=", "string"],
@@ -552,6 +554,16 @@ const API_ROUTES = {
       "number",
       "number",
       "boolean",
+      "boolean",
+      "boolean",
+    ],
+    [
+      "/music/radio?token=&stationId=&voiceId=&guildId=&authorId=&isDeaf=&247=",
+      "string",
+      "string",
+      "number",
+      "number",
+      "number",
       "boolean",
       "boolean",
     ],
@@ -1214,6 +1226,57 @@ download.forEach((val: any) => {
 });
 music.forEach((val: any) => {
   app.route(`${routeBase}/music`, val);
+});
+
+// ── Radio Stream Proxy ────────────────────────────────────────────────────────
+// Lavalink sometimes chokes on non-compliant HTTP responses from radio streams.
+// This proxy fetches the stream on Lavalink's behalf so the bot controls the HTTP layer.
+import { radioStreamUrls } from "./functions/radioProxy.js";
+
+app.get("/radio-proxy/:guildId", async (c) => {
+  // Only allow localhost (Lavalink runs on the same machine)
+  const host = c.req.header("host");
+  if (!isLocalRequest(host)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const guildId = c.req.param("guildId");
+  const key = guildId;
+  const targetUrl = radioStreamUrls.get(key);
+
+  if (!targetUrl) {
+    return c.json({ error: "No active radio stream for this guild" }, 404);
+  }
+
+  const abort = new AbortController();
+
+  c.req.raw.signal?.addEventListener("abort", () => abort.abort());
+
+  let res: Response;
+  try {
+    res = await fetch(targetUrl, {
+      headers: commonHeaders,
+      signal: abort.signal,
+    });
+  } catch (err: any) {
+    if (abort.signal.aborted) return new Response(null, { status: 499 });
+    return c.json({ error: `Failed to fetch stream: ${err?.message}` }, 502);
+  }
+
+  if (!res.ok || !res.body) {
+    return c.json({ error: `Upstream returned ${res.status}` }, 502);
+  }
+
+  const contentType = res.headers.get("content-type") || "audio/mpeg";
+
+  return new Response(res.body, {
+    status: res.status,
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": "no-cache, no-store",
+      "Transfer-Encoding": "chunked",
+    },
+  });
 });
 
 if (BUILD_ID) {

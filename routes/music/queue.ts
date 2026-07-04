@@ -9,6 +9,7 @@ import {
   createMusicStream,
   get247,
   formatDuration,
+  isRadioActive,
 } from "../../functions/musicPlayer.js";
 import {
   YTMusic,
@@ -114,6 +115,12 @@ app.get("/nowplaying/lyrics", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }
@@ -279,6 +286,12 @@ app.get("/queue", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }

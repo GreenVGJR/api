@@ -12,6 +12,7 @@ import {
   formatDuration,
   formatTrack,
   fillAutoplay,
+  isRadioActive,
 } from "../../functions/musicPlayer.js";
 
 type RMValue = "off" | "track" | "queue";
@@ -59,6 +60,12 @@ app.get("/pause", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }
@@ -121,6 +128,12 @@ app.get("/resume", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -179,6 +192,12 @@ app.get("/skip", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }
@@ -375,6 +394,12 @@ app.get("/seek", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -534,6 +559,12 @@ app.get("/loop", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -625,6 +656,12 @@ app.get("/shuffle", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -686,6 +723,12 @@ app.get("/remove", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -743,6 +786,12 @@ app.get("/clear", async (c) => {
       );
       return;
     }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
+      );
+      return;
+    }
     if (!hasActivePlayer(token)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
@@ -785,6 +834,12 @@ app.get("/jump", async (c) => {
     if (!token || !guildId || indexStr === "" || isNaN(index)) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, index", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }
@@ -854,6 +909,12 @@ app.get("/move", async (c) => {
     ) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, from, to", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }
@@ -935,6 +996,12 @@ app.get("/back", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }

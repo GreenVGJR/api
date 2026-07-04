@@ -8,10 +8,14 @@ import {
   hasActivePlayer,
   set247,
   get247,
+  clear247,
   createMusicStream,
   checkVoicePermissions,
   formatDuration,
+  setVoiceStatus,
+  voiceStatusStore,
   PLATFORM_SEARCH,
+  localNode,
 } from "../../functions/musicPlayer.js";
 import {
   SCMusic,
@@ -559,6 +563,31 @@ app.get("/play", async (c) => {
 
       const guildId = channel.guild.id;
       let gp = manager.players.get(guildId);
+
+      // Force disconnect existing player if it's playing radio
+      if (gp && gp.get("__isRadio")) {
+        await log("Active radio player found, performing force disconnect...");
+        if (gp.queue.previous.length > 0) {
+          gp.queue.previous.splice(0, gp.queue.previous.length);
+        }
+        if (gp.queue.tracks.length > 0) {
+          gp.queue.tracks.splice(0, gp.queue.tracks.length);
+        }
+        clear247(token, guildId);
+        const radioVcId = gp.voiceChannelId;
+        if (radioVcId) {
+          await setVoiceStatus(radioVcId, token, "").catch(() => {});
+        }
+        voiceStatusStore.delete(`${token}:${guildId}`);
+        await gp.destroy();
+        await log("Radio player disconnected");
+
+        try {
+          manager.nodeManager.nodes.delete(localNode.id);
+        } catch {}
+        gp = undefined;
+      }
+
       const isNewGP =
         !gp ||
         (!gp.playing &&

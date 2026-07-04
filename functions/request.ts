@@ -6340,7 +6340,7 @@ export const redditSubreddit = async function redditSubreddit(
     if (redditCookies) headers["Cookie"] = redditCookies;
 
     const req = await fetch(
-      `https://www.reddit.com/r/${que.toLowerCase()}/new.json`,
+      `https://www.reddit.com/search/.json?q=subreddit%3A${encodeURIComponent(que.toLowerCase()?.split(" ")?.[0])}&sort=new&restrict_sr=&t=all&include_over_18=on`,
       { headers },
     );
 
@@ -6446,7 +6446,7 @@ export const redditMedia = async function redditMedia(
     if (redditCookies) headers["Cookie"] = redditCookies;
 
     const req = await fetch(
-      `https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&sort=relevance&type=media`,
+      `https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&restrict_sr=&sort=new&t=all&include_over_18=on`,
       { headers },
     );
 
@@ -14603,5 +14603,26 @@ export const DiscordDeleteAutomod = async (
     };
   } catch (e: any) {
     return { error: e.message || "Something just happened" };
+  }
+};
+
+export const RadioSearch = async function RadioSearch(query: string) {
+  if (!query) return null;
+  try {
+    const res = await fetch(
+      `https://all.api.radio-browser.info/json/stations/search?name=${encodeURIComponent(query)}&limit=25&order=votes&reverse=true`,
+      {
+        headers: commonHeaders,
+      },
+    );
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {}
+    return {
+      data: data || null,
+    };
+  } catch (e: any) {
+    return null;
   }
 };

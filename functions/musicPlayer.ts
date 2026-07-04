@@ -22,6 +22,7 @@ import {
   ipToNumber,
 } from "./musicChallenges.ts";
 import { recordRequestLog } from "./logs.js";
+import { radioStreamUrls } from "./radioProxy.js";
 
 // import { Number_random } from './request.ts';
 
@@ -107,10 +108,28 @@ export async function setVoiceStatus(
         continue;
       }
 
-      if (res.ok) return;
+      if (res.ok) {
+        // Proactively wait if bucket is exhausted (prevents next 429)
+        const remaining = Number(res.headers.get("X-RateLimit-Remaining"));
+        if (remaining === 0) {
+          const resetAfter = Number(res.headers.get("X-RateLimit-Reset-After"));
+          if (resetAfter > 0) {
+            console.warn(
+              `Voice Status rate limit bucket exhausted, waiting ${resetAfter}s for reset`,
+            );
+            await sleep(resetAfter * 1000);
+          }
+        }
+        return;
+      }
 
       if (res.status >= 500 && i < retries - 1) {
-        await sleep(1000 * (i + 1));
+        const retryAfter = Number(res.headers.get("Retry-After"));
+        const delay = retryAfter > 0 ? retryAfter * 1000 : 1000 * (i + 1);
+        console.warn(
+          `Voice Status Server Error ${res.status} (Attempt ${i + 1}/${retries}), retrying in ${delay}ms`,
+        );
+        await sleep(delay);
         continue;
       }
 
@@ -305,7 +324,7 @@ const sg = crypto.randomUUID();
 let LAVALINK_NODES: any[] = [];
 let LAVALINK_NODE_GROUPS: any[][] = [];
 
-const localNode = {
+export const localNode = {
   id: "vgjr_" + sg,
   host: process.env.LAVALINK_HOST || "",
   port: parseInt(process.env.LAVALINK_PORT || "2333"),
@@ -460,6 +479,70 @@ async function connectLavalinkWithFallback(
   return false;
 }
 
+/**
+ * Ensure the local Lavalink node is registered, connected, and ready.
+ * Used by the radio endpoint to force playback through the local node.
+ * Returns the connected node, or null if the local node is unavailable.
+ */
+export async function ensureLocalNode(
+  manager: LavalinkManager,
+  log?: (msg: string) => Promise<void>,
+): Promise<any | null> {
+  if (!localNode.host || localNode.host.length === 0) {
+    if (log) await log("Local Lavalink node configuration missing (no host)");
+    return null;
+  }
+
+  // Check if the node is already registered and connected
+  let node = manager.nodeManager.nodes.get(localNode.id);
+  if (node?.connected) return node;
+
+  // Register or re-register the node
+  if (!node) {
+    node = manager.nodeManager.createNode(localNode);
+    patchNodeTls(node);
+    if (log) await log(`Local Lavalink node registered: ${localNode.id}`);
+  }
+
+  // Connect and wait
+  if (!node.connected) {
+    try {
+      node.connect();
+    } catch {}
+    if (log) await log("Waiting for local Lavalink node to connect...");
+    const connected = await new Promise<boolean>((resolve) => {
+      if (node!.connected) return resolve(true);
+      let settled = false;
+      const onConnect = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          (manager.nodeManager as any).off("connect", onConnect);
+        } catch {}
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try {
+          (manager.nodeManager as any).off("connect", onConnect);
+        } catch {}
+        resolve(false);
+      }, 8000);
+      manager.nodeManager.once("connect", onConnect);
+    });
+    if (!connected) {
+      if (log)
+        await log("Local Lavalink node failed to connect within timeout");
+      return null;
+    }
+    if (log) await log("Local Lavalink node connected");
+  }
+
+  return node;
+}
+
 // ─── Player Pool ──────────────────────────────────────────────────────────────
 
 const AUTO_DESTROY_DELAY = 1 * 60 * 1000; // 1 minute
@@ -588,6 +671,20 @@ function safeResumePosition(player: LavalinkPlayer): number | undefined {
 
 export function hasActivePlayer(token: string): boolean {
   return players.has(token);
+}
+
+/**
+ * Returns true if the player for the given guild is a radio player (has `__isRadio` flag).
+ */
+export async function isRadioActive(
+  token: string,
+  guildId: string,
+  log?: (msg: string) => Promise<void>,
+): Promise<boolean> {
+  if (!hasActivePlayer(token)) return false;
+  const { player: manager } = await getOrCreatePlayer(token, log);
+  const gp = manager.players.get(guildId);
+  return !!gp?.get?.("__isRadio");
 }
 
 function scheduleAutoDestroy(token: string) {
@@ -1032,6 +1129,7 @@ export async function getOrCreatePlayer(
         voiceStatusStore.delete(`${token}:${p.guildId}`);
 
         lastVoiceChannel.delete(`${token}:${p.guildId}`);
+        radioStreamUrls.delete(p.guildId);
         console.log(`Lavalink player destroyed for guild ${p.guildId}`);
         scheduleAutoDestroy(token);
       });
@@ -1366,11 +1464,16 @@ export async function destroyPlayer(token: string): Promise<boolean> {
         node.disconnect();
       } catch {}
     }
-    managed.client.destroy();
+    await managed.client.destroy().catch(() => {});
   } catch {}
 
   pendingPlayers.delete(token);
   return true;
+}
+
+export async function destroyAllPlayers(): Promise<void> {
+  const tokens = [...players.keys()];
+  await Promise.allSettled(tokens.map((t) => destroyPlayer(t)));
 }
 
 async function ensureContextCached(managed: ManagedPlayer) {

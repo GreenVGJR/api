@@ -134,7 +134,7 @@ const DEFAULT_PHRASES = ["What you gonna try?", "Now what?", "Hello!", "What's o
 function getDefaultResponseHTML() {
   const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
   return `<div class="flex flex-col items-center justify-center">
-    <div class="text-white-500 text-m">${randomPhrase}</div>
+    <div class="text-white-500 text-s">${randomPhrase}</div>
     <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
     <div class="flex items-center gap-2 mt-1 text-dark-500 text-xs flex-wrap justify-center">
       <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
@@ -920,32 +920,61 @@ async function performRequest(targetUrl, retryCount = 0) {
       responseArea.classList.remove("empty-state");
 
       verboseFetch.line("Reading response body...");
-      const arrayBuffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let text;
+
+      const bodyReader = response.body.getReader();
+      const { value: firstChunk, done: firstDone } = await bodyReader.read();
+
+      const needsDecompress = !firstDone && firstChunk && firstChunk[0] === 0x78;
+      if (needsDecompress) {
+        verboseFetch.line("Decompressing deflate body...");
+      }
+
+      // Rebuild a stream starting with the already-peeked first chunk,
+      // then continue draining the original reader.
+      const rebuiltStream = new ReadableStream({
+        async start(controller) {
+          if (!firstDone && firstChunk) controller.enqueue(firstChunk);
+          while (true) {
+            const { value, done } = await bodyReader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+        },
+      });
+
+      const finalStream = needsDecompress
+        ? rebuiltStream.pipeThrough(new DecompressionStream("deflate"))
+        : rebuiltStream;
+
+      const streamReader = finalStream.getReader();
+      const decoder = new TextDecoder();
+
+      let text = "";
+
+      // Body is fully drained here (streamed under the hood via
+      // pipeThrough), but nothing touches the DOM yet — the verbose
+      // log stays on screen until we're actually done reading, matching
+      // verboseFetch.done() below, instead of disappearing early.
       try {
-        if (bytes[0] === 0x78) {
-          verboseFetch.line("Decompressing deflate body...");
-          text = await new Response(
-            new Blob([arrayBuffer])
-              .stream()
-              .pipeThrough(new DecompressionStream("deflate")),
-          ).text();
-          verboseFetch.done(
-            `Decompressed body received (${text.length.toLocaleString()} chars)`,
-          );
-        } else {
-          text = new TextDecoder().decode(arrayBuffer);
-          verboseFetch.done(
-            `Text body received (${text.length.toLocaleString()} chars)`,
-          );
+        while (true) {
+          const { value, done } = await streamReader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
         }
+        text += decoder.decode(); // flush any remaining bytes
+
+        verboseFetch.done(
+          needsDecompress
+            ? `Decompressed body received (${text.length.toLocaleString()} chars)`
+            : `Text body received (${text.length.toLocaleString()} chars)`,
+        );
       } catch {
-        text = new TextDecoder().decode(arrayBuffer);
         verboseFetch.done(
           `Text body received (${text.length.toLocaleString()} chars)`,
         );
       }
+
       duration = Math.round(performance.now() - startTime);
 
       let cleanText = text.trim();

@@ -1,6 +1,7 @@
 import app from "./app.js";
 import { getBotGuardChallenge, getYoutubei } from "./functions/request.js";
 import { getOCRWorker } from "./functions/ocrWorker.js";
+import { destroyAllPlayers } from "./functions/musicPlayer.js";
 
 const port = 3000;
 const g = globalThis as any;
@@ -30,6 +31,21 @@ if (!g.__vgjr_initialized) {
 
   console.log(`\n🚀 Bun Server is running!`);
   console.log(`🏠 Local:    http://localhost:${port}/playground`);
+  if (!g.__vgjr_shutdown_handlers) {
+    g.__vgjr_shutdown_handlers = true;
+    process.on("SIGINT", async () => {
+      console.log("\n[SIGINT] Shutting down music players...");
+      await destroyAllPlayers().catch(() => {});
+      await new Promise((r) => setTimeout(r, 500));
+      process.exit(0);
+    });
+    process.on("SIGTERM", async () => {
+      console.log("\n[SIGTERM] Shutting down music players...");
+      await destroyAllPlayers().catch(() => {});
+      await new Promise((r) => setTimeout(r, 500));
+      process.exit(0);
+    });
+  }
 } else {
   console.log("🔄 Routes hot-reloaded!");
 }

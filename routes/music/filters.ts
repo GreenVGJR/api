@@ -6,6 +6,7 @@ import {
   getQueue,
   hasActivePlayer,
   createMusicStream,
+  isRadioActive,
 } from "../../functions/musicPlayer.js";
 
 type FilterPreset = {
@@ -609,6 +610,12 @@ app.get("/filter", async (c) => {
     if (!token || !guildId) {
       await s.write(
         `],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
+      );
+      return;
+    }
+    if (await isRadioActive(token, guildId, log)) {
+      await s.write(
+        `],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
       );
       return;
     }

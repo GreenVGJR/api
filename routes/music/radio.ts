@@ -307,6 +307,9 @@ app.get("/radio", async (c) => {
     }
 
     const formattedTrack = formatTrack(track, client, guildPlayer);
+    // Override proxy URL with actual stream URL in response
+    formattedTrack.id = resolvedStreamUrl;
+    formattedTrack.url = resolvedStreamUrl;
     const activeFilters = getActiveFilters(guildPlayer);
 
     await s.write(

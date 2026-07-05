@@ -1156,6 +1156,7 @@ const PARAM_TYPES = new Set([
   "boolean",
   "url",
   "enum",
+  "enum_multi",
   "json",
 ]);
 
@@ -1165,7 +1166,7 @@ function parseParamTypeSpec(typeSpec) {
   const rawType = separatorIndex === -1 ? spec : spec.slice(0, separatorIndex);
   const type = PARAM_TYPES.has(rawType) ? rawType : "string";
   const options =
-    type === "enum" && separatorIndex !== -1
+    (type === "enum" || type === "enum_multi") && separatorIndex !== -1
       ? spec
           .slice(separatorIndex + 1)
           .split(",")
@@ -1230,6 +1231,39 @@ function renderParamControl(p, i) {
         `;
   }
 
+  if (type === "enum_multi" && enumOptions.length) {
+    const selectedValues = value
+      ? value.split(",").map((v) => v.trim()).filter(Boolean)
+      : [];
+    return `
+            <div class="param-enum param-enum-multi" data-param-index="${i}">
+                <input
+                    type="hidden"
+                    class="param-input param-enum-value-input"
+                    data-param-index="${i}"
+                    value="${escapeAttribute(value)}"
+                />
+                <button
+                    type="button"
+                    class="param-enum-button"
+                    data-param-index="${i}"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    ${titleAttr}
+                >
+                    <span class="param-enum-selected${selectedValues.length ? "" : " is-placeholder"}">${selectedValues.length ? escapeHTML(selectedValues.join(", ")) : "enum (multi)"}</span>
+                    <span class="param-enum-arrow" aria-hidden="true">v</span>
+                </button>
+                <div class="param-enum-menu no-scrollbar" role="listbox" hidden>
+                    ${enumOptions.map((option) => {
+                      const isChecked = selectedValues.includes(option) ? " checked" : "";
+                      return `<button type="button" class="param-enum-option param-enum-multi-option${isChecked}" data-value="${escapeAttribute(option)}" role="option" aria-selected="${isChecked ? "true" : "false"}"><span class="param-enum-check" aria-hidden="true">${isChecked ? "\u2611" : "\u2610"}</span>${escapeHTML(option)}</button>`;
+                    }).join("")}
+                </div>
+            </div>
+        `;
+  }
+
   return `
         <input
             type="text"
@@ -1282,10 +1316,60 @@ function setEnumControlValue(control, value, notify = true) {
   if (notify) hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function setEnumMultiControlValue(control, toggleValue, notify = true) {
+  const hiddenInput = control.querySelector(".param-enum-value-input");
+  const selected = control.querySelector(".param-enum-selected");
+  if (!hiddenInput || !selected) return;
+
+  const current = hiddenInput.value
+    ? hiddenInput.value.split(",").map((v) => v.trim()).filter(Boolean)
+    : [];
+  const idx = current.indexOf(toggleValue);
+  if (idx === -1) current.push(toggleValue);
+  else current.splice(idx, 1);
+
+  const newValue = current.join(",");
+  hiddenInput.value = newValue;
+  selected.textContent = newValue || "enum (multi)";
+  selected.classList.toggle("is-placeholder", newValue === "");
+
+  control.querySelectorAll(".param-enum-multi-option").forEach((option) => {
+    const isChecked = current.includes(option.dataset.value);
+    option.classList.toggle("checked", isChecked);
+    option.setAttribute("aria-selected", isChecked ? "true" : "false");
+    const check = option.querySelector(".param-enum-check");
+    if (check) check.textContent = isChecked ? "\u2611" : "\u2610";
+  });
+
+  if (notify) hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function syncEnumControlsFromInputs() {
   paramsContainer.querySelectorAll(".param-enum").forEach((control) => {
     const hiddenInput = control.querySelector(".param-enum-value-input");
-    if (hiddenInput) setEnumControlValue(control, hiddenInput.value, false);
+    if (!hiddenInput) return;
+    if (control.classList.contains("param-enum-multi")) {
+      setEnumMultiControlValueSync(control, hiddenInput.value);
+    } else {
+      setEnumControlValue(control, hiddenInput.value, false);
+    }
+  });
+}
+
+function setEnumMultiControlValueSync(control, value) {
+  const hiddenInput = control.querySelector(".param-enum-value-input");
+  const selected = control.querySelector(".param-enum-selected");
+  if (!hiddenInput || !selected) return;
+  hiddenInput.value = value;
+  const values = value ? value.split(",").map((v) => v.trim()).filter(Boolean) : [];
+  selected.textContent = values.join(", ") || "enum (multi)";
+  selected.classList.toggle("is-placeholder", values.length === 0);
+  control.querySelectorAll(".param-enum-multi-option").forEach((option) => {
+    const isChecked = values.includes(option.dataset.value);
+    option.classList.toggle("checked", isChecked);
+    option.setAttribute("aria-selected", isChecked ? "true" : "false");
+    const check = option.querySelector(".param-enum-check");
+    if (check) check.textContent = isChecked ? "\u2611" : "\u2610";
   });
 }
 
@@ -1330,11 +1414,17 @@ function setupEnumControls() {
     });
 
     menu.querySelectorAll(".param-enum-option").forEach((option) => {
+      const isMulti = control.classList.contains("param-enum-multi");
+
       option.addEventListener("click", (e) => {
         e.stopPropagation();
-        setEnumControlValue(control, option.dataset.value || "");
-        closeMenu();
-        button.focus();
+        if (isMulti) {
+          setEnumMultiControlValue(control, option.dataset.value || "");
+        } else {
+          setEnumControlValue(control, option.dataset.value || "");
+          closeMenu();
+          button.focus();
+        }
       });
 
       option.addEventListener("keydown", (e) => {
@@ -1343,9 +1433,13 @@ function setupEnumControls() {
 
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          setEnumControlValue(control, option.dataset.value || "");
-          closeMenu();
-          button.focus();
+          if (isMulti) {
+            setEnumMultiControlValue(control, option.dataset.value || "");
+          } else {
+            setEnumControlValue(control, option.dataset.value || "");
+            closeMenu();
+            button.focus();
+          }
         } else if (e.key === "Escape") {
           e.preventDefault();
           closeMenu();

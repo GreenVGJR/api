@@ -13855,63 +13855,79 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
       params.customMessage !== undefined ||
       params.custom_message !== undefined;
     if (hasActionInput || mode === "set") {
-      const actionType = parseDiscordAutomodMappedNumber(
+      const rawActionType = String(
         params.actionType ?? params.action ?? "BLOCK_MESSAGE",
-        DISCORD_AUTOMOD_ACTION_TYPES,
-        "actionType",
-      );
-      if (actionType.error || actionType.value === undefined)
-        return { error: actionType.error || "Invalid actionType" };
-      const actionTypeName = discordAutomodName(
-        DISCORD_AUTOMOD_ACTION_TYPES,
-        actionType.value,
-      );
-
-      if (mode === "set") {
-        if (
-          triggerTypeName === "MEMBER_PROFILE" &&
-          actionTypeName !== "BLOCK_MEMBER_INTERACTION"
-        ) {
-          return {
-            error:
-              "Invalid actionType for triggerType MEMBER_PROFILE. Use BLOCK_MEMBER_INTERACTION",
-          };
-        }
-        if (
-          triggerTypeName !== "MEMBER_PROFILE" &&
-          actionTypeName === "BLOCK_MEMBER_INTERACTION"
-        ) {
-          return {
-            error:
-              "Invalid actionType. BLOCK_MEMBER_INTERACTION requires triggerType MEMBER_PROFILE",
-          };
-        }
-      }
-
-      const action: any = { type: actionType.value };
-      const metadata: any = {};
-      const customMessage = params.customMessage ?? params.custom_message;
-      if (customMessage !== undefined)
-        metadata.custom_message = String(customMessage);
-      const alertChannelId = params.alertChannelId ?? params.alert_channel_id;
-      if (
-        actionTypeName === "SEND_ALERT_MESSAGE" &&
-        (alertChannelId === undefined || alertChannelId === "")
       )
-        return { error: "Missing parameter: alertChannelId" };
-      if (alertChannelId !== undefined && alertChannelId !== "")
-        metadata.channel_id = String(alertChannelId);
+        .trim()
+        .replace(/[\s]+/g, "");
+      const actionTypeEntries = rawActionType
+        .split(",")
+        .map((v: string) => v.trim())
+        .filter(Boolean);
+
+      const actions: any[] = [];
+      const alertChannelId = params.alertChannelId ?? params.alert_channel_id;
       const timeoutSeconds = parseDiscordAutomodNumber(
         params.timeoutSeconds ?? params.duration_seconds,
         "timeoutSeconds",
       );
       if (timeoutSeconds.error) return { error: timeoutSeconds.error };
-      if (actionTypeName === "TIMEOUT" && timeoutSeconds.value === undefined)
-        return { error: "Missing parameter: timeoutSeconds" };
-      if (timeoutSeconds.value !== undefined)
-        metadata.duration_seconds = timeoutSeconds.value;
-      if (Object.keys(metadata).length) action.metadata = metadata;
-      payload.actions = [action];
+
+      for (const entry of actionTypeEntries) {
+        const actionType = parseDiscordAutomodMappedNumber(
+          entry,
+          DISCORD_AUTOMOD_ACTION_TYPES,
+          "actionType",
+        );
+        if (actionType.error || actionType.value === undefined)
+          return { error: actionType.error || "Invalid actionType" };
+        const actionTypeName = discordAutomodName(
+          DISCORD_AUTOMOD_ACTION_TYPES,
+          actionType.value,
+        );
+
+        if (mode === "set") {
+          if (
+            triggerTypeName === "MEMBER_PROFILE" &&
+            actionTypeName !== "BLOCK_MEMBER_INTERACTION"
+          ) {
+            return {
+              error:
+                "Invalid actionType for triggerType MEMBER_PROFILE. Use BLOCK_MEMBER_INTERACTION",
+            };
+          }
+          if (
+            triggerTypeName !== "MEMBER_PROFILE" &&
+            actionTypeName === "BLOCK_MEMBER_INTERACTION"
+          ) {
+            return {
+              error:
+                "Invalid actionType. BLOCK_MEMBER_INTERACTION requires triggerType MEMBER_PROFILE",
+            };
+          }
+        }
+
+        const action: any = { type: actionType.value };
+        const metadata: any = {};
+        const customMessage = params.customMessage ?? params.custom_message;
+        if (customMessage !== undefined)
+          metadata.custom_message = String(customMessage);
+        if (
+          actionTypeName === "SEND_ALERT_MESSAGE" &&
+          (alertChannelId === undefined || alertChannelId === "")
+        )
+          return { error: "Missing parameter: alertChannelId" };
+        if (alertChannelId !== undefined && alertChannelId !== "")
+          metadata.channel_id = String(alertChannelId);
+        if (actionTypeName === "TIMEOUT" && timeoutSeconds.value === undefined)
+          return { error: "Missing parameter: timeoutSeconds" };
+        if (timeoutSeconds.value !== undefined)
+          metadata.duration_seconds = timeoutSeconds.value;
+        if (Object.keys(metadata).length) action.metadata = metadata;
+        actions.push(action);
+      }
+
+      payload.actions = actions;
     }
   }
 

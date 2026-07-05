@@ -1,13 +1,9 @@
 import { Context } from "hono";
 import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
-import crypto from "crypto";
-import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-import config from "../config.json" with { type: "json" };
+import zlib from "zlib";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./logs.js";
-
-const { generate_hash } = config;
 
 const logResponse = <T extends Response>(
   c: Context,
@@ -137,108 +133,13 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
     return logResponse(c, c.text("", 200));
   }
 
-  if (generate_hash) {
-    const sh = c.req.query("sh") || "";
-    const uaHash = crypto
-      .createHash("md5")
-      .update(ua)
-      .digest("hex")
-      .slice(0, 8);
-    const checkcookie = getCookie(c, "_sign");
-
-    const urlObj = new URL(c.req.url);
-    const queryKeys = Array.from(urlObj.searchParams.keys())
-      .filter((k) => k !== "sh")
-      .sort();
-    const queryStr = queryKeys
-      .map((k) => `${k}=${urlObj.searchParams.get(k)}`)
-      .join("&");
-
-    const providedUaHash = sh.slice(0, 8);
-    const providedQHash = sh.slice(8, 16);
-    const ts = parseInt(sh.slice(16), 16);
-
-    const qHash = crypto
-      .createHash("md5")
-      .update(
-        urlObj.pathname + "?" + queryStr + (isNaN(ts) ? "" : ts.toString()),
-      )
-      .digest("hex")
-      .slice(0, 8);
-    const letSh = uaHash + qHash;
-
-    const now = Date.now();
-    const isForceRefresh = c.req.header("cache-control") === "no-cache";
-    const timeDiff = now - ts;
-
-    if (
-      sh &&
-      (providedUaHash !== uaHash ||
-        (providedQHash !== qHash &&
-          (isNaN(ts) || new String(ts).length !== 13)))
-    ) {
-      return logResponse(c, c.text("Forbidden", 403));
-    }
-
-    if (
-      !sh ||
-      providedQHash !== qHash ||
-      (isForceRefresh && timeDiff > 3000) ||
-      timeDiff >= 30000
-    ) {
-      const newQHash = crypto
-        .createHash("md5")
-        .update(urlObj.pathname + "?" + queryStr + now.toString())
-        .digest("hex")
-        .slice(0, 8);
-      const newLetSh = uaHash + newQHash;
-      const newSh = newLetSh + now.toString(16);
-      const newUrl = `${urlObj.origin}${urlObj.pathname}?sh=${newSh}${queryStr ? "&" + queryStr : ""}`;
-
-      setCookie(c, "_sign", newLetSh.split("").reverse().join(""), {
-        path: "/",
-        secure: false,
-        sameSite: "Lax",
-      });
-      if (c.req.header("sec-fetch-site") === "none") {
-        c.header("Refresh", "0, url=" + newUrl);
-        return logResponse(c, c.text("", 303));
-      } else {
-        return logResponse(c, c.redirect(newUrl, 302));
-      }
-    }
-
-    if (checkcookie) {
-      deleteCookie(c, "_sign", {
-        path: "/",
-        secure: false,
-        domain: "",
-        sameSite: "Lax",
-      });
-      if (
-        checkcookie !== letSh.split("").reverse().join("") &&
-        c.req.header("referer")
-      ) {
-        return logResponse(
-          c,
-          c.json(
-            ["Signature mismatch", "Refresh this page for gain access"],
-            200,
-          ),
-        );
-      }
-    }
-
-    if (timeDiff > 1000 && !isForceRefresh) {
-      c.header("X-If-Cache", "true");
-      return logResponse(c, c.body(null, 304));
-    }
-  }
-
   const requrl = new URL(c.req.url);
 
   c.header("X-Enc-Route", "v4");
   c.header("Content-Type", "application/json");
+  const acceptEncoding = c.req.header("accept-encoding") || "";
+  const useGzip = acceptEncoding.includes("gzip");
+  if (useGzip) c.header("Content-Encoding", "gzip");
   c.header(
     "Cache-Control",
     requrl.pathname?.startsWith("/tools/discord/") ||
@@ -256,28 +157,54 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
       if (c.req.raw.signal.aborted) return;
 
-      const [data] = await Promise.all([
-        Promise.resolve()
-          .then(() =>
-            typeof promiseFactory === "function"
-              ? promiseFactory()
-              : promiseFactory,
-          )
-          .catch((err) => {
-            console.error("Promise error:", err);
-            return null;
-          }),
-        stream.write(""),
-      ]);
+      let gzip: zlib.Gzip | null = null;
+
+      if (useGzip) {
+        gzip = zlib.createGzip({ level: 1 });
+        const headerChunk: Buffer = await new Promise((resolve) => {
+          gzip!.once("data", resolve);
+          gzip!.flush(zlib.constants.Z_SYNC_FLUSH);
+        });
+        await stream.write(headerChunk);
+      } else {
+        await stream.write("");
+      }
 
       if (c.req.raw.signal.aborted) return;
 
+      const data = await Promise.resolve()
+        .then(() =>
+          typeof promiseFactory === "function"
+            ? promiseFactory()
+            : promiseFactory,
+        )
+        .catch((err) => {
+          console.error("Promise error:", err);
+          return null;
+        });
+
+      if (c.req.raw.signal.aborted) return;
+
+      let payload: string;
       if (!data) {
-        await stream.write("null");
+        payload = "null";
       } else if (typeof data === "object") {
-        await stream.write(JSON.stringify(data));
+        payload = JSON.stringify(data);
       } else {
-        await stream.write(String(data));
+        payload = String(data);
+      }
+
+      if (useGzip && gzip) {
+        await new Promise<void>((resolve, reject) => {
+          gzip!.on("data", (chunk: Buffer) => {
+            stream.write(chunk);
+          });
+          gzip!.on("end", resolve);
+          gzip!.on("error", reject);
+          gzip!.end(Buffer.from(payload));
+        });
+      } else {
+        await stream.write(payload);
       }
     }),
   );

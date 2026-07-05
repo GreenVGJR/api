@@ -1,7 +1,6 @@
 import { fileURLToPath } from "url";
 import { Hono, Context, Next } from "hono";
 import { cors } from "hono/cors";
-import { compress } from "hono/compress";
 import { stream } from "hono/streaming";
 import { getCookie } from "hono/cookie";
 import { sign } from "hono/jwt";
@@ -623,8 +622,6 @@ const API_ROUTES = {
 const { buildId: buildIdConfig, restrictLocal } = config;
 
 const app = new Hono({ strict: false });
-
-app.use("*", compress({ encoding: "gzip" }));
 
 app.use("*", async (c: Context, next: Next) => {
   if (restrictLocal) {

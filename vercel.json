@@ -1,22 +1,22 @@
 {
-  "version": 2,
-  "bunVersion": "1.x",
-  "git": {
-    "deploymentEnabled": false
-  },
-  "builds": [
-    {
-      "src": "index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["node_modules/@httpcloak/**"]
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.ts"
-    }
-  ]
+	"version": 2,
+	"bunVersion": "1.x",
+	"git": {
+		"deploymentEnabled": false
+	},
+	"builds": [
+		{
+			"src": "index.ts",
+			"use": "@vercel/node",
+			"config": {
+				"includeFiles": ["node_modules/@httpcloak/**"]
+			}
+		}
+	],
+	"routes": [
+		{
+			"src": "/(.*)",
+			"dest": "/index.ts"
+		}
+	]
 }

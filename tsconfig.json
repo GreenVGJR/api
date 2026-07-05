@@ -1,19 +1,19 @@
 {
-  "compilerOptions": {
-    "lib": ["ESNext"],
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowJs": false,
-    "types": ["bun-types"]
-  },
-  "exclude": ["node_modules"],
-  "include": ["functions/**/*", "routes/**/*", "index.ts", "gen-routes.ts"]
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"module": "esnext",
+		"target": "esnext",
+		"moduleResolution": "bundler",
+		"moduleDetection": "force",
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"allowSyntheticDefaultImports": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowJs": false,
+		"types": ["bun-types"]
+	},
+	"exclude": ["node_modules"],
+	"include": ["functions/**/*", "routes/**/*", "index.ts", "gen-routes.ts"]
 }

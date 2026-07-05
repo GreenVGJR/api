@@ -1,6 +1,6 @@
 {
-  "buildId": false,
-  "restrictLocal": false,
-  "useLocalLavalink": 2,
-  "disableTLSMusic": false
+	"buildId": false,
+	"restrictLocal": false,
+	"useLocalLavalink": 2,
+	"disableTLSMusic": false
 }

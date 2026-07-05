@@ -5,18 +5,18 @@ import { infoTwitterUser } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/twitter", async (c) => {
-  let query = c.req.query("q");
-  if (query === undefined) {
-    return c.json({ error: "Missing parameter required" }, 202);
-  } else if (query === "") {
-    return c.json({ error: "Nothing to do" }, 202);
-  }
+	let query = c.req.query("q");
+	if (query === undefined) {
+		return c.json({ error: "Missing parameter required" }, 202);
+	} else if (query === "") {
+		return c.json({ error: "Nothing to do" }, 202);
+	}
 
-  // Extract only the username
-  query = query.split("/")[0];
+	// Extract only the username
+	query = query.split("/")[0];
 
-  c.header("X-Route", "x.com");
-  return await dispatch(c, () => infoTwitterUser(query));
+	c.header("X-Route", "x.com");
+	return await dispatch(c, () => infoTwitterUser(query));
 });
 
 export default app;

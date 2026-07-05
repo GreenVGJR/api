@@ -4,466 +4,466 @@
 
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-    <title>VGJR Music | Legal</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" href="/favicon.ico" type="image/x-icon" />
+		<title>VGJR Music | Legal</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
 
-      :root {
-        --bg: #0d0d11;
-        --surface: #131318;
-        --surface-2: #1a1a22;
-        --border: #252538;
-        --accent: #ffffff;
-        --accent-bg: rgba(255, 255, 255, 0.06);
-        --accent-border: rgba(255, 255, 255, 0.15);
-        --text: #e2e2f0;
-        --text-2: #8080a8;
-        --text-3: #3a3a56;
-      }
+			:root {
+				--bg: #0d0d11;
+				--surface: #131318;
+				--surface-2: #1a1a22;
+				--border: #252538;
+				--accent: #ffffff;
+				--accent-bg: rgba(255, 255, 255, 0.06);
+				--accent-border: rgba(255, 255, 255, 0.15);
+				--text: #e2e2f0;
+				--text-2: #8080a8;
+				--text-3: #3a3a56;
+			}
 
-      body {
-        background: var(--bg);
-        color: var(--text);
-        font-family: "Poppins", system-ui, sans-serif;
-        min-height: 100vh;
-        padding-bottom: 80px;
-      }
+			body {
+				background: var(--bg);
+				color: var(--text);
+				font-family: "Poppins", system-ui, sans-serif;
+				min-height: 100vh;
+				padding-bottom: 80px;
+			}
 
-      .wrap {
-        max-width: 660px;
-        margin: 0 auto;
-        padding: 0 20px;
-      }
+			.wrap {
+				max-width: 660px;
+				margin: 0 auto;
+				padding: 0 20px;
+			}
 
-      /* ── Header ─────────────────────────────────────────── */
-      header {
-        padding: 42px 0 34px;
-      }
+			/* ── Header ─────────────────────────────────────────── */
+			header {
+				padding: 42px 0 34px;
+			}
 
-      header h1 {
-        font-family: "Poppins", sans-serif;
-        font-size: 26px;
-        font-weight: 700;
-        letter-spacing: -0.025em;
-        line-height: 1.2;
-        margin-bottom: 9px;
-      }
+			header h1 {
+				font-family: "Poppins", sans-serif;
+				font-size: 26px;
+				font-weight: 700;
+				letter-spacing: -0.025em;
+				line-height: 1.2;
+				margin-bottom: 9px;
+			}
 
-      .meta {
-        font-size: 13px;
-        color: var(--text-2);
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
+			.meta {
+				font-size: 13px;
+				color: var(--text-2);
+				display: flex;
+				align-items: center;
+				gap: 7px;
+			}
 
-      .meta::before {
-        content: "";
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background: var(--text-3);
-      }
+			.meta::before {
+				content: "";
+				width: 4px;
+				height: 4px;
+				border-radius: 50%;
+				background: var(--text-3);
+			}
 
-      /* ── Tabs ────────────────────────────────────────────── */
-      .tabs {
-        display: flex;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 24px;
-        position: relative;
-      }
+			/* ── Tabs ────────────────────────────────────────────── */
+			.tabs {
+				display: flex;
+				border-bottom: 1px solid var(--border);
+				margin-bottom: 24px;
+				position: relative;
+			}
 
-      .tab-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-family: "Poppins", sans-serif;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text-2);
-        padding: 10px 18px;
-        transition: color 0.15s;
-      }
+			.tab-btn {
+				background: none;
+				border: none;
+				cursor: pointer;
+				font-family: "Poppins", sans-serif;
+				font-size: 14px;
+				font-weight: 500;
+				color: var(--text-2);
+				padding: 10px 18px;
+				transition: color 0.15s;
+			}
 
-      .tab-btn:hover {
-        color: var(--text);
-      }
-      .tab-btn.active {
-        color: var(--text);
-      }
+			.tab-btn:hover {
+				color: var(--text);
+			}
+			.tab-btn.active {
+				color: var(--text);
+			}
 
-      .tab-indicator {
-        position: absolute;
-        bottom: -1px;
-        height: 2px;
-        background: var(--accent);
-        border-radius: 2px 2px 0 0;
-        transition:
-          left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-          width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-      }
+			.tab-indicator {
+				position: absolute;
+				bottom: -1px;
+				height: 2px;
+				background: var(--accent);
+				border-radius: 2px 2px 0 0;
+				transition:
+					left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+					width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+			}
 
-      /* ── Pages ───────────────────────────────────────────── */
-      .page {
-        display: none;
-      }
-      .page.active {
-        display: block;
-        animation: fadeUp 0.18s ease;
-      }
+			/* ── Pages ───────────────────────────────────────────── */
+			.page {
+				display: none;
+			}
+			.page.active {
+				display: block;
+				animation: fadeUp 0.18s ease;
+			}
 
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(5px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
+			@keyframes fadeUp {
+				from {
+					opacity: 0;
+					transform: translateY(5px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
 
-      /* ── Section cards ───────────────────────────────────── */
-      .section {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 22px 24px;
-        margin-bottom: 10px;
-      }
+			/* ── Section cards ───────────────────────────────────── */
+			.section {
+				background: var(--surface);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 22px 24px;
+				margin-bottom: 10px;
+			}
 
-      .section h2 {
-        font-family: "Poppins", sans-serif;
-        font-size: 15px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        color: var(--text);
-        margin-bottom: 12px;
-      }
+			.section h2 {
+				font-family: "Poppins", sans-serif;
+				font-size: 15px;
+				font-weight: 600;
+				letter-spacing: -0.01em;
+				color: var(--text);
+				margin-bottom: 12px;
+			}
 
-      .section p {
-        font-size: 14px;
-        line-height: 1.75;
-        color: var(--text-2);
-      }
+			.section p {
+				font-size: 14px;
+				line-height: 1.75;
+				color: var(--text-2);
+			}
 
-      /* ── Privacy data list ───────────────────────────────── */
-      .data-list {
-        list-style: none;
-        display: flex;
-        flex-direction: column;
-      }
+			/* ── Privacy data list ───────────────────────────────── */
+			.data-list {
+				list-style: none;
+				display: flex;
+				flex-direction: column;
+			}
 
-      .data-list li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        font-size: 14px;
-        color: var(--text-2);
-        padding: 9px 0;
-        border-bottom: 1px solid var(--border);
-      }
+			.data-list li {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 14px;
+				font-size: 14px;
+				color: var(--text-2);
+				padding: 9px 0;
+				border-bottom: 1px solid var(--border);
+			}
 
-      .data-list li:first-child {
-        padding-top: 0;
-      }
-      .data-list li:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-      }
+			.data-list li:first-child {
+				padding-top: 0;
+			}
+			.data-list li:last-child {
+				border-bottom: none;
+				padding-bottom: 0;
+			}
 
-      .data-name {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-      }
+			.data-name {
+				display: flex;
+				align-items: center;
+				gap: 9px;
+			}
 
-      .data-name::before {
-        content: "";
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background: var(--text-3);
-        flex-shrink: 0;
-      }
+			.data-name::before {
+				content: "";
+				width: 4px;
+				height: 4px;
+				border-radius: 50%;
+				background: var(--text-3);
+				flex-shrink: 0;
+			}
 
-      .tag {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 4px;
-        white-space: nowrap;
-        flex-shrink: 0;
-        letter-spacing: 0.02em;
-      }
+			.tag {
+				font-size: 11px;
+				font-weight: 600;
+				padding: 2px 8px;
+				border-radius: 4px;
+				white-space: nowrap;
+				flex-shrink: 0;
+				letter-spacing: 0.02em;
+			}
 
-      .tag-temp {
-        background: rgba(212, 163, 58, 0.1);
-        color: #c9922a;
-        border: 1px solid rgba(212, 163, 58, 0.2);
-      }
-      .tag-persist {
-        background: var(--accent-bg);
-        color: var(--text);
-        border: 1px solid var(--accent-border);
-      }
-      .tag-cond {
-        background: rgba(55, 180, 120, 0.1);
-        color: #2fa870;
-        border: 1px solid rgba(55, 180, 120, 0.2);
-      }
+			.tag-temp {
+				background: rgba(212, 163, 58, 0.1);
+				color: #c9922a;
+				border: 1px solid rgba(212, 163, 58, 0.2);
+			}
+			.tag-persist {
+				background: var(--accent-bg);
+				color: var(--text);
+				border: 1px solid var(--accent-border);
+			}
+			.tag-cond {
+				background: rgba(55, 180, 120, 0.1);
+				color: #2fa870;
+				border: 1px solid rgba(55, 180, 120, 0.2);
+			}
 
-      .data-note {
-        margin-top: 14px;
-        padding: 11px 14px;
-        background: var(--surface-2);
-        border-radius: 6px;
-        border-left: 2px solid var(--text-3);
-        font-size: 13px;
-        line-height: 1.7;
-        color: var(--text-2);
-      }
+			.data-note {
+				margin-top: 14px;
+				padding: 11px 14px;
+				background: var(--surface-2);
+				border-radius: 6px;
+				border-left: 2px solid var(--text-3);
+				font-size: 13px;
+				line-height: 1.7;
+				color: var(--text-2);
+			}
 
-      /* ── Footer ──────────────────────────────────────────── */
-      footer {
-        margin-top: 36px;
-        padding-top: 22px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
+			/* ── Footer ──────────────────────────────────────────── */
+			footer {
+				margin-top: 36px;
+				padding-top: 22px;
+				border-top: 1px solid var(--border);
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				flex-wrap: wrap;
+				gap: 12px;
+			}
 
-      footer p {
-        font-size: 13px;
-        color: var(--text-3);
-      }
+			footer p {
+				font-size: 13px;
+				color: var(--text-3);
+			}
 
-      .footer-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text-2);
-        text-decoration: none;
-        padding: 5px 13px;
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        transition:
-          color 0.15s,
-          border-color 0.15s;
-      }
+			.footer-link {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 13px;
+				font-weight: 500;
+				color: var(--text-2);
+				text-decoration: none;
+				padding: 5px 13px;
+				border-radius: 6px;
+				border: 1px solid var(--border);
+				background: var(--surface);
+				transition:
+					color 0.15s,
+					border-color 0.15s;
+			}
 
-      .footer-link:hover {
-        color: var(--text);
-        border-color: var(--accent-border);
-      }
-      .footer-link svg {
-        width: 14px;
-        height: 14px;
-        fill: currentColor;
-      }
+			.footer-link:hover {
+				color: var(--text);
+				border-color: var(--accent-border);
+			}
+			.footer-link svg {
+				width: 14px;
+				height: 14px;
+				fill: currentColor;
+			}
 
-      @media (max-width: 480px) {
-        header h1 {
-          font-size: 22px;
-        }
-        .section {
-          padding: 18px;
-        }
-        .tab-btn {
-          padding: 10px 13px;
-          font-size: 13px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <h1>Terms and Policies</h1>
-        <div class="meta">Last updated June 22, 2026</div>
-      </header>
+			@media (max-width: 480px) {
+				header h1 {
+					font-size: 22px;
+				}
+				.section {
+					padding: 18px;
+				}
+				.tab-btn {
+					padding: 10px 13px;
+					font-size: 13px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="wrap">
+			<header>
+				<h1>Terms and Policies</h1>
+				<div class="meta">Last updated June 22, 2026</div>
+			</header>
 
-      <nav class="tabs" aria-label="Policy sections">
-        <button class="tab-btn active" data-page="terms" aria-selected="true">
-          Terms of Service
-        </button>
-        <button class="tab-btn" data-page="privacy" aria-selected="false">
-          Privacy Policy
-        </button>
-        <div class="tab-indicator" aria-hidden="true"></div>
-      </nav>
+			<nav class="tabs" aria-label="Policy sections">
+				<button class="tab-btn active" data-page="terms" aria-selected="true">
+					Terms of Service
+				</button>
+				<button class="tab-btn" data-page="privacy" aria-selected="false">
+					Privacy Policy
+				</button>
+				<div class="tab-indicator" aria-hidden="true"></div>
+			</nav>
 
-      <!-- ── TERMS OF SERVICE ─────────────────────────── -->
-      <section class="page active" id="terms" role="tabpanel">
-        <div class="section">
-          <h2>Services</h2>
-          <p>
-            VGJR Music is a Discord bot that provides music playback and related
-            audio features. By accessing or using this bot, you agree to be
-            bound by these Terms of Service.
-          </p>
-        </div>
+			<!-- ── TERMS OF SERVICE ─────────────────────────── -->
+			<section class="page active" id="terms" role="tabpanel">
+				<div class="section">
+					<h2>Services</h2>
+					<p>
+						VGJR Music is a Discord bot that provides music playback and related
+						audio features. By accessing or using this bot, you agree to be
+						bound by these Terms of Service.
+					</p>
+				</div>
 
-        <div class="section">
-          <h2>Acceptable Use</h2>
-          <p>
-            You may not use this bot in any manner that violates Discord's Terms
-            of Service. Any such violations may result in your server being
-            blacklisted from accessing the bot.
-          </p>
-        </div>
+				<div class="section">
+					<h2>Acceptable Use</h2>
+					<p>
+						You may not use this bot in any manner that violates Discord's Terms
+						of Service. Any such violations may result in your server being
+						blacklisted from accessing the bot.
+					</p>
+				</div>
 
-        <div class="section">
-          <h2>Modifications</h2>
-          <p>
-            We reserve the right to update or modify these Terms of Service at
-            any time without prior notice. Continued use of the bot following
-            any such changes constitutes your acceptance of the updated terms.
-          </p>
-        </div>
-      </section>
+				<div class="section">
+					<h2>Modifications</h2>
+					<p>
+						We reserve the right to update or modify these Terms of Service at
+						any time without prior notice. Continued use of the bot following
+						any such changes constitutes your acceptance of the updated terms.
+					</p>
+				</div>
+			</section>
 
-      <!-- ── PRIVACY POLICY ───────────────────────────── -->
-      <section class="page" id="privacy" role="tabpanel">
-        <div class="section">
-          <h2>Data We Collect</h2>
-          <ul class="data-list">
-            <li>
-              <span class="data-name">Discord User</span>
-              <span class="tag tag-temp">Temporary</span>
-            </li>
-            <li>
-              <span class="data-name">Your Playlists</span>
-              <span class="tag tag-persist">Persistent</span>
-            </li>
-            <li>
-              <span class="data-name">Music Player Session</span>
-              <span class="tag tag-temp">Temporary</span>
-            </li>
-            <li>
-              <span class="data-name">Lyrics and Last.fm Data</span
-              ><span class="tag tag-temp">Temporary</span>
-            </li>
-            <li>
-              <span class="data-name">Search and Radio Results</span
-              ><span class="tag tag-temp">Temporary</span>
-            </li>
-            <li>
-              <span class="data-name">Total Active Connections</span>
-              <span class="tag tag-temp">Temporary</span>
-            </li>
-            <li>
-              <span class="data-name">Voice Channel Information</span
-              ><span class="tag tag-cond">24/7 Only</span>
-            </li>
-          </ul>
-          <div class="data-note">
-            Temporary data is stored in memory only to keep the bot running
-            stably and is never saved to disk. It may be used to help fix
-            issues.
-          </div>
-        </div>
+			<!-- ── PRIVACY POLICY ───────────────────────────── -->
+			<section class="page" id="privacy" role="tabpanel">
+				<div class="section">
+					<h2>Data We Collect</h2>
+					<ul class="data-list">
+						<li>
+							<span class="data-name">Discord User</span>
+							<span class="tag tag-temp">Temporary</span>
+						</li>
+						<li>
+							<span class="data-name">Your Playlists</span>
+							<span class="tag tag-persist">Persistent</span>
+						</li>
+						<li>
+							<span class="data-name">Music Player Session</span>
+							<span class="tag tag-temp">Temporary</span>
+						</li>
+						<li>
+							<span class="data-name">Lyrics and Last.fm Data</span
+							><span class="tag tag-temp">Temporary</span>
+						</li>
+						<li>
+							<span class="data-name">Search and Radio Results</span
+							><span class="tag tag-temp">Temporary</span>
+						</li>
+						<li>
+							<span class="data-name">Total Active Connections</span>
+							<span class="tag tag-temp">Temporary</span>
+						</li>
+						<li>
+							<span class="data-name">Voice Channel Information</span
+							><span class="tag tag-cond">24/7 Only</span>
+						</li>
+					</ul>
+					<div class="data-note">
+						Temporary data is stored in memory only to keep the bot running
+						stably and is never saved to disk. It may be used to help fix
+						issues.
+					</div>
+				</div>
 
-        <div class="section">
-          <h2>Data Sharing</h2>
-          <p>
-            We do not share your data with any third parties, and we have no
-            intention of doing so.
-          </p>
-        </div>
+				<div class="section">
+					<h2>Data Sharing</h2>
+					<p>
+						We do not share your data with any third parties, and we have no
+						intention of doing so.
+					</p>
+				</div>
 
-        <div class="section">
-          <h2>Modifications</h2>
-          <p>
-            We reserve the right to update or modify this Privacy Policy at any
-            time without prior notice. Continued use of the bot following any
-            such changes constitutes your acceptance of the updated policy.
-          </p>
-        </div>
-      </section>
+				<div class="section">
+					<h2>Modifications</h2>
+					<p>
+						We reserve the right to update or modify this Privacy Policy at any
+						time without prior notice. Continued use of the bot following any
+						such changes constitutes your acceptance of the updated policy.
+					</p>
+				</div>
+			</section>
 
-      <footer>
-        <p>Have a question?</p>
-        <a
-          href="https://github.com/GreenVGJR/amc-discord-bot/issues"
-          class="footer-link"
-          target="_blank"
-          rel="noopener"
-        >
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2Z"
-            />
-          </svg>
-          Open an issue
-        </a>
-      </footer>
-    </div>
+			<footer>
+				<p>Have a question?</p>
+				<a
+					href="https://github.com/GreenVGJR/amc-discord-bot/issues"
+					class="footer-link"
+					target="_blank"
+					rel="noopener"
+				>
+					<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path
+							d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2Z"
+						/>
+					</svg>
+					Open an issue
+				</a>
+			</footer>
+		</div>
 
-    <script>
-      const btns = document.querySelectorAll(".tab-btn");
-      const pages = document.querySelectorAll(".page");
-      const indicator = document.querySelector(".tab-indicator");
-      const BASE = "/amc/";
+		<script>
+			const btns = document.querySelectorAll(".tab-btn");
+			const pages = document.querySelectorAll(".page");
+			const indicator = document.querySelector(".tab-indicator");
+			const BASE = "/amc/";
 
-      function moveIndicator(btn) {
-        indicator.style.left = btn.offsetLeft + "px";
-        indicator.style.width = btn.offsetWidth + "px";
-      }
+			function moveIndicator(btn) {
+				indicator.style.left = btn.offsetLeft + "px";
+				indicator.style.width = btn.offsetWidth + "px";
+			}
 
-      function switchTo(pageId) {
-        btns.forEach((b) => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-        });
-        pages.forEach((p) => p.classList.remove("active"));
-        const btn = document.querySelector(`.tab-btn[data-page="${pageId}"]`);
-        const page = document.getElementById(pageId);
-        if (!btn || !page) return;
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-        page.classList.add("active");
-        moveIndicator(btn);
-      }
+			function switchTo(pageId) {
+				btns.forEach((b) => {
+					b.classList.remove("active");
+					b.setAttribute("aria-selected", "false");
+				});
+				pages.forEach((p) => p.classList.remove("active"));
+				const btn = document.querySelector(`.tab-btn[data-page="${pageId}"]`);
+				const page = document.getElementById(pageId);
+				if (!btn || !page) return;
+				btn.classList.add("active");
+				btn.setAttribute("aria-selected", "true");
+				page.classList.add("active");
+				moveIndicator(btn);
+			}
 
-      btns.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const pageId = btn.dataset.page;
-          history.pushState({ page: pageId }, "", BASE + pageId);
-          switchTo(pageId);
-        });
-      });
+			btns.forEach((btn) => {
+				btn.addEventListener("click", () => {
+					const pageId = btn.dataset.page;
+					history.pushState({ page: pageId }, "", BASE + pageId);
+					switchTo(pageId);
+				});
+			});
 
-      window.addEventListener("popstate", (e) => {
-        switchTo(e.state?.page || "terms");
-      });
+			window.addEventListener("popstate", (e) => {
+				switchTo(e.state?.page || "terms");
+			});
 
-      const initial = location.pathname.replace(BASE, "") || "terms";
-      switchTo(["terms", "privacy"].includes(initial) ? initial : "terms");
-      moveIndicator(document.querySelector(".tab-btn.active"));
-    </script>
-  </body>
+			const initial = location.pathname.replace(BASE, "") || "terms";
+			switchTo(["terms", "privacy"].includes(initial) ? initial : "terms");
+			moveIndicator(document.querySelector(".tab-btn.active"));
+		</script>
+	</body>
 </html>

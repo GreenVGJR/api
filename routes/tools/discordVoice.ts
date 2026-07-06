@@ -10,14 +10,11 @@ app.get("/discord/voice/deafen", async (c) => {
 	const userId = getQuery(c, "userId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "deafen", { userId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "deafen", { userId }));
 });
 
 app.get("/discord/voice/undeafen", async (c) => {
@@ -26,14 +23,11 @@ app.get("/discord/voice/undeafen", async (c) => {
 	const userId = getQuery(c, "userId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "undeafen", { userId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "undeafen", { userId }));
 });
 
 app.get("/discord/voice/mute", async (c) => {
@@ -42,14 +36,11 @@ app.get("/discord/voice/mute", async (c) => {
 	const userId = getQuery(c, "userId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "mute", { userId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "mute", { userId }));
 });
 
 app.get("/discord/voice/unmute", async (c) => {
@@ -58,14 +49,11 @@ app.get("/discord/voice/unmute", async (c) => {
 	const userId = getQuery(c, "userId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "unmute", { userId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "unmute", { userId }));
 });
 
 app.get("/discord/voice/kick", async (c) => {
@@ -74,14 +62,11 @@ app.get("/discord/voice/kick", async (c) => {
 	const userId = getQuery(c, "userId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "kick", { userId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "kick", { userId }));
 });
 
 app.get("/discord/voice/move", async (c) => {
@@ -91,16 +76,12 @@ app.get("/discord/voice/move", async (c) => {
 	const toChannelId = getQuery(c, "toChannelId") || getQuery(c, "to");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!userId) return c.json({ error: "Missing valid parameter: userId" }, 202);
-	if (!toChannelId)
-		return c.json({ error: "Missing valid parameter: toChannelId" }, 202);
+	if (!toChannelId) return c.json({ error: "Missing valid parameter: toChannelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "move", { userId, toChannelId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "move", { userId, toChannelId }));
 });
 
 app.get("/discord/voice/muteall", async (c) => {
@@ -111,15 +92,11 @@ app.get("/discord/voice/muteall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "muteall", { channelId, authorId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "muteall", { channelId, authorId }));
 });
 
 app.get("/discord/voice/unmuteall", async (c) => {
@@ -130,15 +107,11 @@ app.get("/discord/voice/unmuteall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "unmuteall", { channelId, authorId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "unmuteall", { channelId, authorId }));
 });
 
 app.get("/discord/voice/deafall", async (c) => {
@@ -149,15 +122,11 @@ app.get("/discord/voice/deafall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "deafall", { channelId, authorId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "deafall", { channelId, authorId }));
 });
 
 app.get("/discord/voice/undeafall", async (c) => {
@@ -168,15 +137,11 @@ app.get("/discord/voice/undeafall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "undeafall", { channelId, authorId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "undeafall", { channelId, authorId }));
 });
 
 app.get("/discord/voice/kickall", async (c) => {
@@ -186,15 +151,11 @@ app.get("/discord/voice/kickall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "kickall", { channelId, authorId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "kickall", { channelId, authorId }));
 });
 
 app.get("/discord/voice/moveall", async (c) => {
@@ -205,12 +166,9 @@ app.get("/discord/voice/moveall", async (c) => {
 	const authorId = getQuery(c, "authorId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
-	if (!toChannelId)
-		return c.json({ error: "Missing valid parameter: toChannelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!toChannelId) return c.json({ error: "Missing valid parameter: toChannelId" }, 202);
 
 	c.header("X-Route", "discord.com");
 	return await dispatch(c, () =>
@@ -228,15 +186,11 @@ app.get("/discord/voice/list", async (c) => {
 	const channelId = getQuery(c, "channelId");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, guildId, "list", { channelId }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, guildId, "list", { channelId }));
 });
 
 app.get("/discord/voice/setStatus", async (c) => {
@@ -245,13 +199,10 @@ app.get("/discord/voice/setStatus", async (c) => {
 	const content = getQuery(c, "content");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!channelId)
-		return c.json({ error: "Missing valid parameter: channelId" }, 202);
+	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordVoice(token!, "", "setstatus", { channelId, content }),
-	);
+	return await dispatch(c, () => DiscordVoice(token!, "", "setstatus", { channelId, content }));
 });
 
 export default app;

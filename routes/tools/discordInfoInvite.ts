@@ -9,9 +9,7 @@ app.get("/discord/infoInvite", async (c) => {
 	try {
 		const queryToken = c.req.query("token");
 		if (queryToken) {
-			const checktoken = Number.isInteger(
-				parseInt(atob(queryToken.split(".")[0])),
-			);
+			const checktoken = Number.isInteger(parseInt(atob(queryToken.split(".")[0])));
 			if (!checktoken) throw new Error();
 			token = queryToken;
 		}
@@ -19,13 +17,9 @@ app.get("/discord/infoInvite", async (c) => {
 
 	const q = c.req.query("q") || "";
 	const queryGuildId = c.req.query("guildId");
-	const guildId =
-		queryGuildId && Number.isInteger(parseInt(queryGuildId))
-			? queryGuildId
-			: undefined;
+	const guildId = queryGuildId && Number.isInteger(parseInt(queryGuildId)) ? queryGuildId : undefined;
 
-	if (!q && !guildId)
-		return c.json({ error: "Missing valid parameter: q or guildId" }, 202);
+	if (!q && !guildId) return c.json({ error: "Missing valid parameter: q or guildId" }, 202);
 
 	c.header("X-Route", "discord.com");
 	return await dispatch(c, () => DiscordInfoInvite(token, q, guildId));

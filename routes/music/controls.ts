@@ -1,19 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	getQueue,
-	destroyPlayer,
-	hasActivePlayer,
-	get247,
-	set247,
-	createMusicStream,
-	formatDuration,
-	formatTrack,
-	fillAutoplay,
-	isRadioActive,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, getQueue, destroyPlayer, hasActivePlayer, get247, set247, createMusicStream, formatDuration, formatTrack, fillAutoplay, isRadioActive } from "../../functions/musicPlayer.js";
 
 type RMValue = "off" | "track" | "queue";
 const RM = {
@@ -40,8 +28,7 @@ function parseTimeMS(timeStr: string): number {
 	if (timeStr.includes(":")) {
 		const parts = timeStr.split(":").map((p) => parseInt(p, 10));
 		if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 1000;
-		if (parts.length === 3)
-			return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+		if (parts.length === 3) return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
 	}
 
 	const secs = parseInt(timeStr, 10);
@@ -58,21 +45,15 @@ app.get("/pause", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -80,9 +61,7 @@ app.get("/pause", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -123,21 +102,15 @@ app.get("/resume", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -145,9 +118,7 @@ app.get("/resume", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -190,21 +161,15 @@ app.get("/skip", async (c) => {
 		const index = parseInt(indexStr, 10);
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -212,16 +177,12 @@ app.get("/skip", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
 		if (queue.queue.tracks.length === 0) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No more tracks in queue to skip to", type: { primary: "error", alt: "empty_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No more tracks in queue to skip to", type: { primary: "error", alt: "empty_queue" } })}}`);
 			return;
 		}
 
@@ -234,16 +195,12 @@ app.get("/skip", async (c) => {
 			if (index < 0 || index >= tracks.length) {
 				// If autoplay is on, we allow "skipping past the end" by just jumping to something new
 				if (queue.get("autoplay")) {
-					await log(
-						`Index ${index} is past the buffer, clearing and finding new recommendations...`,
-					);
+					await log(`Index ${index} is past the buffer, clearing and finding new recommendations...`);
 					await queue.queue.splice(0, tracks.length);
 					// Explicitly fill before continuing so the output matches
 					await fillAutoplay(queue);
 				} else {
-					await s.write(
-						`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`,
-					);
+					await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`);
 					return;
 				}
 			} else {
@@ -252,11 +209,7 @@ app.get("/skip", async (c) => {
 			}
 		}
 
-		await log(
-			skippedTrack
-				? `Skipping: "${skippedTrack.info.title}"...`
-				: "Skipping: Unknown...",
-		);
+		await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : "Skipping: Unknown...");
 
 		// Use skip(0, false) originally intended, but if it's a live track,
 		// we use stopPlaying(false) to ensure it stops correctly then plays next.
@@ -265,21 +218,15 @@ app.get("/skip", async (c) => {
 		} else {
 			await queue.skip(0, false);
 		}
-		await log(
-			nextTrack ? `Now playing: "${nextTrack.info.title}"` : "Queue ended",
-		);
+		await log(nextTrack ? `Now playing: "${nextTrack.info.title}"` : "Queue ended");
 
 		await s.write(
 			`],"data":${JSON.stringify({
 				status: true,
 				data: {
 					action: "skipped",
-					skippedTrack: skippedTrack
-						? formatTrack(skippedTrack, client, queue)
-						: null,
-					currentTrack: nextTrack
-						? formatTrack(nextTrack, client, queue)
-						: null,
+					skippedTrack: skippedTrack ? formatTrack(skippedTrack, client, queue) : null,
+					currentTrack: nextTrack ? formatTrack(nextTrack, client, queue) : null,
 				},
 				type: { primary: "final", alt: "success" },
 			})}}`,
@@ -293,15 +240,11 @@ app.get("/stop", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -309,9 +252,7 @@ app.get("/stop", async (c) => {
 		const queue = getQueue(manager, guildId);
 
 		if (!queue || (!isActive(queue) && queue.queue.tracks.length === 0)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -389,21 +330,15 @@ app.get("/seek", async (c) => {
 		const time = c.req.query("time");
 
 		if (!token || !guildId || !time) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId, time", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId, time", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -411,9 +346,7 @@ app.get("/seek", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue) || !queue.queue.current) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -421,32 +354,24 @@ app.get("/seek", async (c) => {
 		const duration = currentTrack.info.duration || 0;
 
 		if (currentTrack.info.isStream) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Cannot seek on a live track", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Cannot seek on a live track", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		if (duration <= 0) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Cannot seek: track metadata is missing duration", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Cannot seek: track metadata is missing duration", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		const ms = parseTimeMS(time);
 
 		if (ms > duration) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration / 1000)}s)`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration / 1000)}s)`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		if (ms < 0) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Cannot seek below 0`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek below 0`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -458,9 +383,7 @@ app.get("/seek", async (c) => {
 			await log(`Seek completed to ${seekTarget}ms`);
 		} catch (err: any) {
 			await log(`Seek failed: ${err?.message || err}`);
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Seek failed: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Seek failed: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`);
 			return;
 		}
 
@@ -494,23 +417,17 @@ app.get("/volume", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const value = parseInt(c.req.query("value") || "");
 		if (isNaN(value) || value < 0 || value > 100) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Volume must be a number between 0 and 100", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Volume must be a number between 0 and 100", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -518,9 +435,7 @@ app.get("/volume", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -554,21 +469,15 @@ app.get("/loop", async (c) => {
 		const mode = (c.req.query("mode") || "").toLowerCase().replace(/\s+/g, "");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -576,9 +485,7 @@ app.get("/loop", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -606,9 +513,7 @@ app.get("/loop", async (c) => {
 			if (!isNaN(num) && num in numMap) {
 				repeatMode = numMap[num];
 			} else {
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: `Invalid loop mode: "${mode}". Use: off, track, queue, autoplay (or 0-3)`, type: { primary: "error", alt: "invalid_query" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: `Invalid loop mode: "${mode}". Use: off, track, queue, autoplay (or 0-3)`, type: { primary: "error", alt: "invalid_query" } })}}`);
 				return;
 			}
 		}
@@ -651,21 +556,15 @@ app.get("/shuffle", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -673,16 +572,12 @@ app.get("/shuffle", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
 		if (queue.queue.tracks.length < 2) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Need at least 2 tracks in queue to shuffle", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Need at least 2 tracks in queue to shuffle", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -718,21 +613,15 @@ app.get("/remove", async (c) => {
 		const index = parseInt(indexStr, 10);
 
 		if (!token || !guildId || indexStr === "" || isNaN(index)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, index", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, index", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -740,17 +629,13 @@ app.get("/remove", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const tracks = queue.queue.tracks;
 		if (index < 0 || index >= tracks.length) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -781,21 +666,15 @@ app.get("/clear", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -803,9 +682,7 @@ app.get("/clear", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -832,21 +709,15 @@ app.get("/jump", async (c) => {
 		const index = parseInt(indexStr, 10);
 
 		if (!token || !guildId || indexStr === "" || isNaN(index)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, index", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, index", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -854,17 +725,13 @@ app.get("/jump", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue || !isActive(queue)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
 		const tracks = queue.queue.tracks;
 		if (index < 0 || index >= tracks.length) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Index ${index} is out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -899,29 +766,16 @@ app.get("/move", async (c) => {
 		const from = parseInt(fromStr, 10);
 		const to = parseInt(toStr, 10);
 
-		if (
-			!token ||
-			!guildId ||
-			fromStr === "" ||
-			toStr === "" ||
-			isNaN(from) ||
-			isNaN(to)
-		) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, from, to", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+		if (!token || !guildId || fromStr === "" || toStr === "" || isNaN(from) || isNaN(to)) {
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing or invalid required params: token, guildId, from, to", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -929,17 +783,13 @@ app.get("/move", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const tracks = queue.queue.tracks;
 		if (from < 0 || from >= tracks.length || to < 0 || to >= tracks.length) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Index out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Index out of bounds (0-${tracks.length - 1})`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -994,21 +844,15 @@ app.get("/back", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -1016,24 +860,18 @@ app.get("/back", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		if (!queue.queue.previous.length) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No history found", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No history found", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		const skipped = queue.queue.current;
 		const prevTrack = queue.queue.previous[0];
-		await log(
-			`Backing to previous track: "${prevTrack?.info.title || "Unknown"}"`,
-		);
+		await log(`Backing to previous track: "${prevTrack?.info.title || "Unknown"}"`);
 
 		try {
 			// lavalink-client has no built-in previous() — prepend the previous
@@ -1043,9 +881,7 @@ app.get("/back", async (c) => {
 			await log("Back successful");
 		} catch (err: any) {
 			await log(`Back failed: ${err.message}`);
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Failed to go back: ${err.message}`, type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to go back: ${err.message}`, type: { primary: "error", alt: "critical" } })}}`);
 			return;
 		}
 
@@ -1055,9 +891,7 @@ app.get("/back", async (c) => {
 				data: {
 					action: "back",
 					skippedTrack: skipped ? formatTrack(skipped, client, queue) : null,
-					currentTrack: prevTrack
-						? formatTrack(prevTrack, client, queue)
-						: null,
+					currentTrack: prevTrack ? formatTrack(prevTrack, client, queue) : null,
 				},
 				type: { primary: "final", alt: "success" },
 			})}}`,
@@ -1071,23 +905,17 @@ app.get("/247", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const valueStr = c.req.query("value") || "";
 		if (valueStr !== "true" && valueStr !== "false") {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: 'Value must be "true" or "false"', type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: 'Value must be "true" or "false"', type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -1098,9 +926,7 @@ app.get("/247", async (c) => {
 		const queue = getQueue(player, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player or queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player or queue found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
@@ -1126,17 +952,11 @@ app.get("/where", async (c) => {
 		const authorId = c.req.query("authorId");
 
 		if (!token) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required param: token", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required param: token", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		const isNew = !hasActivePlayer(token);
-		await log(
-			isNew
-				? "Creating new discord.js client..."
-				: "Reusing existing discord.js client",
-		);
+		await log(isNew ? "Creating new discord.js client..." : "Reusing existing discord.js client");
 
 		const { client, player: manager } = await getOrCreatePlayer(token, log);
 		await log(isNew ? "Discord.js client ready" : "Client retrieved");
@@ -1158,20 +978,13 @@ app.get("/where", async (c) => {
 				| null;
 		}[] = [];
 
-		const playersToCheck = guildId
-			? ([[guildId, manager.players.get(guildId)]].filter(([, p]) => p) as [
-					string,
-					any,
-				][])
-			: [...manager.players.entries()];
+		const playersToCheck = guildId ? ([[guildId, manager.players.get(guildId)]].filter(([, p]) => p) as [string, any][]) : [...manager.players.entries()];
 
 		for (const [gid, guildPlayer] of playersToCheck) {
 			if (guildPlayer?.voiceChannelId) {
 				let ch = client.channels.cache.get(guildPlayer.voiceChannelId) as any;
 				if (!ch) {
-					ch = (await client.channels
-						.fetch(guildPlayer.voiceChannelId)
-						.catch(() => null)) as any;
+					ch = (await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null)) as any;
 				}
 				const usersInChannel = ch?.members
 					? [...ch.members.values()].map((m: any) => ({
@@ -1188,9 +1001,7 @@ app.get("/where", async (c) => {
 					guildId: gid,
 					usersInChannel,
 				});
-				await log(
-					`Bot is in VC: ${ch?.name ?? "Unknown"} (${guildPlayer.voiceChannelId}) in guild ${gid}`,
-				);
+				await log(`Bot is in VC: ${ch?.name ?? "Unknown"} (${guildPlayer.voiceChannelId}) in guild ${gid}`);
 			}
 		}
 
@@ -1209,10 +1020,7 @@ app.get("/where", async (c) => {
 			let guildsToCheck: any[] = [];
 			if (guildId) {
 				let g = client.guilds.cache.get(guildId);
-				if (!g)
-					g = (await client.guilds
-						.fetch(guildId)
-						.catch(() => undefined)) as any;
+				if (!g) g = (await client.guilds.fetch(guildId).catch(() => undefined)) as any;
 				if (g) guildsToCheck = [g];
 			} else {
 				guildsToCheck = [...client.guilds.cache.values()];
@@ -1230,15 +1038,12 @@ app.get("/where", async (c) => {
 							name: channelName,
 							guildId: guild.id,
 						};
-						await log(
-							`User ${authorId} is in VC: ${channelName} (${channelId})`,
-						);
+						await log(`User ${authorId} is in VC: ${channelName} (${channelId})`);
 						break;
 					}
 				} catch {}
 			}
-			if (!authorChannel)
-				await log(`User ${authorId} is not in any voice channel`);
+			if (!authorChannel) await log(`User ${authorId} is not in any voice channel`);
 		}
 
 		const result = botChannels.map((b) => ({

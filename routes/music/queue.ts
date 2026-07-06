@@ -1,22 +1,8 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	getQueue,
-	formatTrack,
-	hasActivePlayer,
-	createMusicStream,
-	get247,
-	formatDuration,
-	isRadioActive,
-} from "../../functions/musicPlayer.js";
-import {
-	YTMusic,
-	YTLyrics,
-	tidalLyrics,
-	SPLyrics,
-} from "../../functions/request.js";
+import { getOrCreatePlayer, getQueue, formatTrack, hasActivePlayer, createMusicStream, get247, formatDuration, isRadioActive } from "../../functions/musicPlayer.js";
+import { YTMusic, YTLyrics, tidalLyrics, SPLyrics } from "../../functions/request.js";
 import { getActiveFilters } from "./filters.js";
 
 app.get("/nowplaying", async (c) => {
@@ -25,15 +11,11 @@ app.get("/nowplaying", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -43,26 +25,16 @@ app.get("/nowplaying", async (c) => {
 
 		if (!queue || !queue.queue.current) {
 			await log("No active queue or current track found");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const current: any = queue.queue.current;
 		const previous: any = queue.queue.previous?.[0];
-		const currentQueueIndex = queue.queue.tracks.findIndex(
-			(track: any) => track.info.identifier === current.info.identifier,
-		);
-		const upcomingTracks =
-			currentQueueIndex === 0
-				? queue.queue.tracks.slice(1)
-				: queue.queue.tracks;
+		const currentQueueIndex = queue.queue.tracks.findIndex((track: any) => track.info.identifier === current.info.identifier);
+		const upcomingTracks = currentQueueIndex === 0 ? queue.queue.tracks.slice(1) : queue.queue.tracks;
 		const next: any = upcomingTracks[0];
-		const totalQueueDuration = upcomingTracks.reduce(
-			(acc, track) => acc + (track.info.duration ?? 0),
-			0,
-		);
+		const totalQueueDuration = upcomingTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
 
 		await log(`Now playing: "${current.info.title}"`);
@@ -113,21 +85,15 @@ app.get("/nowplaying/lyrics", async (c) => {
 		const guildId = c.req.query("guildId");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -137,18 +103,13 @@ app.get("/nowplaying/lyrics", async (c) => {
 
 		if (!queue || !queue.queue.current) {
 			await log("No active queue found");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const track = queue.queue.current;
 		const searchQuery = `${track.info.title} ${track.info.author}`;
-		const totalQueueDuration = queue.queue.tracks.reduce(
-			(acc, t) => acc + (t.info.duration ?? 0),
-			0,
-		);
+		const totalQueueDuration = queue.queue.tracks.reduce((acc, t) => acc + (t.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
 		await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
@@ -161,8 +122,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 
 			try {
 				let trackUrl = track.info.uri;
-				const isYouTube =
-					trackUrl?.includes("youtube.com") || trackUrl?.includes("youtu.be");
+				const isYouTube = trackUrl?.includes("youtube.com") || trackUrl?.includes("youtu.be");
 
 				if (!isYouTube) {
 					const searchRes = await YTMusic(searchQuery);
@@ -210,9 +170,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 						lyrics = spData.lyrics;
 						syncLyrics = spData.syncLyrics || null;
 						source = "spotify";
-						footer = spData.providerDisplayName
-							? `Source: ${spData.providerDisplayName}`
-							: null;
+						footer = spData.providerDisplayName ? `Source: ${spData.providerDisplayName}` : null;
 						await log("Spotify lyrics found");
 					}
 				} catch (e: any) {
@@ -222,9 +180,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 
 			if (!lyrics) {
 				await log("No lyrics found from any provider");
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "No lyrics found", type: { primary: "error", alt: "invalid_query" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No lyrics found", type: { primary: "error", alt: "invalid_query" } })}}`);
 				return;
 			}
 
@@ -269,9 +225,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 			);
 		} catch (err: any) {
 			await log(`Lyrics fetch failed: ${err.message}`);
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Failed to fetch lyrics: ${err.message}`, type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to fetch lyrics: ${err.message}`, type: { primary: "error", alt: "critical" } })}}`);
 		}
 	});
 });
@@ -284,21 +238,15 @@ app.get("/queue", async (c) => {
 		const offset = Math.max(0, parseInt(c.req.query("offset") || "0", 10));
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
@@ -308,19 +256,14 @@ app.get("/queue", async (c) => {
 
 		if (!queue || !queue.queue.current) {
 			await log("No active queue or current track found");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const allTracks = queue.queue.tracks;
 		const currentTrack: any = queue.queue.current;
 		const allPreviousTracks = queue.queue.previous;
-		const totalQueueDuration = allTracks.reduce(
-			(acc, track) => acc + (track.info.duration ?? 0),
-			0,
-		);
+		const totalQueueDuration = allTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
 
 		await s.write(
@@ -329,9 +272,7 @@ app.get("/queue", async (c) => {
 				nodeId: queue.node?.id ?? null,
 				data: {
 					client: queue?.options || null,
-					current: queue.queue.current
-						? formatTrack(queue.queue.current, client, queue)
-						: null,
+					current: queue.queue.current ? formatTrack(queue.queue.current, client, queue) : null,
 					is247: get247(token!, guildId!),
 					playing: queue.playing,
 					paused: queue.paused,
@@ -341,16 +282,8 @@ app.get("/queue", async (c) => {
 						array: activeFilters.length > 0 ? activeFilters : [],
 						string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
 					},
-					tracks: allTracks.length
-						? allTracks
-								.slice(offset, offset + limit)
-								.map((t) => formatTrack(t as any, client, queue))
-						: null,
-					previousTracks: allPreviousTracks.length
-						? allPreviousTracks
-								.slice(offset, offset + limit)
-								.map((t) => formatTrack(t as any, client, queue))
-						: null,
+					tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue)) : null,
+					previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue)) : null,
 					total: allTracks.length,
 					limit,
 					offset,

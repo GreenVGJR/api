@@ -1,5 +1,5 @@
 import app from "./app.js";
-import { getBotGuardChallenge, getYoutubei } from "./functions/request.js";
+import { getBotGuardChallenge, getYoutubei, getPoToken } from "./functions/request.js";
 import { getOCRWorker } from "./functions/ocrWorker.js";
 import { destroyAllPlayers } from "./functions/musicPlayer.js";
 
@@ -14,15 +14,12 @@ if (!g.__vgjr_initialized) {
 	g.__vgjr_starttime = Date.now();
 	g.__vgjr_refresh_count = 0;
 	setTimeout(() => {
-		import("./functions/musicPlayer.js")
-			.then(({ autoInit }) => autoInit())
-			.catch(() => {});
+		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
 	}, 0);
 
-	Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getOCRWorker()])
+	Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getOCRWorker(), getPoToken()])
 		.then((results) => {
-			const failed = results.find((result) => result.status === "rejected") as
-				PromiseRejectedResult | undefined;
+			const failed = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
 			if (failed) console.error("YouTube/OCR warmup failed:", failed.reason);
 		})
 		.catch((err) => {

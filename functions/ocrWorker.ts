@@ -4,15 +4,7 @@ import { join } from "path";
 let workerPromise: ReturnType<typeof createWorker> | null = null;
 
 function getWorkerPath() {
-	const filePath = join(
-		process.cwd(),
-		"node_modules",
-		"tesseract.js",
-		"src",
-		"worker-script",
-		"node",
-		"index.js",
-	);
+	const filePath = join(process.cwd(), "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
 	// Ensure the path starts with a leading slash for file URLs
 	const normalized = filePath.startsWith("/") ? filePath : `/${filePath}`;
 	return `file://${normalized}`;

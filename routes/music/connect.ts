@@ -1,14 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	resolveVoiceChannel,
-	hasActivePlayer,
-	set247,
-	get247,
-	createMusicStream,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, hasActivePlayer, set247, get247, createMusicStream } from "../../functions/musicPlayer.js";
 
 app.get("/connect", async (c) => {
 	const token = c.req.query("token");
@@ -21,31 +14,21 @@ app.get("/connect", async (c) => {
 
 	return await createMusicStream(c, async (log, s) => {
 		if (!token || (!voiceId && (!reqGuildId || !authorId))) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, and either voiceId OR (guildId and authorId)", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, and either voiceId OR (guildId and authorId)", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		const isNew = !hasActivePlayer(token);
-		await log(
-			isNew
-				? "Creating new discord.js client..."
-				: "Reusing existing discord.js client",
-		);
+		await log(isNew ? "Creating new discord.js client..." : "Reusing existing discord.js client");
 
 		const { client, player: manager } = await getOrCreatePlayer(token, log);
 		await log(isNew ? "Discord.js client ready" : "Client retrieved");
 
 		if (!voiceId && authorId && reqGuildId) {
-			await log(
-				`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`,
-			);
+			await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
 			let guild = client.guilds.cache.get(reqGuildId as string);
 			if (!guild) {
-				guild = await client.guilds
-					.fetch(reqGuildId as string)
-					.catch(() => undefined);
+				guild = await client.guilds.fetch(reqGuildId as string).catch(() => undefined);
 			}
 			if (guild) {
 				const voiceState = guild.voiceStates.cache.get(authorId as string);
@@ -57,9 +40,7 @@ app.get("/connect", async (c) => {
 
 		if (!voiceId) {
 			await log("No voice channel found");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Please join a voice channel", type: { primary: "error", alt: "unknown_voice" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Please join a voice channel", type: { primary: "error", alt: "unknown_voice" } })}}`);
 			return;
 		}
 
@@ -72,15 +53,8 @@ app.get("/connect", async (c) => {
 		const guildId = channel.guild.id;
 
 		const existingPlayer = manager.players.get(guildId);
-		if (
-			!force &&
-			existingPlayer &&
-			existingPlayer.voiceChannelId === vId &&
-			existingPlayer.connected
-		) {
-			await log(
-				"Already connected to this voice channel with an active player",
-			);
+		if (!force && existingPlayer && existingPlayer.voiceChannelId === vId && existingPlayer.connected) {
+			await log("Already connected to this voice channel with an active player");
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: false,
@@ -93,8 +67,7 @@ app.get("/connect", async (c) => {
 		}
 
 		let guildPlayer = existingPlayer;
-		const needsMove =
-			!!guildPlayer && (force || guildPlayer.voiceChannelId !== vId);
+		const needsMove = !!guildPlayer && (force || guildPlayer.voiceChannelId !== vId);
 
 		if (!guildPlayer) {
 			await log("Creating new Lavalink player and joining voice channel...");
@@ -106,11 +79,7 @@ app.get("/connect", async (c) => {
 			});
 			await guildPlayer.connect();
 		} else if (needsMove) {
-			await log(
-				force
-					? "Force reconnecting..."
-					: `Bot is currently in another channel: ${guildPlayer.voiceChannelId}. Moving to ${vId}...`,
-			);
+			await log(force ? "Force reconnecting..." : `Bot is currently in another channel: ${guildPlayer.voiceChannelId}. Moving to ${vId}...`);
 			guildPlayer.voiceChannelId = vId;
 			const shard = client.guilds.cache.get(guildId)?.shard;
 			if (shard) {

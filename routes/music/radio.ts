@@ -1,29 +1,12 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	resolveVoiceChannel,
-	formatTrack,
-	hasActivePlayer,
-	set247,
-	get247,
-	clear247,
-	createMusicStream,
-	checkVoicePermissions,
-	formatDuration,
-	setVoiceStatus,
-	voiceStatusStore,
-	ensureLocalNode,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, formatDuration, setVoiceStatus, voiceStatusStore, ensureLocalNode } from "../../functions/musicPlayer.js";
 import { commonHeaders } from "../../functions/request.js";
 import { radioStreamUrls } from "../../functions/radioProxy.js";
 import { getActiveFilters } from "./filters.js";
 
-async function resolveRedirectUrl(
-	url: string,
-	maxRedirects = 5,
-): Promise<string> {
+async function resolveRedirectUrl(url: string, maxRedirects = 5): Promise<string> {
 	let current = url;
 	for (let i = 0; i < maxRedirects; i++) {
 		try {
@@ -37,9 +20,7 @@ async function resolveRedirectUrl(
 				const location = res.headers.get("location");
 				if (!location) break;
 				// Handle relative redirects
-				const next = location.startsWith("http")
-					? location
-					: new URL(location, current).href;
+				const next = location.startsWith("http") ? location : new URL(location, current).href;
 				if (next === current) break;
 				current = next;
 			} else {
@@ -66,8 +47,7 @@ app.get("/radio", async (c) => {
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: false,
-					message:
-						"Missing required params: token, stationId, and either voiceId OR (guildId and authorId)",
+					message: "Missing required params: token, stationId, and either voiceId OR (guildId and authorId)",
 					type: { primary: "error", alt: "invalid_query" },
 				})}}`,
 			);
@@ -78,10 +58,7 @@ app.get("/radio", async (c) => {
 		await log(`Fetching radio station details for ID: ${stationId}...`);
 		let stationInfo: any = null;
 		try {
-			const res = await fetch(
-				`https://all.api.radio-browser.info/json/stations/byuuid?uuids=${encodeURIComponent(stationId)}`,
-				{ headers: commonHeaders },
-			);
+			const res = await fetch(`https://all.api.radio-browser.info/json/stations/byuuid?uuids=${encodeURIComponent(stationId)}`, { headers: commonHeaders });
 			const data = await res.json();
 			if (Array.isArray(data) && data.length > 0) {
 				stationInfo = data[0];
@@ -114,11 +91,7 @@ app.get("/radio", async (c) => {
 
 		// 2. Initialize / Retrieve client and player
 		const isNew = !hasActivePlayer(token);
-		await log(
-			isNew
-				? "Creating new discord.js client..."
-				: "Reusing existing discord.js client",
-		);
+		await log(isNew ? "Creating new discord.js client..." : "Reusing existing discord.js client");
 
 		const { client, player: manager } = await getOrCreatePlayer(token, log);
 		await log(isNew ? "Discord.js client ready" : "Client retrieved");
@@ -129,14 +102,10 @@ app.get("/radio", async (c) => {
 			await log(`Resolving voice channel: ${voiceId}`);
 			channel = await resolveVoiceChannel(client, voiceId);
 		} else if (authorId && reqGuildId) {
-			await log(
-				`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`,
-			);
+			await log(`Looking for author's voice connection (${authorId}) in guild ${reqGuildId}...`);
 			let guild = client.guilds.cache.get(reqGuildId as string);
 			if (!guild) {
-				guild = await client.guilds
-					.fetch(reqGuildId as string)
-					.catch(() => undefined);
+				guild = await client.guilds.fetch(reqGuildId as string).catch(() => undefined);
 			}
 			if (guild) {
 				const voiceState = guild.voiceStates.cache.get(authorId as string);
@@ -164,16 +133,10 @@ app.get("/radio", async (c) => {
 		if (existingPlayer) {
 			await log("Active music player found, performing force disconnect...");
 			if (existingPlayer.queue.previous.length > 0) {
-				existingPlayer.queue.previous.splice(
-					0,
-					existingPlayer.queue.previous.length,
-				);
+				existingPlayer.queue.previous.splice(0, existingPlayer.queue.previous.length);
 			}
 			if (existingPlayer.queue.tracks.length > 0) {
-				existingPlayer.queue.tracks.splice(
-					0,
-					existingPlayer.queue.tracks.length,
-				);
+				existingPlayer.queue.tracks.splice(0, existingPlayer.queue.tracks.length);
 			}
 			clear247(token, guildId);
 			const voiceChannelId = existingPlayer.voiceChannelId;
@@ -227,30 +190,19 @@ app.get("/radio", async (c) => {
 
 		// 6. Search and load stream URL
 		await log("Searching and loading radio stream via Lavalink...");
-		const requester = authorId
-			? await client.users
-					.fetch(authorId as string)
-					.catch(() => ({ id: authorId, username: "Discord User" }))
-			: client.user;
+		const requester = authorId ? await client.users.fetch(authorId as string).catch(() => ({ id: authorId, username: "Discord User" })) : client.user;
 
 		let searchResult: any;
 		try {
-			searchResult = await guildPlayer.search(
-				{ query: streamUrl, source: undefined as any },
-				requester,
-				radioNode,
-			);
+			searchResult = await guildPlayer.search({ query: streamUrl, source: undefined as any }, requester, radioNode);
 		} catch (err: any) {
 			const msg = err?.message || "unknown error";
 			await log(`Lavalink search failed: ${msg}`);
-			const isBlocked =
-				msg.includes("Failed to parse JSON") || msg.includes("422");
+			const isBlocked = msg.includes("Failed to parse JSON") || msg.includes("422");
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: false,
-					message: isBlocked
-						? "This radio stream is blocked on public Lavalink nodes."
-						: `Lavalink failed to resolve the radio stream: ${msg}`,
+					message: isBlocked ? "This radio stream is blocked on public Lavalink nodes." : `Lavalink failed to resolve the radio stream: ${msg}`,
 					type: { primary: "error", alt: isBlocked ? "blocked" : "critical" },
 				})}}`,
 			);
@@ -272,8 +224,7 @@ app.get("/radio", async (c) => {
 
 		// Inject station metadata
 		track.info.title = stationInfo.name || track.info.title || "Live Radio";
-		track.info.author =
-			stationInfo.country || track.info.author || "Radio Station";
+		track.info.author = stationInfo.country || track.info.author || "Radio Station";
 		if (stationInfo.favicon) {
 			track.info.artworkUrl = stationInfo.favicon;
 		}
@@ -284,15 +235,7 @@ app.get("/radio", async (c) => {
 		// 8. Play the stream
 		await log("Starting radio stream playback...");
 		try {
-			await Promise.race([
-				guildPlayer.play(),
-				new Promise((_, reject) =>
-					setTimeout(
-						() => reject(new Error("Playback start request timed out")),
-						20_000,
-					),
-				),
-			]);
+			await Promise.race([guildPlayer.play(), new Promise((_, reject) => setTimeout(() => reject(new Error("Playback start request timed out")), 20_000))]);
 			guildPlayer.setData("__isRadio", true);
 		} catch (err: any) {
 			await log(`Play failed: ${err?.message || err}`);

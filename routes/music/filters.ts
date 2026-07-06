@@ -1,13 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	getQueue,
-	hasActivePlayer,
-	createMusicStream,
-	isRadioActive,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, getQueue, hasActivePlayer, createMusicStream, isRadioActive } from "../../functions/musicPlayer.js";
 
 type FilterPreset = {
 	description: string;
@@ -32,10 +26,7 @@ function eqPreset(description: string, gains: number[]): FilterPreset {
 	return {
 		description,
 		requires: "equalizer",
-		isActive: (p) =>
-			eqBands(gains).every(({ band, gain }) =>
-				nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain),
-			),
+		isActive: (p) => eqBands(gains).every(({ band, gain }) => nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain)),
 		apply: async (p) => {
 			await p.filterManager.setEQ(eqBands(gains));
 		},
@@ -45,20 +36,13 @@ function eqPreset(description: string, gains: number[]): FilterPreset {
 	};
 }
 
-function timescalePreset(
-	description: string,
-	timescale: { speed: number; pitch: number; rate: number },
-): FilterPreset {
+function timescalePreset(description: string, timescale: { speed: number; pitch: number; rate: number }): FilterPreset {
 	return {
 		description,
 		requires: "timescale",
 		isActive: (p) => {
 			const active = p.filterManager.data.timescale;
-			return (
-				nearlyEqual(active?.speed ?? 1, timescale.speed) &&
-				nearlyEqual(active?.pitch ?? 1, timescale.pitch) &&
-				nearlyEqual(active?.rate ?? 1, timescale.rate)
-			);
+			return nearlyEqual(active?.speed ?? 1, timescale.speed) && nearlyEqual(active?.pitch ?? 1, timescale.pitch) && nearlyEqual(active?.rate ?? 1, timescale.rate);
 		},
 		apply: async (p) => {
 			p.filterManager.data.timescale = timescale;
@@ -85,12 +69,7 @@ function channelMixPreset(
 		requires: "channelMix",
 		isActive: (p) => {
 			const active = p.filterManager.data.channelMix;
-			return (
-				nearlyEqual(active?.leftToLeft ?? 1, channelMix.leftToLeft) &&
-				nearlyEqual(active?.leftToRight ?? 0, channelMix.leftToRight) &&
-				nearlyEqual(active?.rightToLeft ?? 0, channelMix.rightToLeft) &&
-				nearlyEqual(active?.rightToRight ?? 1, channelMix.rightToRight)
-			);
+			return nearlyEqual(active?.leftToLeft ?? 1, channelMix.leftToLeft) && nearlyEqual(active?.leftToRight ?? 0, channelMix.leftToRight) && nearlyEqual(active?.rightToLeft ?? 0, channelMix.rightToLeft) && nearlyEqual(active?.rightToRight ?? 1, channelMix.rightToRight);
 		},
 		apply: async (p) => {
 			p.filterManager.data.channelMix = channelMix;
@@ -109,10 +88,7 @@ function normalizeFilterName(filter: string): string {
 	return filter.toLowerCase().replace(/[\s_-]+/g, "");
 }
 
-const VOCAL_ONLY_EQ = [
-	-0.25, -0.25, -0.2, -0.12, 0.02, 0.18, 0.3, 0.35, 0.3, 0.22, 0.08, -0.06,
-	-0.16, -0.22, -0.25,
-];
+const VOCAL_ONLY_EQ = [-0.25, -0.25, -0.2, -0.12, 0.02, 0.18, 0.3, 0.35, 0.3, 0.22, 0.08, -0.06, -0.16, -0.22, -0.25];
 const VOCAL_ONLY_CHANNEL_MIX = {
 	leftToLeft: 0.5,
 	leftToRight: 0.5,
@@ -122,8 +98,7 @@ const VOCAL_ONLY_CHANNEL_MIX = {
 
 const FILTER_PRESETS: Record<string, FilterPreset> = {
 	nightcore: {
-		description:
-			"Speeds up the track with a higher pitch for an energetic feel",
+		description: "Speeds up the track with a higher pitch for an energetic feel",
 		requires: "timescale",
 		isActive: (p) => p.filterManager.data.timescale?.speed === 1.2,
 		apply: async (p) => {
@@ -153,14 +128,8 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 		pitch: 1.0,
 		rate: 1.0,
 	}),
-	slow: timescalePreset(
-		"Slows playback down while keeping the original pitch",
-		{ speed: 0.75, pitch: 1.0, rate: 1.0 },
-	),
-	chipmunk: timescalePreset(
-		"Raises the pitch for a chipmunk-style vocal effect",
-		{ speed: 1.0, pitch: 1.55, rate: 1.0 },
-	),
+	slow: timescalePreset("Slows playback down while keeping the original pitch", { speed: 0.75, pitch: 1.0, rate: 1.0 }),
+	chipmunk: timescalePreset("Raises the pitch for a chipmunk-style vocal effect", { speed: 1.0, pitch: 1.55, rate: 1.0 }),
 	deep: timescalePreset("Lowers the pitch for a deeper vocal tone", {
 		speed: 1.0,
 		pitch: 0.75,
@@ -169,10 +138,7 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 	bassboost: {
 		description: "Enhances the bass frequencies for a heavier sound",
 		requires: "equalizer",
-		isActive: (p) =>
-			p.filterManager.equalizerBands?.some(
-				(b: any) => b.band === 0 && b.gain === 0.6,
-			) ?? false,
+		isActive: (p) => p.filterManager.equalizerBands?.some((b: any) => b.band === 0 && b.gain === 0.6) ?? false,
 		apply: async (p) => {
 			await p.filterManager.setEQ([
 				{ band: 0, gain: 0.6 },
@@ -196,20 +162,8 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 			await p.filterManager.clearEQ();
 		},
 	},
-	bassboostlow: eqPreset(
-		"Adds a lighter bass boost without overpowering the mix",
-		[
-			0.2, 0.18, 0.16, 0.1, 0.04, 0.0, -0.03, -0.05, 0.0, 0.0, 0.0, 0.0, 0.0,
-			0.0, 0.0,
-		],
-	),
-	bassboosthigh: eqPreset(
-		"Adds a stronger bass boost while keeping the highs controlled",
-		[
-			0.45, 0.5, 0.5, 0.28, 0.08, 0.0, -0.05, -0.08, 0.0, 0.0, 0.0, 0.0, 0.0,
-			0.0, 0.0,
-		],
-	),
+	bassboostlow: eqPreset("Adds a lighter bass boost without overpowering the mix", [0.2, 0.18, 0.16, 0.1, 0.04, 0.0, -0.03, -0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+	bassboosthigh: eqPreset("Adds a stronger bass boost while keeping the highs controlled", [0.45, 0.5, 0.5, 0.28, 0.08, 0.0, -0.05, -0.08, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
 	soft: {
 		description: "Softens the audio by lowering highs and smoothing the sound",
 		requires: "lowPass",
@@ -226,10 +180,7 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 	trebleboost: {
 		description: "Boosts the treble frequencies for a brighter sound",
 		requires: "equalizer",
-		isActive: (p) =>
-			p.filterManager.equalizerBands?.some(
-				(b: any) => b.band === 14 && b.gain === 0.45,
-			) ?? false,
+		isActive: (p) => p.filterManager.equalizerBands?.some((b: any) => b.band === 14 && b.gain === 0.45) ?? false,
 		apply: async (p) => {
 			await p.filterManager.setEQ([
 				{ band: 0, gain: 0.0 },
@@ -253,67 +204,17 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 			await p.filterManager.clearEQ();
 		},
 	},
-	rock: eqPreset(
-		"Boosts lows and highs for a punchier rock sound",
-		[
-			0.22, 0.18, 0.12, 0.06, 0.03, -0.03, -0.08, -0.12, -0.08, -0.03, 0.04,
-			0.08, 0.14, 0.18, 0.22,
-		],
-	),
-	pop: eqPreset(
-		"Adds clearer vocals and polished highs for pop tracks",
-		[
-			0.12, 0.1, -0.04, -0.06, -0.04, 0.08, 0.12, 0.14, 0.14, 0.12, 0.04, -0.02,
-			0.08, 0.1, 0.1,
-		],
-	),
-	electronic: eqPreset(
-		"Strengthens sub-bass and bright highs for electronic music",
-		[
-			0.25, 0.22, 0.14, 0.06, 0.0, -0.04, -0.06, 0.0, 0.1, 0.14, 0.18, 0.2,
-			0.22, 0.24, 0.25,
-		],
-	),
-	classical: eqPreset(
-		"Balances the spectrum with smooth high-end detail",
-		[
-			0.1, 0.08, 0.04, 0.0, 0.0, 0.04, 0.08, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16,
-			0.18, 0.2,
-		],
-	),
-	vocal: eqPreset(
-		"Highlights vocals by lifting the mid frequencies",
-		[
-			-0.08, -0.06, -0.04, 0.02, 0.08, 0.14, 0.18, 0.16, 0.12, 0.08, 0.02,
-			-0.02, -0.04, -0.06, -0.08,
-		],
-	),
+	rock: eqPreset("Boosts lows and highs for a punchier rock sound", [0.22, 0.18, 0.12, 0.06, 0.03, -0.03, -0.08, -0.12, -0.08, -0.03, 0.04, 0.08, 0.14, 0.18, 0.22]),
+	pop: eqPreset("Adds clearer vocals and polished highs for pop tracks", [0.12, 0.1, -0.04, -0.06, -0.04, 0.08, 0.12, 0.14, 0.14, 0.12, 0.04, -0.02, 0.08, 0.1, 0.1]),
+	electronic: eqPreset("Strengthens sub-bass and bright highs for electronic music", [0.25, 0.22, 0.14, 0.06, 0.0, -0.04, -0.06, 0.0, 0.1, 0.14, 0.18, 0.2, 0.22, 0.24, 0.25]),
+	classical: eqPreset("Balances the spectrum with smooth high-end detail", [0.1, 0.08, 0.04, 0.0, 0.0, 0.04, 0.08, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]),
+	vocal: eqPreset("Highlights vocals by lifting the mid frequencies", [-0.08, -0.06, -0.04, 0.02, 0.08, 0.14, 0.18, 0.16, 0.12, 0.08, 0.02, -0.02, -0.04, -0.06, -0.08]),
 	vocalonly: {
 		description: "Emphasizes centered vocals while reducing lows and highs",
 		requires: ["equalizer", "channelMix"],
 		isActive: (p) => {
 			const active = p.filterManager.data.channelMix;
-			return (
-				eqBands(VOCAL_ONLY_EQ).every(({ band, gain }) =>
-					nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain),
-				) &&
-				nearlyEqual(
-					active?.leftToLeft ?? 1,
-					VOCAL_ONLY_CHANNEL_MIX.leftToLeft,
-				) &&
-				nearlyEqual(
-					active?.leftToRight ?? 0,
-					VOCAL_ONLY_CHANNEL_MIX.leftToRight,
-				) &&
-				nearlyEqual(
-					active?.rightToLeft ?? 0,
-					VOCAL_ONLY_CHANNEL_MIX.rightToLeft,
-				) &&
-				nearlyEqual(
-					active?.rightToRight ?? 1,
-					VOCAL_ONLY_CHANNEL_MIX.rightToRight,
-				)
-			);
+			return eqBands(VOCAL_ONLY_EQ).every(({ band, gain }) => nearlyEqual(p.filterManager.equalizerBands?.[band]?.gain ?? 0, gain)) && nearlyEqual(active?.leftToLeft ?? 1, VOCAL_ONLY_CHANNEL_MIX.leftToLeft) && nearlyEqual(active?.leftToRight ?? 0, VOCAL_ONLY_CHANNEL_MIX.leftToRight) && nearlyEqual(active?.rightToLeft ?? 0, VOCAL_ONLY_CHANNEL_MIX.rightToLeft) && nearlyEqual(active?.rightToRight ?? 1, VOCAL_ONLY_CHANNEL_MIX.rightToRight);
 		},
 		apply: async (p) => {
 			p.filterManager.equalizerBands = eqBands(VOCAL_ONLY_EQ);
@@ -328,20 +229,8 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 			await p.filterManager.applyPlayerFilters();
 		},
 	},
-	fullsound: eqPreset(
-		"Gives the whole track a fuller and slightly louder profile",
-		[
-			0.18, 0.18, 0.16, 0.14, 0.12, 0.1, 0.1, 0.1, 0.12, 0.12, 0.14, 0.16, 0.18,
-			0.18, 0.18,
-		],
-	),
-	gaming: eqPreset(
-		"Emphasizes low-end impact and trims sharp highs for game audio",
-		[
-			0.18, 0.16, 0.14, 0.12, 0.08, 0.04, 0.0, -0.04, -0.08, -0.1, -0.12, -0.14,
-			-0.16, -0.18, -0.2,
-		],
-	),
+	fullsound: eqPreset("Gives the whole track a fuller and slightly louder profile", [0.18, 0.18, 0.16, 0.14, 0.12, 0.1, 0.1, 0.1, 0.12, 0.12, 0.14, 0.16, 0.18, 0.18, 0.18]),
+	gaming: eqPreset("Emphasizes low-end impact and trims sharp highs for game audio", [0.18, 0.16, 0.14, 0.12, 0.08, 0.04, 0.0, -0.04, -0.08, -0.1, -0.12, -0.14, -0.16, -0.18, -0.2]),
 	"8d": {
 		description: "Creates a 360° rotating audio effect around the listener",
 		requires: "rotation",
@@ -504,12 +393,7 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 		requires: "channelMix",
 		isActive: (p) => {
 			const active = p.filterManager.data.channelMix;
-			return (
-				active?.leftToLeft === 0 &&
-				active?.leftToRight === 1 &&
-				active?.rightToLeft === 1 &&
-				active?.rightToRight === 0
-			);
+			return active?.leftToLeft === 0 && active?.leftToRight === 1 && active?.rightToLeft === 1 && active?.rightToRight === 0;
 		},
 		apply: async (p) => {
 			p.filterManager.data.channelMix = {
@@ -532,12 +416,7 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 		requires: "channelMix",
 		isActive: (p) => {
 			const active = p.filterManager.data.channelMix;
-			return (
-				active?.leftToLeft === 0.5 &&
-				active?.leftToRight === 0.5 &&
-				active?.rightToLeft === 0.5 &&
-				active?.rightToRight === 0.5
-			);
+			return active?.leftToLeft === 0.5 && active?.leftToRight === 0.5 && active?.rightToLeft === 0.5 && active?.rightToRight === 0.5;
 		},
 		apply: async (p) => {
 			p.filterManager.data.channelMix = {
@@ -561,15 +440,12 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 		rightToLeft: 0.15,
 		rightToRight: 1,
 	}),
-	surround: channelMixPreset(
-		"Creates a wider virtual surround-like stereo spread",
-		{
-			leftToLeft: 0.75,
-			leftToRight: 0.25,
-			rightToLeft: 0.25,
-			rightToRight: 0.75,
-		},
-	),
+	surround: channelMixPreset("Creates a wider virtual surround-like stereo spread", {
+		leftToLeft: 0.75,
+		leftToRight: 0.25,
+		rightToLeft: 0.25,
+		rightToRight: 0.75,
+	}),
 	left: channelMixPreset("Plays the left channel through both speakers", {
 		leftToLeft: 1,
 		leftToRight: 0,
@@ -596,9 +472,7 @@ const FILTER_PRESETS: Record<string, FilterPreset> = {
 
 export function getActiveFilters(queue: any): string[] {
 	if (!queue) return [];
-	return Object.keys(FILTER_PRESETS).filter(
-		(k) => k !== "reset" && FILTER_PRESETS[k].isActive(queue),
-	);
+	return Object.keys(FILTER_PRESETS).filter((k) => k !== "reset" && FILTER_PRESETS[k].isActive(queue));
 }
 
 app.get("/filter", async (c) => {
@@ -608,45 +482,33 @@ app.get("/filter", async (c) => {
 		const filter = normalizeFilterName(c.req.query("filter") || "");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (await isRadioActive(token, guildId, log)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Stop the player first before using this", type: { final: "error", alt: "blocked" } })}}`);
 			return;
 		}
 
 		// ── No filter param → list available filters from node info ───────
 		if (!filter) {
 			if (!hasActivePlayer(token)) {
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 				return;
 			}
 
 			const { player: manager } = await getOrCreatePlayer(token, log);
-			const nodes = [...manager.nodeManager.nodes.values()].filter(
-				(n: any) => n.connected,
-			);
+			const nodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected);
 
 			if (nodes.length === 0) {
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "No connected Lavalink nodes", type: { primary: "error", alt: "critical" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No connected Lavalink nodes", type: { primary: "error", alt: "critical" } })}}`);
 				return;
 			}
 
 			const node = nodes[0] as any;
 			const nodeFilters: string[] = node.info?.filters ?? [];
 
-			await log(
-				`Found ${nodeFilters.length} supported filters from node "${node.options?.id || node.id || "unknown"}"`,
-			);
+			await log(`Found ${nodeFilters.length} supported filters from node "${node.options?.id || node.id || "unknown"}"`);
 
 			const queue = getQueue(manager, guildId);
 			const activeFilters = getActiveFilters(queue);
@@ -656,8 +518,7 @@ app.get("/filter", async (c) => {
 					status: true,
 					data: {
 						lavalinkFilters: {
-							_warning:
-								"This only meant to check if the lavalink actually support it. Some filters might not exists. Check 'presetFilters' for actual list filters.",
+							_warning: "This only meant to check if the lavalink actually support it. Some filters might not exists. Check 'presetFilters' for actual list filters.",
 							array: nodeFilters,
 							string: nodeFilters?.join(", ") || "",
 						},
@@ -681,44 +542,30 @@ app.get("/filter", async (c) => {
 
 		if (!preset) {
 			const availableFallback = Object.keys(FILTER_PRESETS).join(", ");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Unknown filter: "${filter}". Available: ${availableFallback}`, type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Unknown filter: "${filter}". Available: ${availableFallback}`, type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		const { player: manager } = await getOrCreatePlayer(token, log);
 
 		// ── Check if Lavalink node supports this filter ───────────────────
-		const requiredFilters = Array.isArray(preset.requires)
-			? preset.requires
-			: preset.requires
-				? [preset.requires]
-				: [];
+		const requiredFilters = Array.isArray(preset.requires) ? preset.requires : preset.requires ? [preset.requires] : [];
 
 		if (requiredFilters.length) {
-			const nodes = [...manager.nodeManager.nodes.values()].filter(
-				(n: any) => n.connected,
-			);
+			const nodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected);
 
 			if (nodes.length === 0) {
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "No connected Lavalink nodes", type: { primary: "error", alt: "critical" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No connected Lavalink nodes", type: { primary: "error", alt: "critical" } })}}`);
 				return;
 			}
 
 			const nodeFilters: string[] = (nodes[0] as any).info?.filters ?? [];
-			const missingFilters = requiredFilters.filter(
-				(required) => !nodeFilters.includes(required),
-			);
+			const missingFilters = requiredFilters.filter((required) => !nodeFilters.includes(required));
 
 			if (missingFilters.length) {
 				await s.write(
@@ -737,31 +584,21 @@ app.get("/filter", async (c) => {
 		const queue = getQueue(manager, guildId);
 
 		if (!queue) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found for this guild", type: { primary: "error", alt: "inactive_queue" } })}}`);
 			return;
 		}
 
 		if (!queue.playing && !queue.paused) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No track is currently playing", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No track is currently playing", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 
 		if (filter === "reset") {
-			const isAnyPresetActive = Object.keys(FILTER_PRESETS).some(
-				(k) => k !== "reset" && FILTER_PRESETS[k].isActive(queue),
-			);
-			const hasRawEQ =
-				queue.filterManager.equalizerBands?.some((b: any) => b.gain !== 0) ??
-				false;
+			const isAnyPresetActive = Object.keys(FILTER_PRESETS).some((k) => k !== "reset" && FILTER_PRESETS[k].isActive(queue));
+			const hasRawEQ = queue.filterManager.equalizerBands?.some((b: any) => b.gain !== 0) ?? false;
 
 			if (!isAnyPresetActive && !hasRawEQ) {
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "No filters enabled", type: { primary: "error", alt: "invalid_query" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No filters enabled", type: { primary: "error", alt: "invalid_query" } })}}`);
 				return;
 			}
 
@@ -774,9 +611,7 @@ app.get("/filter", async (c) => {
 				await log("All filters reset successfully");
 			} catch (err: any) {
 				await log(`Filter reset failed: ${err?.message || err}`);
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: `Failed to reset filters: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to reset filters: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`);
 				return;
 			}
 
@@ -797,11 +632,7 @@ app.get("/filter", async (c) => {
 		const currentlyActive = preset.isActive(queue);
 		const actionType = currentlyActive ? "filter_disabled" : "filter_applied";
 
-		await log(
-			currentlyActive
-				? `Disabling filter: ${filter}...`
-				: `Applying filter: ${filter}...`,
-		);
+		await log(currentlyActive ? `Disabling filter: ${filter}...` : `Applying filter: ${filter}...`);
 		try {
 			if (currentlyActive) {
 				await preset.disable(queue);
@@ -812,14 +643,10 @@ app.get("/filter", async (c) => {
 			if (queue.position) {
 				await queue.seek(queue.position);
 			}
-			await log(
-				`Filter "${filter}" ${currentlyActive ? "disabled" : "applied"} successfully`,
-			);
+			await log(`Filter "${filter}" ${currentlyActive ? "disabled" : "applied"} successfully`);
 		} catch (err: any) {
 			await log(`Filter failed: ${err?.message || err}`);
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: `Failed to modify filter: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: `Failed to modify filter: ${err?.message || "Unknown error"}`, type: { primary: "error", alt: "critical" } })}}`);
 			return;
 		}
 

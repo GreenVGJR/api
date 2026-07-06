@@ -4,10 +4,8 @@
 
 import crypto from "crypto";
 
-const STANDARD_B64_ALPHABET =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const CUSTOM_B64_ALPHABET =
-	"Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe";
+const STANDARD_B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CUSTOM_B64_ALPHABET = "Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe";
 
 const ENC_TRANS = (() => {
 	const map = new Map();
@@ -86,11 +84,7 @@ function encrypt(params, postData, userAgent, timestamp) {
 	const checksum = xorKey(buffer);
 	buffer = Buffer.concat([buffer, Buffer.from([checksum])]);
 
-	const enc = Buffer.concat([
-		Buffer.from([0x02]),
-		listKey,
-		stdRc4Enc(listKey, buffer),
-	]);
+	const enc = Buffer.concat([Buffer.from([0x02]), listKey, stdRc4Enc(listKey, buffer)]);
 
 	return customB64Encode(enc);
 }

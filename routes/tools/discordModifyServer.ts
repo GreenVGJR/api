@@ -9,18 +9,13 @@ app.get("/discord/modifyServer", async (c) => {
 	try {
 		const queryToken = c.req.query("token");
 		if (queryToken) {
-			const checktoken = Number.isInteger(
-				parseInt(atob(queryToken.split(".")[0])),
-			);
+			const checktoken = Number.isInteger(parseInt(atob(queryToken.split(".")[0])));
 			if (!checktoken) throw new Error();
 			token = queryToken;
 		}
 	} catch {}
 	const queryGuildId = c.req.query("guildId");
-	const guildId =
-		queryGuildId && Number.isInteger(parseInt(queryGuildId))
-			? queryGuildId
-			: null;
+	const guildId = queryGuildId && Number.isInteger(parseInt(queryGuildId)) ? queryGuildId : null;
 
 	if (!token) return c.json(["Missing valid parameter: token"], 202);
 	if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
@@ -70,8 +65,7 @@ app.get("/discord/modifyServer", async (c) => {
 		payload.splash = null;
 	} else if (splash) {
 		const pSplash = await processImage(c, splash);
-		if (pSplash == "")
-			payloadError.push("[guildSplash] Failed to download image");
+		if (pSplash == "") payloadError.push("[guildSplash] Failed to download image");
 		if (pSplash) payload.splash = pSplash;
 	}
 
@@ -79,15 +73,12 @@ app.get("/discord/modifyServer", async (c) => {
 		payload.banner = null;
 	} else if (banner) {
 		const pBanner = await processImage(c, banner);
-		if (pBanner == "")
-			payloadError.push("[guildBanner] Failed to download image");
+		if (pBanner == "") payloadError.push("[guildBanner] Failed to download image");
 		if (pBanner) payload.banner = pBanner;
 	}
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		Discord(token!, guildId!, payload, payloadError, reason || undefined),
-	);
+	return await dispatch(c, () => Discord(token!, guildId!, payload, payloadError, reason || undefined));
 });
 
 export default app;

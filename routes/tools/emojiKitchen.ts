@@ -22,18 +22,13 @@ app.get("/emoji/kitchen", async (c) => {
 
 	if (imageOnly) {
 		const result = await EmojiKitchen(q1, q2);
-		if (
-			result &&
-			!("error" in result) &&
-			result.data?.media_formats?.png_transparent?.url
-		) {
+		if (result && !("error" in result) && result.data?.media_formats?.png_transparent?.url) {
 			const imageUrl = result.data.media_formats.png_transparent.url;
 
 			try {
 				const response = await fetch(imageUrl);
 				if (response.ok) {
-					const contentType =
-						response.headers.get("content-type") || "image/png";
+					const contentType = response.headers.get("content-type") || "image/png";
 					const buffer = await response.arrayBuffer();
 					return c.body(buffer, 200, {
 						"Content-Type": contentType,

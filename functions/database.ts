@@ -25,10 +25,7 @@ function encrypt(text: string): string {
 			.digest();
 		const iv = crypto.randomBytes(12);
 		const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-		const encrypted = Buffer.concat([
-			cipher.update(text, "utf8"),
-			cipher.final(),
-		]);
+		const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
 		const tag = cipher.getAuthTag();
 		return Buffer.concat([iv, encrypted, tag]).toString("base64url");
 	} catch {
@@ -49,10 +46,7 @@ function decrypt(payload: string): string {
 		const encrypted = data.subarray(12, data.length - 16);
 		const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
 		decipher.setAuthTag(tag);
-		return Buffer.concat([
-			decipher.update(encrypted),
-			decipher.final(),
-		]).toString("utf8");
+		return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 	} catch {
 		return payload;
 	}
@@ -69,11 +63,8 @@ db.run(`
 
 export default {
 	get(name: string, hash: string) {
-		if (!checkKey())
-			return { error: "Database key (DB_KEY) is not set in environment" };
-		const stmt = db.prepare(
-			"SELECT value FROM apidataobjects WHERE name = ? AND hash = ?",
-		);
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
+		const stmt = db.prepare("SELECT value FROM apidataobjects WHERE name = ? AND hash = ?");
 		const result = stmt.get(name, hash) as { value: string } | null;
 		if (result) {
 			result.value = decrypt(result.value);
@@ -81,24 +72,19 @@ export default {
 		return result;
 	},
 	getAll(query: string = "", hash?: string) {
-		if (!checkKey())
-			return { error: "Database key (DB_KEY) is not set in environment" };
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
 		if (!hash) return { error: "Missing hash parameter for access separation" };
 
 		let results: { name: string; value: string; hash: string }[] = [];
 		if (!query) {
-			const stmt = db.prepare(
-				"SELECT name, value, hash FROM apidataobjects WHERE hash = ?",
-			);
+			const stmt = db.prepare("SELECT name, value, hash FROM apidataobjects WHERE hash = ?");
 			results = stmt.all(hash) as {
 				name: string;
 				value: string;
 				hash: string;
 			}[];
 		} else {
-			const stmt = db.prepare(
-				"SELECT name, value, hash FROM apidataobjects WHERE name LIKE ? AND hash = ?",
-			);
+			const stmt = db.prepare("SELECT name, value, hash FROM apidataobjects WHERE name LIKE ? AND hash = ?");
 			results = stmt.all(`%${query}%`, hash) as {
 				name: string;
 				value: string;
@@ -109,8 +95,7 @@ export default {
 		return results.map((r) => ({ ...r, value: decrypt(r.value) }));
 	},
 	set(name: string, value: string, existingHash?: string) {
-		if (!checkKey())
-			return { error: "Database key (DB_KEY) is not set in environment" };
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
 		if (name.length > 1024) {
 			return { error: "Name exceeds limit of 1024 characters" };
 		}
@@ -120,24 +105,18 @@ export default {
 
 		const encryptedValue = encrypt(value);
 		if (existingHash) {
-			const updateStmt = db.prepare(
-				"UPDATE apidataobjects SET value = ? WHERE name = ? AND hash = ?",
-			);
+			const updateStmt = db.prepare("UPDATE apidataobjects SET value = ? WHERE name = ? AND hash = ?");
 			const info = updateStmt.run(encryptedValue, name, existingHash);
 
 			if (info.changes > 0) {
 				return { success: true, type: "update", hash: existingHash };
 			}
 
-			const checkHashStmt = db.prepare(
-				"SELECT 1 FROM apidataobjects WHERE hash = ? LIMIT 1",
-			);
+			const checkHashStmt = db.prepare("SELECT 1 FROM apidataobjects WHERE hash = ? LIMIT 1");
 			const hashExists = checkHashStmt.get(existingHash);
 
 			if (hashExists) {
-				const insertStmt = db.prepare(
-					"INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)",
-				);
+				const insertStmt = db.prepare("INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)");
 				insertStmt.run(name, encryptedValue, existingHash);
 				return { success: true, type: "new", hash: existingHash };
 			} else {
@@ -145,19 +124,14 @@ export default {
 			}
 		} else {
 			const hash = crypto.randomBytes(8).toString("hex");
-			const stmt = db.prepare(
-				"INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)",
-			);
+			const stmt = db.prepare("INSERT INTO apidataobjects (name, value, hash) VALUES (?, ?, ?)");
 			stmt.run(name, encryptedValue, hash);
 			return { success: true, type: "new", hash: hash };
 		}
 	},
 	delete(name: string, hash: string) {
-		if (!checkKey())
-			return { error: "Database key (DB_KEY) is not set in environment" };
-		const stmt = db.prepare(
-			"DELETE FROM apidataobjects WHERE name = ? AND hash = ?",
-		);
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
+		const stmt = db.prepare("DELETE FROM apidataobjects WHERE name = ? AND hash = ?");
 		const info = stmt.run(name, hash);
 		return { success: info.changes > 0 };
 	},

@@ -4,124 +4,13 @@
 
 import crypto from "crypto";
 
-const aa = [
-	0xffffffff,
-	138,
-	1498001188,
-	211147047,
-	253,
-	null,
-	203,
-	288,
-	9,
-	1196819126,
-	3212677781,
-	135,
-	263,
-	193,
-	58,
-	18,
-	244,
-	2931180889,
-	240,
-	173,
-	268,
-	2157053261,
-	261,
-	175,
-	14,
-	5,
-	171,
-	270,
-	156,
-	258,
-	13,
-	15,
-	3732962506,
-	185,
-	169,
-	2,
-	6,
-	132,
-	162,
-	200,
-	3,
-	160,
-	217618912,
-	62,
-	2517678443,
-	44,
-	164,
-	4,
-	96,
-	183,
-	2903579748,
-	3863347763,
-	119,
-	181,
-	10,
-	190,
-	8,
-	2654435769,
-	259,
-	104,
-	230,
-	128,
-	2633865432,
-	225,
-	1,
-	257,
-	143,
-	179,
-	16,
-	600974999,
-	185100057,
-	32,
-	188,
-	53,
-	2718276124,
-	177,
-	196,
-	4294967296,
-	147,
-	117,
-	17,
-	49,
-	7,
-	28,
-	12,
-	266,
-	216,
-	11,
-	0,
-	45,
-	166,
-	247,
-	1451689750,
-];
+const aa = [0xffffffff, 138, 1498001188, 211147047, 253, null, 203, 288, 9, 1196819126, 3212677781, 135, 263, 193, 58, 18, 244, 2931180889, 240, 173, 268, 2157053261, 261, 175, 14, 5, 171, 270, 156, 258, 13, 15, 3732962506, 185, 169, 2, 6, 132, 162, 200, 3, 160, 217618912, 62, 2517678443, 44, 164, 4, 96, 183, 2903579748, 3863347763, 119, 181, 10, 190, 8, 2654435769, 259, 104, 230, 128, 2633865432, 225, 1, 257, 143, 179, 16, 600974999, 185100057, 32, 188, 53, 2718276124, 177, 196, 4294967296, 147, 117, 17, 49, 7, 28, 12, 266, 216, 11, 0, 45, 166, 247, 1451689750];
 const Ot = [aa[9], aa[69], aa[51], aa[92]];
 const MASK32 = 0xffffffff;
 
 function initPrngState() {
 	const nowMs = Date.now();
-	return [
-		aa[44],
-		aa[74],
-		aa[10],
-		aa[62],
-		aa[42],
-		aa[17],
-		aa[2],
-		aa[21],
-		aa[3],
-		aa[70],
-		aa[50],
-		aa[32],
-		aa[0] & nowMs,
-		crypto.randomInt(aa[77]),
-		crypto.randomInt(aa[77]),
-		crypto.randomInt(aa[77]),
-	];
+	return [aa[44], aa[74], aa[10], aa[62], aa[42], aa[17], aa[2], aa[21], aa[3], aa[70], aa[50], aa[32], aa[0] & nowMs, crypto.randomInt(aa[77]), crypto.randomInt(aa[77]), crypto.randomInt(aa[77])];
 }
 let kt = initPrngState();
 let St = aa[88];
@@ -175,10 +64,7 @@ function rand() {
 	return (t + 4294967296 * r) / 2 ** 53;
 }
 
-const numToBytes = (val) =>
-	val < 255 * 255
-		? [(val >> 8) & 0xff, val & 0xff]
-		: [(val >> 24) & 0xff, (val >> 16) & 0xff, (val >> 8) & 0xff, val & 0xff];
+const numToBytes = (val) => (val < 255 * 255 ? [(val >> 8) & 0xff, val & 0xff] : [(val >> 24) & 0xff, (val >> 16) & 0xff, (val >> 8) & 0xff, val & 0xff]);
 
 const beIntFromStr = (str) => {
 	const buf = Buffer.from(str, "utf8").subarray(0, 4);
@@ -194,11 +80,7 @@ function encryptChaCha(keyWords, rounds, bytes) {
 
 	for (let i = 0; i < nFull; i++) {
 		const j = 4 * i;
-		words[i] =
-			bytes[j] |
-			(bytes[j + 1] << 8) |
-			(bytes[j + 2] << 16) |
-			(bytes[j + 3] << 24);
+		words[i] = bytes[j] | (bytes[j + 1] << 8) | (bytes[j + 2] << 16) | (bytes[j + 3] << 24);
 	}
 	if (leftover) {
 		let v = 0,
@@ -241,14 +123,7 @@ function Ab22(key12Words, rounds, str) {
 	return String.fromCharCode(...data);
 }
 
-function encrypt(
-	queryString,
-	body,
-	userAgent,
-	envcode = 0,
-	version = "5.1.1",
-	timestampMs = Date.now(),
-) {
+function encrypt(queryString, body, userAgent, envcode = 0, version = "5.1.1", timestampMs = Date.now()) {
 	const obj = new Map();
 	obj.set(1, 1);
 	obj.set(2, envcode);
@@ -285,10 +160,7 @@ function encrypt(
 	payload.push(obj.size);
 	for (const [k, v] of obj) {
 		payload.push(k);
-		const valBytes =
-			typeof v === "number"
-				? numToBytes(v)
-				: Array.from(Buffer.from(v, "utf8"));
+		const valBytes = typeof v === "number" ? numToBytes(v) : Array.from(Buffer.from(v, "utf8"));
 		payload.push(...numToBytes(valBytes.length));
 		payload.push(...valBytes);
 	}
@@ -302,12 +174,7 @@ function encrypt(
 		const word = (rnd * 4294967296) >>> 0;
 		keyWords.push(word);
 		roundAccum = (roundAccum + (word & 15)) & 15;
-		keyBytes.push(
-			word & 0xff,
-			(word >>> 8) & 0xff,
-			(word >>> 16) & 0xff,
-			(word >>> 24) & 0xff,
-		);
+		keyBytes.push(word & 0xff, (word >>> 8) & 0xff, (word >>> 16) & 0xff, (word >>> 24) & 0xff);
 	}
 	const rounds = roundAccum + 5;
 
@@ -315,31 +182,17 @@ function encrypt(
 
 	let insertPos = 0;
 	for (const b of keyBytes) insertPos = (insertPos + b) % (enc.length + 1);
-	for (const ch of enc)
-		insertPos = (insertPos + ch.charCodeAt(0)) % (enc.length + 1);
+	for (const ch of enc) insertPos = (insertPos + ch.charCodeAt(0)) % (enc.length + 1);
 
 	const keyBytesStr = String.fromCharCode(...keyBytes);
-	const finalStr =
-		String.fromCharCode(((1 << 6) ^ (1 << 3) ^ 3) & 0xff) +
-		enc.slice(0, insertPos) +
-		keyBytesStr +
-		enc.slice(insertPos);
+	const finalStr = String.fromCharCode(((1 << 6) ^ (1 << 3) ^ 3) & 0xff) + enc.slice(0, insertPos) + keyBytesStr + enc.slice(insertPos);
 
-	const alphabet =
-		"u09tbS3UvgDEe6r-ZVMXzLpsAohTn7mdINQlW412GqBjfYiyk8JORCF5/xKHwacP=";
+	const alphabet = "u09tbS3UvgDEe6r-ZVMXzLpsAohTn7mdINQlW412GqBjfYiyk8JORCF5/xKHwacP=";
 	const out = [];
 	const fullLen = Math.floor(finalStr.length / 3) * 3;
 	for (let i = 0; i < fullLen; i += 3) {
-		const block =
-			(finalStr.charCodeAt(i) << 16) |
-			(finalStr.charCodeAt(i + 1) << 8) |
-			finalStr.charCodeAt(i + 2);
-		out.push(
-			alphabet[(block >> 18) & 63],
-			alphabet[(block >> 12) & 63],
-			alphabet[(block >> 6) & 63],
-			alphabet[block & 63],
-		);
+		const block = (finalStr.charCodeAt(i) << 16) | (finalStr.charCodeAt(i + 1) << 8) | finalStr.charCodeAt(i + 2);
+		out.push(alphabet[(block >> 18) & 63], alphabet[(block >> 12) & 63], alphabet[(block >> 6) & 63], alphabet[block & 63]);
 	}
 	return out.join("");
 }

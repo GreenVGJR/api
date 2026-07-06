@@ -1,15 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	destroyPlayer,
-	hasActivePlayer,
-	createMusicStream,
-	clear247,
-	setVoiceStatus,
-	voiceStatusStore,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, destroyPlayer, hasActivePlayer, createMusicStream, clear247, setVoiceStatus, voiceStatusStore } from "../../functions/musicPlayer.js";
 
 app.get("/disconnect", async (c) => {
 	const token = c.req.query("token");
@@ -17,17 +9,13 @@ app.get("/disconnect", async (c) => {
 
 	return await createMusicStream(c, async (log, s) => {
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
 		if (!hasActivePlayer(token)) {
 			await log("No active player found for this token");
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found", type: { primary: "error", alt: "inactive_player" } })}}`);
 			return;
 		}
 

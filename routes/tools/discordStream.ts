@@ -16,18 +16,7 @@ app.get("/discord/stream", async (c) => {
 
 	c.header("X-Route", "discord.com");
 
-	return await dispatch(c, () =>
-		DiscordStream(
-			token!,
-			channelId!,
-			messageId!,
-			url!,
-			clone,
-			onEmbed,
-			name,
-			fallbackEmbed,
-		),
-	);
+	return await dispatch(c, () => DiscordStream(token!, channelId!, messageId!, url!, clone, onEmbed, name, fallbackEmbed));
 });
 
 export default app;

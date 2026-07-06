@@ -13,16 +13,7 @@ app.get("/audiomack", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 
-	const validTypes = [
-		"songs",
-		"albums",
-		"playlists",
-		"artists",
-		"song",
-		"album",
-		"playlist",
-		"artist",
-	];
+	const validTypes = ["songs", "albums", "playlists", "artists", "song", "album", "playlist", "artist"];
 	if (type && !validTypes.includes(type.toLowerCase())) {
 		return c.json(
 			{

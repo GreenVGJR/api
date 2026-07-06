@@ -1,12 +1,5 @@
 import { Hono } from "hono";
-import {
-	getOrCreatePlayer,
-	setVoiceStatus,
-	updateVoiceStatus,
-	createMusicStream,
-	getVoiceStatusSettings,
-	setVoiceStatusSetting,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, setVoiceStatus, updateVoiceStatus, createMusicStream, getVoiceStatusSettings, setVoiceStatusSetting } from "../../functions/musicPlayer.js";
 
 const app = new Hono();
 
@@ -19,9 +12,7 @@ app.get("/voiceStatus", async (c) => {
 		const content = c.req.query("content");
 
 		if (!token || !guildId) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token, guildId", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 
@@ -32,15 +23,11 @@ app.get("/voiceStatus", async (c) => {
 			await log(`Validating guild: ${guildId}`);
 			let guild = client.guilds.cache.get(guildId as string);
 			if (!guild) {
-				guild = await client.guilds
-					.fetch(guildId as string)
-					.catch(() => undefined);
+				guild = await client.guilds.fetch(guildId as string).catch(() => undefined);
 			}
 			if (!guild) {
 				await log("Guild not found or bot not in guild");
-				await s.write(
-					`],"data":${JSON.stringify({ status: false, message: "Guild not found or bot not in guild", data: getVoiceStatusSettings(token, "unknown"), type: { primary: "error", alt: "invalid_query" } })}}`,
-				);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "Guild not found or bot not in guild", data: getVoiceStatusSettings(token, "unknown"), type: { primary: "error", alt: "invalid_query" } })}}`);
 				return;
 			}
 
@@ -66,9 +53,7 @@ app.get("/voiceStatus", async (c) => {
 				const isActive = statusStr === "true";
 				const template = (content || "").trim();
 
-				await log(
-					`Configuring voice status for type: ${type} (Active: ${isActive})`,
-				);
+				await log(`Configuring voice status for type: ${type} (Active: ${isActive})`);
 
 				// Persist settings in the central store (works even if player is destroyed or not yet playing)
 				setVoiceStatusSetting(token, guildId, type, isActive, template);
@@ -99,38 +84,17 @@ app.get("/voiceStatus", async (c) => {
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: isActivePlayer,
-					message: isActivePlayer
-						? undefined
-						: "No active player for this channel",
+					message: isActivePlayer ? undefined : "No active player for this channel",
 					data: {
 						...getVoiceStatusSettings(token, guildId),
-						tags: [
-							"{id}",
-							"{title}",
-							"{author}",
-							"{url}",
-							"{source}",
-							"{actualSource}",
-							"{thumbnail}",
-							"{duration}",
-							"{durationMS}",
-							"{isSeekable}",
-							"{isStream}",
-							"{requestedBy}",
-							"{requester.id}",
-							"{requester.username}",
-							"{requester.globalName}",
-							"{requester.tag}",
-						],
+						tags: ["{id}", "{title}", "{author}", "{url}", "{source}", "{actualSource}", "{thumbnail}", "{duration}", "{durationMS}", "{isSeekable}", "{isStream}", "{requestedBy}", "{requester.id}", "{requester.username}", "{requester.globalName}", "{requester.tag}"],
 					},
 					type: { primary: "final", alt: "success" },
 				})}}`,
 			);
 		} catch (err: any) {
 			await log(`Error: ${err?.message}`);
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to update voice status configuration", type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to update voice status configuration", type: { primary: "error", alt: "critical" } })}}`);
 		}
 	});
 });

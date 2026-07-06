@@ -6,9 +6,7 @@ import { blobDispatch } from "../../functions/httpRequest.js";
 import { commonHeaders, userAgent } from "../../functions/request.js";
 
 async function resizeImage(input: Buffer | ArrayBuffer) {
-	return await new Bun.Image(input)
-		.resize(1024, 1024, { filter: "mks2021" })
-		.buffer();
+	return await new Bun.Image(input).resize(1024, 1024, { filter: "mks2021" }).buffer();
 }
 
 app.get("/ai-image/flux_schnell", async (c) => {
@@ -21,35 +19,27 @@ app.get("/ai-image/flux_schnell", async (c) => {
 	const CF_AID = process.env.CF_AID;
 	const CF_TOKEN = process.env.CF_TOKEN;
 
-	c.header(
-		"X-Route",
-		"api.cloudflare.com, fast-flux-demo.replicate.workers.dev",
-	);
+	c.header("X-Route", "api.cloudflare.com, fast-flux-demo.replicate.workers.dev");
 	c.header("X-Enc-Data", "model:flux-1-schnell");
 
 	if (CF_AID && CF_TOKEN) {
 		if (query.length > 2048) {
-			console.warn(
-				`Cloudflare AI prompt length (${query.length}) exceeds limit of 2048; skipping Cloudflare AI and using fallback`,
-			);
+			console.warn(`Cloudflare AI prompt length (${query.length}) exceeds limit of 2048; skipping Cloudflare AI and using fallback`);
 		} else {
 			try {
-				const cfResponse = await fetch(
-					`https://api.cloudflare.com/client/v4/accounts/${CF_AID}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
-					{
-						method: "POST",
-						headers: {
-							Authorization: `Bearer ${CF_TOKEN}`,
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							prompt: query,
-							steps: 1,
-							width: 768,
-							height: 768,
-						}),
+				const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_AID}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${CF_TOKEN}`,
+						"Content-Type": "application/json",
 					},
-				);
+					body: JSON.stringify({
+						prompt: query,
+						steps: 1,
+						width: 768,
+						height: 768,
+					}),
+				});
 
 				if (cfResponse.ok) {
 					const json = (await cfResponse.json()) as any;
@@ -61,38 +51,22 @@ app.get("/ai-image/flux_schnell", async (c) => {
 						});
 					}
 				} else if (cfResponse.status === 429) {
-					console.warn(
-						"Cloudflare AI rate limited (429), falling back to Vercel",
-					);
+					console.warn("Cloudflare AI rate limited (429), falling back to Vercel");
 				} else {
 					let loggedAsWarning = false;
 					try {
 						const errorJson = await cfResponse.json();
-						if (
-							errorJson &&
-							typeof errorJson === "object" &&
-							Array.isArray(errorJson.errors)
-						) {
-							const messages = errorJson.errors
-								.map((e: any) => e.message)
-								.join("; ");
-							if (
-								/Length of '\/prompt' must be <= 2048/.test(messages) ||
-								/Input prompt contains NSFW content/.test(messages)
-							) {
-								console.warn(
-									`Cloudflare AI validation error (${cfResponse.status}): ${messages}`,
-								);
+						if (errorJson && typeof errorJson === "object" && Array.isArray(errorJson.errors)) {
+							const messages = errorJson.errors.map((e: any) => e.message).join("; ");
+							if (/Length of '\/prompt' must be <= 2048/.test(messages) || /Input prompt contains NSFW content/.test(messages)) {
+								console.warn(`Cloudflare AI validation error (${cfResponse.status}): ${messages}`);
 								loggedAsWarning = true;
 							}
 						}
 					} catch (_) {}
 					if (!loggedAsWarning) {
 						const errorText = await cfResponse.text();
-						console.error(
-							`Cloudflare AI error (${cfResponse.status}):`,
-							errorText,
-						);
+						console.error(`Cloudflare AI error (${cfResponse.status}):`, errorText);
 					}
 				}
 			} catch (e) {
@@ -101,29 +75,22 @@ app.get("/ai-image/flux_schnell", async (c) => {
 		}
 	}
 
-	const fallbackResponse = await fetch(
-		`https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`,
-		{
-			method: "GET",
-			headers: {
-				...commonHeaders,
-				Accept: "application/json, text/plain, */*",
-				"Sec-Fetch-Dest": "empty",
-				"Sec-Fetch-Mode": "cors",
-				"Sec-Fetch-Site": "same-site",
-			},
+	const fallbackResponse = await fetch(`https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${query}`, {
+		method: "GET",
+		headers: {
+			...commonHeaders,
+			Accept: "application/json, text/plain, */*",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-site",
 		},
-	);
+	});
 
 	if (!fallbackResponse.ok)
 		return await blobDispatch(c, fallbackResponse, {
 			"content-type": "image/png",
 		});
-	return await blobDispatch(
-		c,
-		await resizeImage(await fallbackResponse.arrayBuffer()),
-		{ "content-type": "image/png" },
-	);
+	return await blobDispatch(c, await resizeImage(await fallbackResponse.arrayBuffer()), { "content-type": "image/png" });
 });
 
 app.get("/ai-image/flux_klein", async (c) => {
@@ -142,20 +109,17 @@ app.get("/ai-image/flux_klein", async (c) => {
 	formData.append("steps", "1");
 	formData.append("guidance", "2");
 
-	const response = await fetch(
-		`${atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl")}?model=@cf/black-forest-labs/flux-2-klein-9b`,
-		{
-			body: formData,
-			method: "POST",
-			headers: {
-				Origin: "https://multi-modal.ai.cloudflare.com",
-				Referer: "https://multi-modal.ai.cloudflare.com",
-				"Sec-Fetch-Dest": "empty",
-				"Sec-Fetch-Mode": "cors",
-				"Sec-Fetch-Site": "same-origin",
-			},
+	const response = await fetch(`${atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl")}?model=@cf/black-forest-labs/flux-2-klein-9b`, {
+		body: formData,
+		method: "POST",
+		headers: {
+			Origin: "https://multi-modal.ai.cloudflare.com",
+			Referer: "https://multi-modal.ai.cloudflare.com",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
 		},
-	);
+	});
 
 	if (!response.ok) {
 		return c.json({ error: `Upstream returned ${response.status}` }, 502);

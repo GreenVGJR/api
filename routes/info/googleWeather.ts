@@ -11,10 +11,7 @@ app.get("/weather", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header(
-		"X-Route",
-		"weather.googleapis.com, nominatim.openstreetmap.org, www.google.com",
-	);
+	c.header("X-Route", "weather.googleapis.com, nominatim.openstreetmap.org, www.google.com");
 	return await dispatch(c, () => googleWeather(query));
 });
 

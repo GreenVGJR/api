@@ -99,11 +99,7 @@ function initSubprocess() {
 		persistentProc = null;
 		rl = null;
 		if (pendingReject) {
-			pendingReject(
-				new Error(
-					`Python bridge process exited unexpectedly with code ${exitCode}.`,
-				),
-			);
+			pendingReject(new Error(`Python bridge process exited unexpectedly with code ${exitCode}.`));
 			pendingResolve = null;
 			pendingReject = null;
 		}
@@ -142,9 +138,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		pendingReject = reject;
 
 		try {
-			const payloadBytes = new TextEncoder().encode(
-				JSON.stringify(payload) + "\n",
-			);
+			const payloadBytes = new TextEncoder().encode(JSON.stringify(payload) + "\n");
 			persistentProc.stdin.write(payloadBytes);
 			persistentProc.stdin.flush();
 		} catch (err) {
@@ -155,9 +149,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 	});
 }
 
-export async function browserRequest<T = Record<string, any>>(
-	options: ScraplingOptions,
-): Promise<ScraplingResult<T>> {
+export async function browserRequest<T = Record<string, any>>(options: ScraplingOptions): Promise<ScraplingResult<T>> {
 	return new Promise((resolve, reject) => {
 		requestQueue = requestQueue.then(async () => {
 			try {

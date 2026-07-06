@@ -1,10 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	DiscordListMemberRole,
-	PERMISSION_KEYS,
-} from "../../functions/request.js";
+import { DiscordListMemberRole, PERMISSION_KEYS } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/discord/listMember/role", async (c) => {
@@ -12,17 +9,14 @@ app.get("/discord/listMember/role", async (c) => {
 	try {
 		const queryToken = c.req.query("token");
 		if (queryToken) {
-			const checktoken = Number.isInteger(
-				parseInt(atob(queryToken.split(".")[0])),
-			);
+			const checktoken = Number.isInteger(parseInt(atob(queryToken.split(".")[0])));
 			if (!checktoken) throw new Error();
 			token = queryToken;
 		}
 	} catch {}
 
 	const queryGuildId = c.req.query("guildId");
-	const guildId =
-		queryGuildId && /^\d+$/.test(queryGuildId) ? queryGuildId : null;
+	const guildId = queryGuildId && /^\d+$/.test(queryGuildId) ? queryGuildId : null;
 
 	const queryRoleId = c.req.query("roleId");
 	const roleIds =
@@ -30,20 +24,9 @@ app.get("/discord/listMember/role", async (c) => {
 			?.split(",")
 			.map((id) => id.trim())
 			.filter(Boolean) || [];
-	const roleId =
-		roleIds.length > 0 && roleIds.every((id) => /^\d+$/.test(id))
-			? roleIds.join(",")
-			: null;
+	const roleId = roleIds.length > 0 && roleIds.every((id) => /^\d+$/.test(id)) ? roleIds.join(",") : null;
 
-	const validTypes = [
-		"user",
-		"bot",
-		"all",
-		"oldest",
-		"newest",
-		"oldest_position",
-		"newest_position",
-	];
+	const validTypes = ["user", "bot", "all", "oldest", "newest", "oldest_position", "newest_position"];
 	const queryType = c.req.query("type") || "all";
 	const types = queryType.split(",").map((t) => t.trim());
 	const invalidTypes = types.filter((t) => !validTypes.includes(t));
@@ -55,9 +38,7 @@ app.get("/discord/listMember/role", async (c) => {
 	const permission = c.req.query("permission") || "all";
 	if (permission !== "all") {
 		const perms = permission.split(",").map((p) => p.trim().toLowerCase());
-		const invalidPerms = perms.filter(
-			(p) => !PERMISSION_KEYS.hasOwnProperty(p),
-		);
+		const invalidPerms = perms.filter((p) => !PERMISSION_KEYS.hasOwnProperty(p));
 		if (invalidPerms.length > 0) {
 			return c.json(
 				{
@@ -69,14 +50,11 @@ app.get("/discord/listMember/role", async (c) => {
 	}
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!roleId) return c.json({ error: "Missing valid parameter: roleId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordListMemberRole(token!, guildId!, roleId!, type, permission),
-	);
+	return await dispatch(c, () => DiscordListMemberRole(token!, guildId!, roleId!, type, permission));
 });
 
 export default app;

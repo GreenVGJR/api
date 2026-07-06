@@ -14,9 +14,7 @@ export function ipToNumber(ip: string): number | string {
 	if (ip.includes(":")) return ip;
 	const octets = ip.split(".");
 	if (octets.length !== 4) return ip;
-	return (
-		octets.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0
-	);
+	return octets.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
 function hashInput(input: string): string {
@@ -37,30 +35,21 @@ function formatChallengeHash(hash: string): string {
 	return numbers + letters;
 }
 
-export function verifyChallengeHash(
-	solution: string | undefined | null,
-	challengeHash: string | undefined | null,
-): boolean {
+export function verifyChallengeHash(solution: string | undefined | null, challengeHash: string | undefined | null): boolean {
 	if (!solution || !challengeHash) return false;
 
 	const normalizedHash = challengeHash.trim().toLowerCase();
 	if (!/^[a-f0-9]{32}$/.test(normalizedHash)) return false;
 
 	const expectedHash = formatChallengeHash(md5(solution));
-	return crypto.timingSafeEqual(
-		Buffer.from(expectedHash),
-		Buffer.from(normalizedHash),
-	);
+	return crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(normalizedHash));
 }
 
 function encryptPayload(data: object, key: string): string {
 	const cipherKey = crypto.createHash("sha256").update(key).digest();
 	const iv = crypto.randomBytes(12);
 	const cipher = crypto.createCipheriv("aes-256-gcm", cipherKey, iv);
-	const encrypted = Buffer.concat([
-		cipher.update(JSON.stringify(data), "utf8"),
-		cipher.final(),
-	]);
+	const encrypted = Buffer.concat([cipher.update(JSON.stringify(data), "utf8"), cipher.final()]);
 	const tag = cipher.getAuthTag();
 	return Buffer.concat([iv, encrypted, tag]).toString("base64url");
 }
@@ -75,10 +64,7 @@ function decryptPayload(payload: string, key: string): object | null {
 		const encrypted = raw.subarray(12, raw.length - 16);
 		const decipher = crypto.createDecipheriv("aes-256-gcm", cipherKey, iv);
 		decipher.setAuthTag(tag);
-		const decrypted = Buffer.concat([
-			decipher.update(encrypted),
-			decipher.final(),
-		]);
+		const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
 		return JSON.parse(decrypted.toString("utf8"));
 	} catch {
 		return null;
@@ -94,11 +80,7 @@ export function generateChallenge(ip: string | number): {
 	const timestamp = Date.now();
 	const salt = crypto.randomBytes(8);
 
-	const challengePayload = Buffer.concat([
-		CHALLENGE_MAGIC,
-		salt,
-		Buffer.from(timestamp.toString(16).padStart(16, "0"), "hex"),
-	]);
+	const challengePayload = Buffer.concat([CHALLENGE_MAGIC, salt, Buffer.from(timestamp.toString(16).padStart(16, "0"), "hex")]);
 
 	const encrypted = encryptPayload(
 		{
@@ -114,10 +96,7 @@ export function generateChallenge(ip: string | number): {
 	};
 }
 
-export function verifyChallenge(
-	solution: string | undefined | null,
-	ip: string | number,
-): boolean {
+export function verifyChallenge(solution: string | undefined | null, ip: string | number): boolean {
 	if (!solution) return false;
 
 	const formattedIp = String(typeof ip === "number" ? ip : ipToNumber(ip));

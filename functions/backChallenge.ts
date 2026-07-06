@@ -9,21 +9,10 @@ const BACK_CHALLENGE_MAX_AGE_MS = BACK_CHALLENGE_MAX_AGE_UPPER * 1000;
 
 export function encryptChallengeValue(value: string): string {
 	const iv = crypto.randomBytes(12);
-	const cipher = crypto.createCipheriv(
-		"aes-256-gcm",
-		BACK_CHALLENGE_ENCRYPTION_KEY,
-		iv,
-	);
-	const encrypted = Buffer.concat([
-		cipher.update(value, "utf8"),
-		cipher.final(),
-	]);
+	const cipher = crypto.createCipheriv("aes-256-gcm", BACK_CHALLENGE_ENCRYPTION_KEY, iv);
+	const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
 	const authTag = cipher.getAuthTag();
-	return (
-		iv.toString("base64url") +
-		authTag.toString("base64url") +
-		encrypted.toString("base64url")
-	);
+	return iv.toString("base64url") + authTag.toString("base64url") + encrypted.toString("base64url");
 }
 
 export function decryptChallengeValue(encrypted: string): string | null {
@@ -31,11 +20,7 @@ export function decryptChallengeValue(encrypted: string): string | null {
 		const iv = Buffer.from(encrypted.slice(0, 16), "base64url");
 		const authTag = Buffer.from(encrypted.slice(16, 38), "base64url");
 		const data = Buffer.from(encrypted.slice(38), "base64url");
-		const decipher = crypto.createDecipheriv(
-			"aes-256-gcm",
-			BACK_CHALLENGE_ENCRYPTION_KEY,
-			iv,
-		);
+		const decipher = crypto.createDecipheriv("aes-256-gcm", BACK_CHALLENGE_ENCRYPTION_KEY, iv);
 		decipher.setAuthTag(authTag);
 		return decipher.update(data) + decipher.final("utf8");
 	} catch {
@@ -51,10 +36,7 @@ export function getBackChallengeValue(c: Context): string {
 	return encryptChallengeValue(`${ipHash}:${Date.now()}`);
 }
 
-export function isBackChallengeProofValid(
-	value: string,
-	nonce: string,
-): boolean {
+export function isBackChallengeProofValid(value: string, nonce: string): boolean {
 	if (!/^\d+$/.test(nonce)) return false;
 	const hash = crypto
 		.createHash("sha512")
@@ -109,7 +91,5 @@ export function cookieChallengeIsValid(c: Context, cookieValue: any) {
 		.createHash("md5")
 		.update(c.req.header("cf-connecting-ip") || "")
 		.digest("hex");
-	return (
-		cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS
-	);
+	return cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS;
 }

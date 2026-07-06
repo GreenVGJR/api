@@ -12,9 +12,7 @@ app.get("/discord/tiktokFeed", async (c) => {
 
 	c.header("X-Route", "discord.com, www.tiktok.com");
 
-	return await dispatch(c, () =>
-		DiscordTiktokFeed(token!, channelId!, messageId!, region_code),
-	);
+	return await dispatch(c, () => DiscordTiktokFeed(token!, channelId!, messageId!, region_code));
 });
 
 export default app;

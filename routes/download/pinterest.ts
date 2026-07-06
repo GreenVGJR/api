@@ -19,11 +19,7 @@ app.get("/pinterest", async (c) => {
 	if (!first) {
 		return c.json({ error: "Pin not found" }, 404);
 	}
-	const videoUrl =
-		first.videos?.video_list?.V_720P?.url ||
-		first.videos?.video_list?.V_HLSV4?.url ||
-		first.videos?.video_list?.V_480P?.url ||
-		null;
+	const videoUrl = first.videos?.video_list?.V_720P?.url || first.videos?.video_list?.V_HLSV4?.url || first.videos?.video_list?.V_480P?.url || null;
 	const imageUrl = first.images_orig?.url || first.imageLargeUrl || null;
 	const target = videoUrl || imageUrl;
 	const mediaType = videoUrl ? "video" : imageUrl ? "image" : null;

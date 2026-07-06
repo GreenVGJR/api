@@ -17,8 +17,7 @@ export async function youtubeVisitorKey(): Promise<{
 			headers: commonHeaders,
 		});
 		const text = await res.text();
-		const visitor_data =
-			text.split('"visitorData":"')[1]?.split('"')[0] || null;
+		const visitor_data = text.split('"visitorData":"')[1]?.split('"')[0] || null;
 		let cookie = "";
 		if (res.headers.getSetCookie) {
 			cookie = res.headers.getSetCookie().join("; ");
@@ -35,14 +34,11 @@ export async function youtubeVisitorKey(): Promise<{
 
 export const googleAuthKey = async function googleAuthKey() {
 	try {
-		const res = await fetch(
-			`https://cse.google.com/cse.js?hpg=1&cx=${process.env.GOOG_CX}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://cse.google.com/cse.js?hpg=1&cx=${process.env.GOOG_CX}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		if (res.status !== 200) return undefined;
 		const text = await res.text();
 		const extractObject = text?.split("})(")?.[1]?.slice(0, -2);
@@ -62,14 +58,11 @@ export const giphyKey = async function giphyKey() {
 		const text = await res.text();
 		const extractHash = text?.split("app/layout-")?.[1]?.split('"')?.[0];
 		if (!extractHash) return undefined;
-		const res2 = await fetch(
-			`https://giphy.com/_next/static/chunks/app/layout-${extractHash}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res2 = await fetch(`https://giphy.com/_next/static/chunks/app/layout-${extractHash}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		const text2 = await res2.text();
 		return text2.split('mobileApiKey:"')[1].split('"')[0];
 	} catch {
@@ -121,11 +114,7 @@ function decodeSpotifySecret(encoded: string): Buffer {
 	return Buffer.from(hexString, "hex");
 }
 
-function generateSpotifyTOTP(
-	secretHex: string,
-	timestampMs: number,
-	step = 30,
-): string {
+function generateSpotifyTOTP(secretHex: string, timestampMs: number, step = 30): string {
 	const counter = Math.floor(timestampMs / 1000 / step);
 	const buf = Buffer.alloc(8);
 	buf.writeBigInt64BE(BigInt(counter));
@@ -135,12 +124,7 @@ function generateSpotifyTOTP(
 	const digest = hmac.digest();
 
 	const offset = (digest[digest.length - 1] ?? 0) & 0xf;
-	const code =
-		((((digest[offset] ?? 0) & 0x7f) << 24) |
-			(((digest[offset + 1] ?? 0) & 0xff) << 16) |
-			(((digest[offset + 2] ?? 0) & 0xff) << 8) |
-			((digest[offset + 3] ?? 0) & 0xff)) %
-		1000000;
+	const code = ((((digest[offset] ?? 0) & 0x7f) << 24) | (((digest[offset + 1] ?? 0) & 0xff) << 16) | (((digest[offset + 2] ?? 0) & 0xff) << 8) | ((digest[offset + 3] ?? 0) & 0xff)) % 1000000;
 
 	return code.toString().padStart(6, "0");
 }
@@ -152,16 +136,12 @@ const SECRET_FETCH_INTERVAL = 60 * 60 * 1000;
 
 async function ensureTotpSecrets(): Promise<void> {
 	const now = Date.now();
-	if (currentTotpSecret && now - lastSecretFetchTime < SECRET_FETCH_INTERVAL)
-		return;
+	if (currentTotpSecret && now - lastSecretFetchTime < SECRET_FETCH_INTERVAL) return;
 
 	try {
-		const res = await fetch(
-			"https://raw.githubusercontent.com/xyloflake/spot-secrets-go/refs/heads/main/secrets/secretDict.json",
-			{
-				headers: { Accept: "application/json" },
-			},
-		);
+		const res = await fetch("https://raw.githubusercontent.com/xyloflake/spot-secrets-go/refs/heads/main/secrets/secretDict.json", {
+			headers: { Accept: "application/json" },
+		});
 
 		if (res.status !== 200) throw new Error("Failed to fetch secrets");
 
@@ -172,24 +152,15 @@ async function ensureTotpSecrets(): Promise<void> {
 
 		if (!secretData) throw new Error("Missing newest secret entry");
 
-		const mappedData = secretData.map(
-			(value: number, index: number) => value ^ ((index % 33) + 9),
-		);
+		const mappedData = secretData.map((value: number, index: number) => value ^ ((index % 33) + 9));
 
-		currentTotpSecret = Buffer.from(mappedData.join(""), "utf8").toString(
-			"hex",
-		);
+		currentTotpSecret = Buffer.from(mappedData.join(""), "utf8").toString("hex");
 		currentTotpVersion = newestVersion;
 		lastSecretFetchTime = now;
 	} catch {
 		if (!currentTotpSecret) {
-			const fallbackData = [
-				99, 111, 47, 88, 49, 56, 118, 65, 52, 67, 50, 104, 117, 101, 55, 94, 95,
-				75, 94, 49, 69, 36, 85, 64, 74, 60,
-			];
-			const mapped = fallbackData.map(
-				(value, index) => value ^ ((index % 33) + 9),
-			);
+			const fallbackData = [99, 111, 47, 88, 49, 56, 118, 65, 52, 67, 50, 104, 117, 101, 55, 94, 95, 75, 94, 49, 69, 36, 85, 64, 74, 60];
+			const mapped = fallbackData.map((value, index) => value ^ ((index % 33) + 9));
 			currentTotpSecret = Buffer.from(mapped.join(""), "utf8").toString("hex");
 			currentTotpVersion = "19";
 		}
@@ -223,9 +194,7 @@ async function performSpotifyTokenRequest(secretHex: string, version: string) {
 		method: "GET",
 		headers: {
 			...commonHeaders,
-			...(process.env.SPOTIFY_COOKIES
-				? { cookie: process.env.SPOTIFY_COOKIES }
-				: {}),
+			...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
 			"User-Agent": userAgent,
 			Origin: "https://open.spotify.com/",
 			Referer: "https://open.spotify.com/",
@@ -253,25 +222,17 @@ export const spotifyKey = async function spotifyKey() {
 		try {
 			await ensureTotpSecrets();
 			if (currentTotpSecret && currentTotpVersion) {
-				return await performSpotifyTokenRequest(
-					currentTotpSecret,
-					currentTotpVersion,
-				);
+				return await performSpotifyTokenRequest(currentTotpSecret, currentTotpVersion);
 			}
 		} catch {}
 
 		try {
-			const res = await fetch(
-				`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`,
-				{
-					headers: {
-						...commonHeaders,
-						...(process.env.SPOTIFY_COOKIES
-							? { cookie: process.env.SPOTIFY_COOKIES }
-							: {}),
-					},
+			const res = await fetch(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
+				headers: {
+					...commonHeaders,
+					...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
 				},
-			);
+			});
 			const text = await res.text();
 			return text.split('"accessToken":"')[1].split('"')[0];
 		} catch {
@@ -301,9 +262,7 @@ export const spotifyKeyToken = async function spotifyKeyToken() {
 			body: JSON.stringify(bodyhttp),
 			headers: {
 				...commonHeaders,
-				...(process.env.SPOTIFY_COOKIES
-					? { cookie: process.env.SPOTIFY_COOKIES }
-					: {}),
+				...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
 				Origin: "https://clienttoken.spotify.com",
 				Accept: "application/json",
 				"Content-Type": "application/json",
@@ -324,27 +283,17 @@ const STRICT_URI_RE = /[!'()*]/g;
 type OAuthParamValue = string | number | boolean;
 
 function strictEncodeURIComponent(value: OAuthParamValue): string {
-	return encodeURIComponent(String(value)).replace(
-		STRICT_URI_RE,
-		(c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
-	);
+	return encodeURIComponent(String(value)).replace(STRICT_URI_RE, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function buildParamString(params: Record<string, OAuthParamValue>): string {
 	return Object.keys(params)
 		.sort()
-		.map(
-			(key) =>
-				`${strictEncodeURIComponent(key)}=${strictEncodeURIComponent(params[key] ?? "")}`,
-		)
+		.map((key) => `${strictEncodeURIComponent(key)}=${strictEncodeURIComponent(params[key] ?? "")}`)
 		.join("&");
 }
 
-export const mackOauth = async function mackOauth(
-	method: string,
-	url: string,
-	additionalParams: Record<string, OAuthParamValue> = {},
-): Promise<{ signature: string; params: Record<string, OAuthParamValue> }> {
+export const mackOauth = async function mackOauth(method: string, url: string, additionalParams: Record<string, OAuthParamValue> = {}): Promise<{ signature: string; params: Record<string, OAuthParamValue> }> {
 	const params: Record<string, OAuthParamValue> = {
 		...additionalParams,
 		oauth_consumer_key: CONSUMER_KEY_MACK,
@@ -357,38 +306,25 @@ export const mackOauth = async function mackOauth(
 	const paramString = buildParamString(params);
 	const signatureBase = `${method.toUpperCase()}&${strictEncodeURIComponent(url)}&${strictEncodeURIComponent(paramString)}`;
 	const signingKey = `${strictEncodeURIComponent(CONSUMER_SECRET_MACK)}&`;
-	const signature = crypto
-		.createHmac("sha1", signingKey)
-		.update(signatureBase)
-		.digest("base64");
+	const signature = crypto.createHmac("sha1", signingKey).update(signatureBase).digest("base64");
 
 	return { signature, params };
 };
 
 export const tidalKeys = async function tidalKeys() {
 	try {
-		const rest = await fetch(
-			`https://embed.tidal.com/tracks/${[406956243, 1550546][Math.floor(Math.random() * 2)]}`,
-			{
-				method: "GET",
-				headers: {
-					...commonHeaders,
-				},
+		const rest = await fetch(`https://embed.tidal.com/tracks/${[406956243, 1550546][Math.floor(Math.random() * 2)]}`, {
+			method: "GET",
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		const rest_get = await rest.text();
-		const rest2 = await fetch(
-			"https://embed.tidal.com" +
-				rest_get
-					.split('type="module"')[0]
-					.split('script src="')[1]
-					.split('"')[0],
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const rest2 = await fetch("https://embed.tidal.com" + rest_get.split('type="module"')[0].split('script src="')[1].split('"')[0], {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		const rest2_get = await rest2.text();
 		return rest2_get.split('"X-Tidal-Token","')[1].split('"')[0];
 	} catch {
@@ -396,9 +332,7 @@ export const tidalKeys = async function tidalKeys() {
 	}
 };
 
-export const tidalKeysToken = async function tidalKeysToken(
-	refresh: boolean = false,
-) {
+export const tidalKeysToken = async function tidalKeysToken(refresh: boolean = false) {
 	try {
 		if (!keytidal || refresh) {
 			keytidal = await tidalKeys();
@@ -406,10 +340,7 @@ export const tidalKeysToken = async function tidalKeysToken(
 
 		const rt = new URLSearchParams();
 		rt.append("client_id", keytidalopen);
-		rt.append(
-			"client_secret",
-			decodeURIComponent("dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98%3D"),
-		);
+		rt.append("client_secret", decodeURIComponent("dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98%3D"));
 		rt.append("grant_type", "client_credentials");
 
 		const rest = await fetch(`https://auth.tidal.com/v1/oauth2/token`, {
@@ -434,14 +365,11 @@ export const tidalKeysToken = async function tidalKeysToken(
 
 export const deezerKeys = async function deezerKeys() {
 	try {
-		const rest = await fetch(
-			"https://auth.deezer.com/login/anonymous?jo=p&rto=p",
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const rest = await fetch("https://auth.deezer.com/login/anonymous?jo=p&rto=p", {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		let rest_get: any = await rest.text();
 		rest_get = JSON.parse(rest_get);
 		return rest_get.jwt;
@@ -460,10 +388,7 @@ export const imgurKey = async function imgurKey() {
 		const mainAssetPath = res.split("desktop-assets/js/main")[1]?.split(">")[0];
 		if (!mainAssetPath) return undefined;
 
-		const req2 = await fetch(
-			"https://s.imgur.com/desktop-assets/js/main" + mainAssetPath,
-			{ headers: { ...commonHeaders } },
-		);
+		const req2 = await fetch("https://s.imgur.com/desktop-assets/js/main" + mainAssetPath, { headers: { ...commonHeaders } });
 		const res2 = await req2.text();
 		return res2.split('apiClientId:"')[1]?.split('"')[0];
 	} catch (e) {
@@ -473,21 +398,18 @@ export const imgurKey = async function imgurKey() {
 
 export const crunchyKey = async function crunchyKey() {
 	try {
-		const req = await fetch(
-			atob("aHR0cHM6Ly93d3cuY3J1bmNoeXJvbGwuY29tL2F1dGgvdjEvdG9rZW4="),
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					Authorization: "Basic Y3Jfd2ViOg==",
-					"Content-Type": "application/x-www-form-urlencoded",
-					Cookie: `device_id=${crypto.randomUUID()}; c_locale=en`,
-					Origin: "https://www.crunchyroll.com",
-				},
-				method: "POST",
-				body: "grant_type=client_id",
+		const req = await fetch(atob("aHR0cHM6Ly93d3cuY3J1bmNoeXJvbGwuY29tL2F1dGgvdjEvdG9rZW4="), {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				Authorization: "Basic Y3Jfd2ViOg==",
+				"Content-Type": "application/x-www-form-urlencoded",
+				Cookie: `device_id=${crypto.randomUUID()}; c_locale=en`,
+				Origin: "https://www.crunchyroll.com",
 			},
-		);
+			method: "POST",
+			body: "grant_type=client_id",
+		});
 		if (req.status !== 200) return;
 		const res = await req.json();
 		return res.access_token;
@@ -496,9 +418,7 @@ export const crunchyKey = async function crunchyKey() {
 	}
 };
 
-export const saweriaBuildKey = async function saweriaBuildKey(): Promise<
-	string | undefined
-> {
+export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string | undefined> {
 	const mainRes = await fetch("https://saweria.co", {
 		headers: { ...commonHeaders },
 	});
@@ -508,9 +428,7 @@ export const saweriaBuildKey = async function saweriaBuildKey(): Promise<
 	return mainText.split('"buildId":"')[1]?.split('"')[0];
 };
 
-export const instagramKey = async function instagramKey(): Promise<
-	string | null
-> {
+export const instagramKey = async function instagramKey(): Promise<string | null> {
 	try {
 		const res = await fetch("https://www.instagram.com/", {
 			headers: commonHeaders,

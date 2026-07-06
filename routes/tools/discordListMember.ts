@@ -9,36 +9,19 @@ app.get("/discord/listMember", async (c) => {
 	try {
 		const queryToken = c.req.query("token");
 		if (queryToken) {
-			const checktoken = Number.isInteger(
-				parseInt(atob(queryToken.split(".")[0])),
-			);
+			const checktoken = Number.isInteger(parseInt(atob(queryToken.split(".")[0])));
 			if (!checktoken) throw new Error();
 			token = queryToken;
 		}
 	} catch {}
 
 	const queryGuildId = c.req.query("guildId");
-	const guildId =
-		queryGuildId && Number.isInteger(parseInt(queryGuildId))
-			? queryGuildId
-			: null;
+	const guildId = queryGuildId && Number.isInteger(parseInt(queryGuildId)) ? queryGuildId : null;
 
 	const queryLimit = c.req.query("limit");
-	const limit =
-		queryLimit && Number.isInteger(parseInt(queryLimit))
-			? Math.max(1, parseInt(queryLimit))
-			: 10;
+	const limit = queryLimit && Number.isInteger(parseInt(queryLimit)) ? Math.max(1, parseInt(queryLimit)) : 10;
 
-	const validTypes = [
-		"user",
-		"bot",
-		"all",
-		"oldest",
-		"newest",
-		"no_role",
-		"has_role",
-		"banned",
-	];
+	const validTypes = ["user", "bot", "all", "oldest", "newest", "no_role", "has_role", "banned"];
 	const queryType = c.req.query("type") || "all";
 	const types = queryType.split(",").map((t) => t.trim());
 	const invalidTypes = types.filter((t) => !validTypes.includes(t));
@@ -49,9 +32,7 @@ app.get("/discord/listMember", async (c) => {
 	const permission = c.req.query("permission") || "all";
 	if (permission !== "all") {
 		const perms = permission.split(",").map((p) => p.trim().toLowerCase());
-		const invalidPerms = perms.filter(
-			(p) => !PERMISSION_KEYS.hasOwnProperty(p),
-		);
+		const invalidPerms = perms.filter((p) => !PERMISSION_KEYS.hasOwnProperty(p));
 		if (invalidPerms.length > 0) {
 			return c.json(
 				{
@@ -63,13 +44,10 @@ app.get("/discord/listMember", async (c) => {
 	}
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
-	if (!guildId)
-		return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () =>
-		DiscordListMember(token!, guildId!, limit, type, permission),
-	);
+	return await dispatch(c, () => DiscordListMember(token!, guildId!, limit, type, permission));
 });
 
 export default app;

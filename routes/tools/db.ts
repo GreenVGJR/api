@@ -44,10 +44,7 @@ app.get("/db/set", async (c) => {
 	const value = c.req.query("value");
 	const hash = c.req.query("hash");
 	if (!name || !value) {
-		return c.json(
-			{ error: "Missing parameter required (name and value)" },
-			202,
-		);
+		return c.json({ error: "Missing parameter required (name and value)" }, 202);
 	}
 
 	return await dispatch(c, async () => {

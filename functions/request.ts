@@ -1,24 +1,5 @@
 import { type Context } from "hono";
-import {
-	youtubeVisitorKey,
-	googleAuthKey,
-	giphyKey,
-	flickrKey,
-	soundcloudKey,
-	spotifyKey,
-	spotifyKeyToken,
-	mackOauth,
-	tidalKeys,
-	tidalKeysToken,
-	deezerKeys,
-	imgurKey,
-	crunchyKey,
-	saweriaBuildKey,
-	keytidal,
-	keytidalopen,
-	setKeyTidal,
-	instagramKey,
-} from "./authRequest.js";
+import { youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey } from "./authRequest.js";
 
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
@@ -47,8 +28,7 @@ declare global {
 	}
 }
 
-const getRandomInt = (min: number, max: number) =>
-	Math.floor(Math.random() * (max - min + 1)) + min;
+const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 Log.setLevel(Log.Level.ERROR);
 
@@ -59,11 +39,7 @@ const captionPoTokenCache = new Map<string, string>();
 const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || "";
 
 async function ensureBotGuardDom() {
-	if (
-		typeof (globalThis as any).window !== "undefined" &&
-		typeof (globalThis as any).document !== "undefined"
-	)
-		return;
+	if (typeof (globalThis as any).window !== "undefined" && typeof (globalThis as any).document !== "undefined") return;
 	const { JSDOM } = await import("jsdom");
 	const dom = new JSDOM("", { url: "https://www.youtube.com/" });
 	Object.assign(globalThis, {
@@ -97,11 +73,8 @@ export async function getBotGuardChallenge() {
 			requestKey: YOUTUBE_PO_TOKEN_REQUEST_KEY,
 		};
 		const challenge = await BG.Challenge.create(bgConfig);
-		const interpreterJavascript =
-			challenge?.interpreterJavascript
-				?.privateDoNotAccessOrElseSafeScriptWrappedValue;
-		if (!challenge || !interpreterJavascript)
-			throw new Error("Could not load BotGuard challenge");
+		const interpreterJavascript = challenge?.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
+		if (!challenge || !interpreterJavascript) throw new Error("Could not load BotGuard challenge");
 
 		new Function(interpreterJavascript)();
 		return { visitorData, challenge, bgConfig };
@@ -144,7 +117,7 @@ async function getYoutubeCaptionPoToken(videoId: string) {
 	}
 }
 
-async function getPoToken() {
+export async function getPoToken() {
 	if (poTokenCache) return poTokenCache;
 	try {
 		poTokenCache = await generateYoutubePoToken();
@@ -179,22 +152,12 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 	let decodedVisitorData: any = null;
 	if (poTokenCache?.visitor_data) {
 		try {
-			decodedVisitorData = ProtoUtils.decodeVisitorData(
-				poTokenCache.visitor_data,
-			);
+			decodedVisitorData = ProtoUtils.decodeVisitorData(poTokenCache.visitor_data);
 		} catch {}
 	}
 
 	return {
-		visitorData: poTokenCache?.visitor_data
-			? [
-					poTokenCache.visitor_data,
-					decodedVisitorData?.id || null,
-					decodedVisitorData?.timestamp
-						? String(decodedVisitorData.timestamp)
-						: null,
-				]
-			: null,
+		visitorData: poTokenCache?.visitor_data ? [poTokenCache.visitor_data, decodedVisitorData?.id || null, decodedVisitorData?.timestamp ? String(decodedVisitorData.timestamp) : null] : null,
 		sessionPoToken: poTokenCache?.po_token || null,
 		contentPoToken: {
 			poToken: captionPoToken,
@@ -220,8 +183,7 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent =
-	"Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 
 export const commonHeaders = {
 	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -235,8 +197,7 @@ export const commonHeaders = {
 	"User-Agent": userAgent,
 };
 
-const responseStatus = (response: any): number =>
-	response?.status ?? response?.statusCode ?? 0;
+const responseStatus = (response: any): number => response?.status ?? response?.statusCode ?? 0;
 
 const responseText = async (response: any): Promise<string> => {
 	if (!response) return "";
@@ -265,9 +226,7 @@ export const getToken = (c: Context) => {
 	}
 };
 
-const parseAbbreviatedNumber = (
-	str: string | null | undefined,
-): number | null => {
+const parseAbbreviatedNumber = (str: string | null | undefined): number | null => {
 	if (!str) return null;
 	const cleanStr = str
 		.replace(/,/g, "")
@@ -296,15 +255,12 @@ const parseAbbreviatedNumber = (
 	return Math.floor(num);
 };
 
-const formatAbbreviatedNumber = (
-	num: number | string | null | undefined,
-): string => {
+const formatAbbreviatedNumber = (num: number | string | null | undefined): string => {
 	if (num === null || num === undefined) return "0";
 	const n = typeof num === "string" ? parseFloat(num) : num;
 	if (isNaN(n)) return "0";
 
-	if (n >= 1000000000)
-		return (n / 1000000000).toFixed(1).replace(/\.0$/, "") + "B";
+	if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, "") + "B";
 	if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
 	if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
 	return n.toString();
@@ -317,16 +273,10 @@ export const parseYtInitial = (html: any) => {
 
 		let jsonStr = dataParts[1];
 
-		const endIdx =
-			jsonStr.indexOf(";</script>") !== -1
-				? jsonStr.indexOf(";</script>")
-				: jsonStr.indexOf("</script>") !== -1
-					? jsonStr.indexOf("</script>")
-					: jsonStr.length;
+		const endIdx = jsonStr.indexOf(";</script>") !== -1 ? jsonStr.indexOf(";</script>") : jsonStr.indexOf("</script>") !== -1 ? jsonStr.indexOf("</script>") : jsonStr.length;
 
 		jsonStr = jsonStr.substring(0, endIdx).trim();
-		if (jsonStr.endsWith(";"))
-			jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
+		if (jsonStr.endsWith(";")) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
 
 		return JSON.parse(jsonStr);
 	} catch (e) {
@@ -588,14 +538,8 @@ type DiscordListCacheEntry = {
 };
 const DISCORD_LIST_CACHE_TTL = 5 * 60 * 1000;
 let discordObj: Record<string, DiscordListCacheEntry> = {};
-let discordListCacheFetches: Record<
-	string,
-	Promise<DiscordListCacheValue> | undefined
-> = {};
-let discordListMemberPartialObj: Record<
-	string,
-	DiscordListCacheEntry | undefined
-> = {};
+let discordListCacheFetches: Record<string, Promise<DiscordListCacheValue> | undefined> = {};
+let discordListMemberPartialObj: Record<string, DiscordListCacheEntry | undefined> = {};
 let discordListMemberFetches: Record<string, Promise<void> | undefined> = {};
 let konaSummary: any;
 
@@ -628,19 +572,13 @@ function filterCookies(cookie: string | string[]) {
 			.map((c) => c.trim())
 			.filter((c) => {
 				const key = c.split("=")[0];
-				return (
-					key &&
-					!/^(domain|path|expires|max-age|secure|httponly|samesite)$/i.test(key)
-				);
+				return key && !/^(domain|path|expires|max-age|secure|httponly|samesite)$/i.test(key);
 			})
 			.join("; ") + ";"
 	);
 }
 
-function filterSpecificCookies(
-	cookie: string | string[],
-	allowedKeys: string[] = [],
-) {
+function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] = []) {
 	if (typeof cookie !== "string" && !Array.isArray(cookie)) return "";
 	const cookieStr = Array.isArray(cookie) ? cookie.join("; ") : cookie;
 	return cookieStr
@@ -652,9 +590,7 @@ function filterSpecificCookies(
 
 // Helper to extract SSR data from Twitter's HTML
 function extractTwitterSSR(html: string): any {
-	const match = html.match(
-		/<script[^>]*class="\$tsr"[^>]*id="\$tsr-stream-barrier"[^>]*>([\s\S]*?)<\/script>/,
-	);
+	const match = html.match(/<script[^>]*class="\$tsr"[^>]*id="\$tsr-stream-barrier"[^>]*>([\s\S]*?)<\/script>/);
 	if (!match) return null;
 	const scriptContent = match[1];
 	const $R: any = { tsr: [] };
@@ -663,14 +599,7 @@ function extractTwitterSSR(html: string): any {
 	const $_TSR: any = {};
 	const ReadableStream = (globalThis as any).ReadableStream;
 	try {
-		const fn = new Function(
-			"self",
-			"document",
-			"$_TSR",
-			"ReadableStream",
-			"$R",
-			scriptContent + "; return self.$R.tsr[0];",
-		);
+		const fn = new Function("self", "document", "$_TSR", "ReadableStream", "$R", scriptContent + "; return self.$R.tsr[0];");
 		return fn(self, document, $_TSR, ReadableStream, self.$R);
 	} catch (e) {
 		console.error("Failed to evaluate Twitter SSR script", e);
@@ -680,11 +609,7 @@ function extractTwitterSSR(html: string): any {
 
 // Extract user profile from SSR data
 // Resolve __ref pointers within relay records (with cycle detection via visited set)
-function resolveRefs(
-	obj: any,
-	records: Record<string, any>,
-	visited: Set<string> = new Set(),
-): any {
+function resolveRefs(obj: any, records: Record<string, any>, visited: Set<string> = new Set()): any {
 	if (!obj || typeof obj !== "object") return obj;
 	if (obj.__ref) {
 		if (visited.has(obj.__ref)) return `[ref] ${obj.__ref}`;
@@ -697,8 +622,7 @@ function resolveRefs(
 			visited.add(ref);
 			return resolveRefs(records[ref], records, visited);
 		});
-	if (Array.isArray(obj))
-		return obj.map((item) => resolveRefs(item, records, new Set(visited)));
+	if (Array.isArray(obj)) return obj.map((item) => resolveRefs(item, records, new Set(visited)));
 	const resolved: Record<string, any> = {};
 	for (const [key, val] of Object.entries(obj)) {
 		if (key === "__id" || key === "__typename") continue;
@@ -720,11 +644,7 @@ function parseTweetFromSSR(ssr: any): any {
 	return null;
 }
 
-export const Flickr = async function Flickr(
-	que: string,
-	refresh_auth?: boolean,
-	limit_number: number = 10,
-): Promise<any> {
+export const Flickr = async function Flickr(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keyflickr) {
@@ -732,12 +652,9 @@ export const Flickr = async function Flickr(
 	}
 
 	try {
-		const per = await fetch(
-			`https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${encodeURIComponent(que)}&per_page=${limit_number}`,
-			{
-				headers: commonHeaders,
-			},
-		);
+		const per = await fetch(`https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${keyflickr}&format=json&nojsoncallback=1&tags=${encodeURIComponent(que)}&per_page=${limit_number}`, {
+			headers: commonHeaders,
+		});
 
 		if (per.status === 403) {
 			return {
@@ -758,20 +675,14 @@ export const Flickr = async function Flickr(
 		const listids: string[] = pes.photos.photo.map((a: any) => a.id);
 
 		const [per2, sizesResults] = await Promise.all([
-			fetch(
-				`https://api.flickr.com/services/rest/?method=flickr.photos.getInfo&photo_ids=${listids}&api_key=${keyflickr}&format=json&nojsoncallback=1`,
-				{
-					headers: commonHeaders,
-				},
-			),
+			fetch(`https://api.flickr.com/services/rest/?method=flickr.photos.getInfo&photo_ids=${listids}&api_key=${keyflickr}&format=json&nojsoncallback=1`, {
+				headers: commonHeaders,
+			}),
 			Promise.all(
 				listids.map((id) =>
-					fetch(
-						`https://api.flickr.com/services/rest/?method=flickr.photos.getSizes&photo_id=${id}&api_key=${keyflickr}&format=json&nojsoncallback=1`,
-						{
-							headers: commonHeaders,
-						},
-					)
+					fetch(`https://api.flickr.com/services/rest/?method=flickr.photos.getSizes&photo_id=${id}&api_key=${keyflickr}&format=json&nojsoncallback=1`, {
+						headers: commonHeaders,
+					})
 						.then((r) => r.json())
 						.then((j) => ({ id, sizes: j?.sizes?.size ?? [] })),
 				),
@@ -806,18 +717,9 @@ export const Flickr = async function Flickr(
 				]),
 			);
 
-			const highest =
-				sizes.length > 0
-					? original && sizes.length > 1
-						? sizes[sizes.length - 2]
-						: sizes[sizes.length - 1]
-					: null;
+			const highest = sizes.length > 0 ? (original && sizes.length > 1 ? sizes[sizes.length - 2] : sizes[sizes.length - 1]) : null;
 
-			const originalUrl =
-				original?.source ??
-				(a.originalsecret && a.originalformat
-					? `https://live.staticflickr.com/${a.server}/${a.id}_${a.originalsecret}_o.${a.originalformat}`
-					: null);
+			const originalUrl = original?.source ?? (a.originalsecret && a.originalformat ? `https://live.staticflickr.com/${a.server}/${a.id}_${a.originalsecret}_o.${a.originalformat}` : null);
 
 			return {
 				...a,
@@ -828,20 +730,8 @@ export const Flickr = async function Flickr(
 					preview: sizeMap["Large"]?.url ?? sizeMap["Medium 800"]?.url ?? null,
 					highest: highest?.source ?? null,
 					original: originalUrl,
-					width: original
-						? Number(original.width)
-						: a.originalwidth
-							? Number(a.originalwidth)
-							: highest
-								? Number(highest.width)
-								: 0,
-					height: original
-						? Number(original.height)
-						: a.originalheight
-							? Number(a.originalheight)
-							: highest
-								? Number(highest.height)
-								: 0,
+					width: original ? Number(original.width) : a.originalwidth ? Number(a.originalwidth) : highest ? Number(highest.width) : 0,
+					height: original ? Number(original.height) : a.originalheight ? Number(a.originalheight) : highest ? Number(highest.height) : 0,
 				},
 			};
 		});
@@ -853,10 +743,7 @@ export const Flickr = async function Flickr(
 	}
 };
 
-export const YTVideo = async function YTVideo(
-	que: string,
-	deepSearch: boolean = false,
-) {
+export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
 		if (!keyYoutubeVisitor) {
@@ -866,17 +753,7 @@ export const YTVideo = async function YTVideo(
 		let currentUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`;
 		const seenRedirects = new Set<string>();
 		const cookieJar = new Map<string, string>([["CONSENT", "YES+1"]]);
-		const cookieAttributes = new Set([
-			"domain",
-			"expires",
-			"httponly",
-			"max-age",
-			"partitioned",
-			"path",
-			"priority",
-			"samesite",
-			"secure",
-		]);
+		const cookieAttributes = new Set(["domain", "expires", "httponly", "max-age", "partitioned", "path", "priority", "samesite", "secure"]);
 
 		// Bun can loop when following YouTube's cookie-setting redirects without a jar.
 		for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
@@ -884,9 +761,7 @@ export const YTVideo = async function YTVideo(
 				.map(([name, value]) => `${name}=${value}`)
 				.join("; ");
 
-			const fullCookieHeader = [cookieHeader, keyYoutubeVisitor?.cookie]
-				.filter(Boolean)
-				.join("; ");
+			const fullCookieHeader = [cookieHeader, keyYoutubeVisitor?.cookie].filter(Boolean).join("; ");
 			response = await fetch(currentUrl, {
 				headers: {
 					...commonHeaders,
@@ -935,13 +810,8 @@ export const YTVideo = async function YTVideo(
 		}
 
 		let alk: any[] = [];
-		const inrtubeContents =
-			res?.contents?.twoColumnSearchResultsRenderer?.primaryContents
-				?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents ||
-			[];
-		const queryId: any = inrtubeContents?.find(
-			(m: any) => !!m.videoRenderer?.searchVideoResultEntityKey,
-		)?.videoRenderer?.searchVideoResultEntityKey;
+		const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+		const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
 		const videoItems = inrtubeContents.flatMap((item: any) => {
 			if (item.shelfRenderer?.content?.verticalListRenderer?.items) {
@@ -961,24 +831,17 @@ export const YTVideo = async function YTVideo(
 
 			if (checkmix && deepSearch) {
 				try {
-					const rlkreq = await fetch(
-						`https://www.youtube.com/watch?v=&list=${checkmix}`,
-						{
-							headers: { ...commonHeaders },
-						},
-					);
+					const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
+						headers: { ...commonHeaders },
+					});
 
 					let rlkresText = await rlkreq.text();
 					let rlkres: any = parseYtInitial(rlkresText);
 
 					if (rlkres) {
-						const kkmvytmx =
-							rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
+						const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
 						if (kkmvytmx) {
-							const kkmvytfd =
-								rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults
-									?.secondaryResults?.results?.[0]?.itemSectionRenderer
-									?.contents;
+							const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
 							let getmgcf: any = null;
 							try {
 								getmgcf = new URL(kkmvytmx.playlistShareUrl);
@@ -991,28 +854,14 @@ export const YTVideo = async function YTVideo(
 								data:
 									kkmvytmx.contents?.map((c: any) => ({
 										videoId: c.playlistPanelVideoRenderer?.videoId,
-										url:
-											"https://www.youtube.com/watch?v=" +
-											c.playlistPanelVideoRenderer?.videoId,
-										altUrl:
-											"https://www.youtube.com" +
-											c.playlistPanelVideoRenderer?.navigationEndpoint
-												?.commandMetadata?.webCommandMetadata?.url,
+										url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
+										altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 										title: c.playlistPanelVideoRenderer?.title?.simpleText,
-										duration:
-											c.playlistPanelVideoRenderer?.lengthText?.simpleText,
-										thumbnail:
-											"https://s.ytimg.com/vi/" +
-											c.playlistPanelVideoRenderer?.videoId +
-											"/hq720.jpg",
+										duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
+										thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
 										owner: {
-											name: c.playlistPanelVideoRenderer?.longBylineText
-												?.runs?.[0]?.text,
-											url:
-												"https://www.youtube.com" +
-												c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]
-													?.navigationEndpoint?.commandMetadata
-													?.webCommandMetadata?.url,
+											name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
+											url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 										},
 									})) || [],
 								altData:
@@ -1020,41 +869,18 @@ export const YTVideo = async function YTVideo(
 										?.filter((c: any) => c.lockupViewModel)
 										?.map((c: any) => {
 											const lvm = c.lockupViewModel;
-											const nUrl =
-												lvm?.rendererContext?.commandContext?.onTap
-													?.innertubeCommand?.commandMetadata
-													?.webCommandMetadata?.url || "";
-											const rId = nUrl.includes("v=")
-												? nUrl.split("v=")[1].split("&")[0]
-												: lvm?.contentId;
+											const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+											const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
 											return {
 												videoId: rId,
 												url: "https://www.youtube.com/watch?v=" + rId,
 												altUrl: "https://www.youtube.com" + nUrl,
-												title:
-													lvm?.metadata?.lockupMetadataViewModel?.title
-														?.content,
-												thumbnail:
-													"https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+												title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
+												thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
 												owner: {
-													name: lvm?.metadata?.lockupMetadataViewModel?.metadata
-														?.contentMetadataViewModel?.metadataRows?.[0]
-														?.metadataParts?.[0]?.text?.content,
-													url: lvm?.metadata?.lockupMetadataViewModel?.image
-														?.decoratedAvatarViewModel?.rendererContext
-														?.commandContext?.onTap?.innertubeCommand
-														?.commandMetadata?.webCommandMetadata?.url
-														? "https://www.youtube.com" +
-															lvm?.metadata?.lockupMetadataViewModel?.image
-																?.decoratedAvatarViewModel?.rendererContext
-																?.commandContext?.onTap?.innertubeCommand
-																?.commandMetadata?.webCommandMetadata?.url
-														: null,
-													avatar:
-														lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(
-															/=s\d+.*/,
-															"=s0",
-														),
+													name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+													url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+													avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
 												},
 											};
 										}) || [],
@@ -1068,34 +894,17 @@ export const YTVideo = async function YTVideo(
 
 			try {
 				const chnl = a.longBylineText?.runs?.[0];
-				const chnl2 =
-					chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+				const chnl2 = chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
 				const fom = {
 					type: "videoRenderer",
 					videoId: a.videoId,
 					url: "https://www.youtube.com/watch?v=" + a.videoId,
-					altUrl:
-						"https://www.youtube.com" +
-						a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
-					thumbnail:
-						"https://s.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
-					movingThumbnail:
-						a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails
-							?.thumbnails?.[0]?.url || null,
-					previewThumbnail:
-						a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent
-							?.horizontalCardListRenderer?.cards?.[0]
-							?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url ||
-						(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith(
-							"/shorts",
-						)
-							? "https://s.ytimg.com/vi/" + a.videoId + "/oardefault.jpg"
-							: null),
+					altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+					thumbnail: "https://s.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
+					movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
+					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts") ? "https://s.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
 					title: a.title?.runs?.[0]?.text,
-					description:
-						a.detailedMetadataSnippets?.[0]?.snippetText?.runs
-							?.map((b: any) => b.text)
-							?.join("") || "",
+					description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join("") || "",
 					owners: {
 						name: a.ownerText?.runs?.[0]?.text,
 						url:
@@ -1103,72 +912,27 @@ export const YTVideo = async function YTVideo(
 								? ["https://www.youtube.com" + chnl2]
 								: chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems
 										?.map((d: any) => {
-											const u =
-												d.listItemViewModel?.rendererContext?.commandContext
-													?.onTap?.innertubeCommand?.commandMetadata
-													?.webCommandMetadata?.url ||
-												d.listItemViewModel?.leadingAccessory?.avatarViewModel
-													?.endpoint?.innertubeCommand?.commandMetadata
-													?.webCommandMetadata?.url ||
-												d.listItemViewModel?.title?.commandRuns?.[0]?.onTap
-													?.innertubeCommand?.commandMetadata
-													?.webCommandMetadata?.url;
+											const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
 											return u ? "https://www.youtube.com" + u : null;
 										})
 										.filter(Boolean)) || [],
-						avatar: (
-							a.avatar?.avatarStackViewModel?.avatars?.map(
-								(e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url,
-							) ||
-							[
-								a.channelThumbnailSupportedRenderers
-									?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]
-									?.url,
-							]?.map((k: any) => k)
-						)?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")),
+						avatar: (a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")),
 					},
 					timeChapters:
-						a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map(
-							(k: any) => ({
-								text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
-								time: k?.macroMarkersListItemRenderer?.timeDescription
-									?.runs?.[0]?.text,
-								thumbnail:
-									k?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]
-										?.url,
-								isHighlighted: k?.macroMarkersListItemRenderer?.isHighlighted,
-								url:
-									"https://www.youtube.com/" +
-									k?.macroMarkersListItemRenderer?.onTap?.commandMetadata
-										?.webCommandMetadata?.url,
-							}),
-						) || null,
-					isLive:
-						a?.badges?.some(
-							(bad: any) =>
-								bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE",
-						) || false,
-					isATV:
-						((
-							a.detailedMetadataSnippets?.[0]?.snippetText?.runs
-								?.map((b: any) => b.text)
-								.join("") || ""
-						)?.startsWith("Provided to YouTube by ") &&
-							a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer.icon
-								.iconType === "MUSIC") ||
-						false,
+						a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map((k: any) => ({
+							text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
+							time: k?.macroMarkersListItemRenderer?.timeDescription?.runs?.[0]?.text,
+							thumbnail: k?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url,
+							isHighlighted: k?.macroMarkersListItemRenderer?.isHighlighted,
+							url: "https://www.youtube.com/" + k?.macroMarkersListItemRenderer?.onTap?.commandMetadata?.webCommandMetadata?.url,
+						})) || null,
+					isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE") || false,
+					isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer.icon.iconType === "MUSIC") || false,
 					isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
-					isShorts:
-						a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith(
-							"/shorts",
-						),
+					isShorts: a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts"),
 					mixPlaylist: mixData,
-					viewCount: parseAbbreviatedNumber(
-						a?.viewCountText?.simpleText?.split(" ")?.[0] ||
-							a.viewCountText?.runs?.[0]?.text,
-					),
-					duration:
-						a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null,
+					viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(" ")?.[0] || a.viewCountText?.runs?.[0]?.text),
+					duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null,
 				};
 				return fom;
 			} catch (err) {
@@ -1184,31 +948,13 @@ export const YTVideo = async function YTVideo(
 			if (!a) return null;
 			return a.contents.map((e: any) => ({
 				type: "shortsGrid",
-				videoId:
-					e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint
-						?.videoId,
-				url:
-					"https://www.youtube.com/watch?v=" +
-					e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint
-						?.videoId,
-				altUrl:
-					"https://www.youtube.com" +
-					e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata
-						?.webCommandMetadata?.url,
-				thumbnail:
-					"https://s.ytimg.com/vi/" +
-					e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint
-						?.videoId +
-					"/maxresdefault.jpg",
+				videoId: e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+				url: "https://www.youtube.com/watch?v=" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+				altUrl: "https://www.youtube.com" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+				thumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
 				movingThumbnail: null,
-				previewThumbnail:
-					"https://s.ytimg.com/vi/" +
-					e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint
-						?.videoId +
-					"/oardefault.jpg",
-				title:
-					e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content ||
-					null,
+				previewThumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
+				title: e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content || null,
 				description: "",
 				owners: {},
 				timeChapters: null,
@@ -1217,11 +963,7 @@ export const YTVideo = async function YTVideo(
 				isMix: false,
 				isShorts: true,
 				mixPlaylist: null,
-				viewCount: parseAbbreviatedNumber(
-					e?.shortsLockupViewModel?.overlayMetadata?.secondaryText?.content?.split(
-						" ",
-					)?.[0],
-				),
+				viewCount: parseAbbreviatedNumber(e?.shortsLockupViewModel?.overlayMetadata?.secondaryText?.content?.split(" ")?.[0]),
 				duration: null,
 			}));
 		});
@@ -1236,8 +978,7 @@ export const YTVideo = async function YTVideo(
 
 // Running this will create 'eng.traineddata' file
 export const ImageOCR = async function ImageOCR(imageUrl: string) {
-	if (!imageUrl || !imageUrl.startsWith("http"))
-		return { error: "Must be image" };
+	if (!imageUrl || !imageUrl.startsWith("http")) return { error: "Must be image" };
 
 	try {
 		new URL(imageUrl);
@@ -1269,9 +1010,7 @@ export const ImageOCR = async function ImageOCR(imageUrl: string) {
 					.toBuffer(),
 			);
 		} else {
-			buffer = Buffer.from(
-				await sharp(buffer).withMetadata({ density: 300 }).sharpen().toBuffer(),
-			);
+			buffer = Buffer.from(await sharp(buffer).withMetadata({ density: 300 }).sharpen().toBuffer());
 		}
 
 		const worker = await getOCRWorker();
@@ -1302,10 +1041,7 @@ export const ImageOCR = async function ImageOCR(imageUrl: string) {
 	}
 };
 
-export const YTMusic = async function YTMusic(
-	que: string,
-	deepSearch: boolean = false,
-) {
+export const YTMusic = async function YTMusic(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
 		if (!keyYoutubeVisitor) {
@@ -1313,11 +1049,7 @@ export const YTMusic = async function YTMusic(
 		}
 		const videoIdFromPlaylist = (playlistId: string | undefined | null) => {
 			if (!playlistId) return null;
-			return (
-				playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1] ||
-				playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1] ||
-				null
-			);
+			return playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1] || playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1] || null;
 		};
 		const bodyload = JSON.stringify({
 			query: que,
@@ -1330,24 +1062,17 @@ export const YTMusic = async function YTMusic(
 					gl: "US",
 				},
 			},
-			...(poTokenCache?.po_token
-				? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } }
-				: {}),
+			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
 		});
-		const response = await fetch(
-			"https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents",
-			{
-				headers: {
-					...commonHeaders,
-					"Content-Type": "application/json",
-					...(keyYoutubeVisitor?.cookie
-						? { Cookie: keyYoutubeVisitor.cookie }
-						: {}),
-				},
-				body: bodyload,
-				method: "POST",
+		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents", {
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
+				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
 			},
-		);
+			body: bodyload,
+			method: "POST",
+		});
 
 		const res: any = await response.json();
 
@@ -1357,12 +1082,8 @@ export const YTMusic = async function YTMusic(
 			};
 		}
 
-		const sectionContents =
-			res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer
-				?.content?.sectionListRenderer?.contents || [];
-		const musicShelf = sectionContents.find(
-			(c: any) => c.musicShelfRenderer,
-		)?.musicShelfRenderer;
+		const sectionContents = res?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+		const musicShelf = sectionContents.find((c: any) => c.musicShelfRenderer)?.musicShelfRenderer;
 		const innerTubeResults = musicShelf?.contents || [];
 
 		const mappedTasks = innerTubeResults.map(async (item: any) => {
@@ -1370,32 +1091,13 @@ export const YTMusic = async function YTMusic(
 			if (!a) return null;
 
 			try {
-				const flexColumn1 =
-					a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text
-						?.runs || [];
-				const flexColumn0 =
-					a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text
-						?.runs || [];
-				const flexColumn2 =
-					a.flexColumns?.[2]?.musicResponsiveListItemFlexColumnRenderer?.text
-						?.runs || [];
+				const flexColumn1 = a.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+				const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+				const flexColumn2 = a.flexColumns?.[2]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
 
-				const artistRuns = flexColumn1.filter((r: any) =>
-					r?.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType?.startsWith(
-						"MUSIC_PAGE_TYPE_ARTIST",
-					),
-				);
+				const artistRuns = flexColumn1.filter((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType?.startsWith("MUSIC_PAGE_TYPE_ARTIST"));
 
-				const artistRunsFallback =
-					artistRuns.length > 0
-						? artistRuns
-						: flexColumn1.filter(
-								(r: any) =>
-									r?.navigationEndpoint?.browseEndpoint?.browseId &&
-									!r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith(
-										"MPRE",
-									),
-							);
+				const artistRunsFallback = artistRuns.length > 0 ? artistRuns : flexColumn1.filter((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("MPRE"));
 
 				const artistRunsFinal =
 					artistRunsFallback.length > 0
@@ -1414,62 +1116,31 @@ export const YTMusic = async function YTMusic(
 									}));
 							})();
 
-				const albumRun = flexColumn1.find((r: any) =>
-					r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("MPRE"),
-				);
-				const durationRun =
-					flexColumn1.filter((r: any) => r?.text?.includes(":")).pop() ||
-					flexColumn1[flexColumn1.length - 1];
+				const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("MPRE"));
+				const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(":")).pop() || flexColumn1[flexColumn1.length - 1];
 
-				const musch =
-					a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(
-						/=w\d+.*/,
-						"=s0",
-					);
-				const menuWatchEndpoint = a.menu?.menuRenderer?.items?.find(
-					(e: any) =>
-						e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint,
-				)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint;
-				const titleWatchEndpoint =
-					flexColumn0[0]?.navigationEndpoint?.watchEndpoint;
+				const musch = a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
+				const menuWatchEndpoint = a.menu?.menuRenderer?.items?.find((e: any) => e.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint)?.menuNavigationItemRenderer?.navigationEndpoint?.watchEndpoint;
+				const titleWatchEndpoint = flexColumn0[0]?.navigationEndpoint?.watchEndpoint;
 				const itemWatchEndpoint = a.navigationEndpoint?.watchEndpoint;
-				const muspl =
-					menuWatchEndpoint?.playlistId ||
-					titleWatchEndpoint?.playlistId ||
-					itemWatchEndpoint?.playlistId;
-				const videoId =
-					a.playlistItemData?.videoId ||
-					titleWatchEndpoint?.videoId ||
-					itemWatchEndpoint?.videoId ||
-					menuWatchEndpoint?.videoId ||
-					videoIdFromPlaylist(muspl);
-				const altUrl = videoId
-					? "https://music.youtube.com/watch?v=" +
-						videoId +
-						(muspl ? "&list=" + muspl : "")
-					: null;
+				const muspl = menuWatchEndpoint?.playlistId || titleWatchEndpoint?.playlistId || itemWatchEndpoint?.playlistId;
+				const videoId = a.playlistItemData?.videoId || titleWatchEndpoint?.videoId || itemWatchEndpoint?.videoId || menuWatchEndpoint?.videoId || videoIdFromPlaylist(muspl);
+				const altUrl = videoId ? "https://music.youtube.com/watch?v=" + videoId + (muspl ? "&list=" + muspl : "") : null;
 
 				let mixData: any = null;
 				if (muspl && deepSearch) {
 					try {
-						const rlkreq = await fetch(
-							`https://www.youtube.com/watch?v=&list=${muspl}`,
-							{
-								headers: { ...commonHeaders },
-							},
-						);
+						const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${muspl}`, {
+							headers: { ...commonHeaders },
+						});
 
 						let rlkresText = await rlkreq.text();
 						let rlkres: any = parseYtInitial(rlkresText);
 
 						if (rlkres) {
-							const kkmvytmx =
-								rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
+							const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
 							if (kkmvytmx) {
-								const kkmvytfd =
-									rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults
-										?.secondaryResults?.results?.[0]?.itemSectionRenderer
-										?.contents;
+								const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
 								let getmgcf: any = null;
 								try {
 									getmgcf = new URL(kkmvytmx.playlistShareUrl);
@@ -1482,28 +1153,14 @@ export const YTMusic = async function YTMusic(
 									data:
 										kkmvytmx.contents?.map((c: any) => ({
 											videoId: c.playlistPanelVideoRenderer?.videoId,
-											url:
-												"https://www.youtube.com/watch?v=" +
-												c.playlistPanelVideoRenderer?.videoId,
-											altUrl:
-												"https://www.youtube.com" +
-												c.playlistPanelVideoRenderer?.navigationEndpoint
-													?.commandMetadata?.webCommandMetadata?.url,
+											url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
+											altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 											title: c.playlistPanelVideoRenderer?.title?.simpleText,
-											duration:
-												c.playlistPanelVideoRenderer?.lengthText?.simpleText,
-											thumbnail:
-												"https://s.ytimg.com/vi/" +
-												c.playlistPanelVideoRenderer?.videoId +
-												"/hq720.jpg",
+											duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
+											thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
 											owner: {
-												name: c.playlistPanelVideoRenderer?.longBylineText
-													?.runs?.[0]?.text,
-												url:
-													"https://www.youtube.com" +
-													c.playlistPanelVideoRenderer?.longBylineText
-														?.runs?.[0]?.navigationEndpoint?.commandMetadata
-														?.webCommandMetadata?.url,
+												name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
+												url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 											},
 										})) || [],
 									altData:
@@ -1511,42 +1168,18 @@ export const YTMusic = async function YTMusic(
 											?.filter((c: any) => c.lockupViewModel)
 											?.map((c: any) => {
 												const lvm = c.lockupViewModel;
-												const nUrl =
-													lvm?.rendererContext?.commandContext?.onTap
-														?.innertubeCommand?.commandMetadata
-														?.webCommandMetadata?.url || "";
-												const rId = nUrl.includes("v=")
-													? nUrl.split("v=")[1].split("&")[0]
-													: lvm?.contentId;
+												const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+												const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
 												return {
 													videoId: rId,
 													url: "https://www.youtube.com/watch?v=" + rId,
 													altUrl: "https://www.youtube.com" + nUrl,
-													title:
-														lvm?.metadata?.lockupMetadataViewModel?.title
-															?.content,
-													thumbnail:
-														"https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+													title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
+													thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
 													owner: {
-														name: lvm?.metadata?.lockupMetadataViewModel
-															?.metadata?.contentMetadataViewModel
-															?.metadataRows?.[0]?.metadataParts?.[0]?.text
-															?.content,
-														url: lvm?.metadata?.lockupMetadataViewModel?.image
-															?.decoratedAvatarViewModel?.rendererContext
-															?.commandContext?.onTap?.innertubeCommand
-															?.commandMetadata?.webCommandMetadata?.url
-															? "https://www.youtube.com" +
-																lvm?.metadata?.lockupMetadataViewModel?.image
-																	?.decoratedAvatarViewModel?.rendererContext
-																	?.commandContext?.onTap?.innertubeCommand
-																	?.commandMetadata?.webCommandMetadata?.url
-															: null,
-														avatar:
-															lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(
-																/=s\d+.*/,
-																"=s0",
-															),
+														name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+														url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+														avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
 													},
 												};
 											}) || [],
@@ -1560,44 +1193,27 @@ export const YTMusic = async function YTMusic(
 
 				return {
 					duration: durationRun?.text || null,
-					browseId:
-						artistRunsFinal[0]?.navigationEndpoint?.browseEndpoint?.browseId ||
-						null,
-					albumBrowseId:
-						albumRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
+					browseId: artistRunsFinal[0]?.navigationEndpoint?.browseEndpoint?.browseId || null,
+					albumBrowseId: albumRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
 					playlistId: muspl,
 					videoId,
 					url: videoId ? "https://music.youtube.com/watch?v=" + videoId : null,
 					altUrl,
-					baseUrl: videoId
-						? "https://www.youtube.com/watch?v=" + videoId
-						: null,
+					baseUrl: videoId ? "https://www.youtube.com/watch?v=" + videoId : null,
 					shortUrl: videoId ? "https://youtu.be/" + videoId : null,
 					thumbnail: musch?.startsWith("//") ? "https:" + musch : musch,
 					title: flexColumn0[0]?.text,
-					listenCount: String(
-						parseAbbreviatedNumber(flexColumn2[0]?.text?.split(" ")?.[0]),
-					),
-					isATV:
-						titleWatchEndpoint?.watchEndpointMusicSupportedConfigs
-							?.watchEndpointMusicConfig?.musicVideoType ===
-						"MUSIC_VIDEO_TYPE_ATV",
-					isExplicit:
-						a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType?.startsWith(
-							"MUSIC_EXPLICIT",
-						) || false,
+					listenCount: String(parseAbbreviatedNumber(flexColumn2[0]?.text?.split(" ")?.[0])),
+					isATV: titleWatchEndpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType === "MUSIC_VIDEO_TYPE_ATV",
+					isExplicit: a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType?.startsWith("MUSIC_EXPLICIT") || false,
 					isCollab: artistRunsFinal.length > 1,
 					mixPlaylist: mixData,
 					artists:
 						artistRunsFinal.length > 0
 							? artistRunsFinal.map((r: any) => ({
 									name: r.text,
-									browseId:
-										r.navigationEndpoint?.browseEndpoint?.browseId || null,
-									url: r.navigationEndpoint?.browseEndpoint?.browseId
-										? "https://music.youtube.com/channel/" +
-											r.navigationEndpoint.browseEndpoint.browseId
-										: null,
+									browseId: r.navigationEndpoint?.browseEndpoint?.browseId || null,
+									url: r.navigationEndpoint?.browseEndpoint?.browseId ? "https://music.youtube.com/channel/" + r.navigationEndpoint.browseEndpoint.browseId : null,
 								}))
 							: [
 									{
@@ -1639,31 +1255,21 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 					gl: "US",
 				},
 			},
-			...(poTokenCache?.po_token
-				? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } }
-				: {}),
+			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
 		});
 
-		const response = await fetch(
-			"https://m.youtube.com/youtubei/v1/search?prettyPrint=false",
-			{
-				headers: {
-					...commonHeaders,
-					"content-type": "application/json",
-					...(keyYoutubeVisitor?.cookie
-						? { Cookie: keyYoutubeVisitor.cookie }
-						: {}),
-				},
-				body: bodyload,
-				method: "POST",
+		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false", {
+			headers: {
+				...commonHeaders,
+				"content-type": "application/json",
+				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
 			},
-		);
+			body: bodyload,
+			method: "POST",
+		});
 
 		const res: any = await response.json();
-		const contents =
-			res?.contents?.twoColumnSearchResultsRenderer?.primaryContents
-				?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents ||
-			[];
+		const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
 		const alk: any[] = [];
 
@@ -1673,47 +1279,25 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 
 			try {
 				const meta = a.metadata?.lockupMetadataViewModel;
-				const metadataRows =
-					meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
+				const metadataRows = meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
 
 				const ownerPart = metadataRows[0]?.metadataParts?.[0]?.text;
 				const ownerRun = ownerPart?.commandRuns?.[0];
-				const ownerUrl =
-					ownerRun?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata
-						?.url;
-				const browseId =
-					ownerRun?.onTap?.innertubeCommand?.browseEndpoint?.browseId;
+				const ownerUrl = ownerRun?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+				const browseId = ownerRun?.onTap?.innertubeCommand?.browseEndpoint?.browseId;
 
-				const sources: any[] =
-					a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
-						?.thumbnailViewModel?.image?.sources || [];
-				const bestThumb = sources.reduce(
-					(best: any, s: any) => (!best || s.width > best.width ? s : best),
-					null,
-				);
-				const thumbnail = bestThumb
-					? bestThumb.url?.startsWith("//")
-						? "https:" + bestThumb.url
-						: bestThumb.url
-					: null;
+				const sources: any[] = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources || [];
+				const bestThumb = sources.reduce((best: any, s: any) => (!best || s.width > best.width ? s : best), null);
+				const thumbnail = bestThumb ? (bestThumb.url?.startsWith("//") ? "https:" + bestThumb.url : bestThumb.url) : null;
 
-				const badge =
-					a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
-						?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel
-						?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
+				const badge = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
 
 				const targetVideo = metadataRows
-					.filter(
-						(row: any) =>
-							!row.isSpacerRow &&
-							row.metadataParts?.[0]?.text?.commandRuns?.length,
-					)
+					.filter((row: any) => !row.isSpacerRow && row.metadataParts?.[0]?.text?.commandRuns?.length)
 					.map((row: any) => {
 						const part = row.metadataParts[0].text;
 						const run = part.commandRuns?.[0];
-						const webUrl =
-							run?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata
-								?.url;
+						const webUrl = run?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
 						if (!webUrl?.startsWith("/watch")) return null;
 
 						const watchEndpoint = run?.onTap?.innertubeCommand?.watchEndpoint;
@@ -1725,14 +1309,10 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 						const duration = sepIdx !== -1 ? raw.slice(sepIdx + 3) : null;
 
 						// url without list, altUrl with list
-						const url = videoId
-							? `https://www.youtube.com/watch?v=${videoId}`
-							: null;
+						const url = videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
 						const altUrl = webUrl ? `https://www.youtube.com${webUrl}` : null;
 
-						const videoThumb = videoId
-							? `https://i.ytimg.com/vi/${videoId}/hq720.jpg`
-							: null;
+						const videoThumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hq720.jpg` : null;
 
 						return { title, url, altUrl, duration, thumbnail: videoThumb };
 					})
@@ -1742,9 +1322,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 					playlistId: a.contentId,
 					url: "https://www.youtube.com/playlist?list=" + a.contentId,
 					title: meta?.title?.content,
-					videoCount: badge
-						? parseInt(badge.replace(/[^0-9]/g, "")) || null
-						: null,
+					videoCount: badge ? parseInt(badge.replace(/[^0-9]/g, "")) || null : null,
 					thumbnail,
 					targetVideo,
 					owner: {
@@ -1766,11 +1344,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 	}
 };
 
-export const SCMusic = async function SCMusic(
-	que: string,
-	refresh_auth?: boolean,
-	limit_number: number = 10,
-): Promise<any> {
+export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keysc) {
@@ -1779,22 +1353,16 @@ export const SCMusic = async function SCMusic(
 
 	try {
 		const [per, per2] = await Promise.all([
-			fetch(
-				`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
-			fetch(
-				`https://mobi.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			}),
+			fetch(`https://mobi.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
+			}),
 		]);
 
 		if (per.status === 401) {
@@ -1804,15 +1372,10 @@ export const SCMusic = async function SCMusic(
 		let testpes: any = null;
 		try {
 			const per2Text = await per2.text();
-			testpes = JSON.parse(
-				per2Text.split('type="application/json">')[1].split("</script>")[0],
-			);
+			testpes = JSON.parse(per2Text.split('type="application/json">')[1].split("</script>")[0]);
 		} catch {}
 		return {
-			data: [
-				pes?.collection || null,
-				testpes?.props?.pageProps?.initialStoreState?.entities || null,
-			],
+			data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null],
 		};
 	} catch (e) {
 		console.error(e);
@@ -1820,11 +1383,7 @@ export const SCMusic = async function SCMusic(
 	}
 };
 
-export const SPMusic = async function SPMusic(
-	que: string,
-	refresh_auth: boolean = false,
-	limit_number: number = 10,
-): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keysp || !keysptoken) {
@@ -1849,26 +1408,22 @@ export const SPMusic = async function SPMusic(
 			extensions: {
 				persistedQuery: {
 					version: 1,
-					sha256Hash:
-						"fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c",
+					sha256Hash: "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c",
 				},
 			},
 		};
-		const per2 = await fetch(
-			`https://api-partner.spotify.com/pathfinder/v2/query`,
-			{
-				method: "POST",
-				body: JSON.stringify(perbody),
-				headers: {
-					"Content-Type": "application/json",
-					Origin: "https://open.spotify.com",
-					Authorization: "Bearer " + (keysp || ""),
-					"App-Platform": "WebPlayer",
-					"Client-Token": keysptoken || "",
-					...commonHeaders,
-				},
+		const per2 = await fetch(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+			method: "POST",
+			body: JSON.stringify(perbody),
+			headers: {
+				"Content-Type": "application/json",
+				Origin: "https://open.spotify.com",
+				Authorization: "Bearer " + (keysp || ""),
+				"App-Platform": "WebPlayer",
+				"Client-Token": keysptoken || "",
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (per2.status === 403) {
 			return {
@@ -1891,10 +1446,8 @@ export const SPMusic = async function SPMusic(
 				data: {
 					albums: finalpes.albumsV2.items?.map((a: any) => a.data) || null,
 					artists: finalpes.artists.items?.map((a: any) => a.data) || null,
-					audiobooks:
-						finalpes.audiobooks.items?.map((a: any) => a.data) || null,
-					featured:
-						finalpes.topResultsV2.itemsV2?.map((a: any) => a.item.data) || null,
+					audiobooks: finalpes.audiobooks.items?.map((a: any) => a.data) || null,
+					featured: finalpes.topResultsV2.itemsV2?.map((a: any) => a.item.data) || null,
 					episodes: finalpes.episodes.items?.map((a: any) => a.data) || null,
 					genres: finalpes.genres.items?.map((a: any) => a.data) || null,
 					playlists: finalpes.playlists.items?.map((a: any) => a.data) || null,
@@ -1911,9 +1464,7 @@ export const SPMusic = async function SPMusic(
 };
 
 export const YTLyrics = async function YTLyrics(url: string, container?: any) {
-	let videoId = url.match(
-		/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/,
-	)?.[1];
+	let videoId = url.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
 	videoId = videoId || undefined;
 	if (!videoId) return null;
 
@@ -1935,24 +1486,18 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 				},
 			},
 		});
-		const response = await fetch(
-			"https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))",
-			{
-				headers: {
-					...commonHeaders,
-					"Content-Type": "application/json",
-				},
-				body: bodyload,
-				method: "POST",
+		const response = await fetch("https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))", {
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
 			},
-		);
+			body: bodyload,
+			method: "POST",
+		});
 		const res: any = await response.json();
 
 		const bodyload2 = JSON.stringify({
-			browseId:
-				res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer
-					?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint
-					?.browseEndpoint?.browseId,
+			browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
 			context: {
 				client: {
 					clientName: "WEB_REMIX",
@@ -1963,32 +1508,21 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 			},
 		});
 
-		const pull = await fetch(
-			"https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents",
-			{
-				headers: {
-					...commonHeaders,
-					"Content-Type": "application/json",
-				},
-				body: bodyload2,
-				method: "POST",
+		const pull = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents", {
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
 			},
-		);
+			body: bodyload2,
+			method: "POST",
+		});
 
 		const [res2] = await Promise.all([pull.json()]);
-		const covermusic: any =
-			res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(
-				/=w\d+.*/,
-				"=s0",
-			);
+		const covermusic: any = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
 
 		responseBody["data"] = { ...(container || {}) };
-		responseBody["lyrics"] =
-			(res2 as any)?.contents?.sectionListRenderer?.contents?.[0]
-				?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
-		responseBody["footer"] =
-			(res2 as any)?.contents?.sectionListRenderer?.contents?.[0]
-				?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
+		responseBody["lyrics"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
+		responseBody["footer"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
 
 		return responseBody;
 	} catch (e) {
@@ -2000,14 +1534,11 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 export const Shazam = async function Shazam(que: string) {
 	if (!que) return null;
 	try {
-		const pull = await fetch(
-			`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pull = await fetch(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		const res: any = await pull.json();
 		return { data: res?.results?.songs?.data || null };
 	} catch {
@@ -2015,15 +1546,10 @@ export const Shazam = async function Shazam(que: string) {
 	}
 };
 
-export const ShazamLyrics = async function ShazamLyrics(
-	que: string,
-): Promise<any> {
+export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<any> {
 	if (!que) return null;
 	try {
-		const itunesRes = await fetch(
-			`https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`,
-			{ method: "GET", headers: commonHeaders },
-		);
+		const itunesRes = await fetch(`https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`, { method: "GET", headers: commonHeaders });
 		const itunesData: any = await itunesRes.json();
 		const tracks = itunesData?.results;
 
@@ -2070,9 +1596,7 @@ export const ShazamLyrics = async function ShazamLyrics(
 
 						let parsedDuration: number | null = null;
 						if (ldJson.duration && ldJson.duration.startsWith("PT")) {
-							const match = ldJson.duration.match(
-								/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/,
-							);
+							const match = ldJson.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
 							if (match) {
 								const h = parseInt(match[1] || "0", 10);
 								const m = parseInt(match[2] || "0", 10);
@@ -2081,18 +1605,12 @@ export const ShazamLyrics = async function ShazamLyrics(
 							}
 						}
 
-						const byArtist =
-							typeof ldJson.byArtist === "string"
-								? ldJson.byArtist
-								: ldJson.byArtist?.name || ldJson.creator?.name || null;
+						const byArtist = typeof ldJson.byArtist === "string" ? ldJson.byArtist : ldJson.byArtist?.name || ldJson.creator?.name || null;
 
 						shazamInfo = {
 							trackName: ldJson.name || null,
 							trackUrl: ldJson.url || null,
-							thumbnailUrl:
-								ldJson.thumbnailUrl
-									?.replace(/\d+x\d+\w+/, "1x1ss")
-									.replace(/\.\w+$/, ".png") || null,
+							thumbnailUrl: ldJson.thumbnailUrl?.replace(/\d+x\d+\w+/, "1x1ss").replace(/\.\w+$/, ".png") || null,
 							durationTrack: parsedDuration,
 							genreTrack: ldJson.genre || null,
 							byArtist: byArtist,
@@ -2112,40 +1630,26 @@ export const ShazamLyrics = async function ShazamLyrics(
 						};
 					}
 
-					const artistMatch = html.match(
-						/TrackPageArtistLink_artistNameText[^>]*>([^<]+)<\/span>/,
-					);
+					const artistMatch = html.match(/TrackPageArtistLink_artistNameText[^>]*>([^<]+)<\/span>/);
 					if (artistMatch) shazamInfo.byArtist = decodeHTML(artistMatch[1]);
 
-					const albumMatch = html.match(
-						/>Album<\/span>(?:<a[^>]*>)?<span[^>]*>([^<]+)<\/span>/,
-					);
+					const albumMatch = html.match(/>Album<\/span>(?:<a[^>]*>)?<span[^>]*>([^<]+)<\/span>/);
 					if (albumMatch) shazamInfo.albumName = decodeHTML(albumMatch[1]);
 
-					const dateMatch = html.match(
-						/>Release Date<\/span><span[^>]*>([^<]+)<\/span>/,
-					);
+					const dateMatch = html.match(/>Release Date<\/span><span[^>]*>([^<]+)<\/span>/);
 					if (dateMatch) shazamInfo.albumPublished = dateMatch[1];
 
-					const labelMatch = html.match(
-						/>Label<\/span><span[^>]*>([^<]+)<\/span>/,
-					);
+					const labelMatch = html.match(/>Label<\/span><span[^>]*>([^<]+)<\/span>/);
 					shazamInfo.label = labelMatch ? decodeHTML(labelMatch[1]) : null;
 
-					const languageMatch = html.match(
-						/>Language<\/span><span[^>]*>([^<]+)<\/span>/,
-					);
-					shazamInfo.language = languageMatch
-						? decodeHTML(languageMatch[1])
-						: null;
+					const languageMatch = html.match(/>Language<\/span><span[^>]*>([^<]+)<\/span>/);
+					shazamInfo.language = languageMatch ? decodeHTML(languageMatch[1]) : null;
 
 					const bpmMatch = html.match(/>BPM<\/span><span[^>]*>(\d+)<\/span>/);
 					shazamInfo.bpm = bpmMatch ? parseInt(bpmMatch[1], 10) : null;
 
 					const getAttribute = (name: string) => {
-						const regex = new RegExp(
-							`>${name}<\\/span><\\/div><div[^>]*><div[^>]*><div[^>]*style="left:(\\d+)%"`,
-						);
+						const regex = new RegExp(`>${name}<\\/span><\\/div><div[^>]*><div[^>]*><div[^>]*style="left:(\\d+)%"`);
 						const match = html.match(regex);
 						return match ? parseInt(match[1], 10) : null;
 					};
@@ -2166,11 +1670,7 @@ export const ShazamLyrics = async function ShazamLyrics(
 							if (str.includes(":")) {
 								const parts = str.split(":");
 								if (parts.length === 3) {
-									return (
-										parseFloat(parts[0]) * 3600 +
-										parseFloat(parts[1]) * 60 +
-										parseFloat(parts[2])
-									);
+									return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
 								} else if (parts.length === 2) {
 									return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
 								}
@@ -2208,10 +1708,7 @@ export const ShazamLyrics = async function ShazamLyrics(
 							const lyricLines: string[] = [];
 							for (let i = 1; i < lyricParts.length; i++) {
 								const part = lyricParts[i];
-								if (
-									part.startsWith("sectionTitle") ||
-									part.startsWith("lyricLine")
-								) {
+								if (part.startsWith("sectionTitle") || part.startsWith("lyricLine")) {
 									const text = part
 										.split('">')[1]
 										?.split("</div>")[0]
@@ -2231,9 +1728,7 @@ export const ShazamLyrics = async function ShazamLyrics(
 
 				if (!lyrics) {
 					try {
-						const ldJsonMatch = html.split(
-							'script type="application/ld+json">',
-						);
+						const ldJsonMatch = html.split('script type="application/ld+json">');
 						if (ldJsonMatch.length > 1) {
 							const ldJsonStr = ldJsonMatch[1].split("</script>")[0];
 							const ldJson = JSON.parse(ldJsonStr);
@@ -2262,14 +1757,11 @@ export const ShazamLyrics = async function ShazamLyrics(
 export const Deezer = async function Deezer(que: string, limits: number = 10) {
 	if (!que) return null;
 	try {
-		const pull = await fetch(
-			`https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pull = await fetch(`https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 		const res: any = await pull.json();
 		return { data: res?.data || null };
 	} catch {
@@ -2277,10 +1769,7 @@ export const Deezer = async function Deezer(que: string, limits: number = 10) {
 	}
 };
 
-async function resolveTikTokRedirect(
-	url: string,
-	maxRedirects = 6,
-): Promise<string> {
+async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<string> {
 	let currentUrl = url;
 
 	for (let i = 0; i < maxRedirects; i++) {
@@ -2337,16 +1826,9 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		let savetikData: any = null;
 		for (let i = 0; i < 3; i++) {
 			try {
-				const [response, svData] = await Promise.all([
-					fetch(targetUrl, { headers: { ...commonHeaders } }),
-					SavetikVideo(targetUrl),
-				]);
+				const [response, svData] = await Promise.all([fetch(targetUrl, { headers: { ...commonHeaders } }), SavetikVideo(targetUrl)]);
 				const html = await response.text();
-				scriptContent = html
-					.split(
-						'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">',
-					)[1]
-					?.split("</script>")[0];
+				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
 				savetikData = svData;
 				if (scriptContent) break;
 			} catch (e) {
@@ -2357,8 +1839,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		if (!scriptContent) return { error: "WAF Challenge" };
 
 		const json = JSON.parse(scriptContent);
-		const videoDetail =
-			json?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
+		const videoDetail = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
 
 		if (!videoDetail?.video) return { data: null };
 
@@ -2367,16 +1848,11 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 			original_play_url: savetikData?.video_url || null,
 		};
 
-		if (videoDetail.video?.videoID)
-			responseData.videoId = videoDetail.video?.videoID;
+		if (videoDetail.video?.videoID) responseData.videoId = videoDetail.video?.videoID;
 
 		const authorUniqueId = videoDetail.author?.uniqueId;
 		if (authorUniqueId && authorUniqueId !== "undefined") {
-			responseData.url =
-				"https://www.tiktok.com/@" +
-				authorUniqueId +
-				"/video/" +
-				videoDetail.id;
+			responseData.url = "https://www.tiktok.com/@" + authorUniqueId + "/video/" + videoDetail.id;
 			responseData.author = {
 				url: "https://www.tiktok.com/@" + authorUniqueId,
 				aweme_id: videoDetail.author?.id?.toString(),
@@ -2397,59 +1873,39 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		}
 
 		if (videoDetail?.desc) responseData.desc = videoDetail.desc;
-		if (videoDetail?.textLanguage)
-			responseData.descLanguage = videoDetail.textLanguage;
-		if (videoDetail.createTime && videoDetail.createTime !== "0")
-			responseData.createTime = videoDetail.createTime;
+		if (videoDetail?.textLanguage) responseData.descLanguage = videoDetail.textLanguage;
+		if (videoDetail.createTime && videoDetail.createTime !== "0") responseData.createTime = videoDetail.createTime;
 
 		if (videoDetail.video?.cover) responseData.cover = videoDetail.video?.cover;
-		if (videoDetail.video?.originCover)
-			responseData.originCover = videoDetail.video?.originCover;
-		if (videoDetail.video?.dynamicCover)
-			responseData.dynamicCover = videoDetail.video?.dynamicCover;
-		if (videoDetail.video?.duration)
-			responseData.duration = videoDetail.video?.duration;
+		if (videoDetail.video?.originCover) responseData.originCover = videoDetail.video?.originCover;
+		if (videoDetail.video?.dynamicCover) responseData.dynamicCover = videoDetail.video?.dynamicCover;
+		if (videoDetail.video?.duration) responseData.duration = videoDetail.video?.duration;
 
-		const playUrl = videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace(
-			"?faid=1988",
-			"?faid=1233",
-		);
+		const playUrl = videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace("?faid=1988", "?faid=1233");
 		if (playUrl) responseData.play_url = playUrl;
 
 		if (videoDetail.video?.bitrateInfo) {
-			responseData.bit_rate = videoDetail.video?.bitrateInfo?.map(
-				(br: any) => ({
-					gearName: br.GearName,
-					bitrate: br.Bitrate,
-					res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
-					format: br.Format,
-					codec: br.CodecType,
-					play_url: br.PlayAddr?.UrlList?.[2]?.replace("1988", "1233"),
-				}),
-			);
+			responseData.bit_rate = videoDetail.video?.bitrateInfo?.map((br: any) => ({
+				gearName: br.GearName,
+				bitrate: br.Bitrate,
+				res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
+				format: br.Format,
+				codec: br.CodecType,
+				play_url: br.PlayAddr?.UrlList?.[2]?.replace("1988", "1233"),
+			}));
 		}
 
-		if (videoDetail.statsV2?.diggCount)
-			responseData.likeCount = videoDetail.statsV2?.diggCount?.toString();
-		if (videoDetail.statsV2?.shareCount)
-			responseData.shareCount = videoDetail.statsV2?.shareCount?.toString();
-		if (videoDetail.statsV2?.commentCount)
-			responseData.commentCount = videoDetail.statsV2?.commentCount?.toString();
-		if (videoDetail.statsV2?.playCount)
-			responseData.playCount = videoDetail.statsV2?.playCount?.toString();
-		if (videoDetail.statsV2?.collectCount)
-			responseData.favoriteCount =
-				videoDetail.statsV2?.collectCount?.toString();
+		if (videoDetail.statsV2?.diggCount) responseData.likeCount = videoDetail.statsV2?.diggCount?.toString();
+		if (videoDetail.statsV2?.shareCount) responseData.shareCount = videoDetail.statsV2?.shareCount?.toString();
+		if (videoDetail.statsV2?.commentCount) responseData.commentCount = videoDetail.statsV2?.commentCount?.toString();
+		if (videoDetail.statsV2?.playCount) responseData.playCount = videoDetail.statsV2?.playCount?.toString();
+		if (videoDetail.statsV2?.collectCount) responseData.favoriteCount = videoDetail.statsV2?.collectCount?.toString();
 
-		if (videoDetail.suggestedWords)
-			responseData.suggested_words = videoDetail.suggestedWords;
-		const searchSuggest =
-			videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]
-				?.words?.[0]?.word;
+		if (videoDetail.suggestedWords) responseData.suggested_words = videoDetail.suggestedWords;
+		const searchSuggest = videoDetail?.videoSuggestWordsList?.video_suggest_words_struct?.[0]?.words?.[0]?.word;
 		if (searchSuggest) responseData.search_suggest = searchSuggest;
 
-		if (videoDetail.locationCreated)
-			responseData.location = videoDetail.locationCreated;
+		if (videoDetail.locationCreated) responseData.location = videoDetail.locationCreated;
 
 		const musicId = videoDetail.music?.id;
 		if (musicId && musicId !== "undefined") {
@@ -2496,9 +1952,7 @@ export async function SavetikVideo(url: string) {
 		if (!json || !json.data) return null;
 
 		const { document } = parseHTML(json.data);
-		const hdLink = Array.from(document.querySelectorAll("a")).find((el: any) =>
-			el.textContent?.includes("Download MP4 HD"),
-		);
+		const hdLink = Array.from(document.querySelectorAll("a")).find((el: any) => el.textContent?.includes("Download MP4 HD"));
 
 		if (!hdLink) return null;
 
@@ -2509,9 +1963,7 @@ export async function SavetikVideo(url: string) {
 			try {
 				const token = new URL(finalUrl).searchParams.get("token");
 				if (token) {
-					const payload = JSON.parse(
-						Buffer.from(token.split(".")[1], "base64").toString(),
-					);
+					const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
 					if (payload.url) {
 						finalUrl = payload.url;
 					}
@@ -2519,22 +1971,14 @@ export async function SavetikVideo(url: string) {
 			} catch {}
 		}
 
-		const musicLink = Array.from(document.querySelectorAll("a")).find(
-			(el: any) => el.textContent?.includes("Download MP3"),
-		);
+		const musicLink = Array.from(document.querySelectorAll("a")).find((el: any) => el.textContent?.includes("Download MP3"));
 		let musicUrl: any = (musicLink as any)?.getAttribute("href") || null;
 
-		if (
-			musicUrl &&
-			musicUrl.includes("snapcdn.app") &&
-			musicUrl.includes("token=")
-		) {
+		if (musicUrl && musicUrl.includes("snapcdn.app") && musicUrl.includes("token=")) {
 			try {
 				const token = new URL(musicUrl).searchParams.get("token");
 				if (token) {
-					const payload = JSON.parse(
-						Buffer.from(token.split(".")[1], "base64").toString(),
-					);
+					const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
 					if (payload.url) {
 						musicUrl = payload.url;
 					}
@@ -2552,10 +1996,7 @@ export async function SavetikVideo(url: string) {
 	}
 }
 
-export const deezerLyrics = async function deezerLyrics(
-	que: string,
-	refresh_auth: boolean = false,
-): Promise<any> {
+export const deezerLyrics = async function deezerLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
 	if (!que) return null;
 
 	try {
@@ -2569,8 +2010,7 @@ export const deezerLyrics = async function deezerLyrics(
 				query: que,
 				firstList: 1,
 			},
-			query:
-				"query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title duration popularity isExplicit lyrics { id } media { id rights { ads { available availableAfter } sub { available availableAfter } } } album { id displayTitle releaseDate isExplicit tracksCount cover { large: urls(pictureRequest: {width: 500, height: 500}) } contributors { edges { roles node { ... on Artist { id name } } } } } contributors { edges { node { ... on Artist { id name } } } } credits: contributors(roles: [AUTHOR, COMPOSER]) { edges { roles node { ... on Artist { id name } } } } } } } } } }",
+			query: "query SearchFull($query: String!, $firstList: Int!) { instantSearch(query: $query) { results { tracks(first: $firstList) { edges { node { id title duration popularity isExplicit lyrics { id } media { id rights { ads { available availableAfter } sub { available availableAfter } } } album { id displayTitle releaseDate isExplicit tracksCount cover { large: urls(pictureRequest: {width: 500, height: 500}) } contributors { edges { roles node { ... on Artist { id name } } } } } contributors { edges { node { ... on Artist { id name } } } } credits: contributors(roles: [AUTHOR, COMPOSER]) { edges { roles node { ... on Artist { id name } } } } } } } } } }",
 		};
 
 		const responseBody: any = {
@@ -2609,8 +2049,7 @@ export const deezerLyrics = async function deezerLyrics(
 				variables: {
 					trackId: trackNode.id,
 				},
-				query:
-					"query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }",
+				query: "query GetLyrics($trackId: String!) { track(trackId: $trackId) { lyrics { text synchronizedLines { lrcTimestamp line } } } }",
 			};
 
 			const pull2 = await fetch(`https://pipe.deezer.com/api`, {
@@ -2638,10 +2077,7 @@ export const deezerLyrics = async function deezerLyrics(
 	}
 };
 
-export const tidalLyrics = async function tidalLyrics(
-	que: string,
-	refresh_auth: boolean = false,
-): Promise<any> {
+export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
 	if (!que) return null;
 
 	try {
@@ -2655,17 +2091,14 @@ export const tidalLyrics = async function tidalLyrics(
 			return { data: null };
 		}
 
-		const pull = await fetch(
-			`https://openapi.tidal.com/v2/tracks/${trackid}?countryCode=US&include=lyrics`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/vnd.api+json",
-					Origin: "https://tidal.com",
-					Authorization: "Bearer " + keybearer,
-				},
+		const pull = await fetch(`https://openapi.tidal.com/v2/tracks/${trackid}?countryCode=US&include=lyrics`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/vnd.api+json",
+				Origin: "https://tidal.com",
+				Authorization: "Bearer " + keybearer,
 			},
-		);
+		});
 
 		if (pull.status === 429) {
 			return { error: "Rate-limited" };
@@ -2687,10 +2120,7 @@ export const tidalLyrics = async function tidalLyrics(
 	}
 };
 
-export const SPLyrics = async function SPLyrics(
-	que: string,
-	refresh_auth: boolean = false,
-): Promise<any> {
+export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keysp || !keysptoken) {
@@ -2717,16 +2147,13 @@ export const SPLyrics = async function SPLyrics(
 		const l = await infoSpotify("https://open.spotify.com/track/" + trackId);
 		trackData = l?.data;
 
-		const pull = await fetch(
-			`https://spclient.wg.spotify.com/color-lyrics/v2/track/${trackId}?format=json&vnext=true`,
-			{
-				headers: {
-					...commonHeaders,
-					Authorization: "Bearer " + keysp,
-					"App-Platform": "WebPlayer",
-				},
+		const pull = await fetch(`https://spclient.wg.spotify.com/color-lyrics/v2/track/${trackId}?format=json&vnext=true`, {
+			headers: {
+				...commonHeaders,
+				Authorization: "Bearer " + keysp,
+				"App-Platform": "WebPlayer",
 			},
-		);
+		});
 
 		if (pull.status === 401 && !refresh_auth) {
 			return await SPLyrics(que, true);
@@ -2772,26 +2199,19 @@ export const SPLyrics = async function SPLyrics(
 	}
 };
 
-export const Tidal = async function Tidal(
-	que: string,
-	refresh?: boolean,
-	limits: number = 20,
-): Promise<any> {
+export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
 	if (!que) return null;
 	if (refresh) {
 		setKeyTidal(await tidalKeys());
 	}
 
 	try {
-		const pull = await fetch(
-			`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=${limits}&offset=0&query=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-					"X-Tidal-Token": keytidal || "",
-				},
+		const pull = await fetch(`https://api.tidal.com/v1/search/tracks?countryCode=US&locale=en_US&limit=${limits}&offset=0&query=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				"X-Tidal-Token": keytidal || "",
 			},
-		);
+		});
 
 		if (pull.status === 400 || pull.status === 401) {
 			return await Tidal(que, true);
@@ -2804,11 +2224,7 @@ export const Tidal = async function Tidal(
 	}
 };
 
-export const TidalOpen = async function TidalOpen(
-	que: string,
-	refresh?: boolean,
-	limits: number = 20,
-): Promise<any> {
+export const TidalOpen = async function TidalOpen(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
 	if (!que) return null;
 
 	if (!keybearer || refresh) {
@@ -2816,17 +2232,14 @@ export const TidalOpen = async function TidalOpen(
 	}
 
 	try {
-		const pull = await fetch(
-			`https://tidal.com/v2/client-search/?includeContributors=true&includeDidYouMean=true&includeUserPlaylists=true&limit=${limits}&query=${encodeURIComponent(que)}&supportsUserData=true&countryCode=US&locale=en_US&deviceType=BROWSER`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					Authorization: "Bearer " + keybearer,
-					"x-tidal-token": keytidalopen,
-				},
+		const pull = await fetch(`https://tidal.com/v2/client-search/?includeContributors=true&includeDidYouMean=true&includeUserPlaylists=true&limit=${limits}&query=${encodeURIComponent(que)}&supportsUserData=true&countryCode=US&locale=en_US&deviceType=BROWSER`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				Authorization: "Bearer " + keybearer,
+				"x-tidal-token": keytidalopen,
 			},
-		);
+		});
 
 		if (pull.status === 429) {
 			return { error: "Rate-limited" };
@@ -2852,33 +2265,21 @@ export const Genius = async function Genius(que: string) {
 	if (!que) return null;
 	try {
 		const [per, per2] = await Promise.all([
-			fetch(
-				`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			fetch(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
-			fetch(
-				`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			}),
+			fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
+			}),
 		]);
 
-		const [data, data2] = await Promise.all([
-			per.status === 200 ? per.json() : Promise.resolve(null),
-			per2.status === 200 ? per2.json() : Promise.resolve(null),
-		]);
+		const [data, data2] = await Promise.all([per.status === 200 ? per.json() : Promise.resolve(null), per2.status === 200 ? per2.json() : Promise.resolve(null)]);
 
-		const hits =
-			(data as any)?.response?.hits ||
-			(data as any)?.response?.sections?.[0]?.hits ||
-			[];
+		const hits = (data as any)?.response?.hits || (data as any)?.response?.sections?.[0]?.hits || [];
 		const sections = (data2 as any)?.response?.sections || [];
 
 		const results = hits.map((hit: any) => ({
@@ -2908,10 +2309,7 @@ const GEMINI_RETRY_COOLDOWN_MS = 1000;
 function encryptConvo(data: string): string {
 	const iv = crypto.randomBytes(12);
 	const cipher = crypto.createCipheriv("aes-256-gcm", CONVO_KEY, iv);
-	const encrypted = Buffer.concat([
-		cipher.update(data, "utf-8"),
-		cipher.final(),
-	]);
+	const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
 	const authTag = cipher.getAuthTag();
 	return Buffer.concat([iv, authTag, encrypted]).toString("base64url");
 }
@@ -2926,11 +2324,7 @@ function decryptConvo(encoded: string): string {
 	return decipher.update(encrypted) + decipher.final("utf-8");
 }
 
-export const Gemini = async function Gemini(
-	que: string,
-	convo: any,
-	retry: number = 0,
-) {
+export const Gemini = async function Gemini(que: string, convo: any, retry: number = 0) {
 	if (!que) return null;
 
 	let objectbody: any = { cid: null, rid: null, rcid: null, cookies: null };
@@ -2948,52 +2342,31 @@ export const Gemini = async function Gemini(
 		objectbody["cid"] = parsebody?.cid;
 		objectbody["rid"] = parsebody?.rid;
 		objectbody["rcid"] = parsebody?.rcid;
-		objectbody["cookies"] = parsebody?.cookies
-			? filterSpecificCookies(parsebody.cookies, ["NID"])
-			: undefined;
+		objectbody["cookies"] = parsebody?.cookies ? filterSpecificCookies(parsebody.cookies, ["NID"]) : undefined;
 	}
 
 	const qCookies = objectbody.cookies || null;
 
-	const inner = [
-		[que, 0, null, null, null, null, 0],
-		["en-US"],
-		[
-			objectbody.cid || "",
-			objectbody.rid || "",
-			objectbody.rcid || "",
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			"",
-		],
-	];
+	const inner = [[que, 0, null, null, null, null, 0], ["en-US"], [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, null, ""]];
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
-	const req = await fetch(
-		`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=0`,
-		{
-			method: "POST",
-			headers: {
-				...commonHeaders,
-				...(qCookies ? { Cookie: qCookies } : {}),
-				"Content-Type": "application/x-www-form-urlencoded",
-				//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
-				"x-goog-ext-525001261-jspb": `[1,null,null,null,"",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
-				"x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
-				"x-goog-ext-73010989-jspb": "[0]",
-				"x-goog-ext-73010990-jspb": "[0,0,0]",
-				Referer: "https://gemini.google.com",
-				Origin: "https://gemini.google.com",
-				"X-Same-Domain": "1",
-			},
-			body: reqPayload,
+	const req = await fetch(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=0`, {
+		method: "POST",
+		headers: {
+			...commonHeaders,
+			...(qCookies ? { Cookie: qCookies } : {}),
+			"Content-Type": "application/x-www-form-urlencoded",
+			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
+			"x-goog-ext-525001261-jspb": `[1,null,null,null,"",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
+			"x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
+			"x-goog-ext-73010989-jspb": "[0]",
+			"x-goog-ext-73010990-jspb": "[0,0,0]",
+			Referer: "https://gemini.google.com",
+			Origin: "https://gemini.google.com",
+			"X-Same-Domain": "1",
 		},
-	);
+		body: reqPayload,
+	});
 
 	if (req.url.includes("google.com/sorry")) {
 		return {
@@ -3021,8 +2394,7 @@ export const Gemini = async function Gemini(
 		};
 	}
 
-	const cookiess: any =
-		req.headers.getSetCookie?.().join("; ") ?? req.headers.get("set-cookie");
+	const cookiess: any = req.headers.getSetCookie?.().join("; ") ?? req.headers.get("set-cookie");
 	const resText = await req.text();
 	let response;
 	let finalres;
@@ -3060,14 +2432,12 @@ export const Gemini = async function Gemini(
 				}
 				if (errorCode == 13) {
 					return {
-						error:
-							"Can't process this due high-demand model, rate-limited or bad request",
+						error: "Can't process this due high-demand model, rate-limited or bad request",
 					};
 				}
 				if (errorCode == 1097) {
 					return {
-						error:
-							"Can't continue this conversation. Gemini might block this request",
+						error: "Can't continue this conversation. Gemini might block this request",
 					};
 				}
 				if (errorCode == 1076) {
@@ -3075,8 +2445,7 @@ export const Gemini = async function Gemini(
 				}
 				if (["1096", "1100", "1152"].includes(String(errorCode))) {
 					return {
-						error:
-							"Can't continue this conversation. Try again but without conversation id",
+						error: "Can't continue this conversation. Try again but without conversation id",
 					};
 				}
 				return { error: "Rate-limited" };
@@ -3093,10 +2462,7 @@ export const Gemini = async function Gemini(
 
 		finalres = innerData as any;
 
-		response =
-			(finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ??
-				finalres[4]?.[0]?.[1]?.[0]) ||
-			null;
+		response = (finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ?? finalres[4]?.[0]?.[1]?.[0]) || null;
 	} catch (e) {
 		console.error(e);
 		response = null;
@@ -3118,11 +2484,7 @@ export const Gemini = async function Gemini(
 	return responseBody;
 };
 
-export const Translate = async function Translate(
-	que: string,
-	from?: string,
-	to?: string,
-) {
+export const Translate = async function Translate(que: string, from?: string, to?: string) {
 	if (!que) return null;
 
 	const lFrom = from?.toLowerCase();
@@ -3135,9 +2497,7 @@ export const Translate = async function Translate(
 		if (byCode) return byCode.code;
 		const byName = listcodes.find((l) => l.name.toLowerCase() === lower);
 		if (byName) return byName.code;
-		const byPartial = listcodes.find((l) =>
-			l.name.toLowerCase().includes(lower),
-		);
+		const byPartial = listcodes.find((l) => l.name.toLowerCase().includes(lower));
 		if (byPartial) return byPartial.code;
 		return null;
 	};
@@ -3172,19 +2532,10 @@ export const Translate = async function Translate(
 			response: translatedText,
 			data: {
 				query: que,
-				fromLang: [
-					data.src || sourceLang,
-					listcodes.find((l) => l.code === (data.src || sourceLang))?.name ||
-						sourceLang,
-				],
-				toLang: [
-					targetLang,
-					listcodes.find((l) => l.code === targetLang)?.name || targetLang,
-				],
+				fromLang: [data.src || sourceLang, listcodes.find((l) => l.code === (data.src || sourceLang))?.name || sourceLang],
+				toLang: [targetLang, listcodes.find((l) => l.code === targetLang)?.name || targetLang],
 				translateType: [lFrom && lTo ? "specific" : "auto", "flash"],
-				accuracy: data?.ld_result?.srclangs_confidences?.[0]
-					? new String(data?.ld_result?.srclangs_confidences?.[0] * 100)
-					: null,
+				accuracy: data?.ld_result?.srclangs_confidences?.[0] ? new String(data?.ld_result?.srclangs_confidences?.[0] * 100) : null,
 			},
 		};
 	} catch {
@@ -3206,20 +2557,13 @@ function getYoutubeiText(value: any) {
 	if (!value) return "";
 	if (typeof value === "string") return value;
 	if (typeof value.text === "string") return value.text;
-	if (Array.isArray(value.runs))
-		return value.runs.map((run: any) => run.text || "").join("");
-	if (
-		typeof value.toString === "function" &&
-		value.toString !== Object.prototype.toString
-	)
-		return value.toString();
+	if (Array.isArray(value.runs)) return value.runs.map((run: any) => run.text || "").join("");
+	if (typeof value.toString === "function" && value.toString !== Object.prototype.toString) return value.toString();
 	return "";
 }
 
 function getYoutubeErrorMessage(e: any) {
-	return (
-		e?.info?.reason || e?.info?.status || e?.message || "Video unavailable"
-	);
+	return e?.info?.reason || e?.info?.status || e?.message || "Video unavailable";
 }
 
 function mapYoutubeCommentThread(thread: any) {
@@ -3227,41 +2571,26 @@ function mapYoutubeCommentThread(thread: any) {
 	if (!comment) return null;
 	return {
 		author: comment.author?.name || null,
-		authorThumbnail:
-			comment.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
+		authorThumbnail: comment.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
 		text: getYoutubeiText(comment.content),
 		publishedTimeText: comment.published_time || null,
 		likeCount: comment.like_count || "0",
 		commentId: comment.comment_id || null,
 		authorEndpoint: comment.author?.id || null,
-		channelUrl:
-			comment.author?.url ||
-			(comment.author?.id
-				? "https://www.youtube.com/channel/" + comment.author.id
-				: null),
+		channelUrl: comment.author?.url || (comment.author?.id ? "https://www.youtube.com/channel/" + comment.author.id : null),
 	};
 }
 
 function mapYoutubeLiveChatAction(action: any) {
 	const item = action?.item;
 	if (!item?.message) return null;
-	const authorUrl =
-		item.author?.url && !String(item.author.url).includes("/undefined")
-			? item.author.url
-			: item.author?.id
-				? "https://www.youtube.com/channel/" + item.author.id
-				: null;
+	const authorUrl = item.author?.url && !String(item.author.url).includes("/undefined") ? item.author.url : item.author?.id ? "https://www.youtube.com/channel/" + item.author.id : null;
 
 	return {
 		author: item.author?.name || null,
-		authorThumbnail:
-			item.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
+		authorThumbnail: item.author?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0") || null,
 		text: getYoutubeiText(item.message),
-		publishedTimeText:
-			item.timestamp_text ||
-			(item.timestamp
-				? new Date(Number(item.timestamp)).toLocaleTimeString()
-				: null),
+		publishedTimeText: item.timestamp_text || (item.timestamp ? new Date(Number(item.timestamp)).toLocaleTimeString() : null),
 		likeCount: "0",
 		commentId: item.id || null,
 		authorEndpoint: item.author?.id || null,
@@ -3271,25 +2600,18 @@ function mapYoutubeLiveChatAction(action: any) {
 
 async function getYoutubeLiveChatComments(info: any) {
 	if (!info?.livechat?.continuation) return [];
-	const endpoint = info.livechat.is_replay
-		? "live_chat/get_live_chat_replay"
-		: "live_chat/get_live_chat";
+	const endpoint = info.livechat.is_replay ? "live_chat/get_live_chat_replay" : "live_chat/get_live_chat";
 	const response = await info.actions.execute(endpoint, {
 		continuation: info.livechat.continuation,
 		parse: true,
 	});
-	return (response?.continuation_contents?.actions || [])
-		.map(mapYoutubeLiveChatAction)
-		.filter(Boolean);
+	return (response?.continuation_contents?.actions || []).map(mapYoutubeLiveChatAction).filter(Boolean);
 }
 
 async function getYoutubeComments(youtubei: any, info: any, videoId: string) {
-	if (info?.basic_info?.is_live || info?.livechat)
-		return getYoutubeLiveChatComments(info);
+	if (info?.basic_info?.is_live || info?.livechat) return getYoutubeLiveChatComments(info);
 	const commentData = await youtubei.getComments(videoId);
-	return (commentData?.contents || [])
-		.map(mapYoutubeCommentThread)
-		.filter(Boolean);
+	return (commentData?.contents || []).map(mapYoutubeCommentThread).filter(Boolean);
 }
 
 function parseHlsAttributes(line: string) {
@@ -3311,10 +2633,7 @@ async function getYoutubeLiveCaptions(info: any) {
 		const manifest = await response.text();
 		return manifest
 			.split("\n")
-			.filter(
-				(line) =>
-					line.includes("#EXT-X-MEDIA") && line.includes("TYPE=SUBTITLES"),
-			)
+			.filter((line) => line.includes("#EXT-X-MEDIA") && line.includes("TYPE=SUBTITLES"))
 			.map((line) => {
 				const attrs = parseHlsAttributes(line);
 				const uri = attrs.URI ? new URL(attrs.URI, hlsUrl).toString() : null;
@@ -3332,31 +2651,20 @@ async function getYoutubeLiveCaptions(info: any) {
 	}
 }
 
-export const infoYoutube = async function infoYoutube(
-	que: string,
-	deepFetch: boolean = true,
-) {
-	let videoId = que.match(
-		/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/,
-	)?.[1];
+export const infoYoutube = async function infoYoutube(que: string, deepFetch: boolean = true) {
+	let videoId = que.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
 	videoId = videoId || undefined;
 	if (!videoId) return null;
 
 	try {
 		const youtubeiPromise = getYoutubei();
-		const infoPromise = youtubeiPromise
-			.then((youtubei: any) => youtubei.getInfo(videoId))
-			.catch((e: any) => ({ __youtubeError: e }));
+		const infoPromise = youtubeiPromise.then((youtubei: any) => youtubei.getInfo(videoId)).catch((e: any) => ({ __youtubeError: e }));
 		const [infoResult, poToken, comments] = await Promise.all([
 			infoPromise,
 			getYoutubeCaptionPoToken(videoId),
 			deepFetch
 				? Promise.all([youtubeiPromise, infoPromise])
-						.then(([youtubei, info]: any[]) =>
-							info?.__youtubeError
-								? []
-								: getYoutubeComments(youtubei, info, videoId),
-						)
+						.then(([youtubei, info]: any[]) => (info?.__youtubeError ? [] : getYoutubeComments(youtubei, info, videoId)))
 						.catch(() => [])
 				: Promise.resolve([]),
 		]);
@@ -3372,10 +2680,7 @@ export const infoYoutube = async function infoYoutube(
 
 		const info = infoResult;
 
-		if (
-			info?.playability_status?.status &&
-			info.playability_status.status !== "OK"
-		) {
+		if (info?.playability_status?.status && info.playability_status.status !== "OK") {
 			return {
 				_challenge: challenge,
 				error: info.playability_status.reason || info.playability_status.status,
@@ -3398,51 +2703,26 @@ export const infoYoutube = async function infoYoutube(
 		const primary = info.primary_info || {};
 		const secondary = info.secondary_info || {};
 		const owner = secondary.owner?.author || basic.channel || {};
-		const ownerUrls = owner.url
-			? [owner.url]
-			: owner.id
-				? ["https://www.youtube.com/channel/" + owner.id]
-				: [];
-		const ownerAvatars = (owner.thumbnails || [])
-			.map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0"))
-			.filter(Boolean);
+		const ownerUrls = owner.url ? [owner.url] : owner.id ? ["https://www.youtube.com/channel/" + owner.id] : [];
+		const ownerAvatars = (owner.thumbnails || []).map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean);
 		const feeds = (info.watch_next_feed || [])
 			.map((item: any) => {
 				const rId = item.content_id;
 				if (!rId || !/^[A-Za-z0-9_-]{11}$/.test(rId)) return null;
-				const feedOwner =
-					item.metadata?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text
-						?.text || null;
-				const feedOwnerPath =
-					item.metadata?.image?.renderer_context?.command_context?.on_tap
-						?.metadata?.url ||
-					item.metadata?.image?.renderer_context?.command_context?.on_tap
-						?.payload?.canonicalBaseUrl;
-				const feedOwnerUrl = feedOwnerPath
-					? [
-							String(feedOwnerPath).startsWith("http")
-								? feedOwnerPath
-								: "https://www.youtube.com" + feedOwnerPath,
-						]
-					: null;
-				const feedOwnerAvatar =
-					item.metadata?.image?.avatar?.image
-						?.map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0"))
-						.filter(Boolean) || null;
+				const feedOwner = item.metadata?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text?.text || null;
+				const feedOwnerPath = item.metadata?.image?.renderer_context?.command_context?.on_tap?.metadata?.url || item.metadata?.image?.renderer_context?.command_context?.on_tap?.payload?.canonicalBaseUrl;
+				const feedOwnerUrl = feedOwnerPath ? [String(feedOwnerPath).startsWith("http") ? feedOwnerPath : "https://www.youtube.com" + feedOwnerPath] : null;
+				const feedOwnerAvatar = item.metadata?.image?.avatar?.image?.map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean) || null;
 				return {
 					videoId: rId,
 					url: "https://www.youtube.com/watch?v=" + rId,
 					altUrl: "https://www.youtube.com/watch?v=" + rId,
 					title: item.metadata?.title?.text || null,
-					thumbnail:
-						item.content_image?.image?.[0]?.url ||
-						"https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+					thumbnail: item.content_image?.image?.[0]?.url || "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
 					owner: {
 						name: feedOwner,
 						url: feedOwnerUrl,
-						avatar: feedOwnerAvatar?.length
-							? Array.from(new Set(feedOwnerAvatar))
-							: null,
+						avatar: feedOwnerAvatar?.length ? Array.from(new Set(feedOwnerAvatar)) : null,
 					},
 				};
 			})
@@ -3455,10 +2735,7 @@ export const infoYoutube = async function infoYoutube(
 				thumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
 				previewThumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxres1.jpg",
 				title: basic.title || getYoutubeiText(primary.title) || null,
-				description:
-					getYoutubeiText(secondary.description) ||
-					basic.short_description ||
-					null,
+				description: getYoutubeiText(secondary.description) || basic.short_description || null,
 				releaseDate: getYoutubeiText(primary.published) || null,
 				viewCount: String(basic.view_count || 0),
 				owners: {
@@ -3481,14 +2758,10 @@ export const infoYoutube = async function infoYoutube(
 	}
 };
 
-export const infoYoutubeChannel = async function infoYoutubeChannel(
-	url: string,
-) {
+export const infoYoutubeChannel = async function infoYoutubeChannel(url: string) {
 	if (!url) return null;
 
-	const match = url.match(
-		/^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(channel\/|c\/|user\/|@)([a-zA-Z0-9_\-.]+)/,
-	);
+	const match = url.match(/^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(channel\/|c\/|user\/|@)([a-zA-Z0-9_\-.]+)/);
 	if (!match) return null;
 
 	const prefix = match[1];
@@ -3504,9 +2777,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 			method: "GET",
 			headers: {
 				...commonHeaders,
-				...(keyYoutubeVisitor?.cookie
-					? { Cookie: keyYoutubeVisitor.cookie }
-					: {}),
+				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
 			},
 		});
 		const html = await response.text();
@@ -3514,38 +2785,22 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
 		if (!data) return { data: null };
 
-		const tabs =
-			data?.contents?.twoColumnBrowseResultsRenderer?.tabs
-				?.map((t: any) => t.tabRenderer || t.expandableTabRenderer)
-				.filter(Boolean) || [];
+		const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.map((t: any) => t.tabRenderer || t.expandableTabRenderer).filter(Boolean) || [];
 
-		const header =
-			data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+		const header = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
 		const channelMetadataRenderer = data?.metadata?.channelMetadataRenderer;
 		const microformatRenderer = data?.microformat?.microformatDataRenderer;
-		const channelDescription =
-			channelMetadataRenderer?.description || microformatRenderer?.description;
+		const channelDescription = channelMetadataRenderer?.description || microformatRenderer?.description;
 
 		const channelLinks: any[] = [];
-		const metadataRows =
-			header?.metadata?.contentMetadataViewModel?.metadataRows || [];
+		const metadataRows = header?.metadata?.contentMetadataViewModel?.metadataRows || [];
 		metadataRows.forEach((row: any) => {
 			row?.metadataParts?.forEach((part: any) => {
-				const linkModel =
-					part?.text?.contentMetadataAndSelectedTextViewModel?.selectedText
-						?.contentMetadataSelectedTextModel?.linkViewModel ||
-					part?.text?.contentMetadataAndSelectedTextViewModel?.text
-						?.contentMetadataSelectedTextModel?.linkViewModel;
+				const linkModel = part?.text?.contentMetadataAndSelectedTextViewModel?.selectedText?.contentMetadataSelectedTextModel?.linkViewModel || part?.text?.contentMetadataAndSelectedTextViewModel?.text?.contentMetadataSelectedTextModel?.linkViewModel;
 				if (linkModel) {
 					channelLinks.push({
-						title:
-							linkModel.text ||
-							part?.text?.contentMetadataAndSelectedTextViewModel?.text
-								?.content,
-						url:
-							linkModel.href ||
-							linkModel.onTap?.innertubeCommand?.commandMetadata
-								?.webCommandMetadata?.url,
+						title: linkModel.text || part?.text?.contentMetadataAndSelectedTextViewModel?.text?.content,
+						url: linkModel.href || linkModel.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
 					});
 				}
 			});
@@ -3556,9 +2811,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		const extractData = (obj: any) => {
 			if (!obj || typeof obj !== "object") return;
 
-			const link =
-				obj.aboutChannelExternalLinkViewModel ||
-				obj.channelExternalLinkViewModel;
+			const link = obj.aboutChannelExternalLinkViewModel || obj.channelExternalLinkViewModel;
 			if (link) {
 				const title = link.title?.content || link.text;
 				const url = link.link?.content || link.href;
@@ -3567,63 +2820,36 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 				}
 			}
 
-			const meta =
-				obj.aboutChannelViewModel ||
-				obj.aboutChannelRenderer?.metadata?.aboutChannelViewModel;
+			const meta = obj.aboutChannelViewModel || obj.aboutChannelRenderer?.metadata?.aboutChannelViewModel;
 			if (meta) {
 				if (meta.country) channelMetadata["location"] = meta.country;
 				if (meta.joinedDateText?.content || meta.joinedDateText) {
-					const dateStr = (meta.joinedDateText.content || meta.joinedDateText)
-						.replace(/^Joined\s+/i, "")
-						.trim();
+					const dateStr = (meta.joinedDateText.content || meta.joinedDateText).replace(/^Joined\s+/i, "").trim();
 					const timestamp = Date.parse(dateStr);
 					if (!isNaN(timestamp)) {
-						channelMetadata["joinTimestamp"] = String(
-							Math.floor(timestamp / 1000),
-						);
+						channelMetadata["joinTimestamp"] = String(Math.floor(timestamp / 1000));
 					} else {
-						channelMetadata["joinTimestamp"] =
-							meta.joinedDateText.content || meta.joinedDateText;
+						channelMetadata["joinTimestamp"] = meta.joinedDateText.content || meta.joinedDateText;
 					}
 				}
-				if (meta.subscriberCountText)
-					channelMetadata["subscriberCount"] = String(
-						parseAbbreviatedNumber(meta.subscriberCountText),
-					);
-				if (meta.videoCountText)
-					channelMetadata["videoCount"] = String(
-						parseAbbreviatedNumber(meta.videoCountText),
-					);
-				if (meta.viewCountText)
-					channelMetadata["viewCount"] = String(
-						parseAbbreviatedNumber(meta.viewCountText),
-					);
-				if (meta.canonicalChannelUrl)
-					channelMetadata["canonicalUrl"] = meta.canonicalChannelUrl.replace(
-						/^http:\/\//i,
-						"https://",
-					);
+				if (meta.subscriberCountText) channelMetadata["subscriberCount"] = String(parseAbbreviatedNumber(meta.subscriberCountText));
+				if (meta.videoCountText) channelMetadata["videoCount"] = String(parseAbbreviatedNumber(meta.videoCountText));
+				if (meta.viewCountText) channelMetadata["viewCount"] = String(parseAbbreviatedNumber(meta.viewCountText));
+				if (meta.canonicalChannelUrl) channelMetadata["canonicalUrl"] = meta.canonicalChannelUrl.replace(/^http:\/\//i, "https://");
 			}
 
 			if (obj.primaryLinks || obj.secondaryLinks) {
-				const links = [
-					...(obj.primaryLinks || []),
-					...(obj.secondaryLinks || []),
-				];
+				const links = [...(obj.primaryLinks || []), ...(obj.secondaryLinks || [])];
 				links.forEach((l: any) => {
 					const title = l.title?.simpleText;
-					const url =
-						l.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+					const url = l.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
 					if (url && !channelLinks.some((lk) => lk.url === url)) {
 						channelLinks.push({ title: title || "Link", url });
 					}
 				});
 			}
 
-			const banner =
-				obj.banner?.thumbnails ||
-				obj.imageBannerViewModel?.image?.thumbnail?.thumbnails ||
-				obj.imageBannerViewModel?.image?.sources;
+			const banner = obj.banner?.thumbnails || obj.imageBannerViewModel?.image?.thumbnail?.thumbnails || obj.imageBannerViewModel?.image?.sources;
 			if (banner && !channelMetadata["banner"]) {
 				channelMetadata["banner"] = banner;
 			}
@@ -3637,70 +2863,42 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
 		const getBadgeType = (badgeId: string): string | null => {
 			if (!badgeId) return null;
-			const validBadges = [
-				"CHECK_CIRCLE_THICK",
-				"CHECK_CIRCLE_FILLED",
-				"VERIFIED",
-				"VERIFIED_BADGE",
-				"OFFICIAL_ARTIST",
-				"AUDIO_BADGE",
-				"MUSIC_OFFICIAL_ARTIST",
-				"OFFICIAL_ARTIST_BADGE",
-			];
+			const validBadges = ["CHECK_CIRCLE_THICK", "CHECK_CIRCLE_FILLED", "VERIFIED", "VERIFIED_BADGE", "OFFICIAL_ARTIST", "AUDIO_BADGE", "MUSIC_OFFICIAL_ARTIST", "OFFICIAL_ARTIST_BADGE"];
 			return validBadges.includes(badgeId) ? badgeId : null;
 		};
 
 		const c4Header = data?.header?.c4TabbedHeaderRenderer;
 		if (c4Header) {
-			if (c4Header.avatar?.thumbnails)
-				channelMetadata["avatar"] = c4Header.avatar.thumbnails;
-			if (c4Header.banner?.thumbnails)
-				channelMetadata["banner"] = c4Header.banner.thumbnails;
-			if (c4Header.channelHandleText?.runs?.[0]?.text)
-				channelMetadata["handle"] = c4Header.channelHandleText.runs[0].text;
+			if (c4Header.avatar?.thumbnails) channelMetadata["avatar"] = c4Header.avatar.thumbnails;
+			if (c4Header.banner?.thumbnails) channelMetadata["banner"] = c4Header.banner.thumbnails;
+			if (c4Header.channelHandleText?.runs?.[0]?.text) channelMetadata["handle"] = c4Header.channelHandleText.runs[0].text;
 
-			const badge = c4Header.badges
-				?.map((b: any) => b.metadataBadgeRenderer?.icon?.iconType)
-				.find((id: string) => getBadgeType(id));
+			const badge = c4Header.badges?.map((b: any) => b.metadataBadgeRenderer?.icon?.iconType).find((id: string) => getBadgeType(id));
 			if (badge) {
 				channelMetadata["verified"] = true;
 				channelMetadata["verified_type"] = getBadgeType(badge);
 			}
 		}
 
-		const modernHeader =
-			data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+		const modernHeader = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
 		if (modernHeader) {
-			const avatar =
-				modernHeader.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel
-					?.image?.thumbnail?.thumbnails;
+			const avatar = modernHeader.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.thumbnail?.thumbnails;
 			if (avatar) channelMetadata["avatar"] = avatar;
 
-			const banner =
-				data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image
-					?.thumbnail?.thumbnails ||
-				data?.header?.pageHeaderRenderer?.banner?.heroBannerViewModel?.banner
-					?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
+			const banner = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails || data?.header?.pageHeaderRenderer?.banner?.heroBannerViewModel?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails;
 			if (banner) channelMetadata["banner"] = banner;
 
 			const title = modernHeader.title?.dynamicTextViewModel?.text?.content;
 			if (title) channelMetadata["name"] = title;
 
 			if (!channelMetadata["verified"]) {
-				const headerRows =
-					modernHeader.metadata?.contentMetadataViewModel?.metadataRows || [];
+				const headerRows = modernHeader.metadata?.contentMetadataViewModel?.metadataRows || [];
 				let detectedType: string | null = null;
 
 				headerRows.some((row: any) =>
 					row.metadataParts?.some((part: any) => {
-						const vm =
-							part.text?.contentMetadataAndSelectedTextViewModel ||
-							part.text?.contentMetadataViewModel;
-						const renderer =
-							vm?.selectedText?.contentMetadataSelectedTextModel?.badgeViewModel
-								?.badgeViewModel?.badge?.metadataBadgeRenderer ||
-							vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel
-								?.badgeViewModel?.badge?.metadataBadgeRenderer;
+						const vm = part.text?.contentMetadataAndSelectedTextViewModel || part.text?.contentMetadataViewModel;
+						const renderer = vm?.selectedText?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer || vm?.text?.contentMetadataSelectedTextModel?.badgeViewModel?.badgeViewModel?.badge?.metadataBadgeRenderer;
 						const type = getBadgeType(renderer?.icon?.iconType);
 						if (type) {
 							detectedType = type;
@@ -3711,23 +2909,14 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 				);
 
 				if (!detectedType) {
-					const attachmentBadge =
-						modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns
-							?.map(
-								(run: any) =>
-									run.element?.type?.imageType?.image?.sources?.[0]
-										?.clientResource?.imageName,
-							)
-							.find((name: string) => getBadgeType(name));
+					const attachmentBadge = modernHeader.title?.dynamicTextViewModel?.text?.attachmentRuns?.map((run: any) => run.element?.type?.imageType?.image?.sources?.[0]?.clientResource?.imageName).find((name: string) => getBadgeType(name));
 
 					if (attachmentBadge) detectedType = getBadgeType(attachmentBadge);
 				}
 
 				if (!detectedType) {
 					const headerStr = JSON.stringify(modernHeader);
-					const match = headerStr.match(
-						/CHECK_CIRCLE_THICK|CHECK_CIRCLE_FILLED|VERIFIED_BADGE|VERIFIED|OFFICIAL_ARTIST|AUDIO_BADGE|MUSIC_OFFICIAL_ARTIST|OFFICIAL_ARTIST_BADGE/i,
-					);
+					const match = headerStr.match(/CHECK_CIRCLE_THICK|CHECK_CIRCLE_FILLED|VERIFIED_BADGE|VERIFIED|OFFICIAL_ARTIST|AUDIO_BADGE|MUSIC_OFFICIAL_ARTIST|OFFICIAL_ARTIST_BADGE/i);
 					if (match) detectedType = match[0].toUpperCase();
 				}
 
@@ -3744,15 +2933,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		}
 
 		if (!channelMetadata["banner"]) {
-			const b1 =
-				data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image
-					?.thumbnail?.thumbnails ||
-				data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image
-					?.sources;
-			const b2 =
-				modernHeader?.banner?.imageBannerViewModel?.image?.thumbnail
-					?.thumbnails ||
-				modernHeader?.banner?.imageBannerViewModel?.image?.sources;
+			const b1 = data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails || data?.header?.pageHeaderRenderer?.banner?.imageBannerViewModel?.image?.sources;
+			const b2 = modernHeader?.banner?.imageBannerViewModel?.image?.thumbnail?.thumbnails || modernHeader?.banner?.imageBannerViewModel?.image?.sources;
 			const b3 = data?.header?.c4TabbedHeaderRenderer?.banner?.thumbnails;
 
 			if (b1) channelMetadata["banner"] = b1;
@@ -3775,34 +2957,17 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		}
 
 		if (channelMetadataRenderer) {
-			if (channelMetadataRenderer.externalId)
-				channelMetadata["channelId"] = channelMetadataRenderer.externalId;
-			if (channelMetadataRenderer.vanityChannelUrl)
-				channelMetadata["vanityChannelUrl"] =
-					channelMetadataRenderer.vanityChannelUrl.replace(
-						/^http:\/\//i,
-						"https://",
-					);
-			if (channelMetadataRenderer.channelUrl)
-				channelMetadata["channelUrl"] = channelMetadataRenderer.channelUrl;
-			if (typeof channelMetadataRenderer.isFamilySafe === "boolean")
-				channelMetadata["familySafe"] = channelMetadataRenderer.isFamilySafe;
-			if (channelMetadataRenderer.availableCountryCodes)
-				channelMetadata["availableCountries"] =
-					channelMetadataRenderer.availableCountryCodes;
+			if (channelMetadataRenderer.externalId) channelMetadata["channelId"] = channelMetadataRenderer.externalId;
+			if (channelMetadataRenderer.vanityChannelUrl) channelMetadata["vanityChannelUrl"] = channelMetadataRenderer.vanityChannelUrl.replace(/^http:\/\//i, "https://");
+			if (channelMetadataRenderer.channelUrl) channelMetadata["channelUrl"] = channelMetadataRenderer.channelUrl;
+			if (typeof channelMetadataRenderer.isFamilySafe === "boolean") channelMetadata["familySafe"] = channelMetadataRenderer.isFamilySafe;
+			if (channelMetadataRenderer.availableCountryCodes) channelMetadata["availableCountries"] = channelMetadataRenderer.availableCountryCodes;
 			if (channelMetadataRenderer.keywords) {
 				const keywordsStr = channelMetadataRenderer.keywords;
-				const keywordsArray =
-					keywordsStr
-						.match(/"[^"]+"|[^\s]+/g)
-						?.map((k: string) => k.replace(/^"|"$/g, "")) || [];
-				if (keywordsArray.length > 0)
-					channelMetadata["keywords"] = keywordsArray;
+				const keywordsArray = keywordsStr.match(/"[^"]+"|[^\s]+/g)?.map((k: string) => k.replace(/^"|"$/g, "")) || [];
+				if (keywordsArray.length > 0) channelMetadata["keywords"] = keywordsArray;
 			}
-			if (
-				channelMetadataRenderer.avatar?.thumbnails &&
-				!channelMetadata["avatar"]
-			) {
+			if (channelMetadataRenderer.avatar?.thumbnails && !channelMetadata["avatar"]) {
 				channelMetadata["avatar"] = channelMetadataRenderer.avatar.thumbnails;
 			}
 		}
@@ -3812,31 +2977,19 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 			if (microformatRenderer.tags && !channelMetadata["keywords"]) {
 				channelMetadata["keywords"] = microformatRenderer.tags;
 			}
-			if (
-				typeof microformatRenderer.familySafe === "boolean" &&
-				channelMetadata["familySafe"] === undefined
-			) {
+			if (typeof microformatRenderer.familySafe === "boolean" && channelMetadata["familySafe"] === undefined) {
 				channelMetadata["familySafe"] = microformatRenderer.familySafe;
 			}
-			if (
-				microformatRenderer.availableCountries &&
-				!channelMetadata["availableCountries"]
-			) {
-				channelMetadata["availableCountries"] =
-					microformatRenderer.availableCountries;
+			if (microformatRenderer.availableCountries && !channelMetadata["availableCountries"]) {
+				channelMetadata["availableCountries"] = microformatRenderer.availableCountries;
 			}
 		}
 
 		// Final fallback for channelId
 		if (!channelMetadata["channelId"] && identifier && prefix === "channel/") {
 			channelMetadata["channelId"] = identifier;
-		} else if (
-			!channelMetadata["channelId"] &&
-			microformatRenderer?.urlCanonical
-		) {
-			const idMatch = microformatRenderer.urlCanonical.match(
-				/\/channel\/([^\/?#]+)/,
-			);
+		} else if (!channelMetadata["channelId"] && microformatRenderer?.urlCanonical) {
+			const idMatch = microformatRenderer.urlCanonical.match(/\/channel\/([^\/?#]+)/);
 			if (idMatch) channelMetadata["channelId"] = idMatch[1];
 		}
 
@@ -3867,8 +3020,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		function searchToken(obj: any): string | null {
 			if (!obj || typeof obj !== "object") return null;
 			if (obj.continuationItemRenderer) {
-				return obj.continuationItemRenderer.continuationEndpoint
-					?.continuationCommand?.token;
+				return obj.continuationItemRenderer.continuationEndpoint?.continuationCommand?.token;
 			}
 			if (Array.isArray(obj)) {
 				for (const item of obj) {
@@ -3889,32 +3041,29 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
 		if (continuationToken) {
 			try {
-				const continuationReq = await fetch(
-					"https://m.youtube.com/youtubei/v1/browse?prettyPrint=false",
-					{
-						method: "POST",
-						headers: { ...commonHeaders, "Content-Type": "application/json" },
-						body: JSON.stringify({
-							continuation: continuationToken,
-							context: {
-								client: {
-									clientName: "WEB",
-									clientVersion: "2.20260204.01.00",
-									hl: "en",
-									gl: "US",
-									visitorData: visitorData,
-								},
+				const continuationReq = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+					method: "POST",
+					headers: { ...commonHeaders, "Content-Type": "application/json" },
+					body: JSON.stringify({
+						continuation: continuationToken,
+						context: {
+							client: {
+								clientName: "WEB",
+								clientVersion: "2.20260204.01.00",
+								hl: "en",
+								gl: "US",
+								visitorData: visitorData,
 							},
-							...(poTokenCache?.po_token
-								? {
-										serviceIntegrityDimensions: {
-											poToken: poTokenCache.po_token,
-										},
-									}
-								: {}),
-						}),
-					},
-				);
+						},
+						...(poTokenCache?.po_token
+							? {
+									serviceIntegrityDimensions: {
+										poToken: poTokenCache.po_token,
+									},
+								}
+							: {}),
+					}),
+				});
 				const continuationRes: any = await continuationReq.json();
 
 				extractData(continuationRes);
@@ -3935,12 +3084,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 				obj.forEach((item) => buttons.push(...findAllButtons(item)));
 			} else {
 				for (const key of Object.keys(obj)) {
-					if (
-						["trackingParams", "loggingDirectives", "rendererContext"].includes(
-							key,
-						)
-					)
-						continue;
+					if (["trackingParams", "loggingDirectives", "rendererContext"].includes(key)) continue;
 					buttons.push(...findAllButtons(obj[key]));
 				}
 			}
@@ -3948,23 +3092,13 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		};
 
 		const vm = data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
-		const allButtons = findAllButtons(
-			vm?.actions || data?.header?.c4TabbedHeaderRenderer?.buttons,
-		);
+		const allButtons = findAllButtons(vm?.actions || data?.header?.c4TabbedHeaderRenderer?.buttons);
 
 		allButtons.forEach((btn: any) => {
-			const endpoint =
-				btn?.command?.browseEndpoint ||
-				btn?.onTap?.innertubeCommand?.browseEndpoint ||
-				btn?.navigationEndpoint?.browseEndpoint;
+			const endpoint = btn?.command?.browseEndpoint || btn?.onTap?.innertubeCommand?.browseEndpoint || btn?.navigationEndpoint?.browseEndpoint;
 
 			if (endpoint && endpoint.browseId === "FEcommunity_page") {
-				if (
-					!tabs.some(
-						(t: any) =>
-							t.endpoint?.browseEndpoint?.browseId === endpoint.browseId,
-					)
-				) {
+				if (!tabs.some((t: any) => t.endpoint?.browseEndpoint?.browseId === endpoint.browseId)) {
 					extraEndpoints.push({
 						title: "Community",
 						endpoint: { browseEndpoint: endpoint },
@@ -4004,26 +3138,17 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 							: {}),
 					});
 
-					const req = await fetch(
-						"https://m.youtube.com/youtubei/v1/browse?prettyPrint=false",
-						{
-							method: "POST",
-							headers: {
-								...commonHeaders,
-								"Content-Type": "application/json",
-							},
-							body: bodyload,
+					const req = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+						method: "POST",
+						headers: {
+							...commonHeaders,
+							"Content-Type": "application/json",
 						},
-					);
+						body: bodyload,
+					});
 
 					const res: any = await req.json();
-					const tabContent =
-						res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(
-							(t: any) => t?.tabRenderer?.selected,
-						)?.tabRenderer?.content ||
-						res?.contents?.sectionListRenderer ||
-						res?.contents ||
-						res;
+					const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res?.contents?.sectionListRenderer || res?.contents || res;
 
 					return {
 						title: tab.title,
@@ -4064,26 +3189,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 			}
 
 			const keys = Object.keys(obj);
-			const metadata = [
-				"trackingParams",
-				"accessibility",
-				"accessibilityData",
-				"clickTrackingParams",
-				"commandMetadata",
-				"loggingContext",
-				"loggingDirectives",
-				"type",
-				"style",
-				"targetId",
-				"identifier",
-				"entityId",
-				"onTap",
-				"command",
-				"navigationEndpoint",
-				"params",
-				"menu",
-				"title",
-			];
+			const metadata = ["trackingParams", "accessibility", "accessibilityData", "clickTrackingParams", "commandMetadata", "loggingContext", "loggingDirectives", "type", "style", "targetId", "identifier", "entityId", "onTap", "command", "navigationEndpoint", "params", "menu", "title"];
 			const dataKeys = keys.filter((k) => !metadata.includes(k));
 
 			if (dataKeys.length === 0) return null;
@@ -4092,23 +3198,13 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 			if (Array.isArray(obj.items)) return flatten(obj.items);
 			if (Array.isArray(obj.content)) return flatten(obj.content);
 
-			if (
-				obj.post &&
-				typeof obj.post === "object" &&
-				dataKeys.includes("post")
-			) {
+			if (obj.post && typeof obj.post === "object" && dataKeys.includes("post")) {
 				return flatten(obj.post);
 			}
 
 			if (dataKeys.length === 1) {
 				const key = dataKeys[0];
-				if (
-					key.endsWith("Renderer") ||
-					key.endsWith("ViewModel") ||
-					["content", "item", "contents", "items", "post", "posts"].includes(
-						key,
-					)
-				) {
+				if (key.endsWith("Renderer") || key.endsWith("ViewModel") || ["content", "item", "contents", "items", "post", "posts"].includes(key)) {
 					return flatten(obj[key]);
 				}
 			}
@@ -4121,10 +3217,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		};
 
 		finalResults.forEach((r: any) => {
-			const title =
-				typeof r.title === "string"
-					? r.title.toLowerCase()
-					: r.title?.runs?.[0]?.text?.toLowerCase() || "";
+			const title = typeof r.title === "string" ? r.title.toLowerCase() : r.title?.runs?.[0]?.text?.toLowerCase() || "";
 			if (title && title !== "search") {
 				const flattened = flatten(r.content);
 				if (title === "posts") {
@@ -4139,17 +3232,12 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
 		const normalizedLinks = channelLinks.map((link) => ({
 			title: link.title,
-			url:
-				link.url && !link.url.match(/^https?:\/\//i)
-					? `https://${link.url}`
-					: link.url,
+			url: link.url && !link.url.match(/^https?:\/\//i) ? `https://${link.url}` : link.url,
 		}));
 
 		const processBanner = (images: any[]) => {
 			if (!Array.isArray(images) || images.length === 0) return null;
-			const sorted = [...images].sort(
-				(a, b) => (b.width || 0) - (a.width || 0),
-			);
+			const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
 			const highestUrl = sorted[0]?.url || null;
 
 			if (!highestUrl) return null;
@@ -4165,9 +3253,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 
 		const processAvatar = (images: any[]) => {
 			if (!Array.isArray(images) || images.length === 0) return null;
-			const sorted = [...images].sort(
-				(a, b) => (b.width || 0) - (a.width || 0),
-			);
+			const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
 			const highestUrl = sorted[0]?.url || null;
 
 			if (!highestUrl) return null;
@@ -4191,10 +3277,8 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 		};
 
 		const processedMetadata = { ...channelMetadata };
-		if (processedMetadata["banner"])
-			processedMetadata["banner"] = processBanner(processedMetadata["banner"]);
-		if (processedMetadata["avatar"])
-			processedMetadata["avatar"] = processAvatar(processedMetadata["avatar"]);
+		if (processedMetadata["banner"]) processedMetadata["banner"] = processBanner(processedMetadata["banner"]);
+		if (processedMetadata["avatar"]) processedMetadata["avatar"] = processAvatar(processedMetadata["avatar"]);
 
 		return {
 			data: {
@@ -4212,10 +3296,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(
 	}
 };
 
-export const infoSoundcloud = async function infoSoundcloud(
-	que: string,
-	refresh_auth: boolean = false,
-): Promise<any> {
+export const infoSoundcloud = async function infoSoundcloud(que: string, refresh_auth: boolean = false): Promise<any> {
 	if (!que) return null;
 	if (refresh_auth || !keysc) {
 		keysc = await soundcloudKey();
@@ -4225,14 +3306,11 @@ export const infoSoundcloud = async function infoSoundcloud(
 		if (!test.host.endsWith("soundcloud.com")) return null;
 
 		const [res, res2] = await Promise.all([
-			fetch(
-				`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			fetch(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
+			}),
 			fetch("https://mobi.soundcloud.com" + test.pathname, {
 				headers: {
 					...commonHeaders,
@@ -4248,16 +3326,11 @@ export const infoSoundcloud = async function infoSoundcloud(
 		let pull2: any = null;
 		try {
 			const res2Text = await res2.text();
-			pull2 = JSON.parse(
-				res2Text.split('type="application/json">')[1].split("</script>")[0],
-			);
+			pull2 = JSON.parse(res2Text.split('type="application/json">')[1].split("</script>")[0]);
 		} catch {}
 
 		return {
-			data: [
-				pull || null,
-				pull2?.props?.pageProps?.initialStoreState?.entities || null,
-			],
+			data: [pull || null, pull2?.props?.pageProps?.initialStoreState?.entities || null],
 		};
 	} catch (e) {
 		console.error("infoSoundcloud error:", e);
@@ -4271,33 +3344,22 @@ export type SoundcloudStreamCandidate = {
 	url: string;
 };
 
-export const infoSoundcloudStreams = async function infoSoundcloudStreams(
-	url: string,
-	refresh_auth: boolean = false,
-): Promise<SoundcloudStreamCandidate[]> {
+export const infoSoundcloudStreams = async function infoSoundcloudStreams(url: string, refresh_auth: boolean = false): Promise<SoundcloudStreamCandidate[]> {
 	if (!url) return [];
 	if (refresh_auth || !keysc) {
 		keysc = await soundcloudKey();
 	}
 	try {
-		const res = await fetch(
-			`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const res = await fetch(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`, {
+			headers: { ...commonHeaders },
+		});
 		if (res.status === 401) return await infoSoundcloudStreams(url, true);
 
 		const data: any = res.status === 200 ? await res.json() : null;
 		if (!data) return [];
 
-		const transcodings: any[] = Array.isArray(data.media?.transcodings)
-			? data.media.transcodings
-			: [];
-		const orderedTranscodings = [
-			...transcodings.filter((t: any) => t?.format?.protocol === "hls"),
-			...transcodings.filter((t: any) => t?.format?.protocol === "progressive"),
-		];
+		const transcodings: any[] = Array.isArray(data.media?.transcodings) ? data.media.transcodings : [];
+		const orderedTranscodings = [...transcodings.filter((t: any) => t?.format?.protocol === "hls"), ...transcodings.filter((t: any) => t?.format?.protocol === "progressive")];
 
 		const candidates: SoundcloudStreamCandidate[] = [];
 		const seen = new Set<string>();
@@ -4312,8 +3374,7 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(
 				const streamRes = await fetch(streamUrl.toString(), {
 					headers: { ...commonHeaders },
 				});
-				const streamData: any =
-					streamRes.status === 200 ? await streamRes.json() : null;
+				const streamData: any = streamRes.status === 200 ? await streamRes.json() : null;
 				if (streamData?.url) {
 					candidates.push({
 						protocol: transcoding.format?.protocol || "unknown",
@@ -4331,10 +3392,7 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(
 	}
 };
 
-export const infoSoundcloudStream = async function infoSoundcloudStream(
-	url: string,
-	refresh_auth: boolean = false,
-): Promise<string | null> {
+export const infoSoundcloudStream = async function infoSoundcloudStream(url: string, refresh_auth: boolean = false): Promise<string | null> {
 	const streams = await infoSoundcloudStreams(url, refresh_auth);
 	return streams[0]?.url || null;
 };
@@ -4345,15 +3403,12 @@ export const infoSpotify = async function infoSpotify(que: string) {
 		const test = new URL(que);
 		if (test.host !== "open.spotify.com") return null;
 
-		const res = await fetch(
-			`https://open.spotify.com/oembed?url=${encodeURIComponent(que)}`,
-			{
-				method: "GET",
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(que)}`, {
+			method: "GET",
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const pull: any = await res.json();
 
@@ -4366,9 +3421,7 @@ export const infoSpotify = async function infoSpotify(que: string) {
 		});
 
 		const pull2 = await res2.text();
-		const test2 = JSON.parse(
-			pull2.split('type="application/json">')[1].split("</script>")[0],
-		);
+		const test2 = JSON.parse(pull2.split('type="application/json">')[1].split("</script>")[0]);
 		return { data: test2?.props?.pageProps?.state?.data?.entity || null };
 	} catch {
 		return null;
@@ -4390,9 +3443,7 @@ export const infoITunes = async function infoITunes(que: string) {
 		});
 
 		const pull = await res.text();
-		const serverDataMatch = pull.match(
-			/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/,
-		);
+		const serverDataMatch = pull.match(/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/);
 		if (!serverDataMatch) {
 			return { data: null };
 		}
@@ -4419,16 +3470,13 @@ export const pinterest = async function pinterest(que: string) {
 	if (!que) return null;
 	try {
 		const feat = { options: { query: que, scope: "pins" }, context: {} };
-		const req = await fetch(
-			`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`,
-			{
-				method: "GET",
-				headers: {
-					...commonHeaders,
-					"X-Pinterest-PWS-Handler": "www/search/[scope].js",
-				},
+		const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
+			method: "GET",
+			headers: {
+				...commonHeaders,
+				"X-Pinterest-PWS-Handler": "www/search/[scope].js",
 			},
-		);
+		});
 
 		const res: any = await req.json();
 		return res.resource_response.data.results[0]
@@ -4445,8 +3493,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
 	if (!que) return null;
 	try {
 		const test = new URL(que);
-		if (!test.host.includes("pinterest.") && !test.host.includes("pin.it"))
-			return null;
+		if (!test.host.includes("pinterest.") && !test.host.includes("pin.it")) return null;
 
 		const res = await fetch(que, {
 			headers: {
@@ -4457,15 +3504,12 @@ export const infoPinterest = async function infoPinterest(que: string) {
 		const html = await res.text();
 
 		const data: any[] = [];
-		const scriptRegex =
-			/<script\s+data-relay-completed-request="true"[^>]*>([\s\S]*?)<\/script>/g;
+		const scriptRegex = /<script\s+data-relay-completed-request="true"[^>]*>([\s\S]*?)<\/script>/g;
 		let match;
 
 		while ((match = scriptRegex.exec(html)) !== null) {
 			const scriptContent = match[1];
-			const funcMatch = scriptContent.match(
-				/window\.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__\("([^"]+)",\s*(\{[\s\S]*?\})\);?/,
-			);
+			const funcMatch = scriptContent.match(/window\.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__\("([^"]+)",\s*(\{[\s\S]*?\})\);?/);
 			if (funcMatch) {
 				try {
 					const api_query = JSON.parse(decodeURIComponent(funcMatch[1]));
@@ -4476,12 +3520,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
 					const entries = Object.entries(relayData);
 					if (entries.length > 0) {
 						const firstValue: any = entries[0][1];
-						const finalData =
-							firstValue &&
-							typeof firstValue === "object" &&
-							"data" in firstValue
-								? firstValue.data
-								: firstValue;
+						const finalData = firstValue && typeof firstValue === "object" && "data" in firstValue ? firstValue.data : firstValue;
 
 						data.push({
 							api_query,
@@ -4498,13 +3537,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
 	}
 };
 
-export const Discord = async (
-	token: string,
-	guildId: string,
-	payload: any,
-	payloadError: any,
-	reasonAudit?: string,
-) => {
+export const Discord = async (token: string, guildId: string, payload: any, payloadError: any, reasonAudit?: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	const url = `https://discord.com/api/v10/guilds/${guildId}`;
@@ -4572,12 +3605,7 @@ export const Discord = async (
 		}
 
 		return {
-			data: [
-				currentInfo,
-				patchResponse,
-				response.status,
-				...(reasonAudit ? [reasonAudit] : []),
-			],
+			data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
 			...(payloadError?.[0] && {
 				error: payloadError,
 				errorMessage: "Continuing anyways",
@@ -4588,14 +3616,7 @@ export const Discord = async (
 	}
 };
 
-export const DiscordMember = async (
-	token: string,
-	guildId: string,
-	payload: any,
-	payloadError: any,
-	reasonAudit?: string,
-	isReset: boolean = false,
-) => {
+export const DiscordMember = async (token: string, guildId: string, payload: any, payloadError: any, reasonAudit?: string, isReset: boolean = false) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -4632,16 +3653,11 @@ export const DiscordMember = async (
 		}
 
 		// Normalize values for comparison (treat null, undefined, and empty string as the same "empty" state)
-		const normalize = (v: any) =>
-			v === "" || v === undefined || v === null ? null : v;
+		const normalize = (v: any) => (v === "" || v === undefined || v === null ? null : v);
 
 		// Check if payload values already match current info — skip PATCH if nothing changed
 		const allSame = Object.keys(payload).every((key) => {
-			const currentVal = normalize(
-				currentInfo[key] !== undefined
-					? currentInfo[key]
-					: currentInfo.user?.[key],
-			);
+			const currentVal = normalize(currentInfo[key] !== undefined ? currentInfo[key] : currentInfo.user?.[key]);
 			const payloadVal = normalize(payload[key]);
 			return currentVal === payloadVal;
 		});
@@ -4649,22 +3665,15 @@ export const DiscordMember = async (
 		// Helper to generate changes object: all requested keys are present, true if successful AND actually changed state
 		const getChanges = (requested: any, successful: any, current: any) => {
 			return Object.keys(requested).reduce((acc: any, key) => {
-				const newVal = normalize(
-					successful[key] !== undefined
-						? successful[key]
-						: successful.user?.[key],
-				);
-				const currentVal = normalize(
-					current[key] !== undefined ? current[key] : current.user?.[key],
-				);
+				const newVal = normalize(successful[key] !== undefined ? successful[key] : successful.user?.[key]);
+				const currentVal = normalize(current[key] !== undefined ? current[key] : current.user?.[key]);
 				// It's a "change" if the new state is actually different from the previous state
 				acc[key] = newVal !== currentVal;
 				return acc;
 			}, {});
 		};
 
-		const changes = (p?: any) =>
-			isReset ? getChanges(payload, p || payload, currentInfo) : null;
+		const changes = (p?: any) => (isReset ? getChanges(payload, p || payload, currentInfo) : null);
 
 		if (allSame) {
 			return { data: [false, null, 204, changes()] };
@@ -4685,11 +3694,7 @@ export const DiscordMember = async (
 		try {
 			patchResponse = await response.json();
 
-			if (
-				response.status === 403 &&
-				patchResponse?.code === 50013 &&
-				payload.nick !== undefined
-			) {
+			if (response.status === 403 && patchResponse?.code === 50013 && payload.nick !== undefined) {
 				const { nick, ...retryPayload } = payload;
 				if (Object.keys(retryPayload).length > 0) {
 					const retryResponse = await fetch(url, {
@@ -4697,8 +3702,7 @@ export const DiscordMember = async (
 						headers: {
 							Authorization: `Bot ${token}`,
 							"Content-Type": "application/json",
-							"User-Agent":
-								"DiscordBot (https://github.com/discord-bot, 1.0.0)",
+							"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 							...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
 						},
 						body: JSON.stringify(retryPayload),
@@ -4707,13 +3711,7 @@ export const DiscordMember = async (
 
 					if (retryResponse.status >= 200 && retryResponse.status < 300) {
 						return {
-							data: [
-								currentInfo,
-								retryJson,
-								retryResponse.status,
-								changes(retryJson),
-								...(reasonAudit ? [reasonAudit] : []),
-							],
+							data: [currentInfo, retryJson, retryResponse.status, changes(retryJson), ...(reasonAudit ? [reasonAudit] : [])],
 							...(payloadError?.[0] && {
 								error: payloadError,
 								errorMessage: "Continuing anyways (Retried without nickname)",
@@ -4728,24 +3726,13 @@ export const DiscordMember = async (
 
 		if (response.status < 200 || response.status >= 300) {
 			return {
-				data: [
-					currentInfo.code === 0 ? null : currentInfo,
-					null,
-					response.status,
-					null,
-				],
+				data: [currentInfo.code === 0 ? null : currentInfo, null, response.status, null],
 				error: patchResponse || { status: response.status },
 			};
 		}
 
 		return {
-			data: [
-				currentInfo,
-				patchResponse,
-				response.status,
-				changes(patchResponse),
-				...(reasonAudit ? [reasonAudit] : []),
-			],
+			data: [currentInfo, patchResponse, response.status, changes(patchResponse), ...(reasonAudit ? [reasonAudit] : [])],
 			...(payloadError?.[0] && {
 				error: payloadError,
 				errorMessage: "Continuing anyways",
@@ -4756,29 +3743,19 @@ export const DiscordMember = async (
 	}
 };
 
-export const DiscordWebhook = async (
-	token: string | null,
-	guildId: string | null | undefined,
-	payload: any,
-) => {
+export const DiscordWebhook = async (token: string | null, guildId: string | null | undefined, payload: any) => {
 	const action = payload.action;
 
 	if (payload.webhookUrl) {
-		const match = payload.webhookUrl.match(
-			/webhooks\/(\d+)(?:\/([a-zA-Z0-9_-]+))?(?:[/?]|$)/,
-		);
+		const match = payload.webhookUrl.match(/webhooks\/(\d+)(?:\/([a-zA-Z0-9_-]+))?(?:[/?]|$)/);
 		if (match) {
 			payload.webhookId = match[1];
 			if (match[2]) payload.webhookToken = match[2];
 		}
 	}
 
-	const webhookId =
-		payload.webhookId ||
-		(action !== "create" && action !== "list" ? guildId : null);
-	const channelId =
-		payload.channelId ||
-		(action === "create" || action === "list" ? guildId : null);
+	const webhookId = payload.webhookId || (action !== "create" && action !== "list" ? guildId : null);
+	const channelId = payload.channelId || (action === "create" || action === "list" ? guildId : null);
 	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 
 	let url = "";
@@ -4799,10 +3776,7 @@ export const DiscordWebhook = async (
 				});
 				if (res.ok) {
 					const contentType = res.headers.get("content-type");
-					if (
-						contentType?.startsWith("image/") ||
-						contentType?.startsWith("video/")
-					) {
+					if (contentType?.startsWith("image/") || contentType?.startsWith("video/")) {
 						const arrayBuffer = await res.arrayBuffer();
 						const buffer = Buffer.from(arrayBuffer);
 						payload.avatar = `data:${contentType};base64,${buffer.toString("base64")}`;
@@ -4856,9 +3830,7 @@ export const DiscordWebhook = async (
 					username: payload.username || null,
 					avatar_url: payload.avatar_url || null,
 				};
-				Object.keys(bodyPayload).forEach(
-					(key) => bodyPayload[key] === null && delete bodyPayload[key],
-				);
+				Object.keys(bodyPayload).forEach((key) => bodyPayload[key] === null && delete bodyPayload[key]);
 			}
 		}
 
@@ -4875,12 +3847,7 @@ export const DiscordWebhook = async (
 			} catch (e) {}
 		}
 
-		if (
-			token &&
-			webhookToken &&
-			(action === "info" || action === "delete") &&
-			(response.status === 403 || result?.code === 50013)
-		) {
+		if (token && webhookToken && (action === "info" || action === "delete") && (response.status === 403 || result?.code === 50013)) {
 			const fallbackUrl = `https://discord.com/api/v10/webhooks/${webhookId}/${webhookToken}`;
 			const fallbackHeaders = { ...headers };
 			delete fallbackHeaders["Authorization"];
@@ -4914,12 +3881,7 @@ export const DiscordWebhook = async (
 			}
 		}
 
-		if (
-			action === "info" &&
-			result &&
-			typeof result === "object" &&
-			!Array.isArray(result)
-		) {
+		if (action === "info" && result && typeof result === "object" && !Array.isArray(result)) {
 			if (result.user === undefined) {
 				if (checkUserFill && response.status === 200) {
 					result.user = {
@@ -4947,15 +3909,12 @@ export const DiscordWebhook = async (
 export const GettyImage = async function GettyImage(que: string) {
 	if (!que) return null;
 	try {
-		const req = await fetch(
-			`https://www.istockphoto.com/en/search/2/image?phrase=${encodeURIComponent(que)}&page=1`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-				},
+		const req = await fetch(`https://www.istockphoto.com/en/search/2/image?phrase=${encodeURIComponent(que)}&page=1`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
 			},
-		);
+		});
 
 		const res: any = await req.json();
 		return {
@@ -4970,14 +3929,11 @@ export const Unsplash = async function Unsplash(que: string) {
 	if (!que) return null;
 
 	try {
-		const pull = await fetch(
-			`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pull = await fetch(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (pull.status === 403) {
 			return {
@@ -5003,14 +3959,11 @@ export const Pixiv = async function Pixiv(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res: any = await per.json();
 		const items = res?.body?.illust?.data || res?.body?.illustManga?.data || [];
@@ -5035,14 +3988,11 @@ export const DiscordServers = async function DiscordServers(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://discord.com/api/v10/discovery/search?query=${encodeURIComponent(que)}&limit=10`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://discord.com/api/v10/discovery/search?query=${encodeURIComponent(que)}&limit=10`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (per.status === 403) {
 			return {
@@ -5062,14 +4012,11 @@ export const Bilibili = async function Bilibili(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${encodeURIComponent(que)}&highlight=1&pn=1&ps=10&qid=&sort=0`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${encodeURIComponent(que)}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (per.status === 403) {
 			return {
@@ -5079,10 +4026,7 @@ export const Bilibili = async function Bilibili(que: string) {
 
 		const res: any = await per.json();
 		return {
-			data:
-				res?.data?.modules?.[0]?.items ||
-				res?.data?.modules?.[1]?.items ||
-				null,
+			data: res?.data?.modules?.[0]?.items || res?.data?.modules?.[1]?.items || null,
 		};
 	} catch (e) {
 		console.error(e);
@@ -5094,14 +4038,11 @@ export const DiscordApps = async function DiscordApps(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (per.status === 403) {
 			return {
@@ -5121,14 +4062,11 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res: any = await per.json();
 		const items = res?.results || [];
@@ -5136,12 +4074,7 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
 		return {
 			data:
 				items?.map((item: any) => {
-					const {
-						encrypted_media_url,
-						encrypted_drm_media_url,
-						encrypted_media_path,
-						...rest
-					} = item;
+					const { encrypted_media_url, encrypted_drm_media_url, encrypted_media_path, ...rest } = item;
 					return rest;
 				}) || null,
 		};
@@ -5162,8 +4095,7 @@ export const Twitch = async function Twitch(que: string) {
 				extensions: {
 					persistedQuery: {
 						version: 1,
-						sha256Hash:
-							"7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5",
+						sha256Hash: "7f3580f6ac6cd8aa1424cff7c974a07143827d6fa36bba1b54318fe7f0b68dc5",
 					},
 				},
 			},
@@ -5173,8 +4105,7 @@ export const Twitch = async function Twitch(que: string) {
 				extensions: {
 					persistedQuery: {
 						version: 1,
-						sha256Hash:
-							"176dee782d1da7f1913242153c4abc4ef2a2b0b5ccb490d4a7b679e72bf1f45e",
+						sha256Hash: "176dee782d1da7f1913242153c4abc4ef2a2b0b5ccb490d4a7b679e72bf1f45e",
 					},
 				},
 			},
@@ -5217,25 +4148,19 @@ export const ThreadUser = async function ThreadUser(que: string) {
 			__relay_internal__pv__BarcelonaIsCrawlerrelayprovider: false,
 			__relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider: false,
 		};
-		const per = await fetch(
-			`https://www.threads.com/graphql/query?doc_id=24871030029227550&variables=${JSON.stringify(bodyhttp)}`,
-			{
-				headers: {
-					...commonHeaders,
-					Origin: "https://www.threads.com",
-					"X-IG-App-ID": "1412234116260832",
-					"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
-				},
+		const per = await fetch(`https://www.threads.com/graphql/query?doc_id=24871030029227550&variables=${JSON.stringify(bodyhttp)}`, {
+			headers: {
+				...commonHeaders,
+				Origin: "https://www.threads.com",
+				"X-IG-App-ID": "1412234116260832",
+				"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
 			},
-		);
+		});
 
 		const res: any = await per.json();
 
 		return {
-			data:
-				res?.data?.xdt_api__v1__users__search_connection?.edges?.map(
-					(a: any) => a?.node,
-				) || null,
+			data: res?.data?.xdt_api__v1__users__search_connection?.edges?.map((a: any) => a?.node) || null,
 		};
 	} catch (e) {
 		console.error(e);
@@ -5247,15 +4172,12 @@ export const Pexels = async function Pexels(que: string) {
 	if (!que) return null;
 
 	try {
-		const response = await fetch(
-			`https://api.pexels.com/en-us/api/v2/search?per_page=20&query=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-					"Secret-Key": process.env.PEXELS || "",
-				},
+		const response = await fetch(`https://api.pexels.com/en-us/api/v2/search?per_page=20&query=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				"Secret-Key": process.env.PEXELS || "",
 			},
-		);
+		});
 
 		if (response.status === 403) {
 			return {
@@ -5285,15 +4207,12 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(
-			`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`,
-			{
-				headers: {
-					...commonHeaders,
-					"X-Khronos": Math.floor(Date.now() / 1000).toString(),
-				},
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+			headers: {
+				...commonHeaders,
+				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
 			},
-		);
+		});
 
 		const res = await pul.text();
 		if (res === "") {
@@ -5315,14 +4234,11 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(
-			`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res = await pul.text();
 		if (res === "") {
@@ -5344,14 +4260,11 @@ export const TiktokUser = async function TiktokUser(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(
-			`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res = await pul.text();
 		if (res === "") {
@@ -5381,12 +4294,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 	};
 
 	const queryString = url.split("?")[1] || "";
-	const xBogus = signBogus(
-		queryString,
-		"",
-		userAgent,
-		Math.floor(Date.now() / 1000),
-	);
+	const xBogus = signBogus(queryString, "", userAgent, Math.floor(Date.now() / 1000));
 	const xGnarly = signGnarly(queryString, "", userAgent);
 	const signedUrl = `${url}&X-Bogus=${xBogus}&X-Gnarly=${xGnarly}`;
 
@@ -5396,8 +4304,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 			const res = await pul.text();
 
 			if (res === "" || pul.status !== 200) {
-				if (i === 2)
-					return { error: "Akamai Captcha asking to verify you're not a bot" };
+				if (i === 2) return { error: "Akamai Captcha asking to verify you're not a bot" };
 				await new Promise((r) => setTimeout(r, 1000));
 				continue;
 			}
@@ -5423,27 +4330,12 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 					const videoInfo = item.video || {};
 					const bitrateInfo = videoInfo.bitrateInfo || [];
 
-					const sortedBitrateAsc = [...bitrateInfo].sort(
-						(a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0),
-					);
-					const sortedBitrateDesc = [...bitrateInfo].sort(
-						(a: any, b: any) =>
-							(b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0) -
-							(a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0),
-					);
+					const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
+					const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0) - (a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0));
 
-					const videoUrl =
-						(videoInfo.PlayAddrStruct?.UrlList || [])
-							.find((u: string) => u.includes("aweme/v1/play"))
-							?.replace("faid=1988", "faid=1180") || null;
-					const highestVideoUrl =
-						sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) =>
-							u.includes("aweme/v1/play"),
-						)?.replace("faid=1988", "faid=1180") || null;
-					const lowestVideoUrl =
-						sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) =>
-							u.includes("aweme/v1/play"),
-						)?.replace("faid=1988", "faid=1180") || null;
+					const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
+					const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
+					const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
 
 					const extractRedirect = async (url: string) => {
 						try {
@@ -5458,25 +4350,12 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 						}
 					};
 
-					const [finalVideoUrl, finalLowestVideoUrl, finalHighestVideoUrl] =
-						await Promise.all([
-							videoUrl ? extractRedirect(videoUrl) : Promise.resolve(null),
-							lowestVideoUrl
-								? extractRedirect(lowestVideoUrl)
-								: Promise.resolve(null),
-							highestVideoUrl
-								? extractRedirect(highestVideoUrl)
-								: Promise.resolve(null),
-						]);
+					const [finalVideoUrl, finalLowestVideoUrl, finalHighestVideoUrl] = await Promise.all([videoUrl ? extractRedirect(videoUrl) : Promise.resolve(null), lowestVideoUrl ? extractRedirect(lowestVideoUrl) : Promise.resolve(null), highestVideoUrl ? extractRedirect(highestVideoUrl) : Promise.resolve(null)]);
 
 					return {
 						aweme_id: item.id,
 						videoId: item.video?.videoID,
-						url:
-							"https://www.tiktok.com/@" +
-							item.author?.uniqueId +
-							"/video/" +
-							item.id,
+						url: "https://www.tiktok.com/@" + item.author?.uniqueId + "/video/" + item.id,
 						desc: item.desc,
 						descLanguage: item?.textLanguage || null,
 						challenges: item?.challenges || [],
@@ -5491,10 +4370,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 							res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
 							format: br.Format,
 							codec: br.CodecType,
-							play_url: br.PlayAddr?.UrlList?.[2]?.replace(
-								"faid=1988",
-								"faid=1180",
-							),
+							play_url: br.PlayAddr?.UrlList?.[2]?.replace("faid=1988", "faid=1180"),
 						})),
 						author: {
 							url: "https://www.tiktok.com/@" + item.author?.uniqueId,
@@ -5544,26 +4420,18 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 	return null;
 };
 
-export const DiscordTiktokFeed = async function DiscordTiktokFeed(
-	token: string,
-	channelId: string,
-	messageId?: string,
-	region_code: string = "",
-) {
+export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string, region_code: string = "") {
 	if (!token) return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 
 	try {
-		const channelCheck = await fetch(
-			`https://discord.com/api/v10/channels/${channelId}`,
-			{
-				headers: {
-					Authorization: `Bot ${token}`,
-					"Content-Type": "application/json",
-					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
-				},
+		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+			headers: {
+				Authorization: `Bot ${token}`,
+				"Content-Type": "application/json",
+				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 			},
-		);
+		});
 
 		const channelData: any = await channelCheck.json();
 
@@ -5572,16 +4440,13 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 		}
 
 		if (messageId) {
-			const messageCheck = await fetch(
-				`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
-				{
-					headers: {
-						Authorization: `Bot ${token}`,
-						"Content-Type": "application/json",
-						"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
-					},
+			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+				headers: {
+					Authorization: `Bot ${token}`,
+					"Content-Type": "application/json",
+					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 				},
-			);
+			});
 
 			const messageData: any = await messageCheck.json();
 
@@ -5594,19 +4459,10 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 	}
 
 	const feed = await TiktokFeed(region_code);
-	if (!feed || !feed.data)
-		return { error: "Akamai Captcha asking to verify you're not a bot" };
+	if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
 
 	const item = feed.data;
-	const footerText =
-		"TikTok • " +
-		new Date(Number(item.create_time) * 1000).toLocaleString() +
-		" • ❤️ " +
-		formatAbbreviatedNumber(item.statistics.digg_count) +
-		" 👁️ " +
-		formatAbbreviatedNumber(item.statistics.play_count) +
-		" 💬 " +
-		formatAbbreviatedNumber(item.statistics.comment_count);
+	const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + formatAbbreviatedNumber(item.statistics.digg_count) + " 👁️ " + formatAbbreviatedNumber(item.statistics.play_count) + " 💬 " + formatAbbreviatedNumber(item.statistics.comment_count);
 
 	const embed = {
 		color: 0x000000,
@@ -5619,15 +4475,12 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 		url: item.url,
 		footer: {
 			text: footerText,
-			icon_url:
-				"https://sf16-sg.tiktokcdn.com/obj/eden-sg/uvkuhyieh7lpqpbj/pwa/512x512.png",
+			icon_url: "https://sf16-sg.tiktokcdn.com/obj/eden-sg/uvkuhyieh7lpqpbj/pwa/512x512.png",
 		},
 	};
 
 	const MAX_DISCORD_SIZE = 8388608;
-	const urlsToTry = [item.highest_video_url, item.video_url].filter(
-		(u, i, a) => u && a.indexOf(u) === i,
-	);
+	const urlsToTry = [item.highest_video_url, item.video_url].filter((u, i, a) => u && a.indexOf(u) === i);
 	let videoBuffer: ArrayBuffer | null = null;
 
 	for (const url of urlsToTry) {
@@ -5640,9 +4493,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 				},
 			});
 
-			const contentLength = parseInt(
-				vidReq.headers.get("content-length") || "0",
-			);
+			const contentLength = parseInt(vidReq.headers.get("content-length") || "0");
 
 			if (contentLength > MAX_DISCORD_SIZE) {
 				continue;
@@ -5687,9 +4538,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 	form.append("payload_json", JSON.stringify(payload));
 
 	try {
-		const url = messageId
-			? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`
-			: `https://discord.com/api/v10/channels/${channelId}/messages`;
+		const url = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
 
 		const response = await fetch(url, {
 			method: messageId ? "PATCH" : "POST",
@@ -5707,16 +4556,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(
 	}
 };
 
-export const DiscordStream = async function DiscordStream(
-	token: string,
-	channelId: string,
-	messageId?: string,
-	url?: string,
-	clone?: boolean,
-	onEmbed?: boolean,
-	name?: string,
-	fallbackEmbed?: boolean,
-) {
+export const DiscordStream = async function DiscordStream(token: string, channelId: string, messageId?: string, url?: string, clone?: boolean, onEmbed?: boolean, name?: string, fallbackEmbed?: boolean) {
 	if (!token) return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 	if (!url) return { error: "Missing url" };
@@ -5724,15 +4564,12 @@ export const DiscordStream = async function DiscordStream(
 	let messageData: any = null;
 
 	try {
-		const channelCheck = await fetch(
-			`https://discord.com/api/v10/channels/${channelId}`,
-			{
-				headers: {
-					Authorization: `Bot ${token}`,
-					"Content-Type": "application/json",
-				},
+		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+			headers: {
+				Authorization: `Bot ${token}`,
+				"Content-Type": "application/json",
 			},
-		);
+		});
 
 		const channelData: any = await channelCheck.json();
 
@@ -5741,15 +4578,12 @@ export const DiscordStream = async function DiscordStream(
 		}
 
 		if (messageId) {
-			const messageCheck = await fetch(
-				`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
-				{
-					headers: {
-						Authorization: `Bot ${token}`,
-						"Content-Type": "application/json",
-					},
+			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+				headers: {
+					Authorization: `Bot ${token}`,
+					"Content-Type": "application/json",
 				},
-			);
+			});
 
 			messageData = await messageCheck.json();
 
@@ -5817,13 +4651,9 @@ export const DiscordStream = async function DiscordStream(
 		if (contentType.includes("video/mp4")) filename += ".mp4";
 		else if (contentType.includes("audio/mp4")) filename += ".m4a";
 		else if (contentType.includes("audio/mpeg")) filename += ".mp3";
-		else if (contentType.includes("video/"))
-			filename += "." + contentType.split("/")[1].split(";")[0];
-		else if (contentType.includes("audio/"))
-			filename += "." + contentType.split("/")[1].split(";")[0];
-		else if (contentType.includes("image/"))
-			filename +=
-				"." + contentType.split("/")[1].split(";")[0].replace("jpeg", "jpg");
+		else if (contentType.includes("video/")) filename += "." + contentType.split("/")[1].split(";")[0];
+		else if (contentType.includes("audio/")) filename += "." + contentType.split("/")[1].split(";")[0];
+		else if (contentType.includes("image/")) filename += "." + contentType.split("/")[1].split(";")[0].replace("jpeg", "jpg");
 	}
 
 	if (name) {
@@ -5849,20 +4679,12 @@ export const DiscordStream = async function DiscordStream(
 	}
 
 	if (fileTooLarge) {
-		if (
-			fallbackEmbed &&
-			clone &&
-			messageData &&
-			messageData.embeds &&
-			messageData.embeds.length > 0
-		) {
+		if (fallbackEmbed && clone && messageData && messageData.embeds && messageData.embeds.length > 0) {
 			payload.embeds = messageData.embeds;
 			if (!payload.embeds[0].image) payload.embeds[0].image = {};
 			payload.embeds[0].image.url = url;
-			if (payload.content === undefined && messageData.content)
-				payload.content = messageData.content;
-			if (payload.components === undefined && messageData.components)
-				payload.components = messageData.components;
+			if (payload.content === undefined && messageData.content) payload.content = messageData.content;
+			if (payload.components === undefined && messageData.components) payload.components = messageData.components;
 		} else {
 			let currentContent = payload.content;
 			if (currentContent === undefined && clone && messageData) {
@@ -5889,9 +4711,7 @@ export const DiscordStream = async function DiscordStream(
 	form.append("payload_json", JSON.stringify(payload));
 
 	try {
-		const discordUrl = messageId
-			? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`
-			: `https://discord.com/api/v10/channels/${channelId}/messages`;
+		const discordUrl = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
 
 		const response = await fetch(discordUrl, {
 			method: messageId ? "PATCH" : "POST",
@@ -5909,9 +4729,7 @@ export const DiscordStream = async function DiscordStream(
 	}
 };
 
-export const infoTwitterUser = async function infoTwitterUser(
-	que: string,
-): Promise<any> {
+export const infoTwitterUser = async function infoTwitterUser(que: string): Promise<any> {
 	if (!que) return null;
 	try {
 		const res = await fetch(`https://x.com/${que}`, {
@@ -5934,11 +4752,7 @@ export const infoTwitterUser = async function infoTwitterUser(
 			}
 		}
 		// Merge flat profile fields from matches.l (snake_case/simple names) into resolved user
-		const profileMatch = ssr?.matches?.find(
-			(m: any) =>
-				typeof m.i === "string" &&
-				m.i.replace(/\0/g, "").includes("$username_profile"),
-		);
+		const profileMatch = ssr?.matches?.find((m: any) => typeof m.i === "string" && m.i.replace(/\0/g, "").includes("$username_profile"));
 		const flat = profileMatch?.l || null;
 		if (flat && typeof flat === "object") {
 			for (const key of Object.keys(flat)) {
@@ -5955,9 +4769,7 @@ export const infoTwitterUser = async function infoTwitterUser(
 	}
 };
 
-export const infoTwitterTweet = async function infoTwitterTweet(
-	que: string,
-): Promise<any> {
+export const infoTwitterTweet = async function infoTwitterTweet(que: string): Promise<any> {
 	if (!que) return null;
 	try {
 		const res = await fetch(`https://x.com/i/status/${que}`, {
@@ -5980,18 +4792,14 @@ export const robloxGames = async function robloxGames(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul1 = await fetch(
-			`https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(que)}&sessionId=abc`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pul1 = await fetch(`https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(que)}&sessionId=abc`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res1: any = await pul1.json();
-		const gamesList =
-			res1.searchResults?.flatMap((group: any) => group.contents) || [];
+		const gamesList = res1.searchResults?.flatMap((group: any) => group.contents) || [];
 		const restIds = gamesList
 			.filter((b: any) => b?.universeId)
 			.map((b: any) => b.universeId)
@@ -5999,14 +4807,11 @@ export const robloxGames = async function robloxGames(que: string) {
 
 		if (!restIds) return { data: gamesList };
 
-		const pul2 = await fetch(
-			`https://games.roblox.com/v1/games?universeIds=${restIds}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pul2 = await fetch(`https://games.roblox.com/v1/games?universeIds=${restIds}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res2: any = await pul2.json();
 		const detailsMap = new Map(res2.data.map((game: any) => [game.id, game]));
@@ -6037,35 +4842,24 @@ export const YTChannel = async function YTChannel(que: string) {
 					clientVersion: "2.20251212",
 					hl: "en",
 					gl: "US",
-					...(poTokenCache?.visitor_data
-						? { visitorData: poTokenCache.visitor_data }
-						: {}),
+					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 				},
 			},
-			...(poTokenCache?.po_token
-				? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } }
-				: {}),
+			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
 		});
 
-		const response = await fetch(
-			"https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer",
-			{
-				headers: {
-					...commonHeaders,
-					"content-type": "application/json",
-					...(keyYoutubeVisitor?.cookie
-						? { Cookie: keyYoutubeVisitor.cookie }
-						: {}),
-				},
-				body: bodyload,
-				method: "POST",
+		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer", {
+			headers: {
+				...commonHeaders,
+				"content-type": "application/json",
+				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
 			},
-		);
+			body: bodyload,
+			method: "POST",
+		});
 
 		const res: any = await response.json();
-		const contents =
-			res?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer
-				?.contents || [];
+		const contents = res?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
 		let alk: any[] = [];
 		contents.forEach((item: any) => {
@@ -6073,48 +4867,25 @@ export const YTChannel = async function YTChannel(que: string) {
 			if (!a) return;
 
 			try {
-				const subRuns =
-					a.subscriberCountText?.runs?.map((r: any) => r.text) || [];
+				const subRuns = a.subscriberCountText?.runs?.map((r: any) => r.text) || [];
 				const videoRuns = a.videoCountText?.runs?.map((r: any) => r.text) || [];
-				const allMetadata = [
-					...subRuns,
-					...videoRuns,
-					a.subscriberCountText?.simpleText,
-					a.videoCountText?.simpleText,
-				].filter(Boolean);
+				const allMetadata = [...subRuns, ...videoRuns, a.subscriberCountText?.simpleText, a.videoCountText?.simpleText].filter(Boolean);
 
 				const handle = allMetadata.find((t) => t.startsWith("@"));
-				const subs = allMetadata.find((t) =>
-					t.toLowerCase().includes("subscriber"),
-				);
-				const videos = allMetadata.find(
-					(t) =>
-						t.toLowerCase().includes("video") ||
-						(t.match(/^\d+/) &&
-							!t.includes("subscriber") &&
-							!t.startsWith("@")),
-				);
+				const subs = allMetadata.find((t) => t.toLowerCase().includes("subscriber"));
+				const videos = allMetadata.find((t) => t.toLowerCase().includes("video") || (t.match(/^\d+/) && !t.includes("subscriber") && !t.startsWith("@")));
 
-				const ava = a.thumbnail?.thumbnails?.[0]?.url?.replace(
-					/=s\d+.*/,
-					"=s0",
-				);
+				const ava = a.thumbnail?.thumbnails?.[0]?.url?.replace(/=s\d+.*/, "=s0");
 				const fom = {
 					channelId: a.channelId,
 					url: "https://www.youtube.com/channel/" + a.channelId,
 					handle: handle || null,
 					avatar: (ava?.startsWith("//") ? "https:" + ava : ava) || null,
-					banner:
-						a.tvBanner?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0") || null,
+					banner: a.tvBanner?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0") || null,
 					name: a.title?.simpleText || a.title?.runs?.[0]?.text,
 					subscriberCount: parseAbbreviatedNumber(subs),
 					videoCount: parseAbbreviatedNumber(videos),
-					verified: !!a.ownerBadges?.find(
-						(b: any) =>
-							b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED" ||
-							b.metadataBadgeRenderer?.style ===
-								"BADGE_STYLE_TYPE_VERIFIED_ARTIST",
-					),
+					verified: !!a.ownerBadges?.find((b: any) => b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED" || b.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_VERIFIED_ARTIST"),
 				};
 				alk.push(fom);
 			} catch (err) {
@@ -6133,14 +4904,11 @@ export const robloxAudio = async function robloxAudio(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul1 = await fetch(
-			`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const pul1 = await fetch(`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const res1: any = await pul1.json();
 		const assetList = res1.data || [];
@@ -6149,28 +4917,19 @@ export const robloxAudio = async function robloxAudio(que: string) {
 		if (!assetIds) return { data: null };
 
 		const [pul2, pul3] = await Promise.all([
-			fetch(
-				`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			fetch(`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
-			fetch(
-				`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`,
-				{
-					headers: {
-						...commonHeaders,
-					},
+			}),
+			fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
+			}),
 		]);
 
-		const [res2, res3] = await Promise.all([
-			pul2.json() as Promise<any>,
-			pul3.json() as Promise<any>,
-		]);
+		const [res2, res3] = await Promise.all([pul2.json() as Promise<any>, pul3.json() as Promise<any>]);
 
 		const thumbnails = res3.data || [];
 		const details = res2.data || [];
@@ -6181,9 +4940,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
 				return {
 					title: item.asset.audioDetails?.title || item.asset.name,
 					duration: item.asset.duration || 0,
-					thumbnail:
-						thumb?.imageUrl ||
-						"https://prod.docsiteassets.roblox.com/assets/feeds/robloxYoutubeAvatar.webp",
+					thumbnail: thumb?.imageUrl || "https://prod.docsiteassets.roblox.com/assets/feeds/robloxYoutubeAvatar.webp",
 					url: `https://create.roblox.com/store/asset/${item.asset.id}`,
 					...item,
 				};
@@ -6204,18 +4961,15 @@ export const Bandcamp = async function Bandcamp(que: string) {
 			full_page: false,
 		};
 
-		const pul = await fetch(
-			`https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic`,
-			{
-				method: "POST",
-				body: JSON.stringify(body),
-				headers: {
-					...commonHeaders,
-					"Content-Type": "application/json",
-					Origin: "https://bandcamp.com",
-				},
+		const pul = await fetch(`https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic`, {
+			method: "POST",
+			body: JSON.stringify(body),
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
+				Origin: "https://bandcamp.com",
 			},
-		);
+		});
 
 		const res: any = await pul.json();
 		const results = res?.auto?.results || [];
@@ -6223,12 +4977,7 @@ export const Bandcamp = async function Bandcamp(que: string) {
 		return {
 			data: results.map((b: any) => ({
 				title: b.name,
-				thumbnail:
-					b.img_id === null
-						? b.img
-							? b.img.replace("/img/", "/img/a")
-							: null
-						: `https://f4.bcbits.com/img/a${b.art_id || b.img_id}_10.jpg`,
+				thumbnail: b.img_id === null ? (b.img ? b.img.replace("/img/", "/img/a") : null) : `https://f4.bcbits.com/img/a${b.art_id || b.img_id}_10.jpg`,
 				url: b.item_url_path,
 				...b,
 			})),
@@ -6243,8 +4992,7 @@ export const Capcut = async function Capcut(que: string) {
 
 	try {
 		const time = Math.round(Date.now() / 1000);
-		const linkhost =
-			"https://edit-api-sg.capcut.com/lv/v1/cc_web/replicate/search_templates";
+		const linkhost = "https://edit-api-sg.capcut.com/lv/v1/cc_web/replicate/search_templates";
 
 		const croppedHost = linkhost.slice(-7);
 
@@ -6300,9 +5048,7 @@ export const Capcut = async function Capcut(que: string) {
 
 let redditCookies: string = "";
 
-export const refreshRedditAuth = async (
-	force: boolean = false,
-): Promise<string> => {
+export const refreshRedditAuth = async (force: boolean = false): Promise<string> => {
 	if (!force && redditCookies) return redditCookies;
 
 	try {
@@ -6326,23 +5072,16 @@ export const refreshRedditAuth = async (
 	}
 };
 
-export const redditSubreddit = async function redditSubreddit(
-	que: string,
-	refresh_auth: boolean = false,
-) {
+export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "")
-			await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
 		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
-		const req = await fetch(
-			`https://www.reddit.com/search/.json?q=subreddit%3A${encodeURIComponent(que.toLowerCase()?.split(" ")?.[0])}&sort=new&restrict_sr=&t=all&include_over_18=on`,
-			{ headers },
-		);
+		const req = await fetch(`https://www.reddit.com/search/.json?q=subreddit%3A${encodeURIComponent(que.toLowerCase()?.split(" ")?.[0])}&sort=new&restrict_sr=&t=all&include_over_18=on`, { headers });
 
 		if (req.status === 451) {
 			return { error: "This subreddit is not available in your country" };
@@ -6364,10 +5103,7 @@ export const redditSubreddit = async function redditSubreddit(
 	}
 };
 
-export const RedditPost = async (
-	url: string,
-	refresh_auth: boolean = false,
-): Promise<any> => {
+export const RedditPost = async (url: string, refresh_auth: boolean = false): Promise<any> => {
 	if (!url) return null;
 
 	try {
@@ -6380,8 +5116,7 @@ export const RedditPost = async (
 		const pathname = urlObj.pathname.replace(/\/+$/, "");
 		const jsonUrl = `https://www.reddit.com${pathname}.json`;
 
-		if (refresh_auth || redditCookies === "")
-			await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
 		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
@@ -6400,11 +5135,7 @@ export const RedditPost = async (
 		let res;
 		try {
 			res = await req.json();
-			res = Array.isArray(res)
-				? res.flatMap(
-						(l: any) => l?.data?.children?.map((c: any) => c.data) || [],
-					)
-				: res;
+			res = Array.isArray(res) ? res.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : res;
 		} catch {
 			await refreshRedditAuth(true);
 			const retryReq2 = await fetch(jsonUrl, {
@@ -6413,11 +5144,7 @@ export const RedditPost = async (
 			let retryRes2;
 			try {
 				retryRes2 = await retryReq2.json();
-				retryRes2 = Array.isArray(retryRes2)
-					? retryRes2.flatMap(
-							(l: any) => l?.data?.children?.map((c: any) => c.data) || [],
-						)
-					: retryRes2;
+				retryRes2 = Array.isArray(retryRes2) ? retryRes2.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : retryRes2;
 			} catch {
 				return {
 					error: "Invalid response. Probably anti-bot challenge return.",
@@ -6432,23 +5159,16 @@ export const RedditPost = async (
 	}
 };
 
-export const redditMedia = async function redditMedia(
-	que: string,
-	refresh_auth: boolean = false,
-) {
+export const redditMedia = async function redditMedia(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "")
-			await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
 		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
-		const req = await fetch(
-			`https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&restrict_sr=&sort=new&t=all&include_over_18=on`,
-			{ headers },
-		);
+		const req = await fetch(`https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&restrict_sr=&sort=new&t=all&include_over_18=on`, { headers });
 
 		if (req.status === 403) {
 			if (!refresh_auth) return redditMedia(que, true);
@@ -6474,22 +5194,15 @@ export const instagramUser = async function instagramUser(que: string) {
 	}
 
 	try {
-		const testreq = await fetch(
-			`https://www.instagram.com/${encodeURIComponent(que)}/embed`,
-			{
-				headers: {
-					...commonHeaders,
-					...(keyInstagram ? { Cookie: keyInstagram } : {}),
-					"Sec-Fetch-Dest": "iframe",
-				},
+		const testreq = await fetch(`https://www.instagram.com/${encodeURIComponent(que)}/embed`, {
+			headers: {
+				...commonHeaders,
+				...(keyInstagram ? { Cookie: keyInstagram } : {}),
+				"Sec-Fetch-Dest": "iframe",
 			},
-		);
+		});
 
-		if (
-			!testreq.url.includes(
-				`https://www.instagram.com/${encodeURIComponent(que)}`,
-			)
-		) {
+		if (!testreq.url.includes(`https://www.instagram.com/${encodeURIComponent(que)}`)) {
 			return {
 				error: "Please sign in",
 			};
@@ -6517,19 +5230,16 @@ export const instagramUser = async function instagramUser(que: string) {
 		let b: any = null;
 
 		for (let attempt = 0; attempt < 2; attempt++) {
-			const req = await fetch(
-				`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`,
-				{
-					headers: {
-						...commonHeaders,
-						...(keyInstagram ? { Cookie: keyInstagram } : {}),
-						"X-IG-App-ID": "936619743392459",
-						"X-ASBD-ID": "198387",
-						"X-IG-WWW-Claim": "0",
-						Origin: "https://www.instagram.com",
-					},
+			const req = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
+				headers: {
+					...commonHeaders,
+					...(keyInstagram ? { Cookie: keyInstagram } : {}),
+					"X-IG-App-ID": "936619743392459",
+					"X-ASBD-ID": "198387",
+					"X-IG-WWW-Claim": "0",
+					Origin: "https://www.instagram.com",
 				},
-			);
+			});
 
 			try {
 				const text = await req.text();
@@ -6540,19 +5250,16 @@ export const instagramUser = async function instagramUser(que: string) {
 			} catch {}
 
 			if (!a) {
-				const req2 = await fetch(
-					`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`,
-					{
-						headers: {
-							...commonHeaders,
-							...(keyInstagram ? { Cookie: keyInstagram } : {}),
-							Origin: "https://www.instagram.com",
-							"X-Ig-App-Id": "936619743392459",
-							"X-Asbd-Id": "198387",
-							"X-Ig-Www-Claim": "0",
-						},
+				const req2 = await fetch(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
+					headers: {
+						...commonHeaders,
+						...(keyInstagram ? { Cookie: keyInstagram } : {}),
+						Origin: "https://www.instagram.com",
+						"X-Ig-App-Id": "936619743392459",
+						"X-Asbd-Id": "198387",
+						"X-Ig-Www-Claim": "0",
 					},
-				);
+				});
 				try {
 					const res2 = await req2.json();
 					b = res2?.data?.user || res2?.data || res2;
@@ -6577,10 +5284,8 @@ export const instagramUser = async function instagramUser(que: string) {
 						category: source.category_name || null,
 						external_links: source.bio_links,
 						followed_count: source.edge_follow?.count || source.following_count,
-						follower_count:
-							source.edge_followed_by?.count || source.follower_count,
-						post_count:
-							source.edge_owner_to_timeline_media?.count || source.media_count,
+						follower_count: source.edge_followed_by?.count || source.follower_count,
+						post_count: source.edge_owner_to_timeline_media?.count || source.media_count,
 						verified: source.is_verified,
 						private: source.is_private,
 						pronouns: source.pronouns?.[0] ? source.pronouns : null,
@@ -6641,18 +5346,15 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 		};
 
 		const [per, per2] = await Promise.all([
-			fetch(
-				`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`,
-				{
-					headers: {
-						...commonHeaders,
-						"User-Agent": `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
-						Origin: "https://www.threads.com",
-						"X-IG-App-ID": "1412234116260832",
-						"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
-					},
+			fetch(`https://www.threads.com/graphql/query?doc_id=26203769429220861&variables=${JSON.stringify(bodyhttp)}`, {
+				headers: {
+					...commonHeaders,
+					"User-Agent": `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
+					Origin: "https://www.threads.com",
+					"X-IG-App-ID": "1412234116260832",
+					"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
 				},
-			),
+			}),
 			fetch(`https://www.threads.com/@${encodeURIComponent(que)}`, {
 				headers: { ...commonHeaders },
 			}),
@@ -6689,9 +5391,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 								for (const arg of args) {
 									const innerReqs = arg?.__bbox?.require || [];
 									for (const innerReq of innerReqs) {
-										if (
-											innerReq?.[0]?.startsWith("RelayPrefetchedStreamCache")
-										) {
+										if (innerReq?.[0]?.startsWith("RelayPrefetchedStreamCache")) {
 											const data = innerReq?.[3]?.[1]?.__bbox?.result?.data;
 											if (data) webData.push(data);
 										}
@@ -6709,25 +5409,19 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 
 		if (finalres) {
 			bodyhttp2.userID = finalres.id;
-			const per3 = await fetch(
-				`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`,
-				{
-					headers: {
-						...commonHeaders,
-						"User-Agent": `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
-						Origin: "https://www.threads.com",
-						"X-IG-App-ID": "1412234116260832",
-						"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
-					},
+			const per3 = await fetch(`https://www.threads.com/graphql/query?doc_id=33773912952222602&variables=${JSON.stringify(bodyhttp2)}`, {
+				headers: {
+					...commonHeaders,
+					"User-Agent": `Barcelona ${getRandomInt(400, 450)}.${getRandomInt(0, 9)}.${getRandomInt(0, 9)}.${getRandomInt(10, 99)}.${getRandomInt(100, 999)} Android (35/15; 480dpi; 1220x2712; Xiaomi/Redmi; 23090RA98G; zircon; mt6886; fr_FR; ${getRandomInt(100000000, 999999999)})`,
+					Origin: "https://www.threads.com",
+					"X-IG-App-ID": "1412234116260832",
+					"X-LOGGED-OUT-THREADS-MIGRATED-REQUEST": "true",
 				},
-			);
+			});
 
 			if (per3.status === 200) {
 				const res3 = (await per3.json()) as any;
-				edges =
-					res3?.data?.mediaData?.edges?.map(
-						(a: any) => a?.node?.thread_items?.[0]?.post,
-					) || null;
+				edges = res3?.data?.mediaData?.edges?.map((a: any) => a?.node?.thread_items?.[0]?.post) || null;
 			}
 
 			finalres = {
@@ -6775,39 +5469,30 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
 	try {
 		const [apiRes, apiRes2, apiRes3] = await Promise.all([
-			fetch(
-				`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://tenor.com",
-						Origin: "https://tenor.com",
-						"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-					},
+			fetch(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://tenor.com",
+					Origin: "https://tenor.com",
+					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
 				},
-			),
-			fetch(
-				`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://tenor.com",
-						Origin: "https://tenor.com",
-						"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-					},
+			}),
+			fetch(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://tenor.com",
+					Origin: "https://tenor.com",
+					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
 				},
-			),
-			fetch(
-				`https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://tenor.com",
-						Origin: "https://tenor.com",
-						"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-					},
+			}),
+			fetch(`https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://tenor.com",
+					Origin: "https://tenor.com",
+					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
 				},
-			),
+			}),
 		]);
 
 		if (apiRes.status === 200) {
@@ -6826,14 +5511,11 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
 	try {
 		const formatQuery = getFormatQuery(type);
-		const webRes = await fetch(
-			`https://tenor.com/search/${encodeURIComponent(que.toLowerCase())}-gifs${formatQuery}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const webRes = await fetch(`https://tenor.com/search/${encodeURIComponent(que.toLowerCase())}-gifs${formatQuery}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (webRes.status !== 200) {
 			return { error: `${webRes.status} - Can't process this` };
@@ -6845,9 +5527,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 			return { error: "Blocked recaptcha" };
 		}
 
-		const storeMatch = html.match(
-			/<script id="store-cache"[^>]*>([\s\S]*?)<\/script>/,
-		);
+		const storeMatch = html.match(/<script id="store-cache"[^>]*>([\s\S]*?)<\/script>/);
 		if (!storeMatch) {
 			return { error: "Failed to parse webpage data" };
 		}
@@ -6858,15 +5538,9 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
 		return {
 			data: {
-				suggestion:
-					suggestionKeys.length > 0
-						? storeData.searchSuggestions[suggestionKeys[0]]?.results
-						: null,
+				suggestion: suggestionKeys.length > 0 ? storeData.searchSuggestions[suggestionKeys[0]]?.results : null,
 				autocomplete: null,
-				data:
-					searchKeys.length > 0
-						? storeData.universal.search[searchKeys[0]]?.results
-						: [],
+				data: searchKeys.length > 0 ? storeData.universal.search[searchKeys[0]]?.results : [],
 			},
 		};
 	} catch (e) {
@@ -6903,9 +5577,7 @@ export const infoTenor = async function infoTenor(url: string) {
 		}
 
 		const html = await res.text();
-		const gifMatch = html.match(
-			/<script id="gif-json"[^>]*>([\s\S]*?)<\/script>/,
-		);
+		const gifMatch = html.match(/<script id="gif-json"[^>]*>([\s\S]*?)<\/script>/);
 
 		if (!gifMatch) {
 			return { error: "Failed to parse GIF data" };
@@ -6940,9 +5612,7 @@ export const infoGiphy = async function infoGiphy(url: string) {
 
 		const html = await res.text();
 
-		const keywordsMatch = html.match(
-			/<meta\s+name="keywords"\s+content="([^"]*)"/i,
-		);
+		const keywordsMatch = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i);
 		const keywords =
 			keywordsMatch?.[1]
 				?.split(",")
@@ -7013,12 +5683,9 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 	};
 
 	try {
-		const res = await fetch(
-			`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const res = await fetch(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
+			headers: { ...commonHeaders },
+		});
 
 		if (res.status !== 200) {
 			return { error: `${res.status} - Can't process this` };
@@ -7062,11 +5729,7 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 	}
 };
 
-export const GiphyAPI = async function GiphyAPI(
-	que: string,
-	type?: string,
-	refresh_auth: boolean = false,
-) {
+export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	const getTypeQuery = (t?: string) => {
@@ -7082,24 +5745,15 @@ export const GiphyAPI = async function GiphyAPI(
 		}
 
 		const [res, res2, res3] = await Promise.all([
-			fetch(
-				`https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
-				{
-					headers: { ...commonHeaders },
-				},
-			),
-			fetch(
-				`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
-				{
-					headers: { ...commonHeaders },
-				},
-			),
-			fetch(
-				`https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`,
-				{
-					headers: { ...commonHeaders },
-				},
-			),
+			fetch(`https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+				headers: { ...commonHeaders },
+			}),
+			fetch(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+				headers: { ...commonHeaders },
+			}),
+			fetch(`https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+				headers: { ...commonHeaders },
+			}),
 		]);
 
 		if (res.status === 401) {
@@ -7118,12 +5772,9 @@ export const GiphyAPI = async function GiphyAPI(
 		} catch {}
 		try {
 			if (jl.data?.[0]?.id) {
-				const fetchRelated = await fetch(
-					`https://api.giphy.com/v1/${getTypeQuery(type)}/related?gif_id=${jl.data[0].id}&limit=25&api_key=${keygiphy}`,
-					{
-						headers: { ...commonHeaders },
-					},
-				);
+				const fetchRelated = await fetch(`https://api.giphy.com/v1/${getTypeQuery(type)}/related?gif_id=${jl.data[0].id}&limit=25&api_key=${keygiphy}`, {
+					headers: { ...commonHeaders },
+				});
 				jl3 = await fetchRelated.json();
 			}
 		} catch {}
@@ -7148,12 +5799,9 @@ export async function googleWeather(query: string): Promise<any> {
 	if (!query) return null;
 
 	try {
-		const l = await fetch(
-			`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const l = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`, {
+			headers: { ...commonHeaders },
+		});
 
 		let ls: any = await l.json();
 
@@ -7178,16 +5826,13 @@ export async function googleWeather(query: string): Promise<any> {
 		if (!datageo) return { data: null };
 		const coords = datageo.geo.latitude + "," + datageo.geo.longitude;
 
-		const k = await fetch(
-			`https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`,
-			{
-				headers: {
-					...commonHeaders,
-					Referer: "https://storage.googleapis.com/",
-					"X-Goog-Api-Key": process.env.GOOG_WEATHER || "",
-				},
+		const k = await fetch(`https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${datageo.geo.latitude}&location.longitude=${datageo.geo.longitude}&prettyPrint=false`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://storage.googleapis.com/",
+				"X-Goog-Api-Key": process.env.GOOG_WEATHER || "",
 			},
-		);
+		});
 
 		if (k.status !== 200) return { data: null };
 
@@ -7210,10 +5855,7 @@ export async function googleWeather(query: string): Promise<any> {
 	}
 }
 
-export async function OpenRouterGPT(
-	query: string,
-	convo: any = null,
-): Promise<any> {
+export async function OpenRouterGPT(query: string, convo: any = null): Promise<any> {
 	if (!query) return null;
 
 	let messages: any[] = [];
@@ -7285,22 +5927,7 @@ let driftCookies: string | null = null;
 export async function DriftProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (
-		!username ||
-		[
-			"robots.txt",
-			"favicon.ico",
-			"message",
-			"cdn-cgi",
-			"customize",
-			"login",
-			"join",
-			"auth",
-			"media",
-			"go",
-		].includes(username.toLowerCase())
-	)
-		return null;
+	if (!username || ["robots.txt", "favicon.ico", "message", "cdn-cgi", "customize", "login", "join", "auth", "media", "go"].includes(username.toLowerCase())) return null;
 	const filterurl = new URL("https://drift.rip/" + username);
 	let res: any;
 
@@ -7359,9 +5986,7 @@ export async function DriftProfile(query: string): Promise<any> {
 			};
 		}
 		const { document } = parseHTML(test);
-		let schemaJson: any = document.querySelector(
-			'script[type="application/ld+json"]',
-		)?.textContent;
+		let schemaJson: any = document.querySelector('script[type="application/ld+json"]')?.textContent;
 
 		try {
 			schemaJson = JSON.parse(schemaJson || "{}");
@@ -7372,132 +5997,66 @@ export async function DriftProfile(query: string): Promise<any> {
 		const styles = Array.from(document.querySelectorAll("style"))
 			.map((s: any) => s.textContent)
 			.join("");
-		const myProfileId =
-			test?.split("let currentProfileId =")?.[1]?.split(";")?.[0]?.trim() ||
-			null;
+		const myProfileId = test?.split("let currentProfileId =")?.[1]?.split(";")?.[0]?.trim() || null;
 
 		return {
 			data: {
 				user: {
-					account_id:
-						test?.split("let userSql = ")?.[1]?.split(";")?.[0]?.trim() || null,
+					account_id: test?.split("let userSql = ")?.[1]?.split(";")?.[0]?.trim() || null,
 					profile_id: myProfileId,
-					name:
-						schemaJson?.name?.split("|")?.[1]?.trim() ||
-						schemaJson?.mainEntity?.name ||
-						"",
+					name: schemaJson?.name?.split("|")?.[1]?.trim() || schemaJson?.mainEntity?.name || "",
 					display_name: {
-						text:
-							document.querySelector("#bio-username")?.textContent?.trim() ||
-							"",
-						color:
-							styles.match(/#bio-username\s*\{[^}]*color:\s*([^;]+)/i)?.[1] ||
-							null,
+						text: document.querySelector("#bio-username")?.textContent?.trim() || "",
+						color: styles.match(/#bio-username\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
 					},
 					description: {
-						text:
-							document.querySelector("#bio-description")?.textContent?.trim() ||
-							null,
-						color:
-							styles.match(
-								/#bio-description\s*\{[^}]*color:\s*([^;]+)/i,
-							)?.[1] || null,
+						text: document.querySelector("#bio-description")?.textContent?.trim() || null,
+						color: styles.match(/#bio-description\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
 					},
 					label: {
-						text:
-							document.querySelector("#bio-label")?.textContent?.trim() || null,
-						color:
-							styles.match(/#bio-label\s*\{[^}]*color:\s*([^;]+)/i)?.[1] ||
-							null,
+						text: document.querySelector("#bio-label")?.textContent?.trim() || null,
+						color: styles.match(/#bio-label\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
 					},
 					about_me: {
-						text:
-							document.querySelector("#bio-aboutMe")?.textContent?.trim() ||
-							null,
-						color:
-							styles.match(/.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i)?.[1] ||
-							null,
+						text: document.querySelector("#bio-aboutMe")?.textContent?.trim() || null,
+						color: styles.match(/.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
 					},
 					startPage: {
-						text:
-							document.querySelector("#bio-startText")?.textContent?.trim() ||
-							"",
-						color:
-							styles.match(/#bio-startText\s*\{[^}]*color:\s*([^;]+)/i)?.[1] ||
-							null,
+						text: document.querySelector("#bio-startText")?.textContent?.trim() || "",
+						color: styles.match(/#bio-startText\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
 					},
-					views:
-						document
-							.querySelector("#profile-views-inner-container span.text-sm")
-							?.textContent?.trim()
-							?.replace(",", "") || null,
+					views: document.querySelector("#profile-views-inner-container span.text-sm")?.textContent?.trim()?.replace(",", "") || null,
 					badges: [
 						...Array.from(document.querySelectorAll(".bio-badge"))
 							.map((el: any) => {
 								const parent = el.parentElement;
 								const tippyContent = parent?.getAttribute("data-tippy-content");
-								return tippyContent
-									? { name: tippyContent, icon: el.getAttribute("icon") }
-									: null;
+								return tippyContent ? { name: tippyContent, icon: el.getAttribute("icon") } : null;
 							})
 							.filter(Boolean),
 					],
 					assets: {
-						avatar: schemaJson?.mainEntity?.image
-							? schemaJson?.mainEntity?.image?.startsWith("http")
-								? schemaJson.mainEntity.image
-								: "https://drift.rip/" + schemaJson?.mainEntity?.image
-							: null,
-						banner:
-							styles.match(
-								/.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i,
-							)?.[1] || null,
+						avatar: schemaJson?.mainEntity?.image ? (schemaJson?.mainEntity?.image?.startsWith("http") ? schemaJson.mainEntity.image : "https://drift.rip/" + schemaJson?.mainEntity?.image) : null,
+						banner: styles.match(/.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null,
 						background: (() => {
 							const videoEl = document.querySelector("#video-background");
-							const bg =
-								test?.split('staticBackground.src = "')?.[1]?.split('"')[0] ||
-								videoEl?.getAttribute("src") ||
-								videoEl?.querySelector("source")?.getAttribute("src") ||
-								null;
+							const bg = test?.split('staticBackground.src = "')?.[1]?.split('"')[0] || videoEl?.getAttribute("src") || videoEl?.querySelector("source")?.getAttribute("src") || null;
 
 							if (!bg) return null;
-							return bg.startsWith("http")
-								? bg
-								: "https://drift.rip" + (bg.startsWith("/") ? "" : "/") + bg;
+							return bg.startsWith("http") ? bg : "https://drift.rip" + (bg.startsWith("/") ? "" : "/") + bg;
 						})(),
 						audio: (() => {
-							const aud =
-								document
-									.querySelector("#background-audio")
-									?.getAttribute("src") ||
-								document
-									.querySelector("#background-audio source")
-									?.getAttribute("src") ||
-								(test?.includes("hasAudio = true")
-									? test?.split('audio.src = "')?.[1]?.split('"')[0]
-									: null) ||
-								null;
+							const aud = document.querySelector("#background-audio")?.getAttribute("src") || document.querySelector("#background-audio source")?.getAttribute("src") || (test?.includes("hasAudio = true") ? test?.split('audio.src = "')?.[1]?.split('"')[0] : null) || null;
 							if (!aud) return null;
-							return aud.startsWith("http")
-								? aud
-								: "https://drift.rip" + (aud.startsWith("/") ? "" : "/") + aud;
+							return aud.startsWith("http") ? aud : "https://drift.rip" + (aud.startsWith("/") ? "" : "/") + aud;
 						})(),
-						cursor:
-							styles.match(/cursor:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null,
+						cursor: styles.match(/cursor:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null,
 					},
 					connections: [
 						// Discord Users
-						...Array.from(
-							document.querySelectorAll(
-								"#profile-cards-section a[data-discord-user-json]",
-							),
-						).map((el: any) => {
+						...Array.from(document.querySelectorAll("#profile-cards-section a[data-discord-user-json]")).map((el: any) => {
 							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=")
-								? decodeURIComponent(
-										new URL(href).searchParams.get("url") || "",
-									)
-								: href;
+							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
 							let richContent: any = null;
 							const rawJson = el.getAttribute("data-discord-user-json") || "";
 							try {
@@ -7505,33 +6064,20 @@ export async function DriftProfile(query: string): Promise<any> {
 							} catch {
 								try {
 									let fixed = rawJson;
-									const openBraces =
-										(fixed.match(/\{/g) || []).length -
-										(fixed.match(/\}/g) || []).length;
-									const openBrackets =
-										(fixed.match(/\[/g) || []).length -
-										(fixed.match(/\]/g) || []).length;
+									const openBraces = (fixed.match(/\{/g) || []).length - (fixed.match(/\}/g) || []).length;
+									const openBrackets = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
 									if (!fixed.endsWith('"')) fixed += '"';
 									for (let i = 0; i < openBrackets; i++) fixed += "]";
 									for (let i = 0; i < openBraces; i++) fixed += "}";
 									richContent = JSON.parse(fixed);
 								} catch {}
 							}
-							const discordUserId =
-								el.getAttribute("data-discord-user-id") ||
-								richContent?.userId ||
-								null;
+							const discordUserId = el.getAttribute("data-discord-user-id") || richContent?.userId || null;
 							const imgEl = el.querySelector("img");
 							return {
 								type: "discordUser",
-								text:
-									richContent?.globalName ||
-									richContent?.username ||
-									el.querySelector(".module-titleText")?.textContent?.trim() ||
-									"",
-								url: discordUserId
-									? `https://discord.com/users/${discordUserId}`
-									: directUrl || null,
+								text: richContent?.globalName || richContent?.username || el.querySelector(".module-titleText")?.textContent?.trim() || "",
+								url: discordUserId ? `https://discord.com/users/${discordUserId}` : directUrl || null,
 								tracking_url: href || null,
 								icon_type: imgEl ? "image" : null,
 								icon: imgEl?.getAttribute("src") || null,
@@ -7539,17 +6085,9 @@ export async function DriftProfile(query: string): Promise<any> {
 							};
 						}),
 
-						...Array.from(
-							document.querySelectorAll(
-								"#profile-cards-section a[data-guild-json]",
-							),
-						).map((el: any) => {
+						...Array.from(document.querySelectorAll("#profile-cards-section a[data-guild-json]")).map((el: any) => {
 							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=")
-								? decodeURIComponent(
-										new URL(href).searchParams.get("url") || "",
-									)
-								: href;
+							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
 							let richContent: any = null;
 							try {
 								richContent = JSON.parse(el.getAttribute("data-guild-json"));
@@ -7557,10 +6095,7 @@ export async function DriftProfile(query: string): Promise<any> {
 							const imgEl = el.querySelector("img");
 							return {
 								type: "discordServer",
-								text:
-									richContent?.serverName ||
-									el.querySelector(".module-titleText")?.textContent?.trim() ||
-									"",
+								text: richContent?.serverName || el.querySelector(".module-titleText")?.textContent?.trim() || "",
 								url: directUrl || null,
 								tracking_url: href || null,
 								icon_type: imgEl ? "image" : null,
@@ -7569,23 +6104,13 @@ export async function DriftProfile(query: string): Promise<any> {
 							};
 						}),
 
-						...Array.from(
-							document.querySelectorAll(
-								"#profile-cards-section a[data-fivem-id]",
-							),
-						).map((el: any) => {
+						...Array.from(document.querySelectorAll("#profile-cards-section a[data-fivem-id]")).map((el: any) => {
 							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=")
-								? decodeURIComponent(
-										new URL(href).searchParams.get("url") || "",
-									)
-								: href;
+							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
 							const imgEl = el.querySelector("img");
 							return {
 								type: "fiveM",
-								text:
-									el.querySelector(".module-titleText")?.textContent?.trim() ||
-									"",
+								text: el.querySelector(".module-titleText")?.textContent?.trim() || "",
 								url: directUrl || null,
 								tracking_url: href || null,
 								icon_type: imgEl ? "image" : null,
@@ -7594,77 +6119,33 @@ export async function DriftProfile(query: string): Promise<any> {
 							};
 						}),
 
-						...Array.from(
-							document.querySelectorAll(
-								"#profile-cards-section a[data-roblox-user-json]",
-							),
-						).map((el: any) => {
+						...Array.from(document.querySelectorAll("#profile-cards-section a[data-roblox-user-json]")).map((el: any) => {
 							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=")
-								? decodeURIComponent(
-										new URL(href).searchParams.get("url") || "",
-									)
-								: href;
+							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
 							let richContent: any = null;
 							try {
-								richContent = JSON.parse(
-									el.getAttribute("data-roblox-user-json"),
-								);
+								richContent = JSON.parse(el.getAttribute("data-roblox-user-json"));
 							} catch {}
 							const imgEl = el.querySelector("img");
 							return {
 								type: "roblox",
-								text:
-									richContent?.username ||
-									el.querySelector(".module-titleText")?.textContent?.trim() ||
-									"",
-								url:
-									directUrl ||
-									(richContent?.profileId
-										? encodeURI(
-												"https://www.roblox.com/users/" +
-													richContent?.profileId +
-													"/profile",
-											)
-										: null),
-								tracking_url:
-									href ||
-									(richContent?.profileId
-										? "https://drift.rip/go?ref=moduleInner&p=" +
-											myProfileId +
-											"&url=" +
-											encodeURIComponent(
-												"https://www.roblox.com/users/" +
-													richContent?.profileId +
-													"/profile",
-											)
-										: null),
+								text: richContent?.username || el.querySelector(".module-titleText")?.textContent?.trim() || "",
+								url: directUrl || (richContent?.profileId ? encodeURI("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
+								tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=" + encodeURIComponent("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
 								icon_type: imgEl ? "image" : null,
 								icon: imgEl?.getAttribute("src") || null,
 								richContent,
 							};
 						}),
 
-						...Array.from(
-							document.querySelectorAll("#section-profile-connections > a"),
-						).map((el: any) => {
+						...Array.from(document.querySelectorAll("#section-profile-connections > a")).map((el: any) => {
 							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=")
-								? decodeURIComponent(
-										new URL(href).searchParams.get("url") || "",
-									)
-								: href;
+							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
 							const iconEl = el.querySelector("iconify-icon");
 							const imgEl = el.querySelector("img");
 							const iconName = iconEl?.getAttribute("icon") || "";
-							const platform =
-								iconName.split(":")[1] ||
-								imgEl?.getAttribute("alt") ||
-								"unknown";
-							const colorSocialText =
-								(iconEl || imgEl)
-									?.getAttribute("style")
-									?.match(/color:\s*(#[0-9a-fA-F]{3,8})/)?.[1] || null;
+							const platform = iconName.split(":")[1] || imgEl?.getAttribute("alt") || "unknown";
+							const colorSocialText = (iconEl || imgEl)?.getAttribute("style")?.match(/color:\s*(#[0-9a-fA-F]{3,8})/)?.[1] || null;
 
 							return {
 								type: "social",
@@ -7677,10 +6158,7 @@ export async function DriftProfile(query: string): Promise<any> {
 								url: directUrl || null,
 								tracking_url: href || null,
 								icon_type: iconEl ? "iconify" : imgEl ? "image" : null,
-								icon:
-									iconEl?.getAttribute("icon") ||
-									imgEl?.getAttribute("src") ||
-									null,
+								icon: iconEl?.getAttribute("icon") || imgEl?.getAttribute("src") || null,
 								richContent: null,
 							};
 						}),
@@ -7688,23 +6166,12 @@ export async function DriftProfile(query: string): Promise<any> {
 				},
 				web: {
 					webTitle: document.querySelector("head > title")?.textContent,
-					webDesc: document
-						.querySelector('head > meta[name="description"]')
-						?.getAttribute("content"),
-					title: document
-						.querySelector('head > meta[property="og:title"]')
-						?.getAttribute("content"),
-					desc: document
-						.querySelector('head > meta[property="og:description"]')
-						?.getAttribute("content"),
-					bannerUrl: document
-						.querySelector('head > meta[property="og:image"]')
-						?.getAttribute("content"),
-					canonicalTitle:
-						document.querySelector('h1[class="hdn"]')?.textContent,
-					canonicalUrl: document
-						.querySelector('head > link[rel="canonical"]')
-						?.getAttribute("href"),
+					webDesc: document.querySelector('head > meta[name="description"]')?.getAttribute("content"),
+					title: document.querySelector('head > meta[property="og:title"]')?.getAttribute("content"),
+					desc: document.querySelector('head > meta[property="og:description"]')?.getAttribute("content"),
+					bannerUrl: document.querySelector('head > meta[property="og:image"]')?.getAttribute("content"),
+					canonicalTitle: document.querySelector('h1[class="hdn"]')?.textContent,
+					canonicalUrl: document.querySelector('head > link[rel="canonical"]')?.getAttribute("href"),
 				},
 			},
 		};
@@ -7748,12 +6215,7 @@ export async function PatreonProfile(query: string): Promise<any> {
 				const pushArg = chunk.substring(0, endIdx);
 				const parsed = JSON.parse(pushArg);
 
-				if (
-					!Array.isArray(parsed) ||
-					parsed[0] !== 1 ||
-					typeof parsed[1] !== "string"
-				)
-					continue;
+				if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== "string") continue;
 
 				const content = parsed[1];
 				const lines = content.split("\n").filter((l: string) => l.trim());
@@ -7806,10 +6268,7 @@ export async function PatreonProfile(query: string): Promise<any> {
 	}
 }
 
-export async function SaweriaProfile(
-	query: string,
-	refresh_auth: boolean = false,
-): Promise<any> {
+export async function SaweriaProfile(query: string, refresh_auth: boolean = false): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
 	if (!username) return null;
@@ -7825,12 +6284,9 @@ export async function SaweriaProfile(
 			};
 		}
 
-		const dataRes = await fetch(
-			`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const dataRes = await fetch(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
+			headers: { ...commonHeaders },
+		});
 
 		if (dataRes.status === 403) {
 			return {
@@ -7863,26 +6319,7 @@ export async function SaweriaProfile(
 export async function TrakteerProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (
-		!username ||
-		[
-			"robots.txt",
-			"favicon.ico",
-			"login",
-			"register",
-			"forgot-password",
-			"cdn-cgi",
-			"terms",
-			"privacy-policy",
-			"auth",
-			"search",
-			"explore",
-			"feed",
-			"feature-and-pricing",
-			"career",
-		].includes(username.toLowerCase())
-	)
-		return null;
+	if (!username || ["robots.txt", "favicon.ico", "login", "register", "forgot-password", "cdn-cgi", "terms", "privacy-policy", "auth", "search", "explore", "feed", "feature-and-pricing", "career"].includes(username.toLowerCase())) return null;
 
 	try {
 		const res = await fetch(`https://trakteer.id/${username}`, {
@@ -7978,32 +6415,7 @@ let gunsCookies: string | null = null;
 export async function GunsProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (
-		!username ||
-		[
-			"robots.txt",
-			"favicon.ico",
-			"register",
-			"pricing",
-			"login",
-			"reset",
-			"cdn-cgi",
-			"account",
-			"terms",
-			"privacy",
-			"dashboard",
-			"leaderboard",
-			"api",
-			"de",
-			"fr",
-			"es",
-			"tr",
-			"ru",
-			"pt",
-			"ar",
-		].includes(username.toLowerCase())
-	)
-		return null;
+	if (!username || ["robots.txt", "favicon.ico", "register", "pricing", "login", "reset", "cdn-cgi", "account", "terms", "privacy", "dashboard", "leaderboard", "api", "de", "fr", "es", "tr", "ru", "pt", "ar"].includes(username.toLowerCase())) return null;
 
 	let browserGuns: boolean = false;
 	let dataResults: any[] = [];
@@ -8032,12 +6444,8 @@ export async function GunsProfile(query: string): Promise<any> {
 
 					const html = await responseText(res);
 					const { document: doc } = parseHTML(html);
-					const pageTitle =
-						doc.querySelector("title")?.textContent?.trim() || "";
-					const isChallenge =
-						status === 401 ||
-						status === 403 ||
-						pageTitle === "Just a moment...";
+					const pageTitle = doc.querySelector("title")?.textContent?.trim() || "";
+					const isChallenge = status === 401 || status === 403 || pageTitle === "Just a moment...";
 
 					if (!isChallenge) {
 						break;
@@ -8057,19 +6465,13 @@ export async function GunsProfile(query: string): Promise<any> {
 							return { error: "IP Blocked" };
 						}
 
-						const browserChallenge =
-							!browserRes.success ||
-							browserRes.status === 401 ||
-							browserRes.status === 403;
+						const browserChallenge = !browserRes.success || browserRes.status === 401 || browserRes.status === 403;
 
 						if (browserChallenge) {
 							return { error: "Guns.lol asking to verify you're not a bot" };
 						}
 
-						if (
-							browserRes.cookies &&
-							Object.keys(browserRes.cookies).length > 0
-						) {
+						if (browserRes.cookies && Object.keys(browserRes.cookies).length > 0) {
 							gunsCookies = Object.entries(browserRes.cookies)
 								.map(([key, val]) => `${key}=${val}`)
 								.join("; ");
@@ -8115,12 +6517,7 @@ export async function GunsProfile(query: string): Promise<any> {
 						const pushArg = chunk.substring(0, endIdx);
 						const parsed = JSON.parse(pushArg);
 
-						if (
-							!Array.isArray(parsed) ||
-							parsed[0] !== 1 ||
-							typeof parsed[1] !== "string"
-						)
-							continue;
+						if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== "string") continue;
 
 						const content = parsed[1];
 
@@ -8138,20 +6535,11 @@ export async function GunsProfile(query: string): Promise<any> {
 
 								if (Array.isArray(innerParsed)) {
 									for (const item of innerParsed) {
-										if (
-											item &&
-											typeof item === "object" &&
-											!Array.isArray(item) &&
-											"data" in item
-										) {
+										if (item && typeof item === "object" && !Array.isArray(item) && "data" in item) {
 											dataResults.push(item.data);
 										}
 									}
-								} else if (
-									innerParsed &&
-									typeof innerParsed === "object" &&
-									"data" in innerParsed
-								) {
+								} else if (innerParsed && typeof innerParsed === "object" && "data" in innerParsed) {
 									dataResults.push(innerParsed.data);
 								}
 							} catch {}
@@ -8208,26 +6596,7 @@ export async function GunsProfile(query: string): Promise<any> {
 export async function RageProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (
-		!username ||
-		[
-			"robots.txt",
-			"favicon.ico",
-			"leaderboards",
-			"pricing",
-			"docs",
-			"auth",
-			"cdn-cgi",
-			"terms",
-			"privacy",
-			"copyright",
-			"docs",
-			"dashboard",
-			"main_og.png",
-			"extra.css",
-		].includes(username.toLowerCase())
-	)
-		return null;
+	if (!username || ["robots.txt", "favicon.ico", "leaderboards", "pricing", "docs", "auth", "cdn-cgi", "terms", "privacy", "copyright", "docs", "dashboard", "main_og.png", "extra.css"].includes(username.toLowerCase())) return null;
 
 	let res: any;
 
@@ -8270,12 +6639,7 @@ export async function RageProfile(query: string): Promise<any> {
 				const pushArg = chunk.substring(0, endIdx);
 				const parsed = JSON.parse(pushArg);
 
-				if (
-					!Array.isArray(parsed) ||
-					parsed[0] !== 1 ||
-					typeof parsed[1] !== "string"
-				)
-					continue;
+				if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== "string") continue;
 
 				const content = parsed[1];
 				const lines = content.split("\n").filter((l: string) => l.trim());
@@ -8285,11 +6649,7 @@ export async function RageProfile(query: string): Promise<any> {
 					if (colonIdx === -1) continue;
 
 					const jsonPart = line.substring(colonIdx + 1);
-					if (
-						!jsonPart.includes('"user"') ||
-						!jsonPart.includes('"customization"')
-					)
-						continue;
+					if (!jsonPart.includes('"user"') || !jsonPart.includes('"customization"')) continue;
 
 					try {
 						const innerParsed = JSON.parse(jsonPart);
@@ -8335,36 +6695,7 @@ export async function RageProfile(query: string): Promise<any> {
 export async function HauntProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (
-		!username ||
-		[
-			"robots.txt",
-			"favicon.ico",
-			"login",
-			"register",
-			"pricing",
-			"cdn-cgi",
-			"terms",
-			"privacy",
-			"copyright",
-			"dashboard",
-			"settings",
-			"api",
-			"leaderboard",
-			"checkout",
-			"marketplace",
-			"redeem",
-			"en",
-			"de",
-			"ru",
-			"es",
-			"fr",
-			"pt",
-			"ar",
-			"it",
-		].includes(username.toLowerCase())
-	)
-		return null;
+	if (!username || ["robots.txt", "favicon.ico", "login", "register", "pricing", "cdn-cgi", "terms", "privacy", "copyright", "dashboard", "settings", "api", "leaderboard", "checkout", "marketplace", "redeem", "en", "de", "ru", "es", "fr", "pt", "ar", "it"].includes(username.toLowerCase())) return null;
 
 	let res: any;
 
@@ -8472,10 +6803,7 @@ export async function HauntProfile(query: string): Promise<any> {
 				}
 
 				const nextLineIdx = content.indexOf("\n", index);
-				const line =
-					nextLineIdx === -1
-						? content.slice(index)
-						: content.slice(index, nextLineIdx);
+				const line = nextLineIdx === -1 ? content.slice(index) : content.slice(index, nextLineIdx);
 				index = nextLineIdx === -1 ? content.length : nextLineIdx + 1;
 				if (!line.trim()) continue;
 
@@ -8507,12 +6835,7 @@ export async function HauntProfile(query: string): Promise<any> {
 				const pushArg = chunk.substring(0, endIdx);
 				const parsed = JSON.parse(pushArg);
 
-				if (
-					!Array.isArray(parsed) ||
-					parsed[0] !== 1 ||
-					typeof parsed[1] !== "string"
-				)
-					continue;
+				if (!Array.isArray(parsed) || parsed[0] !== 1 || typeof parsed[1] !== "string") continue;
 
 				processRscContent(parsed[1]);
 			} catch {}
@@ -8542,11 +6865,7 @@ export async function HauntProfile(query: string): Promise<any> {
 			return current;
 		};
 
-		const resolveRscRefs = (
-			value: any,
-			depth = 0,
-			resolving = new Set<string>(),
-		): any => {
+		const resolveRscRefs = (value: any, depth = 0, resolving = new Set<string>()): any => {
 			if (depth > 80) return value;
 			if (typeof value === "string") {
 				const refMatch = value.match(/^\$([0-9a-f]+)(?::(.+))?$/i);
@@ -8554,23 +6873,16 @@ export async function HauntProfile(query: string): Promise<any> {
 
 				const [, refKey, refPath] = refMatch;
 				const resolvingKey = `${refKey}:${refPath || ""}`;
-				if (!(refKey in rscEntries) || resolving.has(resolvingKey))
-					return value;
+				if (!(refKey in rscEntries) || resolving.has(resolvingKey)) return value;
 
 				resolving.add(resolvingKey);
-				const target = refPath
-					? getRscPathValue(rscEntries[refKey], refPath.split(":"))
-					: rscEntries[refKey];
-				const resolved =
-					target === undefined
-						? value
-						: resolveRscRefs(target, depth + 1, resolving);
+				const target = refPath ? getRscPathValue(rscEntries[refKey], refPath.split(":")) : rscEntries[refKey];
+				const resolved = target === undefined ? value : resolveRscRefs(target, depth + 1, resolving);
 				resolving.delete(resolvingKey);
 				return resolved;
 			}
 
-			if (Array.isArray(value))
-				return value.map((item) => resolveRscRefs(item, depth + 1, resolving));
+			if (Array.isArray(value)) return value.map((item) => resolveRscRefs(item, depth + 1, resolving));
 			if (value && typeof value === "object") {
 				const resolved: Record<string, any> = {};
 				for (const key of Object.keys(value)) {
@@ -8585,19 +6897,12 @@ export async function HauntProfile(query: string): Promise<any> {
 		const collectCounters = (obj: any) => {
 			if (!obj || typeof obj !== "object") return;
 			if (!Array.isArray(obj)) {
-				const label =
-					typeof obj.tooltipLabel === "string"
-						? obj.tooltipLabel
-						: typeof obj.content === "string"
-							? obj.content
-							: null;
+				const label = typeof obj.tooltipLabel === "string" ? obj.tooltipLabel : typeof obj.content === "string" ? obj.content : null;
 				if (label && typeof obj.count === "number") {
 					const key = label
 						.trim()
 						.toLowerCase()
-						.replace(/[^a-z0-9]+([a-z0-9])/g, (_match: string, char: string) =>
-							char.toUpperCase(),
-						);
+						.replace(/[^a-z0-9]+([a-z0-9])/g, (_match: string, char: string) => char.toUpperCase());
 					counters[key] = obj.count;
 				}
 			}
@@ -8674,9 +6979,7 @@ function resolveFlags(flags: number | null | undefined): string[] {
 	return badges;
 }
 
-function resolveApplicationFlags(
-	flags: string | number | null | undefined,
-): string[] {
+function resolveApplicationFlags(flags: string | number | null | undefined): string[] {
 	if (flags === undefined || flags === null || flags === "") return [];
 
 	let value: bigint;
@@ -8688,8 +6991,7 @@ function resolveApplicationFlags(
 
 	const resolved: string[] = [];
 	for (let bit = 0; bit < 64; bit++) {
-		if ((value & (1n << BigInt(bit))) !== 0n)
-			resolved.push(DISCORD_APPLICATION_FLAGS[bit] || `UNKNOWN_${bit}`);
+		if ((value & (1n << BigInt(bit))) !== 0n) resolved.push(DISCORD_APPLICATION_FLAGS[bit] || `UNKNOWN_${bit}`);
 	}
 
 	return resolved;
@@ -8708,10 +7010,7 @@ function formatDiscordApplicationInstallParams(params: any) {
 	return formatted;
 }
 
-function formatDiscordApiError(
-	req: { status: number; statusText: string },
-	data: any,
-) {
+function formatDiscordApiError(req: { status: number; statusText: string }, data: any) {
 	return { status: req.status, statusText: req.statusText, data };
 }
 
@@ -8729,12 +7028,9 @@ function formatDiscordUser(user: any) {
 	if (formatted.banner && formatted.id) {
 		formatted.banner_url = `https://cdn.discordapp.com/banners/${formatted.id}/${formatted.banner}.${discordCdnExtension(formatted.banner)}?size=4096`;
 	}
-	if (formatted.public_flags !== undefined)
-		formatted.badges = resolveFlags(formatted.public_flags);
-	if (formatted.flags !== undefined)
-		formatted.badges_raw = resolveFlags(formatted.flags);
-	if (formatted.id)
-		formatted.created_at = String(getSnowflakeDate(formatted.id));
+	if (formatted.public_flags !== undefined) formatted.badges = resolveFlags(formatted.public_flags);
+	if (formatted.flags !== undefined) formatted.badges_raw = resolveFlags(formatted.flags);
+	if (formatted.id) formatted.created_at = String(getSnowflakeDate(formatted.id));
 
 	return formatted;
 }
@@ -8761,31 +7057,21 @@ function formatDiscordGuild(guild: any) {
 	if (Array.isArray(formatted.emojis)) {
 		formatted.emojis = formatted.emojis.map((emoji: any) => ({
 			...emoji,
-			url: emoji.id
-				? `https://cdn.discordapp.com/emojis/${emoji.id}.${emoji.animated ? "gif" : "png"}?size=4096`
-				: null,
+			url: emoji.id ? `https://cdn.discordapp.com/emojis/${emoji.id}.${emoji.animated ? "gif" : "png"}?size=4096` : null,
 			created_at: emoji.id ? String(getSnowflakeDate(emoji.id)) : null,
 		}));
 	}
 	if (Array.isArray(formatted.stickers)) {
 		formatted.stickers = formatted.stickers.map((sticker: any) => {
-			const ext =
-				sticker.format_type === 4
-					? "gif"
-					: sticker.format_type === 3
-						? "json"
-						: "png";
+			const ext = sticker.format_type === 4 ? "gif" : sticker.format_type === 3 ? "json" : "png";
 			return {
 				...sticker,
-				url: sticker.id
-					? `https://cdn.discordapp.com/stickers/${sticker.id}.${ext}?size=4096`
-					: null,
+				url: sticker.id ? `https://cdn.discordapp.com/stickers/${sticker.id}.${ext}?size=4096` : null,
 				created_at: sticker.id ? String(getSnowflakeDate(sticker.id)) : null,
 			};
 		});
 	}
-	if (formatted.id)
-		formatted.created_at = String(getSnowflakeDate(formatted.id));
+	if (formatted.id) formatted.created_at = String(getSnowflakeDate(formatted.id));
 
 	return formatted;
 }
@@ -8803,10 +7089,7 @@ function formatDiscordApplication(app: any) {
 	const formatted = { ...app };
 
 	if (formatted.guild_id) {
-		const guild =
-			formatted.guild && typeof formatted.guild === "object"
-				? formatted.guild
-				: {};
+		const guild = formatted.guild && typeof formatted.guild === "object" ? formatted.guild : {};
 		formatted.guild = formatDiscordGuild({
 			...guild,
 			id: guild.id || formatted.guild_id,
@@ -8841,9 +7124,7 @@ function formatDiscordApplication(app: any) {
 		};
 	}
 
-	const resolvedFlags = resolveApplicationFlags(
-		formatted.flags_new ?? formatted.flags,
-	);
+	const resolvedFlags = resolveApplicationFlags(formatted.flags_new ?? formatted.flags);
 	formatted.flags_resolved = {
 		array: resolvedFlags,
 		string: resolvedFlags.join(", "),
@@ -8851,9 +7132,7 @@ function formatDiscordApplication(app: any) {
 
 	let applicationFlags = 0n;
 	try {
-		applicationFlags = BigInt(
-			String(formatted.flags_new ?? formatted.flags ?? 0),
-		);
+		applicationFlags = BigInt(String(formatted.flags_new ?? formatted.flags ?? 0));
 	} catch {}
 	formatted.intents = {
 		presence: (applicationFlags & ((1n << 12n) | (1n << 13n))) !== 0n,
@@ -8862,43 +7141,30 @@ function formatDiscordApplication(app: any) {
 	};
 
 	if (formatted.install_params) {
-		formatted.install_params = formatDiscordApplicationInstallParams(
-			formatted.install_params,
-		);
+		formatted.install_params = formatDiscordApplicationInstallParams(formatted.install_params);
 	}
 
-	if (
-		formatted.integration_types_config &&
-		typeof formatted.integration_types_config === "object"
-	) {
+	if (formatted.integration_types_config && typeof formatted.integration_types_config === "object") {
 		formatted.integration_types_config = Object.fromEntries(
-			Object.entries(formatted.integration_types_config).map(
-				([key, config]: [string, any]) => {
-					const typeId = Number(key);
-					return [
-						key,
-						{
-							...config,
-							type: {
-								id: typeId,
-								name:
-									DISCORD_APPLICATION_INTEGRATION_TYPES[typeId] || "UNKNOWN",
-							},
-							oauth2_install_params: formatDiscordApplicationInstallParams(
-								config?.oauth2_install_params,
-							),
+			Object.entries(formatted.integration_types_config).map(([key, config]: [string, any]) => {
+				const typeId = Number(key);
+				return [
+					key,
+					{
+						...config,
+						type: {
+							id: typeId,
+							name: DISCORD_APPLICATION_INTEGRATION_TYPES[typeId] || "UNKNOWN",
 						},
-					];
-				},
-			),
+						oauth2_install_params: formatDiscordApplicationInstallParams(config?.oauth2_install_params),
+					},
+				];
+			}),
 		);
 	}
 
-	formatted.created_at = formatted.id
-		? String(getSnowflakeDate(formatted.id))
-		: null;
-	if (formatted.bot?.id)
-		formatted.bot.created_at = String(getSnowflakeDate(formatted.bot.id));
+	formatted.created_at = formatted.id ? String(getSnowflakeDate(formatted.id)) : null;
+	if (formatted.bot?.id) formatted.bot.created_at = String(getSnowflakeDate(formatted.bot.id));
 
 	return formatted;
 }
@@ -9016,17 +7282,12 @@ export const DISCORD_CHANNEL_TYPES: Record<number, string> = {
 	16: "media",
 };
 
-function resolvePermissions(
-	permissions: string | bigint | null | undefined,
-): string[] {
+function resolvePermissions(permissions: string | bigint | null | undefined): string[] {
 	if (!permissions) return [];
 	const p = typeof permissions === "string" ? BigInt(permissions) : permissions;
 	const resolved: string[] = [];
 
-	if (
-		(p & DISCORD_PERMISSIONS["Administrator"]!) ===
-		DISCORD_PERMISSIONS["Administrator"]!
-	) {
+	if ((p & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) {
 		return ["Administrator"];
 	}
 
@@ -9062,10 +7323,7 @@ function getMemberPermissions(
 				permissions |= BigInt(role.permissions);
 			}
 		}
-		if (
-			(permissions & DISCORD_PERMISSIONS["Administrator"]!) ===
-			DISCORD_PERMISSIONS["Administrator"]!
-		) {
+		if ((permissions & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) {
 			permissions = 0x7fffffffffffffn;
 		}
 	}
@@ -9088,11 +7346,7 @@ const getSnowflakeDate = (id: string) => {
 	}
 };
 
-async function discordListCache(
-	token: string,
-	url: string,
-	headers: any,
-): Promise<DiscordListCacheValue> {
+async function discordListCache(token: string, url: string, headers: any): Promise<DiscordListCacheValue> {
 	const key = `${token}:${url}`;
 	const now = Date.now();
 	const cached = discordObj[key];
@@ -9136,10 +7390,7 @@ function discordListMembersCacheKey(token: string, guildId: string) {
 	return `${token}:guild:${guildId}:members:all`;
 }
 
-function getDiscordListMembersCache(
-	token: string,
-	guildId: string,
-): any[] | null {
+function getDiscordListMembersCache(token: string, guildId: string): any[] | null {
 	const key = discordListMembersCacheKey(token, guildId);
 	const cached = discordObj[key];
 
@@ -9152,10 +7403,7 @@ function getDiscordListMembersCache(
 	return Array.isArray(cached.value.data) ? cached.value.data : null;
 }
 
-function getDiscordListMembersPartialCache(
-	token: string,
-	guildId: string,
-): any[] | null {
+function getDiscordListMembersPartialCache(token: string, guildId: string): any[] | null {
 	const key = discordListMembersCacheKey(token, guildId);
 	const cached = discordListMemberPartialObj[key];
 
@@ -9168,11 +7416,7 @@ function getDiscordListMembersPartialCache(
 	return Array.isArray(cached.value.data) ? cached.value.data : null;
 }
 
-async function discordListMembersCache(
-	token: string,
-	guildId: string,
-	headers: any,
-) {
+async function discordListMembersCache(token: string, guildId: string, headers: any) {
 	const cacheKey = discordListMembersCacheKey(token, guildId);
 	if (getDiscordListMembersCache(token, guildId)) return;
 
@@ -9206,34 +7450,18 @@ async function discordListMembersCache(
 	delete discordListMemberPartialObj[cacheKey];
 }
 
-function discordListMembersCacheLater(
-	token: string,
-	guildId: string,
-	headers: any,
-) {
+function discordListMembersCacheLater(token: string, guildId: string, headers: any) {
 	const cacheKey = discordListMembersCacheKey(token, guildId);
-	if (
-		getDiscordListMembersCache(token, guildId) ||
-		discordListMemberFetches[cacheKey]
-	)
-		return;
+	if (getDiscordListMembersCache(token, guildId) || discordListMemberFetches[cacheKey]) return;
 
-	discordListMemberFetches[cacheKey] = discordListMembersCache(
-		token,
-		guildId,
-		headers,
-	)
+	discordListMemberFetches[cacheKey] = discordListMembersCache(token, guildId, headers)
 		.catch(() => {})
 		.finally(() => {
 			delete discordListMemberFetches[cacheKey];
 		});
 }
 
-async function ensureDiscordListMembersCache(
-	token: string,
-	guildId: string,
-	headers: any,
-): Promise<any[] | null> {
+async function ensureDiscordListMembersCache(token: string, guildId: string, headers: any): Promise<any[] | null> {
 	const cacheKey = discordListMembersCacheKey(token, guildId);
 	const cached = getDiscordListMembersCache(token, guildId);
 	if (cached) return cached;
@@ -9246,11 +7474,7 @@ async function ensureDiscordListMembersCache(
 	return getDiscordListMembersCache(token, guildId);
 }
 
-export const DiscordInfoMember = async (
-	token: string,
-	userId: string,
-	guildId?: string,
-) => {
+export const DiscordInfoMember = async (token: string, userId: string, guildId?: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!userId) return { error: "Missing userId" };
 
@@ -9262,27 +7486,17 @@ export const DiscordInfoMember = async (
 	};
 
 	try {
-		const url = guildId
-			? `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`
-			: `https://discord.com/api/v10/users/${userId}`;
+		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/members/${userId}` : `https://discord.com/api/v10/users/${userId}`;
 
-		const urlRoles = guildId
-			? `https://discord.com/api/v10/guilds/${guildId}/roles`
-			: null;
-		const urlGuild = guildId
-			? `https://discord.com/api/v10/guilds/${guildId}`
-			: null;
+		const urlRoles = guildId ? `https://discord.com/api/v10/guilds/${guildId}/roles` : null;
+		const urlGuild = guildId ? `https://discord.com/api/v10/guilds/${guildId}` : null;
 
 		const urlDMs = `https://discord.com/api/v10/users/@me/channels`;
 
 		const [req, rolesReq, guildReq, dmReq] = await Promise.all([
 			fetch(url, { method: "GET", headers }),
-			urlRoles
-				? fetch(urlRoles, { method: "GET", headers })
-				: Promise.resolve(null),
-			urlGuild
-				? fetch(urlGuild, { method: "GET", headers })
-				: Promise.resolve(null),
+			urlRoles ? fetch(urlRoles, { method: "GET", headers }) : Promise.resolve(null),
+			urlGuild ? fetch(urlGuild, { method: "GET", headers }) : Promise.resolve(null),
 			fetch(urlDMs, {
 				method: "POST",
 				headers,
@@ -9299,12 +7513,10 @@ export const DiscordInfoMember = async (
 			data = await req.json();
 		} catch {}
 		try {
-			if (rolesReq && rolesReq.status === 200)
-				rolesData = await rolesReq.json();
+			if (rolesReq && rolesReq.status === 200) rolesData = await rolesReq.json();
 		} catch {}
 		try {
-			if (guildReq && guildReq.status === 200)
-				guildData = await guildReq.json();
+			if (guildReq && guildReq.status === 200) guildData = await guildReq.json();
 		} catch {}
 		try {
 			if (dmReq && dmReq.status === 200) dmData = await dmReq.json();
@@ -9322,21 +7534,12 @@ export const DiscordInfoMember = async (
 		const flagsBadges = resolveFlags(userData?.flags);
 		const publicFlagsBadges = resolveFlags(userData?.public_flags);
 
-		const avatarUrl = userData?.avatar
-			? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-			: null;
-		const bannerUrl = userData?.banner
-			? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith("a_") ? "gif" : "png"}?size=4096`
-			: null;
+		const avatarUrl = userData?.avatar ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+		const bannerUrl = userData?.banner ? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 
-		const guildAvatarUrl =
-			guildId && data.avatar
-				? `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${data.avatar}.${data.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
+		const guildAvatarUrl = guildId && data.avatar ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${data.avatar}.${data.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 
-		const perms = guildId
-			? getMemberPermissions(data, rolesData, guildData, guildId)
-			: {};
+		const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
 
 		const result: any = {
 			dmChannelId: dmData?.id || null,
@@ -9346,12 +7549,8 @@ export const DiscordInfoMember = async (
 			banner_url: bannerUrl,
 			badges: publicFlagsBadges,
 			badges_raw: flagsBadges,
-			joined_at: data.joined_at
-				? String(Math.floor(new Date(data.joined_at).getTime() / 1000))
-				: null,
-			premium_since: data.premium_since
-				? String(Math.floor(new Date(data.premium_since).getTime() / 1000))
-				: null,
+			joined_at: data.joined_at ? String(Math.floor(new Date(data.joined_at).getTime() / 1000)) : null,
+			premium_since: data.premium_since ? String(Math.floor(new Date(data.premium_since).getTime() / 1000)) : null,
 			created_at: userData?.id ? String(getSnowflakeDate(userData.id)) : null,
 		};
 
@@ -9388,11 +7587,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		const urlDirectory = `https://discord.com/api/v10/application-directory-static/applications/${botId}`;
 		const urlSimilar = `https://discord.com/api/v10/application-directory-static/applications/${botId}/similar`;
 		const urlStoreLayout = `https://discord.com/api/v10/applications/${botId}/store-layout`;
-		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([
-			fetch(urlDirectory, { method: "GET", headers }),
-			fetch(urlSimilar, { method: "GET", headers }),
-			fetch(urlStoreLayout, { method: "GET", headers }),
-		]);
+		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([fetch(urlDirectory, { method: "GET", headers }), fetch(urlSimilar, { method: "GET", headers }), fetch(urlStoreLayout, { method: "GET", headers })]);
 
 		let directoryData: any = null;
 		let similarData: any = null;
@@ -9408,22 +7603,14 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		} catch {}
 
 		data = formatDiscordApplication(data);
-		const directory =
-			directoryReq.status === 200
-				? formatDiscordApplication(directoryData)
-				: null;
+		const directory = directoryReq.status === 200 ? formatDiscordApplication(directoryData) : null;
 		const guildId = data.guild?.id || directory?.guild?.id;
 
 		if (guildId) {
 			const urlGuildPreview = `https://discord.com/api/v10/guilds/${guildId}/preview`;
 			const urlGuildDirectory = `https://discord.com/api/v10/discovery/${guildId}`;
 			const urlGuildRichContent = `https://discord.com/api/guilds/${guildId}/widget.json`;
-			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] =
-				await Promise.all([
-					fetch(urlGuildPreview, { method: "GET", headers }),
-					fetch(urlGuildDirectory, { method: "GET", headers }),
-					fetch(urlGuildRichContent, { method: "GET", headers }),
-				]);
+			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([fetch(urlGuildPreview, { method: "GET", headers }), fetch(urlGuildDirectory, { method: "GET", headers }), fetch(urlGuildRichContent, { method: "GET", headers })]);
 
 			let guildPreviewData: any = null;
 			let guildDirectoryData: any = null;
@@ -9450,23 +7637,15 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 					guildDirectoryReq.status === 200
 						? formatDiscordDiscovery(guildDirectoryData)
 						: {
-								error: formatDiscordApiError(
-									guildDirectoryReq,
-									guildDirectoryData,
-								),
+								error: formatDiscordApiError(guildDirectoryReq, guildDirectoryData),
 							},
 				richContent:
 					guildRichContentReq.status === 200
 						? guildRichContentData
 						: {
-								error: formatDiscordApiError(
-									guildRichContentReq,
-									guildRichContentData,
-								),
+								error: formatDiscordApiError(guildRichContentReq, guildRichContentData),
 							},
-				directory_alt: directory?.guild
-					? formatDiscordGuild(directory.guild)
-					: {},
+				directory_alt: directory?.guild ? formatDiscordGuild(directory.guild) : {},
 			};
 		}
 
@@ -9479,29 +7658,20 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 			};
 
 		if (similarReq.status === 200 && similarData) {
-			data.similar = Array.isArray(similarData.applications)
-				? similarData.applications.map(formatDiscordApplication)
-				: similarData.applications;
+			data.similar = Array.isArray(similarData.applications) ? similarData.applications.map(formatDiscordApplication) : similarData.applications;
 		} else {
 			data.similar = { error: formatDiscordApiError(similarReq, similarData) };
 		}
 
-		if (storeLayoutReq.status === 200 && storeLayoutData)
-			data.store_layout = storeLayoutData;
+		if (storeLayoutReq.status === 200 && storeLayoutData) data.store_layout = storeLayoutData;
 		else
 			data.store_layout = {
 				error: formatDiscordApiError(storeLayoutReq, storeLayoutData),
 			};
 
 		const countSources = [data, directory].filter(Boolean);
-		const firstCount = (key: string) =>
-			countSources.find(
-				(source) => source[key] !== undefined && source[key] !== null,
-			)?.[key];
-		data.serverCount =
-			firstCount("approximate_guild_count") ??
-			directory?.directory_entry?.guild_count ??
-			0;
+		const firstCount = (key: string) => countSources.find((source) => source[key] !== undefined && source[key] !== null)?.[key];
+		data.serverCount = firstCount("approximate_guild_count") ?? directory?.directory_entry?.guild_count ?? 0;
 
 		return { data };
 	} catch (e: any) {
@@ -9509,13 +7679,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 	}
 };
 
-export const DiscordListMember = async (
-	token: string,
-	guildId: string,
-	limit: number = 10,
-	type: string = "all",
-	permission: string = "all",
-) => {
+export const DiscordListMember = async (token: string, guildId: string, limit: number = 10, type: string = "all", permission: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -9528,22 +7692,13 @@ export const DiscordListMember = async (
 	try {
 		const types = type.split(",").map((t) => t.trim());
 		const isBannedRequested = types.includes("banned");
-		const isSpecial = types.some((t) =>
-			["oldest", "newest", "no_role", "has_role"].includes(t),
-		);
+		const isSpecial = types.some((t) => ["oldest", "newest", "no_role", "has_role"].includes(t));
 
-		const targetLimit = isSpecial
-			? Math.max(1000, limit)
-			: limit === -1
-				? 1000
-				: limit;
+		const targetLimit = isSpecial ? Math.max(1000, limit) : limit === -1 ? 1000 : limit;
 
 		const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
 		const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
-		const [rolesReq, guildReq] = await Promise.all([
-			discordListCache(token, urlRoles, headers),
-			discordListCache(token, urlGuild, headers),
-		]);
+		const [rolesReq, guildReq] = await Promise.all([discordListCache(token, urlRoles, headers), discordListCache(token, urlGuild, headers)]);
 
 		let rolesData: any = [];
 		let guildData: any = null;
@@ -9552,16 +7707,10 @@ export const DiscordListMember = async (
 
 		const memberCacheKey = discordListMembersCacheKey(token, guildId);
 		let memberCacheBuilding = !!discordListMemberFetches[memberCacheKey];
-		let cachedMembers =
-			isBannedRequested && types.length === 1
-				? null
-				: getDiscordListMembersCache(token, guildId);
+		let cachedMembers = isBannedRequested && types.length === 1 ? null : getDiscordListMembersCache(token, guildId);
 		if (!cachedMembers && !(isBannedRequested && types.length === 1)) {
 			const partialMembers = getDiscordListMembersPartialCache(token, guildId);
-			if (
-				partialMembers &&
-				(isSpecial || partialMembers.length >= targetLimit)
-			) {
+			if (partialMembers && (isSpecial || partialMembers.length >= targetLimit)) {
 				cachedMembers = partialMembers;
 			}
 
@@ -9574,20 +7723,14 @@ export const DiscordListMember = async (
 		let data: any[] = [];
 		let cachedMembersCount = cachedMembers?.length ?? 0;
 		if (cachedMembers) {
-			data = isSpecial
-				? cachedMembers.slice()
-				: cachedMembers.slice(0, targetLimit);
+			data = isSpecial ? cachedMembers.slice() : cachedMembers.slice(0, targetLimit);
 		} else {
 			let lastMemberId: string | null = null;
-			let membersFetchRemaining =
-				isBannedRequested && types.length === 1 ? 0 : targetLimit;
+			let membersFetchRemaining = isBannedRequested && types.length === 1 ? 0 : targetLimit;
 
 			while (membersFetchRemaining > 0) {
 				const currentFetchLimit = Math.min(membersFetchRemaining, 1000);
-				const fetchLimit =
-					memberCacheBuilding && !lastMemberId && currentFetchLimit < 1000
-						? 1000
-						: currentFetchLimit;
+				const fetchLimit = memberCacheBuilding && !lastMemberId && currentFetchLimit < 1000 ? 1000 : currentFetchLimit;
 				let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${fetchLimit}`;
 				if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
 
@@ -9601,8 +7744,7 @@ export const DiscordListMember = async (
 				data.push(...usedBatch);
 				lastMemberId = batch[batch.length - 1].user?.id;
 				membersFetchRemaining -= usedBatch.length;
-				if (batch.length < fetchLimit || usedBatch.length < currentFetchLimit)
-					break;
+				if (batch.length < fetchLimit || usedBatch.length < currentFetchLimit) break;
 			}
 			cachedMembersCount = data.length;
 		}
@@ -9655,56 +7797,34 @@ export const DiscordListMember = async (
 
 		if (Array.isArray(data)) {
 			data = data.map((member: any, index: number) => {
-				const perms = member.is_banned
-					? { permissions: "0" }
-					: getMemberPermissions(member, rolesData, guildData, guildId);
+				const perms = member.is_banned ? { permissions: "0" } : getMemberPermissions(member, rolesData, guildData, guildId);
 				return {
 					...member,
 					position: index + 1,
 					...perms,
-					joined_at: member.joined_at
-						? String(Math.floor(new Date(member.joined_at).getTime() / 1000))
-						: null,
-					premium_since: member.premium_since
-						? String(
-								Math.floor(new Date(member.premium_since).getTime() / 1000),
-							)
-						: null,
-					created_at: member.user?.id
-						? String(getSnowflakeDate(member.user.id))
-						: null,
+					joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+					premium_since: member.premium_since ? String(Math.floor(new Date(member.premium_since).getTime() / 1000)) : null,
+					created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null,
 				};
 			});
 
 			if (permission !== "all") {
-				const requestedPerms = permission
-					.split(",")
-					.map((p) => p.trim().toLowerCase());
-				const permBits = requestedPerms
-					.map((p) => PERMISSION_KEYS[p])
-					.filter((b) => b !== undefined) as bigint[];
+				const requestedPerms = permission.split(",").map((p) => p.trim().toLowerCase());
+				const permBits = requestedPerms.map((p) => PERMISSION_KEYS[p]).filter((b) => b !== undefined) as bigint[];
 
 				if (permBits.length > 0) {
 					data = data.filter((member: any) => {
 						const memberPerms = BigInt(member.permissions);
 
-						if (
-							(memberPerms & DISCORD_PERMISSIONS["Administrator"]!) ===
-							DISCORD_PERMISSIONS["Administrator"]!
-						)
-							return true;
+						if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
 
 						return permBits.every((bit) => (memberPerms & bit) === bit);
 					});
 				}
 			}
 
-			const botsCount = data.filter(
-				(member: any) => member.user?.bot || member.bot,
-			).length;
-			const usersCount = data.filter(
-				(member: any) => !member.user?.bot && !member.bot,
-			).length;
+			const botsCount = data.filter((member: any) => member.user?.bot || member.bot).length;
+			const usersCount = data.filter((member: any) => !member.user?.bot && !member.bot).length;
 
 			for (const t of types) {
 				if (t === "user") {
@@ -9712,23 +7832,13 @@ export const DiscordListMember = async (
 				} else if (t === "bot") {
 					data = data.filter((member: any) => member.user?.bot || member.bot);
 				} else if (t === "no_role") {
-					data = data.filter(
-						(member: any) => !member.roles || member.roles.length === 0,
-					);
+					data = data.filter((member: any) => !member.roles || member.roles.length === 0);
 				} else if (t === "has_role") {
-					data = data.filter(
-						(member: any) => member.roles && member.roles.length > 0,
-					);
+					data = data.filter((member: any) => member.roles && member.roles.length > 0);
 				} else if (t === "oldest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(a.joined_at || 0) - Number(b.joined_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(a.joined_at || 0) - Number(b.joined_at || 0));
 				} else if (t === "newest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(b.joined_at || 0) - Number(a.joined_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(b.joined_at || 0) - Number(a.joined_at || 0));
 				}
 			}
 
@@ -9751,13 +7861,7 @@ export const DiscordListMember = async (
 	}
 };
 
-export const DiscordListMemberRole = async (
-	token: string,
-	guildId: string,
-	roleId: string,
-	type: string = "all",
-	permission: string = "all",
-) => {
+export const DiscordListMemberRole = async (token: string, guildId: string, roleId: string, type: string = "all", permission: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	if (!roleId) return { error: "Missing roleId" };
@@ -9777,16 +7881,9 @@ export const DiscordListMemberRole = async (
 	try {
 		const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
 		const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
-		const cachedMembers = await ensureDiscordListMembersCache(
-			token,
-			guildId,
-			headers,
-		);
+		const cachedMembers = await ensureDiscordListMembersCache(token, guildId, headers);
 
-		const [rolesReq, guildReq] = await Promise.all([
-			discordListCache(token, urlRoles, headers),
-			discordListCache(token, urlGuild, headers),
-		]);
+		const [rolesReq, guildReq] = await Promise.all([discordListCache(token, urlRoles, headers), discordListCache(token, urlGuild, headers)]);
 
 		let rolesData: any = [];
 		let guildData: any = null;
@@ -9806,10 +7903,7 @@ export const DiscordListMemberRole = async (
 					.filter(Boolean)
 					.map((role: any) => {
 						const members = cachedMembers
-							.filter(
-								(member: any) =>
-									Array.isArray(member.roles) && member.roles.includes(role.id),
-							)
+							.filter((member: any) => Array.isArray(member.roles) && member.roles.includes(role.id))
 							.map((member: any) => member.user?.id)
 							.filter(Boolean);
 						const resolvedArray = resolvePermissions(role.permissions);
@@ -9829,58 +7923,34 @@ export const DiscordListMemberRole = async (
 
 		const cachedMembersCount = cachedMembers.length;
 		const types = type.split(",").map((t) => t.trim());
-		let data = cachedMembers
-			.map((member: any, index: number) => ({ ...member, position: index + 1 }))
-			.filter(
-				(member: any) =>
-					Array.isArray(member.roles) &&
-					roleIds.some((id) => member.roles.includes(id)),
-			);
+		let data = cachedMembers.map((member: any, index: number) => ({ ...member, position: index + 1 })).filter((member: any) => Array.isArray(member.roles) && roleIds.some((id) => member.roles.includes(id)));
 
 		data = data.map((member: any) => {
 			const perms = getMemberPermissions(member, rolesData, guildData, guildId);
 			return {
 				...member,
 				...perms,
-				joined_at: member.joined_at
-					? String(Math.floor(new Date(member.joined_at).getTime() / 1000))
-					: null,
-				premium_since: member.premium_since
-					? String(Math.floor(new Date(member.premium_since).getTime() / 1000))
-					: null,
-				created_at: member.user?.id
-					? String(getSnowflakeDate(member.user.id))
-					: null,
+				joined_at: member.joined_at ? String(Math.floor(new Date(member.joined_at).getTime() / 1000)) : null,
+				premium_since: member.premium_since ? String(Math.floor(new Date(member.premium_since).getTime() / 1000)) : null,
+				created_at: member.user?.id ? String(getSnowflakeDate(member.user.id)) : null,
 			};
 		});
 
 		if (permission !== "all") {
-			const requestedPerms = permission
-				.split(",")
-				.map((p) => p.trim().toLowerCase());
-			const permBits = requestedPerms
-				.map((p) => PERMISSION_KEYS[p])
-				.filter((b) => b !== undefined) as bigint[];
+			const requestedPerms = permission.split(",").map((p) => p.trim().toLowerCase());
+			const permBits = requestedPerms.map((p) => PERMISSION_KEYS[p]).filter((b) => b !== undefined) as bigint[];
 
 			if (permBits.length > 0) {
 				data = data.filter((member: any) => {
 					const memberPerms = BigInt(member.permissions);
-					if (
-						(memberPerms & DISCORD_PERMISSIONS["Administrator"]!) ===
-						DISCORD_PERMISSIONS["Administrator"]!
-					)
-						return true;
+					if ((memberPerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
 					return permBits.every((bit) => (memberPerms & bit) === bit);
 				});
 			}
 		}
 
-		const botsCount = data.filter(
-			(member: any) => member.user?.bot || member.bot,
-		).length;
-		const usersCount = data.filter(
-			(member: any) => !member.user?.bot && !member.bot,
-		).length;
+		const botsCount = data.filter((member: any) => member.user?.bot || member.bot).length;
+		const usersCount = data.filter((member: any) => !member.user?.bot && !member.bot).length;
 
 		for (const t of types) {
 			if (t === "user") {
@@ -9888,23 +7958,13 @@ export const DiscordListMemberRole = async (
 			} else if (t === "bot") {
 				data = data.filter((member: any) => member.user?.bot || member.bot);
 			} else if (t === "oldest") {
-				data.sort(
-					(a: any, b: any) =>
-						Number(a.joined_at || 0) - Number(b.joined_at || 0),
-				);
+				data.sort((a: any, b: any) => Number(a.joined_at || 0) - Number(b.joined_at || 0));
 			} else if (t === "newest") {
-				data.sort(
-					(a: any, b: any) =>
-						Number(b.joined_at || 0) - Number(a.joined_at || 0),
-				);
+				data.sort((a: any, b: any) => Number(b.joined_at || 0) - Number(a.joined_at || 0));
 			} else if (t === "oldest_position") {
-				data.sort(
-					(a: any, b: any) => Number(a.position || 0) - Number(b.position || 0),
-				);
+				data.sort((a: any, b: any) => Number(a.position || 0) - Number(b.position || 0));
 			} else if (t === "newest_position") {
-				data.sort(
-					(a: any, b: any) => Number(b.position || 0) - Number(a.position || 0),
-				);
+				data.sort((a: any, b: any) => Number(b.position || 0) - Number(a.position || 0));
 			}
 		}
 
@@ -9921,13 +7981,7 @@ export const DiscordListMemberRole = async (
 	}
 };
 
-export const DiscordListRole = async (
-	token: string,
-	guildId: string,
-	limit: number = 10,
-	type: string = "all",
-	permission: string = "all",
-) => {
+export const DiscordListRole = async (token: string, guildId: string, limit: number = 10, type: string = "all", permission: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -9951,14 +8005,9 @@ export const DiscordListRole = async (
 			}
 		}
 
-		const membersReqPromise: Promise<DiscordListCacheValue> = cachedMembers
-			? Promise.resolve({ status: 200, statusText: "OK", data: cachedMembers })
-			: discordListCache(token, urlMembers, headers);
+		const membersReqPromise: Promise<DiscordListCacheValue> = cachedMembers ? Promise.resolve({ status: 200, statusText: "OK", data: cachedMembers }) : discordListCache(token, urlMembers, headers);
 
-		const [rolesReq, membersReq] = await Promise.all([
-			discordListCache(token, urlRoles, headers),
-			membersReqPromise,
-		]);
+		const [rolesReq, membersReq] = await Promise.all([discordListCache(token, urlRoles, headers), membersReqPromise]);
 
 		let rolesData: any = [];
 		let membersData: any = [];
@@ -9981,9 +8030,7 @@ export const DiscordListRole = async (
 			const totalRoles = rolesData.length;
 
 			rolesData = rolesData.map((role: any) => {
-				const members = membersData
-					.filter((m: any) => m.roles.includes(role.id))
-					.map((m: any) => m.user?.id);
+				const members = membersData.filter((m: any) => m.roles.includes(role.id)).map((m: any) => m.user?.id);
 
 				return {
 					...role,
@@ -9994,21 +8041,13 @@ export const DiscordListRole = async (
 			});
 
 			if (permission !== "all") {
-				const requestedPerms = permission
-					.split(",")
-					.map((p) => p.trim().toLowerCase());
-				const permBits = requestedPerms
-					.map((p) => PERMISSION_KEYS[p])
-					.filter((b) => b !== undefined) as bigint[];
+				const requestedPerms = permission.split(",").map((p) => p.trim().toLowerCase());
+				const permBits = requestedPerms.map((p) => PERMISSION_KEYS[p]).filter((b) => b !== undefined) as bigint[];
 
 				if (permBits.length > 0) {
 					rolesData = rolesData.filter((role: any) => {
 						const rolePerms = BigInt(role.permissions);
-						if (
-							(rolePerms & DISCORD_PERMISSIONS["Administrator"]!) ===
-							DISCORD_PERMISSIONS["Administrator"]!
-						)
-							return true;
+						if ((rolePerms & DISCORD_PERMISSIONS["Administrator"]!) === DISCORD_PERMISSIONS["Administrator"]!) return true;
 						return permBits.every((bit) => (rolePerms & bit) === bit);
 					});
 				}
@@ -10017,15 +8056,9 @@ export const DiscordListRole = async (
 			const types = type.split(",").map((t) => t.trim());
 			for (const t of types) {
 				if (t === "oldest") {
-					rolesData.sort(
-						(a: any, b: any) =>
-							Number(a.created_at || 0) - Number(b.created_at || 0),
-					);
+					rolesData.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
 				} else if (t === "newest") {
-					rolesData.sort(
-						(a: any, b: any) =>
-							Number(b.created_at || 0) - Number(a.created_at || 0),
-					);
+					rolesData.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
 				}
 			}
 
@@ -10057,12 +8090,7 @@ export const DiscordListRole = async (
 	}
 };
 
-export const DiscordListChannel = async (
-	token: string,
-	guildId: string,
-	limit: number = 10,
-	type: string = "all",
-) => {
+export const DiscordListChannel = async (token: string, guildId: string, limit: number = 10, type: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -10076,10 +8104,7 @@ export const DiscordListChannel = async (
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
 		const urlThreads = `https://discord.com/api/v10/guilds/${guildId}/threads/active`;
 
-		const [reqChannels, reqThreads] = await Promise.all([
-			fetch(urlChannels, { method: "GET", headers }),
-			fetch(urlThreads, { method: "GET", headers }),
-		]);
+		const [reqChannels, reqThreads] = await Promise.all([fetch(urlChannels, { method: "GET", headers }), fetch(urlThreads, { method: "GET", headers })]);
 
 		let channelsData: any = [];
 		let threadsData: any = { threads: [] };
@@ -10095,10 +8120,7 @@ export const DiscordListChannel = async (
 			} catch {}
 		}
 
-		let data = [
-			...(Array.isArray(channelsData) ? channelsData : []),
-			...(Array.isArray(threadsData.threads) ? threadsData.threads : []),
-		];
+		let data = [...(Array.isArray(channelsData) ? channelsData : []), ...(Array.isArray(threadsData.threads) ? threadsData.threads : [])];
 
 		if (data.length === 0 && reqChannels.status !== 200) {
 			return {
@@ -10165,11 +8187,7 @@ export const DiscordListChannel = async (
 				data = data.filter((channel: any) => {
 					const typeName = channel.type.name;
 					if (typeName && types.includes(typeName)) return true;
-					if (
-						types.includes("threads") &&
-						[10, 11, 12].includes(channel.type.id)
-					)
-						return true;
+					if (types.includes("threads") && [10, 11, 12].includes(channel.type.id)) return true;
 					return false;
 				});
 			}
@@ -10206,18 +8224,9 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 		const url = `https://discord.com/api/v10/guilds/${guildId}?with_counts=true`;
 		const urlWebhooks = `https://discord.com/api/v10/guilds/${guildId}/webhooks`;
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
-		const urlClientMember = botId
-			? `https://discord.com/api/v10/guilds/${guildId}/members/${botId}`
-			: null;
+		const urlClientMember = botId ? `https://discord.com/api/v10/guilds/${guildId}/members/${botId}` : null;
 
-		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([
-			fetch(url, { method: "GET", headers }),
-			fetch(urlWebhooks, { method: "GET", headers }),
-			fetch(urlChannels, { method: "GET", headers }),
-			urlClientMember
-				? fetch(urlClientMember, { method: "GET", headers })
-				: Promise.resolve(null),
-		]);
+		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([fetch(url, { method: "GET", headers }), fetch(urlWebhooks, { method: "GET", headers }), fetch(urlChannels, { method: "GET", headers }), urlClientMember ? fetch(urlClientMember, { method: "GET", headers }) : Promise.resolve(null)]);
 
 		let data: any = null;
 		let webhooksData: any = [];
@@ -10234,8 +8243,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 			if (channelsReq.status === 200) channelsData = await channelsReq.json();
 		} catch {}
 		try {
-			if (clientMemberReq && clientMemberReq.status === 200)
-				clientMemberData = await clientMemberReq.json();
+			if (clientMemberReq && clientMemberReq.status === 200) clientMemberData = await clientMemberReq.json();
 		} catch {}
 
 		if (req.status !== 200) {
@@ -10353,23 +8361,11 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 			const flagsBadges = resolveFlags(userData?.flags);
 			const publicFlagsBadges = resolveFlags(userData?.public_flags);
 
-			const avatarUrl = userData?.avatar
-				? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
-			const bannerUrl = userData?.banner
-				? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
-			const guildAvatarUrl =
-				guildId && clientMemberData.avatar
-					? `https://cdn.discordapp.com/guilds/${guildId}/users/${userData.id}/avatars/${clientMemberData.avatar}.${clientMemberData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-					: null;
+			const avatarUrl = userData?.avatar ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.${userData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+			const bannerUrl = userData?.banner ? `https://cdn.discordapp.com/banners/${userData.id}/${userData.banner}.${userData.banner.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+			const guildAvatarUrl = guildId && clientMemberData.avatar ? `https://cdn.discordapp.com/guilds/${guildId}/users/${userData.id}/avatars/${clientMemberData.avatar}.${clientMemberData.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 
-			const perms = getMemberPermissions(
-				clientMemberData,
-				data.roles,
-				data,
-				guildId,
-			);
+			const perms = getMemberPermissions(clientMemberData, data.roles, data, guildId);
 
 			data.client = {
 				...clientMemberData,
@@ -10378,18 +8374,8 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 				banner_url: bannerUrl,
 				badges: publicFlagsBadges,
 				badges_raw: flagsBadges,
-				joined_at: clientMemberData.joined_at
-					? String(
-							Math.floor(new Date(clientMemberData.joined_at).getTime() / 1000),
-						)
-					: null,
-				premium_since: clientMemberData.premium_since
-					? String(
-							Math.floor(
-								new Date(clientMemberData.premium_since).getTime() / 1000,
-							),
-						)
-					: null,
+				joined_at: clientMemberData.joined_at ? String(Math.floor(new Date(clientMemberData.joined_at).getTime() / 1000)) : null,
+				premium_since: clientMemberData.premium_since ? String(Math.floor(new Date(clientMemberData.premium_since).getTime() / 1000)) : null,
 				created_at: userData?.id ? String(getSnowflakeDate(userData.id)) : null,
 			};
 		}
@@ -10408,9 +8394,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!q) return { error: "Missing sticker ID or URL" };
 
-	const match = q.match(
-		/(?:cdn\.discordapp\.com\/stickers\/|discord\.com\/stickers\/)?(\d+)/,
-	);
+	const match = q.match(/(?:cdn\.discordapp\.com\/stickers\/|discord\.com\/stickers\/)?(\d+)/);
 	const stickerId = match ? match[1] : q;
 
 	if (stickerCache.has(stickerId)) return { data: stickerCache.get(stickerId) };
@@ -10440,12 +8424,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 
 		if (data) {
 			data.created_at = String(getSnowflakeDate(data.id));
-			const ext =
-				data.format_type === 4
-					? "gif"
-					: data.format_type === 3
-						? "json"
-						: "png";
+			const ext = data.format_type === 4 ? "gif" : data.format_type === 3 ? "json" : "png";
 			data.url = `https://cdn.discordapp.com/stickers/${data.id}.${ext}`;
 
 			if (data.guild_id && token) {
@@ -10463,21 +8442,11 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 						if (previewReq.status === 200) {
 							const previewData: any = await previewReq.json();
 							if (previewData) {
-								previewData.icon_url = previewData.icon
-									? `https://cdn.discordapp.com/icons/${previewData.id}/${previewData.icon}.${previewData.icon.startsWith("a_") ? "gif" : "png"}?size=4096`
-									: null;
-								previewData.splash_url = previewData.splash
-									? `https://cdn.discordapp.com/splashes/${previewData.id}/${previewData.splash}.png?size=4096`
-									: null;
-								previewData.discovery_splash_url = previewData.discovery_splash
-									? `https://cdn.discordapp.com/discovery-splashes/${previewData.id}/${previewData.discovery_splash}.png?size=4096`
-									: null;
-								previewData.home_header_url = previewData.home_header
-									? `https://cdn.discordapp.com/home-headers/${previewData.id}/${previewData.home_header}.png?size=4096`
-									: null;
-								previewData.created_at = String(
-									getSnowflakeDate(previewData.id),
-								);
+								previewData.icon_url = previewData.icon ? `https://cdn.discordapp.com/icons/${previewData.id}/${previewData.icon}.${previewData.icon.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+								previewData.splash_url = previewData.splash ? `https://cdn.discordapp.com/splashes/${previewData.id}/${previewData.splash}.png?size=4096` : null;
+								previewData.discovery_splash_url = previewData.discovery_splash ? `https://cdn.discordapp.com/discovery-splashes/${previewData.id}/${previewData.discovery_splash}.png?size=4096` : null;
+								previewData.home_header_url = previewData.home_header ? `https://cdn.discordapp.com/home-headers/${previewData.id}/${previewData.home_header}.png?size=4096` : null;
+								previewData.created_at = String(getSnowflakeDate(previewData.id));
 								data.guild = previewData;
 								data.guild.resultsType = "preview";
 							} else {
@@ -10510,9 +8479,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 			if (data.user) {
 				const u = data.user;
 				u.created_at = String(getSnowflakeDate(u.id));
-				u.avatar_url = u.avatar
-					? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-					: null;
+				u.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 			} else {
 				data.user = {};
 			}
@@ -10541,20 +8508,8 @@ const DISCORD_STICKER_MIME_TO_EXT: Record<string, string> = {
 	"image/gif": "gif",
 	"application/json": "json",
 };
-const DISCORD_STICKER_CONVERT_MIME_TO_PNG = new Set([
-	"image/jpeg",
-	"image/jpg",
-	"image/pjpeg",
-	"image/webp",
-	"image/x-webp",
-]);
-const DISCORD_STICKER_CONVERT_EXT_TO_PNG = new Set([
-	"jpg",
-	"jpeg",
-	"jpe",
-	"jfif",
-	"webp",
-]);
+const DISCORD_STICKER_CONVERT_MIME_TO_PNG = new Set(["image/jpeg", "image/jpg", "image/pjpeg", "image/webp", "image/x-webp"]);
+const DISCORD_STICKER_CONVERT_EXT_TO_PNG = new Set(["jpg", "jpeg", "jpe", "jfif", "webp"]);
 const DISCORD_STICKER_EXT_TO_MIME: Record<string, string> = {
 	png: "image/png",
 	apng: "image/png",
@@ -10562,11 +8517,7 @@ const DISCORD_STICKER_EXT_TO_MIME: Record<string, string> = {
 	json: "application/json",
 };
 
-export const DiscordCreateSticker = async (
-	token: string,
-	guildId: string,
-	payload: DiscordCreateStickerPayload,
-) => {
+export const DiscordCreateSticker = async (token: string, guildId: string, payload: DiscordCreateStickerPayload) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	if (!payload.url) return { error: "Missing sticker URL" };
@@ -10575,18 +8526,14 @@ export const DiscordCreateSticker = async (
 	const description = payload.description ?? "";
 	const tags = payload.tags?.trim() || name;
 
-	if (name.length < 2 || name.length > 30)
-		return { error: "Sticker name must be 2-30 characters" };
-	if (description.length === 1 || description.length > 100)
-		return { error: "Sticker description must be empty or 2-100 characters" };
-	if (!tags || tags.length > 200)
-		return { error: "Sticker tags must be 1-200 characters" };
+	if (name.length < 2 || name.length > 30) return { error: "Sticker name must be 2-30 characters" };
+	if (description.length === 1 || description.length > 100) return { error: "Sticker description must be empty or 2-100 characters" };
+	if (!tags || tags.length > 200) return { error: "Sticker tags must be 1-200 characters" };
 
 	let stickerUrl: URL;
 	try {
 		stickerUrl = new URL(payload.url);
-		if (stickerUrl.protocol !== "http:" && stickerUrl.protocol !== "https:")
-			throw new Error();
+		if (stickerUrl.protocol !== "http:" && stickerUrl.protocol !== "https:") throw new Error();
 	} catch {
 		return { error: "Invalid sticker URL" };
 	}
@@ -10594,8 +8541,7 @@ export const DiscordCreateSticker = async (
 	try {
 		const source = await fetch(stickerUrl, {
 			headers: {
-				Accept:
-					"image/png,image/apng,image/gif,image/jpeg,image/webp,application/json,*/*;q=0.8",
+				Accept: "image/png,image/apng,image/gif,image/jpeg,image/webp,application/json,*/*;q=0.8",
 				"User-Agent": userAgent,
 			},
 		});
@@ -10611,15 +8557,10 @@ export const DiscordCreateSticker = async (
 			};
 		}
 
-		const rawContentType =
-			source.headers.get("content-type")?.split(";")[0]?.toLowerCase() || "";
+		const rawContentType = source.headers.get("content-type")?.split(";")[0]?.toLowerCase() || "";
 		const pathExt = stickerUrl.pathname.split(".").pop()?.toLowerCase() || "";
-		const shouldConvertToPng =
-			DISCORD_STICKER_CONVERT_MIME_TO_PNG.has(rawContentType) ||
-			DISCORD_STICKER_CONVERT_EXT_TO_PNG.has(pathExt);
-		const sourceLimit = shouldConvertToPng
-			? DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES
-			: DISCORD_STICKER_MAX_BYTES;
+		const shouldConvertToPng = DISCORD_STICKER_CONVERT_MIME_TO_PNG.has(rawContentType) || DISCORD_STICKER_CONVERT_EXT_TO_PNG.has(pathExt);
+		const sourceLimit = shouldConvertToPng ? DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES : DISCORD_STICKER_MAX_BYTES;
 		const contentLength = Number(source.headers.get("content-length") || 0);
 		if (contentLength > sourceLimit) {
 			return {
@@ -10627,21 +8568,14 @@ export const DiscordCreateSticker = async (
 			};
 		}
 
-		const extFromUrl =
-			!shouldConvertToPng && DISCORD_STICKER_EXT_TO_MIME[pathExt]
-				? pathExt
-				: "";
+		const extFromUrl = !shouldConvertToPng && DISCORD_STICKER_EXT_TO_MIME[pathExt] ? pathExt : "";
 		const extFromType = DISCORD_STICKER_MIME_TO_EXT[rawContentType] || "";
 		const ext = shouldConvertToPng ? "png" : extFromUrl || extFromType;
-		const mimeType = shouldConvertToPng
-			? "image/png"
-			: DISCORD_STICKER_EXT_TO_MIME[ext] ||
-				(DISCORD_STICKER_MIME_TO_EXT[rawContentType] ? rawContentType : "");
+		const mimeType = shouldConvertToPng ? "image/png" : DISCORD_STICKER_EXT_TO_MIME[ext] || (DISCORD_STICKER_MIME_TO_EXT[rawContentType] ? rawContentType : "");
 
 		if (!ext || !mimeType) {
 			return {
-				error:
-					"Unsupported sticker file type. Use PNG, APNG, GIF, Lottie JSON, JPEG, or WebP",
+				error: "Unsupported sticker file type. Use PNG, APNG, GIF, Lottie JSON, JPEG, or WebP",
 			};
 		}
 
@@ -10656,12 +8590,7 @@ export const DiscordCreateSticker = async (
 		if (shouldConvertToPng) {
 			try {
 				const sharp = (await import("sharp")).default;
-				fileBytes = new Uint8Array(
-					await sharp(Buffer.from(fileBytes))
-						.rotate()
-						.png({ compressionLevel: 9, adaptiveFiltering: true })
-						.toBuffer(),
-				);
+				fileBytes = new Uint8Array(await sharp(Buffer.from(fileBytes)).rotate().png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer());
 			} catch (err: any) {
 				return {
 					error: `Failed to convert sticker image to PNG: ${err?.message || err}`,
@@ -10675,34 +8604,24 @@ export const DiscordCreateSticker = async (
 			};
 		}
 
-		const filenameBase =
-			name.replace(/[^a-zA-Z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") ||
-			"sticker";
+		const filenameBase = name.replace(/[^a-zA-Z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") || "sticker";
 		const form = new FormData();
 		form.append("name", name);
 		form.append("description", description);
 		form.append("tags", tags);
-		form.append(
-			"file",
-			new Blob([fileBytes], { type: mimeType }),
-			`${filenameBase}.${ext}`,
-		);
+		form.append("file", new Blob([fileBytes], { type: mimeType }), `${filenameBase}.${ext}`);
 
 		const headers: any = {
 			Authorization: `Bot ${token}`,
 			"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 		};
-		if (payload.reason)
-			headers["X-Audit-Log-Reason"] = encodeURIComponent(payload.reason);
+		if (payload.reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(payload.reason);
 
-		const response = await fetch(
-			`https://discord.com/api/v10/guilds/${guildId}/stickers`,
-			{
-				method: "POST",
-				headers,
-				body: form,
-			},
-		);
+		const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/stickers`, {
+			method: "POST",
+			headers,
+			body: form,
+		});
 
 		let result: any = null;
 		try {
@@ -10721,12 +8640,7 @@ export const DiscordCreateSticker = async (
 
 		if (result?.id) {
 			result.created_at = String(getSnowflakeDate(result.id));
-			const resultExt =
-				result.format_type === 4
-					? "gif"
-					: result.format_type === 3
-						? "json"
-						: ext;
+			const resultExt = result.format_type === 4 ? "gif" : result.format_type === 3 ? "json" : ext;
 			result.url = `https://cdn.discordapp.com/stickers/${result.id}.${resultExt}`;
 			stickerCache.set(result.id, result);
 		}
@@ -10737,28 +8651,20 @@ export const DiscordCreateSticker = async (
 	}
 };
 
-export const DiscordDeleteSticker = async (
-	token: string,
-	guildId: string,
-	stickerId: string,
-) => {
+export const DiscordDeleteSticker = async (token: string, guildId: string, stickerId: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	if (!stickerId) return { error: "Missing stickerId" };
-	if (!/^\d+$/.test(guildId) || !/^\d+$/.test(stickerId))
-		return { error: "Invalid guildId or stickerId" };
+	if (!/^\d+$/.test(guildId) || !/^\d+$/.test(stickerId)) return { error: "Invalid guildId or stickerId" };
 
 	try {
-		const response = await fetch(
-			`https://discord.com/api/v10/guilds/${guildId}/stickers/${stickerId}`,
-			{
-				method: "DELETE",
-				headers: {
-					Authorization: `Bot ${token}`,
-					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
-				},
+		const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/stickers/${stickerId}`, {
+			method: "DELETE",
+			headers: {
+				Authorization: `Bot ${token}`,
+				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 			},
-		);
+		});
 
 		let result: any = null;
 		if (response.status !== 204) {
@@ -10793,9 +8699,7 @@ const processDiscordMessage = async (m: any, token?: string) => {
 	}
 	if (m.hasOwnProperty("edited_timestamp")) {
 		if (m.edited_timestamp) {
-			m.edited_at = String(
-				Math.floor(new Date(m.edited_timestamp).getTime() / 1000),
-			);
+			m.edited_at = String(Math.floor(new Date(m.edited_timestamp).getTime() / 1000));
 		} else {
 			m.edited_at = null;
 		}
@@ -10805,8 +8709,7 @@ const processDiscordMessage = async (m: any, token?: string) => {
 	if (Array.isArray(m.sticker_items)) {
 		for (let i = 0; i < m.sticker_items.length; i++) {
 			const s = m.sticker_items[i];
-			const ext =
-				s.format_type === 4 ? "gif" : s.format_type === 3 ? "json" : "png";
+			const ext = s.format_type === 4 ? "gif" : s.format_type === 3 ? "json" : "png";
 			s.url = `https://cdn.discordapp.com/stickers/${s.id}.${ext}`;
 
 			if (token) {
@@ -10846,9 +8749,7 @@ const processDiscordMessage = async (m: any, token?: string) => {
 			const alt = mdMatch[1];
 			const url = mdMatch[2];
 			const normalizedUrl = url.replace(/\/$/, "");
-			const richContent = m.embeds?.find(
-				(e: any) => e.url && e.url.replace(/\/$/, "") === normalizedUrl,
-			);
+			const richContent = m.embeds?.find((e: any) => e.url && e.url.replace(/\/$/, "") === normalizedUrl);
 			hyperlinkItems.push({
 				alt,
 				url,
@@ -10863,9 +8764,7 @@ const processDiscordMessage = async (m: any, token?: string) => {
 			const url = bareMatch[1];
 			if (seenUrls.has(url)) continue;
 			const normalizedUrl = url.replace(/\/$/, "");
-			const richContent = m.embeds?.find(
-				(e: any) => e.url && e.url.replace(/\/$/, "") === normalizedUrl,
-			);
+			const richContent = m.embeds?.find((e: any) => e.url && e.url.replace(/\/$/, "") === normalizedUrl);
 			hyperlinkItems.push({
 				alt: null,
 				url,
@@ -10883,12 +8782,7 @@ const processDiscordMessage = async (m: any, token?: string) => {
 	return m;
 };
 
-export const DiscordInfoMessages = async (
-	token: string,
-	channelId: string,
-	sort: "asc" | "desc" = "desc",
-	limit: number = 50,
-) => {
+export const DiscordInfoMessages = async (token: string, channelId: string, sort: "asc" | "desc" = "desc", limit: number = 50) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 
@@ -10923,9 +8817,7 @@ export const DiscordInfoMessages = async (
 		}
 
 		if (Array.isArray(data)) {
-			data = await Promise.all(
-				data.map((m) => processDiscordMessage(m, token)),
-			);
+			data = await Promise.all(data.map((m) => processDiscordMessage(m, token)));
 		}
 
 		return { limit, data };
@@ -10934,11 +8826,7 @@ export const DiscordInfoMessages = async (
 	}
 };
 
-export const DiscordInfoMessage = async (
-	token: string,
-	channelId: string,
-	messageId: string,
-) => {
+export const DiscordInfoMessage = async (token: string, channelId: string, messageId: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 	if (!messageId) return { error: "Missing messageId" };
@@ -10976,14 +8864,8 @@ export const DiscordInfoMessage = async (
 	}
 };
 
-export const DiscordInfoInvite = async (
-	token: string | null,
-	q: string,
-	guildId?: string,
-) => {
-	const match = q?.match(
-		/(?:discord\.gg\/|discord\.com\/invite\/)([a-zA-Z0-9-]+)|^([a-zA-Z0-9-]+)$/,
-	);
+export const DiscordInfoInvite = async (token: string | null, q: string, guildId?: string) => {
+	const match = q?.match(/(?:discord\.gg\/|discord\.com\/invite\/)([a-zA-Z0-9-]+)|^([a-zA-Z0-9-]+)$/);
 	const code = match?.[1] ?? match?.[2] ?? null;
 
 	if (!guildId && (!code || !/^[a-zA-Z0-9-]{2,30}$/.test(code))) {
@@ -10997,9 +8879,7 @@ export const DiscordInfoInvite = async (
 	if (token) headers["Authorization"] = `Bot ${token}`;
 
 	try {
-		const url = guildId
-			? `https://discord.com/api/v10/guilds/${guildId}/invites`
-			: `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
+		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/invites` : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
 
 		const req = await fetch(url, { method: "GET", headers });
 		let data: any = null;
@@ -11025,9 +8905,7 @@ export const DiscordInfoInvite = async (
 				data.created_at = String(getSnowflakeDate(data.id));
 			}
 			if (data.expires_at) {
-				data.expires_at = String(
-					Math.floor(new Date(data.expires_at).getTime() / 1000),
-				);
+				data.expires_at = String(Math.floor(new Date(data.expires_at).getTime() / 1000));
 			}
 		}
 
@@ -11035,35 +8913,21 @@ export const DiscordInfoInvite = async (
 			const g = data.guild;
 			const guildId = g.id;
 
-			data.guild.icon_url = g.icon
-				? `https://cdn.discordapp.com/icons/${guildId}/${g.icon}.${g.icon.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
-			data.guild.splash_url = g.splash
-				? `https://cdn.discordapp.com/splashes/${guildId}/${g.splash}.png?size=4096`
-				: null;
-			data.guild.banner_url = g.banner
-				? `https://cdn.discordapp.com/banners/${guildId}/${g.banner}.${g.banner.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
-			data.guild.created_at = guildId
-				? String(getSnowflakeDate(guildId))
-				: null;
+			data.guild.icon_url = g.icon ? `https://cdn.discordapp.com/icons/${guildId}/${g.icon}.${g.icon.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+			data.guild.splash_url = g.splash ? `https://cdn.discordapp.com/splashes/${guildId}/${g.splash}.png?size=4096` : null;
+			data.guild.banner_url = g.banner ? `https://cdn.discordapp.com/banners/${guildId}/${g.banner}.${g.banner.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+			data.guild.created_at = guildId ? String(getSnowflakeDate(guildId)) : null;
 		}
 
 		if (data && data.inviter) {
 			const u = data.inviter;
 			const userId = u.id;
 
-			data.inviter.avatar_url = u.avatar
-				? `https://cdn.discordapp.com/avatars/${userId}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
-			data.inviter.banner_url = u.banner
-				? `https://cdn.discordapp.com/banners/${userId}/${u.banner}.${u.banner.startsWith("a_") ? "gif" : "png"}?size=4096`
-				: null;
+			data.inviter.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+			data.inviter.banner_url = u.banner ? `https://cdn.discordapp.com/banners/${userId}/${u.banner}.${u.banner.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 			data.inviter.badges = resolveFlags(u.public_flags);
 			data.inviter.badges_raw = resolveFlags(u.flags);
-			data.inviter.created_at = userId
-				? String(getSnowflakeDate(userId))
-				: null;
+			data.inviter.created_at = userId ? String(getSnowflakeDate(userId)) : null;
 		}
 
 		return { data };
@@ -11072,13 +8936,7 @@ export const DiscordInfoInvite = async (
 	}
 };
 
-export const DiscordListInvite = async (
-	token: string,
-	guildId: string,
-	limit: number = 10,
-	type: string = "all",
-	authorId: string = "",
-) => {
+export const DiscordListInvite = async (token: string, guildId: string, limit: number = 10, type: string = "all", authorId: string = "") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -11109,27 +8967,17 @@ export const DiscordListInvite = async (
 				const enriched = { ...invite };
 				if (enriched.inviter) {
 					const u = enriched.inviter;
-					enriched.inviter.avatar_url = u.avatar
-						? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096`
-						: null;
-					enriched.inviter.banner_url = u.banner
-						? `https://cdn.discordapp.com/banners/${u.id}/${u.banner}.${u.banner.startsWith("a_") ? "gif" : "png"}?size=4096`
-						: null;
+					enriched.inviter.avatar_url = u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
+					enriched.inviter.banner_url = u.banner ? `https://cdn.discordapp.com/banners/${u.id}/${u.banner}.${u.banner.startsWith("a_") ? "gif" : "png"}?size=4096` : null;
 					enriched.inviter.badges = resolveFlags(u.public_flags);
 					enriched.inviter.badges_raw = resolveFlags(u.flags);
-					enriched.inviter.created_at = u.id
-						? String(getSnowflakeDate(u.id))
-						: null;
+					enriched.inviter.created_at = u.id ? String(getSnowflakeDate(u.id)) : null;
 				}
 				if (enriched.created_at) {
-					enriched.created_at = String(
-						Math.floor(new Date(enriched.created_at).getTime() / 1000),
-					);
+					enriched.created_at = String(Math.floor(new Date(enriched.created_at).getTime() / 1000));
 				}
 				if (enriched.expires_at) {
-					enriched.expires_at = String(
-						Math.floor(new Date(enriched.expires_at).getTime() / 1000),
-					);
+					enriched.expires_at = String(Math.floor(new Date(enriched.expires_at).getTime() / 1000));
 				}
 				return enriched;
 			});
@@ -11141,24 +8989,16 @@ export const DiscordListInvite = async (
 			}
 
 			const types = type.split(",").map((t) => t.trim().toLowerCase());
-			const filterTypes = [
-				"temporary",
-				"permanent",
-				"has_expire",
-				"user",
-				"bot",
-			];
+			const filterTypes = ["temporary", "permanent", "has_expire", "user", "bot"];
 			const hasFilterType = types.some((t) => filterTypes.includes(t));
 
 			if (!types.includes("all") && hasFilterType) {
 				data = data.filter((i: any) => {
 					let keep = false;
 					if (types.includes("temporary") && i.temporary) keep = true;
-					if (types.includes("permanent") && !i.temporary && i.max_age === 0)
-						keep = true;
+					if (types.includes("permanent") && !i.temporary && i.max_age === 0) keep = true;
 					if (types.includes("has_expire") && !!i.expires_at) keep = true;
-					if (types.includes("user") && i.inviter && !i.inviter.bot)
-						keep = true;
+					if (types.includes("user") && i.inviter && !i.inviter.bot) keep = true;
 					if (types.includes("bot") && i.inviter && i.inviter.bot) keep = true;
 					return keep;
 				});
@@ -11166,15 +9006,9 @@ export const DiscordListInvite = async (
 
 			for (const t of types) {
 				if (t === "oldest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(a.created_at || 0) - Number(b.created_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
 				} else if (t === "newest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(b.created_at || 0) - Number(a.created_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
 				}
 			}
 
@@ -11194,11 +9028,7 @@ export const DiscordListInvite = async (
 	}
 };
 
-export const DiscordInfoChannel = async (
-	token: string,
-	channelId: string,
-	guildId?: string,
-) => {
+export const DiscordInfoChannel = async (token: string, channelId: string, guildId?: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 
@@ -11209,9 +9039,7 @@ export const DiscordInfoChannel = async (
 	};
 
 	try {
-		const url = guildId
-			? `https://discord.com/api/v10/guilds/${guildId}/channels`
-			: `https://discord.com/api/v10/channels/${channelId}`;
+		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/channels` : `https://discord.com/api/v10/channels/${channelId}`;
 
 		const req = await fetch(url, { method: "GET", headers });
 		let data: any = null;
@@ -11239,23 +9067,21 @@ export const DiscordInfoChannel = async (
 			};
 
 			if (data.permission_overwrites) {
-				data.permission_overwrites = data.permission_overwrites.map(
-					(o: any) => {
-						const allowResolved = resolvePermissions(o.allow);
-						const denyResolved = resolvePermissions(o.deny);
-						return {
-							...o,
-							allow_resolved: {
-								array: allowResolved,
-								string: allowResolved.join(", "),
-							},
-							deny_resolved: {
-								array: denyResolved,
-								string: denyResolved.join(", "),
-							},
-						};
-					},
-				);
+				data.permission_overwrites = data.permission_overwrites.map((o: any) => {
+					const allowResolved = resolvePermissions(o.allow);
+					const denyResolved = resolvePermissions(o.deny);
+					return {
+						...o,
+						allow_resolved: {
+							array: allowResolved,
+							string: allowResolved.join(", "),
+						},
+						deny_resolved: {
+							array: denyResolved,
+							string: denyResolved.join(", "),
+						},
+					};
+				});
 			}
 			data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
 		}
@@ -11266,11 +9092,7 @@ export const DiscordInfoChannel = async (
 	}
 };
 
-export const DiscordInfoRole = async (
-	token: string,
-	roleId: string,
-	guildId: string,
-) => {
+export const DiscordInfoRole = async (token: string, roleId: string, guildId: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!roleId) return { error: "Missing roleId" };
 	if (!guildId) return { error: "Missing guildId" };
@@ -11285,10 +9107,7 @@ export const DiscordInfoRole = async (
 		const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
 		const urlCounts = `https://discord.com/api/v10/guilds/${guildId}/roles/member-counts`;
 
-		const [rolesReq, countsReq] = await Promise.all([
-			fetch(urlRoles, { method: "GET", headers }),
-			fetch(urlCounts, { method: "GET", headers }),
-		]);
+		const [rolesReq, countsReq] = await Promise.all([fetch(urlRoles, { method: "GET", headers }), fetch(urlCounts, { method: "GET", headers })]);
 
 		let rolesData: any = [];
 		let countsData: any = [];
@@ -11318,10 +9137,7 @@ export const DiscordInfoRole = async (
 		}
 
 		if (data && !Array.isArray(data)) {
-			const membersCount =
-				countsData && typeof countsData === "object"
-					? countsData[roleId] || 0
-					: 0;
+			const membersCount = countsData && typeof countsData === "object" ? countsData[roleId] || 0 : 0;
 
 			const resolvedArray = resolvePermissions(data.permissions);
 			data = {
@@ -11341,11 +9157,7 @@ export const DiscordInfoRole = async (
 	}
 };
 
-export const DiscordListWebhooks = async (
-	token: string,
-	guildId: string,
-	type: string = "all",
-) => {
+export const DiscordListWebhooks = async (token: string, guildId: string, type: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -11379,15 +9191,9 @@ export const DiscordListWebhooks = async (
 			const types = type.split(",").map((t) => t.trim().toLowerCase());
 			for (const t of types) {
 				if (t === "oldest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(a.created_at || 0) - Number(b.created_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(a.created_at || 0) - Number(b.created_at || 0));
 				} else if (t === "newest") {
-					data.sort(
-						(a: any, b: any) =>
-							Number(b.created_at || 0) - Number(a.created_at || 0),
-					);
+					data.sort((a: any, b: any) => Number(b.created_at || 0) - Number(a.created_at || 0));
 				}
 			}
 		}
@@ -11398,10 +9204,7 @@ export const DiscordListWebhooks = async (
 	}
 };
 
-export const ImgurPost = async (
-	query: string,
-	refresh_auth: boolean = false,
-): Promise<any> => {
+export const ImgurPost = async (query: string, refresh_auth: boolean = false): Promise<any> => {
 	if (!query) return null;
 
 	if (refresh_auth || !keyimgur) {
@@ -11409,12 +9212,8 @@ export const ImgurPost = async (
 	}
 
 	try {
-		const req = await fetch(
-			`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`,
-			{ headers: { ...commonHeaders }, signal: AbortSignal.timeout(90000) },
-		);
-		if (req.status === 401 || req.status === 400)
-			return await ImgurPost(query, true);
+		const req = await fetch(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: { ...commonHeaders }, signal: AbortSignal.timeout(90000) });
+		if (req.status === 401 || req.status === 400) return await ImgurPost(query, true);
 		const res: any = await req.json();
 		return { data: res?.posts || null };
 	} catch {
@@ -11436,36 +9235,27 @@ export const Klipy = async function Klipy(que: string, type?: string) {
 	try {
 		const queryType = getQueryType(type);
 		const [req, req2, req3] = await Promise.all([
-			fetch(
-				`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://klipy.com",
-						Origin: "https://klipy.com",
-					},
+			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://klipy.com",
+					Origin: "https://klipy.com",
 				},
-			),
-			fetch(
-				`https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://klipy.com",
-						Origin: "https://klipy.com",
-					},
+			}),
+			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://klipy.com",
+					Origin: "https://klipy.com",
 				},
-			),
-			fetch(
-				`https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: "https://klipy.com",
-						Origin: "https://klipy.com",
-					},
+			}),
+			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://klipy.com",
+					Origin: "https://klipy.com",
 				},
-			),
+			}),
 		]);
 
 		let res2: any;
@@ -11507,14 +9297,11 @@ export const infoKlipy = async function infoKlipy(url: string) {
 			return { error: "Invalid Klipy URL path" };
 		}
 
-		const req = await fetch(
-			`https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const req = await fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (req.status === 404) {
 			return { error: `${req.status} - Not found` };
@@ -11541,9 +9328,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
 	let softMatches: string[] = [];
 	const d = new Date();
 
-	const gmtUtcMatch = query.match(
-		/^(?:gmt|utc)\s*([+-]?)\s*(\d{1,2})(?::?(\d{2}))?$/,
-	);
+	const gmtUtcMatch = query.match(/^(?:gmt|utc)\s*([+-]?)\s*(\d{1,2})(?::?(\d{2}))?$/);
 
 	if (gmtUtcMatch) {
 		const sign = gmtUtcMatch[1] === "-" ? -1 : 1;
@@ -11557,8 +9342,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
 				timeZoneName: "longOffset",
 			});
 			const parts = formatter.formatToParts(d);
-			const offsetPart =
-				parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
+			const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
 
 			let gmtStr = offsetPart.replace("GMT", "");
 			if (gmtStr === "") gmtStr = "+00:00";
@@ -11574,30 +9358,19 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
 
 		if (softMatches.length > 0) {
 			softMatches.sort((a, b) => {
-				const aPri =
-					a.startsWith("Antarctica/") || a.startsWith("Etc/") ? 1 : 0;
-				const bPri =
-					b.startsWith("Antarctica/") || b.startsWith("Etc/") ? 1 : 0;
+				const aPri = a.startsWith("Antarctica/") || a.startsWith("Etc/") ? 1 : 0;
+				const bPri = b.startsWith("Antarctica/") || b.startsWith("Etc/") ? 1 : 0;
 				return aPri - bPri;
 			});
 			exactMatches = [softMatches[0]];
 			softMatches = softMatches.slice(1);
 		}
 	} else {
-		exactMatches = timezones.filter(
-			(tz) =>
-				tz.toLowerCase() === query ||
-				tz.toLowerCase().split("/").pop() === query,
-		);
+		exactMatches = timezones.filter((tz) => tz.toLowerCase() === query || tz.toLowerCase().split("/").pop() === query);
 		softMatches = timezones.filter((tz) => tz.toLowerCase().includes(query));
 	}
 
-	const matches =
-		exactMatches.length > 0
-			? exactMatches.concat(
-					softMatches.filter((tz) => !exactMatches.includes(tz)),
-				)
-			: softMatches;
+	const matches = exactMatches.length > 0 ? exactMatches.concat(softMatches.filter((tz) => !exactMatches.includes(tz))) : softMatches;
 
 	if (matches.length === 0) {
 		return { error: "Timezone not found" };
@@ -11613,8 +9386,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
 
 	function getOffsetMinutes(date: Date) {
 		const parts = formatter.formatToParts(date);
-		const offsetPart =
-			parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
+		const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
 		let str = offsetPart.replace("GMT", "");
 		if (str === "") str = "+00:00";
 
@@ -11654,11 +9426,7 @@ export const TimezoneInfo = async function TimezoneInfo(q: string) {
 		p[part.type] = part.value;
 	});
 
-	const isoOffsetStr =
-		(currentOffsetMinutes >= 0 ? "+" : "-") +
-		String(Math.abs(Math.floor(currentOffsetMinutes / 60))).padStart(2, "0") +
-		":" +
-		String(Math.abs(currentOffsetMinutes % 60)).padStart(2, "0");
+	const isoOffsetStr = (currentOffsetMinutes >= 0 ? "+" : "-") + String(Math.abs(Math.floor(currentOffsetMinutes / 60))).padStart(2, "0") + ":" + String(Math.abs(currentOffsetMinutes % 60)).padStart(2, "0");
 
 	const isoLocal = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${isoOffsetStr}`;
 	const utcLocal =
@@ -11702,14 +9470,11 @@ export const PatreonSearch = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			`https://www.patreon.com/api/search?q=${encodeURIComponent(query)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://www.patreon.com/api/search?q=${encodeURIComponent(query)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const response = await res.json();
 
@@ -11729,14 +9494,11 @@ export const Trakteer = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${encodeURIComponent(query)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${encodeURIComponent(query)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const response = await res.json();
 
@@ -11768,21 +9530,17 @@ export const IMDB = async (query: string): Promise<any> => {
 		};
 		const exter: any = {
 			persistedQuery: {
-				sha256Hash:
-					"600c8ca2deb61df89fced826818a7b5bdfc5539c39402a8bd285221aedbfa99a",
+				sha256Hash: "600c8ca2deb61df89fced826818a7b5bdfc5539c39402a8bd285221aedbfa99a",
 				version: 1,
 			},
 		};
-		const res = await fetch(
-			`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					"Content-Type": "application/json",
-				},
+		const res = await fetch(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				"Content-Type": "application/json",
 			},
-		);
+		});
 
 		const response = await res.json();
 
@@ -11810,17 +9568,12 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 		return raw;
 	};
 
-	const hasClass = (el: any, name: string): boolean =>
-		el.getAttribute?.("class")?.split(" ").includes(name) ?? false;
+	const hasClass = (el: any, name: string): boolean => el.getAttribute?.("class")?.split(" ").includes(name) ?? false;
 
 	const text = (el: any): string => String(el?.textContent ?? "").trim();
 
 	// Parse subtitle string into structured metadata per section
-	const parseMeta = (
-		section: string,
-		subtitle: string,
-		description: string,
-	) => {
+	const parseMeta = (section: string, subtitle: string, description: string) => {
 		switch (section) {
 			case "memes": {
 				const captions = subtitle.match(/([\d,]+\+?)\s+captions?/)?.[1] ?? null;
@@ -11862,12 +9615,9 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 	};
 
 	try {
-		const res = await fetch(
-			`https://imgflip.com/search?q=${encodeURIComponent(query)}`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const res = await fetch(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
+			headers: { ...commonHeaders },
+		});
 
 		const html: string = await res.text();
 
@@ -11885,8 +9635,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 		let currentSection = "unknown";
 
 		for (const child of container.children) {
-			const heading =
-				child.tagName === "H2" ? child : child.querySelector?.("h2");
+			const heading = child.tagName === "H2" ? child : child.querySelector?.("h2");
 
 			if (heading) {
 				currentSection = text(heading).toLowerCase();
@@ -11898,9 +9647,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 				continue;
 			}
 
-			const anchors: any[] = hasClass(child, "s-result")
-				? [child]
-				: [...child.querySelectorAll("a.s-result")];
+			const anchors: any[] = hasClass(child, "s-result") ? [child] : [...child.querySelectorAll("a.s-result")];
 
 			for (const el of anchors) {
 				const url = resolveUrl(el.getAttribute("href"));
@@ -11909,15 +9656,12 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 				const rawCover = el.querySelector("img")?.getAttribute("src");
 				const isGif = el.getAttribute("href")?.includes("/gif/") ?? false;
 				const cover = resolveUrl(rawCover);
-				const full_cover = isGif
-					? cover.replace("/2/", "/").replace(/\.jpg$/, ".mp4")
-					: cover.replace("/2/", "/");
+				const full_cover = isGif ? cover.replace("/2/", "/").replace(/\.jpg$/, ".mp4") : cover.replace("/2/", "/");
 				const description = text(el.querySelector(".s-result-description"));
 
 				const meta = parseMeta(currentSection, subtitle, description);
 
-				const noCover =
-					currentSection === "users" || currentSection === "streams";
+				const noCover = currentSection === "users" || currentSection === "streams";
 				const entry: Record<string, any> = noCover
 					? { url, title, ...meta }
 					: {
@@ -11944,14 +9688,11 @@ export const OtoDB = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			`https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const json = await res.json();
 
@@ -11987,26 +9728,18 @@ export const OtoDB = async (query: string): Promise<any> => {
 	}
 };
 
-export const DiscordVoice = async (
-	token: string,
-	guildId: string,
-	action: string,
-	payload: any,
-) => {
+export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
 	if (action === "setstatus") {
 		const { channelId, content } = payload;
-		const res = await fetch(
-			`https://discord.com/api/v10/channels/${channelId}/voice-status`,
-			{
-				method: "PUT",
-				headers: {
-					Authorization: `Bot ${token}`,
-					"Content-Type": "application/json",
-					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
-				},
-				body: JSON.stringify({ status: content || "" }),
+		const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+			method: "PUT",
+			headers: {
+				Authorization: `Bot ${token}`,
+				"Content-Type": "application/json",
+				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 			},
-		);
+			body: JSON.stringify({ status: content || "" }),
+		});
 
 		if (!res.ok) {
 			const body = await res.text();
@@ -12027,22 +9760,18 @@ export const DiscordVoice = async (
 		};
 	}
 
-	if (!token || !guildId || !action)
-		return { error: "Missing required parameters" };
+	if (!token || !guildId || !action) return { error: "Missing required parameters" };
 
 	const modifyMember = async (userId: string, data: any) => {
-		const res = await fetch(
-			`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`,
-			{
-				method: "PATCH",
-				headers: {
-					Authorization: `Bot ${token}`,
-					"Content-Type": "application/json",
-					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
-				},
-				body: JSON.stringify(data),
+		const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+			method: "PATCH",
+			headers: {
+				Authorization: `Bot ${token}`,
+				"Content-Type": "application/json",
+				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 			},
-		);
+			body: JSON.stringify(data),
+		});
 		if (!res.ok) {
 			const body = await res.text();
 			let parsed: any;
@@ -12069,25 +9798,15 @@ export const DiscordVoice = async (
 			return JSON.parse(JSON.stringify({ member: m, voiceState: m.voice }));
 		};
 
-		const buildAllResult = (
-			action: string,
-			channelId: string,
-			oldData: any[],
-			results: PromiseSettledResult<any>[],
-			totalVoiceMembers: number,
-			excludeAuthors: string[],
-			extra?: Record<string, any>,
-		) => {
+		const buildAllResult = (action: string, channelId: string, oldData: any[], results: PromiseSettledResult<any>[], totalVoiceMembers: number, excludeAuthors: string[], extra?: Record<string, any>) => {
 			const newData = oldData.map((old, i) => {
 				const result = results[i];
 				const formatted = JSON.parse(JSON.stringify(old));
 				if (result.status === "fulfilled") {
 					const apiData = result.value.data;
 					if (apiData) {
-						if (apiData.deaf !== undefined)
-							formatted.voiceState.serverDeaf = apiData.deaf;
-						if (apiData.mute !== undefined)
-							formatted.voiceState.serverMute = apiData.mute;
+						if (apiData.deaf !== undefined) formatted.voiceState.serverDeaf = apiData.deaf;
+						if (apiData.mute !== undefined) formatted.voiceState.serverMute = apiData.mute;
 					}
 					if (action === "kickall" || action === "kick") {
 						formatted.voiceState.channelId = null;
@@ -12114,9 +9833,7 @@ export const DiscordVoice = async (
 			};
 		};
 
-		if (
-			["deafen", "undeafen", "mute", "unmute", "kick", "move"].includes(action)
-		) {
+		if (["deafen", "undeafen", "mute", "unmute", "kick", "move"].includes(action)) {
 			const { userId } = payload;
 			if (!userId) return { error: "Missing valid parameter: userId" };
 
@@ -12132,29 +9849,21 @@ export const DiscordVoice = async (
 			const oldData = formatMemberData(memberObj);
 
 			let result: any;
-			if (action === "deafen")
-				result = await modifyMember(userId, { deaf: true });
-			else if (action === "undeafen")
-				result = await modifyMember(userId, { deaf: false });
-			else if (action === "mute")
-				result = await modifyMember(userId, { mute: true });
-			else if (action === "unmute")
-				result = await modifyMember(userId, { mute: false });
-			else if (action === "kick")
-				result = await modifyMember(userId, { channel_id: null });
+			if (action === "deafen") result = await modifyMember(userId, { deaf: true });
+			else if (action === "undeafen") result = await modifyMember(userId, { deaf: false });
+			else if (action === "mute") result = await modifyMember(userId, { mute: true });
+			else if (action === "unmute") result = await modifyMember(userId, { mute: false });
+			else if (action === "kick") result = await modifyMember(userId, { channel_id: null });
 			else if (action === "move") {
 				const { toChannelId } = payload;
-				if (!toChannelId)
-					return { error: "Missing valid parameter: toChannelId" };
+				if (!toChannelId) return { error: "Missing valid parameter: toChannelId" };
 				result = await modifyMember(userId, { channel_id: toChannelId });
 			}
 
 			const newData = formatMemberData(memberObj);
 			if (result.data) {
-				if (result.data.deaf !== undefined)
-					newData.voiceState.serverDeaf = result.data.deaf;
-				if (result.data.mute !== undefined)
-					newData.voiceState.serverMute = result.data.mute;
+				if (result.data.deaf !== undefined) newData.voiceState.serverDeaf = result.data.deaf;
+				if (result.data.mute !== undefined) newData.voiceState.serverMute = result.data.mute;
 			}
 			if (action === "kick") {
 				newData.voiceState.channelId = null;
@@ -12177,8 +9886,7 @@ export const DiscordVoice = async (
 		if (!channelId) return { error: "Missing valid parameter: channelId" };
 
 		const channel: any = await guild.channels.fetch(channelId);
-		if (!channel || !channel.isVoiceBased())
-			return { error: "Invalid voice channel" };
+		if (!channel || !channel.isVoiceBased()) return { error: "Invalid voice channel" };
 
 		if (action === "list") {
 			const membersCount = channel.members.size;
@@ -12202,119 +9910,47 @@ export const DiscordVoice = async (
 			.filter(Boolean);
 
 		if (action === "muteall") {
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) => modifyMember(member.id, { mute: true })),
-			);
-			return buildAllResult(
-				"muteall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: true })));
+			return buildAllResult("muteall", channelId, oldData, results, channel.members.size, authorIds);
 		}
 
 		if (action === "unmuteall") {
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) => modifyMember(member.id, { mute: false })),
-			);
-			return buildAllResult(
-				"unmuteall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { mute: false })));
+			return buildAllResult("unmuteall", channelId, oldData, results, channel.members.size, authorIds);
 		}
 
 		if (action === "deafall") {
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) => modifyMember(member.id, { deaf: true })),
-			);
-			return buildAllResult(
-				"deafall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: true })));
+			return buildAllResult("deafall", channelId, oldData, results, channel.members.size, authorIds);
 		}
 
 		if (action === "undeafall") {
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) => modifyMember(member.id, { deaf: false })),
-			);
-			return buildAllResult(
-				"undeafall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { deaf: false })));
+			return buildAllResult("undeafall", channelId, oldData, results, channel.members.size, authorIds);
 		}
 
 		if (action === "kickall") {
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) =>
-					modifyMember(member.id, { channel_id: null }),
-				),
-			);
-			return buildAllResult(
-				"kickall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: null })));
+			return buildAllResult("kickall", channelId, oldData, results, channel.members.size, authorIds);
 		}
 
 		if (action === "moveall") {
 			const { toChannelId } = payload;
-			if (!toChannelId)
-				return { error: "Missing valid parameter: toChannelId" };
-			const members = [...channel.members.values()].filter(
-				(member: any) => !authorIds.includes(member.id),
-			);
+			if (!toChannelId) return { error: "Missing valid parameter: toChannelId" };
+			const members = [...channel.members.values()].filter((member: any) => !authorIds.includes(member.id));
 			const oldData = members.map(formatMemberData);
-			const results = await Promise.allSettled(
-				members.map((member: any) =>
-					modifyMember(member.id, { channel_id: toChannelId }),
-				),
-			);
-			return buildAllResult(
-				"moveall",
-				channelId,
-				oldData,
-				results,
-				channel.members.size,
-				authorIds,
-				{ toChannelId },
-			);
+			const results = await Promise.allSettled(members.map((member: any) => modifyMember(member.id, { channel_id: toChannelId })));
+			return buildAllResult("moveall", channelId, oldData, results, channel.members.size, authorIds, { toChannelId });
 		}
 
 		return { error: "Unknown action" };
@@ -12323,48 +9959,30 @@ export const DiscordVoice = async (
 	}
 };
 
-export const Audiomack = async function Audiomack(
-	que: string,
-	type: string = "songs",
-	limits: number = 30,
-): Promise<any> {
+export const Audiomack = async function Audiomack(que: string, type: string = "songs", limits: number = 30): Promise<any> {
 	if (!que) return null;
 
 	let searchType = type.toLowerCase();
 	if (searchType === "song" || searchType === "songs") searchType = "songs";
-	else if (searchType === "album" || searchType === "albums")
-		searchType = "albums";
-	else if (searchType === "playlist" || searchType === "playlists")
-		searchType = "playlists";
-	else if (searchType === "artist" || searchType === "artists")
-		searchType = "artists";
+	else if (searchType === "album" || searchType === "albums") searchType = "albums";
+	else if (searchType === "playlist" || searchType === "playlists") searchType = "playlists";
+	else if (searchType === "artist" || searchType === "artists") searchType = "artists";
 	else searchType = "songs";
 
 	try {
-		const { signature, params } = await mackOauth(
-			"GET",
-			"https://api.audiomack.com/v1/search",
-			{
-				q: que,
-				show: searchType,
-				sort: "popular",
-				limit: limits,
-				page: 1,
-			},
-		);
+		const { signature, params } = await mackOauth("GET", "https://api.audiomack.com/v1/search", {
+			q: que,
+			show: searchType,
+			sort: "popular",
+			limit: limits,
+			page: 1,
+		});
 
-		const searchParams = new URLSearchParams(
-			Object.entries({ ...params, oauth_signature: signature }).map(
-				([k, v]): [string, string] => [k, String(v)],
-			),
-		);
+		const searchParams = new URLSearchParams(Object.entries({ ...params, oauth_signature: signature }).map(([k, v]): [string, string] => [k, String(v)]));
 
-		const pull = await fetch(
-			`https://api.audiomack.com/v1/search?${searchParams}`,
-			{
-				headers: { ...commonHeaders },
-			},
-		);
+		const pull = await fetch(`https://api.audiomack.com/v1/search?${searchParams}`, {
+			headers: { ...commonHeaders },
+		});
 
 		if (pull.status !== 200) {
 			return {
@@ -12380,10 +9998,7 @@ export const Audiomack = async function Audiomack(
 	}
 };
 
-export const CrunchySearch = async function CrunchySearch(
-	que: string,
-	refresh_auth: boolean = false,
-) {
+export const CrunchySearch = async function CrunchySearch(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
@@ -12391,16 +10006,13 @@ export const CrunchySearch = async function CrunchySearch(
 			keycrunchy = await crunchyKey();
 		}
 
-		const per = await fetch(
-			`https://beta-api.crunchyroll.com/content/v2/discover/search?q=${encodeURIComponent(que)}&n=20&type=series,episode,top_results&ratings=true&locale=en`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					Authorization: "Bearer " + keycrunchy,
-				},
+		const per = await fetch(`https://beta-api.crunchyroll.com/content/v2/discover/search?q=${encodeURIComponent(que)}&n=20&type=series,episode,top_results&ratings=true&locale=en`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				Authorization: "Bearer " + keycrunchy,
 			},
-		);
+		});
 
 		if (per.status === 403) {
 			return {
@@ -12429,14 +10041,11 @@ export const SafeBooru = async function SafeBooru(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(
-			`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const per = await fetch(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (per.status === 403) {
 			return {
@@ -12458,14 +10067,11 @@ export const SafeBooru = async function SafeBooru(que: string) {
 
 		const finalres = await Promise.allSettled(
 			parseres.map(async (e: any) => {
-				const req2 = await fetch(
-					`https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(e.value)}&limit=100`,
-					{
-						headers: {
-							...commonHeaders,
-						},
+				const req2 = await fetch(`https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(e.value)}&limit=100`, {
+					headers: {
+						...commonHeaders,
 					},
-				);
+				});
 
 				const res2: any = await req2.json();
 
@@ -12481,9 +10087,7 @@ export const SafeBooru = async function SafeBooru(que: string) {
 		);
 
 		return {
-			data: finalres
-				.map((r) => (r.status === "fulfilled" ? r.value : null))
-				.filter(Boolean),
+			data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
 		};
 	} catch (e) {
 		console.error(e);
@@ -12505,14 +10109,10 @@ export const Konachan = async function Konachan(que: string) {
 			const lookinfo: any = await pullinfo.json();
 			const data = lookinfo.data || "";
 			// Konachan summary format: "category`tag1`tag2` category`tag3`..."
-			konaSummary = data
-				.split(" ")
-				.flatMap((group: string) => group.split("`").slice(1, -1));
+			konaSummary = data.split(" ").flatMap((group: string) => group.split("`").slice(1, -1));
 		}
 
-		const specificTags = konaSummary
-			.filter((tag: string) => tag.includes(que.toLowerCase()))
-			.slice(0, 5);
+		const specificTags = konaSummary.filter((tag: string) => tag.includes(que.toLowerCase())).slice(0, 5);
 
 		if (specificTags.length === 0) {
 			return {
@@ -12522,14 +10122,11 @@ export const Konachan = async function Konachan(que: string) {
 
 		const finalres = await Promise.allSettled(
 			specificTags.map(async (tag: string) => {
-				const req2 = await fetch(
-					`https://konachan.net/post.json?limit=20&tags=${encodeURIComponent(tag)}`,
-					{
-						headers: {
-							...commonHeaders,
-						},
+				const req2 = await fetch(`https://konachan.net/post.json?limit=20&tags=${encodeURIComponent(tag)}`, {
+					headers: {
+						...commonHeaders,
 					},
-				);
+				});
 
 				const res2: any = await req2.json();
 
@@ -12541,9 +10138,7 @@ export const Konachan = async function Konachan(que: string) {
 		);
 
 		return {
-			data: finalres
-				.map((r) => (r.status === "fulfilled" ? r.value : null))
-				.filter(Boolean),
+			data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
 		};
 	} catch (e) {
 		console.error(e);
@@ -12555,15 +10150,12 @@ export const Tumblr = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			`https://api.tumblr.com/v2/timeline/search?limit=40&query=${encodeURIComponent(query)}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`,
-			{
-				headers: {
-					...commonHeaders,
-					Authorization: "Bearer " + keytumblr,
-				},
+		const res = await fetch(`https://api.tumblr.com/v2/timeline/search?limit=40&query=${encodeURIComponent(query)}&mode=recent&timeline_type=post&post_role=any&reblog_info=true&notes_info=true&days=0&npf=true`, {
+			headers: {
+				...commonHeaders,
+				Authorization: "Bearer " + keytumblr,
 			},
-		);
+		});
 
 		if (res.status === 429) {
 			return {
@@ -12578,45 +10170,30 @@ export const Tumblr = async (query: string): Promise<any> => {
 		}
 
 		return {
-			data: response?.response?.timeline?.elements
-				?.map((a: any) => (a.object_type === "post" ? a : null))
-				.filter(Boolean),
+			data: response?.response?.timeline?.elements?.map((a: any) => (a.object_type === "post" ? a : null)).filter(Boolean),
 		};
 	} catch {
 		return null;
 	}
 };
 
-export const googleImgSearch = async (
-	query: string,
-	sort: string = "relevance",
-): Promise<any> => {
+export const googleImgSearch = async (query: string, sort: string = "relevance"): Promise<any> => {
 	if (!query) return null;
 
 	try {
 		const dateRestrictParam = sort === "latest" ? "&dateRestrict=d1" : "";
 
 		const fetchPage = (start: number) => {
-			return fetch(
-				`https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&prettyPrint=false&searchType=image&num=10&start=${start}${dateRestrictParam}&cx=${process.env.GOOG_CX}`,
-				{
-					headers: {
-						...commonHeaders,
-						Referer: process.env.GOOG_RX || "",
-						"X-Goog-Api-Key": process.env.GOOG_EX || "",
-					},
+			return fetch(`https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&prettyPrint=false&searchType=image&num=10&start=${start}${dateRestrictParam}&cx=${process.env.GOOG_CX}`, {
+				headers: {
+					...commonHeaders,
+					Referer: process.env.GOOG_RX || "",
+					"X-Goog-Api-Key": process.env.GOOG_EX || "",
 				},
-			);
+			});
 		};
 
-		const [res1, res2] = await Promise.all([
-			fetchPage(1).catch(
-				() => ({ status: 500, json: async () => ({}) }) as any,
-			),
-			fetchPage(11).catch(
-				() => ({ status: 500, json: async () => ({}) }) as any,
-			),
-		]);
+		const [res1, res2] = await Promise.all([fetchPage(1).catch(() => ({ status: 500, json: async () => ({}) }) as any), fetchPage(11).catch(() => ({ status: 500, json: async () => ({}) }) as any)]);
 
 		const isOk1 = res1.status === 200;
 		const isOk2 = res2.status === 200;
@@ -12630,28 +10207,21 @@ export const googleImgSearch = async (
 		const response1: any = isOk1 ? await res1.json() : {};
 		const response2: any = isOk2 ? await res2.json() : {};
 
-		const res = await fetch(
-			`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const resText = await res.text();
 		let suggestions: string[] = [];
 		try {
-			const jsonString = resText
-				.replace(/^window\.google\.ac\.h\(/, "")
-				.replace(/\)$/, "");
+			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
 			const parsed = JSON.parse(jsonString);
 			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
 				suggestions = parsed[0]
 					.map((item: any) => {
-						return typeof item[0] === "string"
-							? item[0].replace(/<\/?b>/g, "")
-							: "";
+						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
 					})
 					.filter(Boolean);
 			}
@@ -12659,16 +10229,12 @@ export const googleImgSearch = async (
 			// Ignore parse errors
 		}
 
-		const combinedItems = [
-			...(response1.items || []),
-			...(response2.items || []),
-		];
+		const combinedItems = [...(response1.items || []), ...(response2.items || [])];
 		const validResponse = response1.queries ? response1 : response2;
 
 		let filterResponse = {};
 		if (validResponse.queries?.request?.[0]) {
-			const { cx, count, startIndex, ...rest } =
-				validResponse.queries.request[0];
+			const { cx, count, startIndex, ...rest } = validResponse.queries.request[0];
 			filterResponse = rest;
 		}
 
@@ -12686,10 +10252,7 @@ export const googleImgSearch = async (
 	}
 };
 
-export const googleImgSearchV2 = async (
-	query: string,
-	refresh_auth: boolean = false,
-): Promise<any> => {
+export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = false): Promise<any> => {
 	if (!query) return null;
 
 	try {
@@ -12697,14 +10260,11 @@ export const googleImgSearchV2 = async (
 			googleImgSpAuth = await googleAuthKey();
 		}
 
-		const res = await fetch(
-			`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&searchtype=image&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&searchtype=image&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (res.status === 403) {
 			return {
@@ -12735,12 +10295,7 @@ export const googleImgSearchV2 = async (
 
 		const response = JSON.parse(raw);
 
-		if (
-			response?.error?.code === 400 ||
-			response?.error?.code === 401 ||
-			res.status === 400 ||
-			res.status === 401
-		) {
+		if (response?.error?.code === 400 || response?.error?.code === 401 || res.status === 400 || res.status === 401) {
 			return await googleImgSearchV2(query, true);
 		}
 
@@ -12749,28 +10304,21 @@ export const googleImgSearchV2 = async (
 			return await googleImgSearchV2(query);
 		}
 
-		const res2 = await fetch(
-			`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const resText = await res2.text();
 		let suggestions: string[] = [];
 		try {
-			const jsonString = resText
-				.replace(/^window\.google\.ac\.h\(/, "")
-				.replace(/\)$/, "");
+			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
 			const parsed = JSON.parse(jsonString);
 			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
 				suggestions = parsed[0]
 					.map((item: any) => {
-						return typeof item[0] === "string"
-							? item[0].replace(/<\/?b>/g, "")
-							: "";
+						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
 					})
 					.filter(Boolean);
 			}
@@ -12792,10 +10340,7 @@ export const googleImgSearchV2 = async (
 	}
 };
 
-export const googleSearch = async (
-	query: string,
-	refresh_auth: boolean = false,
-): Promise<any> => {
+export const googleSearch = async (query: string, refresh_auth: boolean = false): Promise<any> => {
 	if (!query) return null;
 
 	try {
@@ -12803,14 +10348,11 @@ export const googleSearch = async (
 			googleImgSpAuth = await googleAuthKey();
 		}
 
-		const res = await fetch(
-			`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (res.status === 403) {
 			return {
@@ -12841,12 +10383,7 @@ export const googleSearch = async (
 
 		const response = JSON.parse(raw);
 
-		if (
-			response?.error?.code === 400 ||
-			response?.error?.code === 401 ||
-			res.status === 400 ||
-			res.status === 401
-		) {
+		if (response?.error?.code === 400 || response?.error?.code === 401 || res.status === 400 || res.status === 401) {
 			return await googleSearch(query, true);
 		}
 
@@ -12855,28 +10392,21 @@ export const googleSearch = async (
 			return await googleSearch(query);
 		}
 
-		const res2 = await fetch(
-			`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		const resText = await res2.text();
 		let suggestions: string[] = [];
 		try {
-			const jsonString = resText
-				.replace(/^window\.google\.ac\.h\(/, "")
-				.replace(/\)$/, "");
+			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
 			const parsed = JSON.parse(jsonString);
 			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
 				suggestions = parsed[0]
 					.map((item: any) => {
-						return typeof item[0] === "string"
-							? item[0].replace(/<\/?b>/g, "")
-							: "";
+						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
 					})
 					.filter(Boolean);
 			}
@@ -12906,14 +10436,11 @@ export const duckSearch = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			`https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (res.status === 403) {
 			return {
@@ -12963,18 +10490,14 @@ export const duckSearch = async (query: string): Promise<any> => {
 
 		let instantAnswers: any = null;
 		try {
-			const deepMatch = final.match(
-				/DDG\.deep\.deepPayload\s*=\s*(\{[\s\S]*?\});/,
-			);
+			const deepMatch = final.match(/DDG\.deep\.deepPayload\s*=\s*(\{[\s\S]*?\});/);
 			if (deepMatch) {
 				const payload = JSON.parse(deepMatch[1]);
 				instantAnswers = payload?.instantAnswers?.[0]?.data || null;
 			}
 
 			if (!instantAnswers) {
-				const duckbarMatch = final.match(
-					/DDG\.duckbar\.add\((\{[\s\S]*?"from":"deep_answer"[\s\S]*?\})\);/,
-				);
+				const duckbarMatch = final.match(/DDG\.duckbar\.add\((\{[\s\S]*?"from":"deep_answer"[\s\S]*?\})\);/);
 				if (duckbarMatch) {
 					const duckbarData = JSON.parse(duckbarMatch[1]);
 					instantAnswers = duckbarData?.data || null;
@@ -12992,9 +10515,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 
 		let organicResults: any[] = [];
 		try {
-			const organicMatch = final.match(
-				/DDG\.pageLayout\) DDG\.pageLayout\.load\('d',\s*(\[[\s\S]*?\])\);/,
-			);
+			const organicMatch = final.match(/DDG\.pageLayout\) DDG\.pageLayout\.load\('d',\s*(\[[\s\S]*?\])\);/);
 			if (organicMatch) {
 				const parsed = JSON.parse(organicMatch[1]);
 				organicResults = parsed
@@ -13005,9 +10526,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 						snippet: (r.a || "").replace(/<\/?b>/g, ""),
 						domain: r.d || null,
 						siteName: r.sn || null,
-						icon: r.i
-							? `https://external-content.duckduckgo.com/ip3/${r.i}.ico`
-							: null,
+						icon: r.i ? `https://external-content.duckduckgo.com/ip3/${r.i}.ico` : null,
 						siteLinks:
 							r.l?.map((sl: any) => ({
 								text: sl.text,
@@ -13022,9 +10541,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 		// Extract related searches from DDG.duckbar.loadModule('related_searches', {...})
 		let relatedSearches: any[] = [];
 		try {
-			const relatedMatch = final.match(
-				/DDG\.duckbar\.loadModule\('related_searches',\s*(\{[\s\S]*?\})\);/,
-			);
+			const relatedMatch = final.match(/DDG\.duckbar\.loadModule\('related_searches',\s*(\{[\s\S]*?\})\);/);
 			if (relatedMatch) {
 				const parsed = JSON.parse(relatedMatch[1]);
 				relatedSearches =
@@ -13035,14 +10552,11 @@ export const duckSearch = async (query: string): Promise<any> => {
 			}
 		} catch {}
 
-		const res3 = await fetch(
-			`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const res3 = await fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		let autotext: any = {};
 
@@ -13111,20 +10625,14 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 		};
 
 		const [res2, res3] = await Promise.all([
-			fetch(
-				`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1`,
-				{
-					headers: imageHeaders,
+			fetch(`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1`, {
+				headers: imageHeaders,
+			}),
+			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
-			fetch(
-				`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`,
-				{
-					headers: {
-						...commonHeaders,
-					},
-				},
-			).catch(() => null),
+			}).catch(() => null),
 		]);
 
 		if (res2.status === 403) {
@@ -13205,20 +10713,14 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 		};
 
 		const [res2, res3] = await Promise.all([
-			fetch(
-				`https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2`,
-				{
-					headers: videoHeaders,
+			fetch(`https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2`, {
+				headers: videoHeaders,
+			}),
+			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`, {
+				headers: {
+					...commonHeaders,
 				},
-			),
-			fetch(
-				`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`,
-				{
-					headers: {
-						...commonHeaders,
-					},
-				},
-			).catch(() => null),
+			}).catch(() => null),
 		]);
 
 		if (res2.status === 403) {
@@ -13275,8 +10777,7 @@ let emojiLastFetchTime = 0;
 
 async function loadEmojiData() {
 	const now = Date.now();
-	if (emojiDataCache && now - emojiLastFetchTime < EMOJI_CACHE_TTL)
-		return emojiDataCache;
+	if (emojiDataCache && now - emojiLastFetchTime < EMOJI_CACHE_TTL) return emojiDataCache;
 	if (emojiLoadPromise) return emojiLoadPromise;
 
 	emojiLoadPromise = (async () => {
@@ -13298,12 +10799,8 @@ async function loadEmojiData() {
 	return result;
 }
 
-export const EmojiLookup = async function EmojiLookup(
-	query: string,
-	limit: number = 25,
-) {
-	if (!query || query.trim().length === 0)
-		return { error: "Missing parameter 'q'" };
+export const EmojiLookup = async function EmojiLookup(query: string, limit: number = 25) {
+	if (!query || query.trim().length === 0) return { error: "Missing parameter 'q'" };
 
 	const qInput = query.trim();
 
@@ -13356,11 +10853,7 @@ export const EmojiLookup = async function EmojiLookup(
 		emojibaseMatches = emojibaseData.filter((e: any) => e.emoji === trimmed);
 	} else {
 		const searchQ = trimmed.toLowerCase();
-		emojibaseMatches = emojibaseData.filter(
-			(e: any) =>
-				e.label.toLowerCase().includes(searchQ) ||
-				e.tags?.some((t: string) => t.toLowerCase().includes(searchQ)),
-		);
+		emojibaseMatches = emojibaseData.filter((e: any) => e.label.toLowerCase().includes(searchQ) || e.tags?.some((t: string) => t.toLowerCase().includes(searchQ)));
 
 		emojibaseMatches.sort((a: any, b: any) => {
 			const aLabel = a.label.toLowerCase();
@@ -13400,12 +10893,8 @@ export const EmojiLookup = async function EmojiLookup(
 					emojiUrl: `https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u${cpNoto}.png`,
 					emojiUrl2: `https://raw.githubusercontent.com/jdecked/twemoji/refs/heads/main/assets/72x72/${codepoint}.png`,
 					gBoardOrder: entry.order,
-					keywords: [
-						entry.label.toLowerCase().replace(/ /g, "_"),
-						...(entry.tags ?? []),
-					],
-					category:
-						(emojibaseGroups.groups as any)[entry.group]?.toLowerCase() || "",
+					keywords: [entry.label.toLowerCase().replace(/ /g, "_"), ...(entry.tags ?? [])],
+					category: (emojibaseGroups.groups as any)[entry.group]?.toLowerCase() || "",
 					subcategory: (emojibaseGroups.subgroups as any)[entry.subgroup] || "",
 				};
 			}),
@@ -13422,9 +10911,7 @@ export const EmojiLookup = async function EmojiLookup(
 	const results: any[] = [];
 
 	// Check if query looks like a codepoint (hex string like "2615" or "1f600")
-	const isCodepointQuery = /^[0-9a-f]+(-[0-9a-f]+)*$/i.test(
-		q.replace(/\s+/g, "-"),
-	);
+	const isCodepointQuery = /^[0-9a-f]+(-[0-9a-f]+)*$/i.test(q.replace(/\s+/g, "-"));
 
 	const normalizedQuery = query.trim().replace(/\uFE0F/g, "");
 
@@ -13436,18 +10923,13 @@ export const EmojiLookup = async function EmojiLookup(
 		}
 
 		// Direct codepoint match
-		if (
-			isCodepointQuery &&
-			codepoint.toLowerCase() === q.replace(/\s+/g, "-")
-		) {
+		if (isCodepointQuery && codepoint.toLowerCase() === q.replace(/\s+/g, "-")) {
 			results.unshift({ ...entry, codepoint });
 			continue;
 		}
 
 		const alt = (entry.alt || "").toLowerCase();
-		const keywords: string[] = (entry.keywords || []).map((k: string) =>
-			k.toLowerCase(),
-		);
+		const keywords: string[] = (entry.keywords || []).map((k: string) => k.toLowerCase());
 		const category = (entry.category || "").toLowerCase();
 		const subcategory = (entry.subcategory || "").toLowerCase();
 		const searchable = `${alt} ${keywords.join(" ")} ${category} ${subcategory}`;
@@ -13504,10 +10986,7 @@ export const EmojiLookup = async function EmojiLookup(
 	};
 };
 
-export const EmojiKitchen = async function EmojiKitchen(
-	q1: string,
-	q2: string,
-) {
+export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) {
 	if (!q1 || !q2) return null;
 
 	const fetchEmoji = async (query: string) => {
@@ -13573,13 +11052,8 @@ function discordAutomodName(map: Record<string, number>, value: number) {
 	return Object.entries(map).find(([, v]) => v === value)?.[0] || "UNKNOWN";
 }
 
-function parseDiscordAutomodMappedNumber(
-	value: any,
-	map: Record<string, number>,
-	label: string,
-) {
-	if (value === undefined || value === null || value === "")
-		return { value: undefined as number | undefined };
+function parseDiscordAutomodMappedNumber(value: any, map: Record<string, number>, label: string) {
+	if (value === undefined || value === null || value === "") return { value: undefined as number | undefined };
 	const raw = String(value).trim();
 	if (/^\d+$/.test(raw)) return { value: parseInt(raw, 10) };
 	const key = raw.toUpperCase().replace(/[\s-]+/g, "_");
@@ -13590,8 +11064,7 @@ function parseDiscordAutomodMappedNumber(
 }
 
 function parseDiscordAutomodBoolean(value: any, label: string) {
-	if (value === undefined || value === null || value === "")
-		return { value: undefined as boolean | undefined };
+	if (value === undefined || value === null || value === "") return { value: undefined as boolean | undefined };
 	const raw = String(value).trim().toLowerCase();
 	if (raw === "true" || raw === "1" || raw === "yes") return { value: true };
 	if (raw === "false" || raw === "0" || raw === "no") return { value: false };
@@ -13599,30 +11072,21 @@ function parseDiscordAutomodBoolean(value: any, label: string) {
 }
 
 function parseDiscordAutomodNumber(value: any, label: string) {
-	if (value === undefined || value === null || value === "")
-		return { value: undefined as number | undefined };
+	if (value === undefined || value === null || value === "") return { value: undefined as number | undefined };
 	const parsed = parseInt(String(value), 10);
-	if (!Number.isFinite(parsed))
-		return { error: `Invalid ${label}. Use a number` };
+	if (!Number.isFinite(parsed)) return { error: `Invalid ${label}. Use a number` };
 	return { value: parsed };
 }
 
-function parseDiscordAutomodStringArray(
-	value: any,
-	label: string,
-	jsonArrayOnly = false,
-) {
-	if (value === undefined || value === null)
-		return { value: undefined as string[] | undefined };
-	if (Array.isArray(value))
-		return { value: value.map((v) => String(v)).filter(Boolean) };
+function parseDiscordAutomodStringArray(value: any, label: string, jsonArrayOnly = false) {
+	if (value === undefined || value === null) return { value: undefined as string[] | undefined };
+	if (Array.isArray(value)) return { value: value.map((v) => String(v)).filter(Boolean) };
 	const raw = String(value).trim();
 	if (!raw) return { value: [] };
 	if (raw.startsWith("[")) {
 		try {
 			const parsed = JSON.parse(raw);
-			if (Array.isArray(parsed))
-				return { value: parsed.map((v) => String(v)).filter(Boolean) };
+			if (Array.isArray(parsed)) return { value: parsed.map((v) => String(v)).filter(Boolean) };
 		} catch {}
 		return {
 			error: `Invalid ${label}. Use a JSON array${jsonArrayOnly ? "" : " or comma-separated values"}`,
@@ -13639,18 +11103,12 @@ function parseDiscordAutomodStringArray(
 
 function parseDiscordAutomodPresetArray(value: any) {
 	const parsed = parseDiscordAutomodStringArray(value, "presets");
-	if (parsed.error || parsed.value === undefined)
-		return parsed as { value?: number[]; error?: string };
+	if (parsed.error || parsed.value === undefined) return parsed as { value?: number[]; error?: string };
 
 	const presets: number[] = [];
 	for (const item of parsed.value) {
-		const preset = parseDiscordAutomodMappedNumber(
-			item,
-			DISCORD_AUTOMOD_PRESET_TYPES,
-			"presets",
-		);
-		if (preset.error || preset.value === undefined)
-			return { error: preset.error || "Invalid presets" };
+		const preset = parseDiscordAutomodMappedNumber(item, DISCORD_AUTOMOD_PRESET_TYPES, "presets");
+		if (preset.error || preset.value === undefined) return { error: preset.error || "Invalid presets" };
 		presets.push(preset.value);
 	}
 
@@ -13660,17 +11118,9 @@ function parseDiscordAutomodPresetArray(value: any) {
 function formatDiscordAutomodRule(rule: any) {
 	if (!rule || typeof rule !== "object") return rule;
 	const formatted = { ...rule };
-	formatted.trigger_type_name = discordAutomodName(
-		DISCORD_AUTOMOD_TRIGGER_TYPES,
-		formatted.trigger_type,
-	);
-	formatted.event_type_name = discordAutomodName(
-		DISCORD_AUTOMOD_EVENT_TYPES,
-		formatted.event_type,
-	);
-	formatted.created_at = formatted.id
-		? String(getSnowflakeDate(formatted.id))
-		: null;
+	formatted.trigger_type_name = discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, formatted.trigger_type);
+	formatted.event_type_name = discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, formatted.event_type);
+	formatted.created_at = formatted.id ? String(getSnowflakeDate(formatted.id)) : null;
 
 	if (Array.isArray(formatted.actions)) {
 		formatted.actions = formatted.actions.map((action: any) => ({
@@ -13682,9 +11132,7 @@ function formatDiscordAutomodRule(rule: any) {
 	if (formatted.trigger_metadata?.presets) {
 		formatted.trigger_metadata = {
 			...formatted.trigger_metadata,
-			presets_resolved: formatted.trigger_metadata.presets.map((p: number) =>
-				discordAutomodName(DISCORD_AUTOMOD_PRESET_TYPES, p),
-			),
+			presets_resolved: formatted.trigger_metadata.presets.map((p: number) => discordAutomodName(DISCORD_AUTOMOD_PRESET_TYPES, p)),
 		};
 	}
 
@@ -13696,8 +11144,7 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 	if (rawPayload) {
 		try {
 			const parsed = JSON.parse(String(rawPayload));
-			if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-				return { payload: parsed };
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return { payload: parsed };
 		} catch {}
 		return { error: "Invalid payload. Use a JSON object" };
 	}
@@ -13707,157 +11154,89 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 	if (name !== undefined) payload.name = String(name);
 
 	const eventRaw = params.eventType ?? params.event_type;
-	const eventType = parseDiscordAutomodMappedNumber(
-		eventRaw ?? (mode === "set" ? "MESSAGE_SEND" : undefined),
-		DISCORD_AUTOMOD_EVENT_TYPES,
-		"eventType",
-	);
+	const eventType = parseDiscordAutomodMappedNumber(eventRaw ?? (mode === "set" ? "MESSAGE_SEND" : undefined), DISCORD_AUTOMOD_EVENT_TYPES, "eventType");
 	if (eventType.error) return { error: eventType.error };
 	if (eventType.value !== undefined) payload.event_type = eventType.value;
 
 	const triggerRaw = params.triggerType ?? params.trigger_type;
-	const triggerType = parseDiscordAutomodMappedNumber(
-		triggerRaw,
-		DISCORD_AUTOMOD_TRIGGER_TYPES,
-		"triggerType",
-	);
+	const triggerType = parseDiscordAutomodMappedNumber(triggerRaw, DISCORD_AUTOMOD_TRIGGER_TYPES, "triggerType");
 	if (triggerType.error) return { error: triggerType.error };
 	if (triggerType.value !== undefined) payload.trigger_type = triggerType.value;
 
-	const enabled = parseDiscordAutomodBoolean(
-		params.enabled ?? (mode === "set" ? "true" : undefined),
-		"enabled",
-	);
+	const enabled = parseDiscordAutomodBoolean(params.enabled ?? (mode === "set" ? "true" : undefined), "enabled");
 	if (enabled.error) return { error: enabled.error };
 	if (enabled.value !== undefined) payload.enabled = enabled.value;
 
 	if (mode === "set") {
 		if (!payload.name) return { error: "Missing parameter: name" };
-		if (!payload.trigger_type)
-			return { error: "Missing parameter: triggerType" };
+		if (!payload.trigger_type) return { error: "Missing parameter: triggerType" };
 	}
 
 	const triggerMetadata: any = {};
-	const keywordFilter = parseDiscordAutomodStringArray(
-		params.keywordFilter ?? params.keyword_filter,
-		"keywordFilter",
-		true,
-	);
+	const keywordFilter = parseDiscordAutomodStringArray(params.keywordFilter ?? params.keyword_filter, "keywordFilter", true);
 	if (keywordFilter.error) return { error: keywordFilter.error };
-	if (keywordFilter.value !== undefined)
-		triggerMetadata.keyword_filter = keywordFilter.value;
+	if (keywordFilter.value !== undefined) triggerMetadata.keyword_filter = keywordFilter.value;
 
-	const regexPatterns = parseDiscordAutomodStringArray(
-		params.regexPatterns ?? params.regex_patterns,
-		"regexPatterns",
-	);
+	const regexPatterns = parseDiscordAutomodStringArray(params.regexPatterns ?? params.regex_patterns, "regexPatterns");
 	if (regexPatterns.error) return { error: regexPatterns.error };
-	if (regexPatterns.value !== undefined)
-		triggerMetadata.regex_patterns = regexPatterns.value;
+	if (regexPatterns.value !== undefined) triggerMetadata.regex_patterns = regexPatterns.value;
 
-	const allowList = parseDiscordAutomodStringArray(
-		params.allowList ?? params.allow_list,
-		"allowList",
-	);
+	const allowList = parseDiscordAutomodStringArray(params.allowList ?? params.allow_list, "allowList");
 	if (allowList.error) return { error: allowList.error };
-	if (allowList.value !== undefined)
-		triggerMetadata.allow_list = allowList.value;
+	if (allowList.value !== undefined) triggerMetadata.allow_list = allowList.value;
 
 	const presets = parseDiscordAutomodPresetArray(params.presets);
 	if (presets.error) return { error: presets.error };
 	if (presets.value !== undefined) triggerMetadata.presets = presets.value;
 
-	const mentionTotalLimit = parseDiscordAutomodNumber(
-		params.mentionTotalLimit ?? params.mention_total_limit,
-		"mentionTotalLimit",
-	);
+	const mentionTotalLimit = parseDiscordAutomodNumber(params.mentionTotalLimit ?? params.mention_total_limit, "mentionTotalLimit");
 	if (mentionTotalLimit.error) return { error: mentionTotalLimit.error };
-	if (mentionTotalLimit.value !== undefined)
-		triggerMetadata.mention_total_limit = mentionTotalLimit.value;
+	if (mentionTotalLimit.value !== undefined) triggerMetadata.mention_total_limit = mentionTotalLimit.value;
 
-	const mentionRaidProtection = parseDiscordAutomodBoolean(
-		params.mentionRaidProtection ?? params.mention_raid_protection_enabled,
-		"mentionRaidProtection",
-	);
-	if (mentionRaidProtection.error)
-		return { error: mentionRaidProtection.error };
-	if (mentionRaidProtection.value !== undefined)
-		triggerMetadata.mention_raid_protection_enabled =
-			mentionRaidProtection.value;
+	const mentionRaidProtection = parseDiscordAutomodBoolean(params.mentionRaidProtection ?? params.mention_raid_protection_enabled, "mentionRaidProtection");
+	if (mentionRaidProtection.error) return { error: mentionRaidProtection.error };
+	if (mentionRaidProtection.value !== undefined) triggerMetadata.mention_raid_protection_enabled = mentionRaidProtection.value;
 
-	const eventTypeName =
-		eventType.value !== undefined
-			? discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, eventType.value)
-			: undefined;
-	const triggerTypeName =
-		triggerType.value !== undefined
-			? discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, triggerType.value)
-			: undefined;
+	const eventTypeName = eventType.value !== undefined ? discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, eventType.value) : undefined;
+	const triggerTypeName = triggerType.value !== undefined ? discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, triggerType.value) : undefined;
 
 	if (mode === "set") {
-		if (
-			eventTypeName === "MESSAGE_SEND" &&
-			triggerTypeName === "MEMBER_PROFILE"
-		) {
+		if (eventTypeName === "MESSAGE_SEND" && triggerTypeName === "MEMBER_PROFILE") {
 			return {
-				error:
-					"Invalid triggerType for eventType MESSAGE_SEND. Use KEYWORD, SPAM, KEYWORD_PRESET, or MENTION_SPAM",
+				error: "Invalid triggerType for eventType MESSAGE_SEND. Use KEYWORD, SPAM, KEYWORD_PRESET, or MENTION_SPAM",
 			};
 		}
-		if (
-			eventTypeName === "GUILD_MEMBER_JOIN_OR_UPDATE" &&
-			triggerTypeName !== "MEMBER_PROFILE"
-		) {
+		if (eventTypeName === "GUILD_MEMBER_JOIN_OR_UPDATE" && triggerTypeName !== "MEMBER_PROFILE") {
 			return {
-				error:
-					"Invalid triggerType for eventType GUILD_MEMBER_JOIN_OR_UPDATE. Use MEMBER_PROFILE",
+				error: "Invalid triggerType for eventType GUILD_MEMBER_JOIN_OR_UPDATE. Use MEMBER_PROFILE",
 			};
 		}
 
-		if (
-			(triggerTypeName === "KEYWORD" || triggerTypeName === "MEMBER_PROFILE") &&
-			!keywordFilter.value?.length &&
-			!regexPatterns.value?.length
-		) {
+		if ((triggerTypeName === "KEYWORD" || triggerTypeName === "MEMBER_PROFILE") && !keywordFilter.value?.length && !regexPatterns.value?.length) {
 			return { error: "Missing parameter: keywordFilter or regexPatterns" };
 		}
 		if (triggerTypeName === "KEYWORD_PRESET" && !presets.value?.length) {
 			return { error: "Missing parameter: presets" };
 		}
-		if (
-			triggerTypeName === "MENTION_SPAM" &&
-			mentionTotalLimit.value === undefined
-		) {
+		if (triggerTypeName === "MENTION_SPAM" && mentionTotalLimit.value === undefined) {
 			return { error: "Missing parameter: mentionTotalLimit" };
 		}
 	}
 
-	if (Object.keys(triggerMetadata).length || mode === "set")
-		payload.trigger_metadata = triggerMetadata;
+	if (Object.keys(triggerMetadata).length || mode === "set") payload.trigger_metadata = triggerMetadata;
 
 	if (params.actions) {
 		try {
 			const actions = JSON.parse(String(params.actions));
-			if (!Array.isArray(actions))
-				return { error: "actions must be a JSON array" };
+			if (!Array.isArray(actions)) return { error: "actions must be a JSON array" };
 			payload.actions = actions;
 		} catch {
 			return { error: "Invalid actions. Use a JSON array" };
 		}
 	} else {
-		const hasActionInput =
-			params.actionType !== undefined ||
-			params.action !== undefined ||
-			params.alertChannelId !== undefined ||
-			params.alert_channel_id !== undefined ||
-			params.timeoutSeconds !== undefined ||
-			params.duration_seconds !== undefined ||
-			params.customMessage !== undefined ||
-			params.custom_message !== undefined;
+		const hasActionInput = params.actionType !== undefined || params.action !== undefined || params.alertChannelId !== undefined || params.alert_channel_id !== undefined || params.timeoutSeconds !== undefined || params.duration_seconds !== undefined || params.customMessage !== undefined || params.custom_message !== undefined;
 		if (hasActionInput || mode === "set") {
-			const rawActionType = String(
-				params.actionType ?? params.action ?? "BLOCK_MESSAGE",
-			)
+			const rawActionType = String(params.actionType ?? params.action ?? "BLOCK_MESSAGE")
 				.trim()
 				.replace(/[\s]+/g, "");
 			const actionTypeEntries = rawActionType
@@ -13867,42 +11246,23 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 
 			const actions: any[] = [];
 			const alertChannelId = params.alertChannelId ?? params.alert_channel_id;
-			const timeoutSeconds = parseDiscordAutomodNumber(
-				params.timeoutSeconds ?? params.duration_seconds,
-				"timeoutSeconds",
-			);
+			const timeoutSeconds = parseDiscordAutomodNumber(params.timeoutSeconds ?? params.duration_seconds, "timeoutSeconds");
 			if (timeoutSeconds.error) return { error: timeoutSeconds.error };
 
 			for (const entry of actionTypeEntries) {
-				const actionType = parseDiscordAutomodMappedNumber(
-					entry,
-					DISCORD_AUTOMOD_ACTION_TYPES,
-					"actionType",
-				);
-				if (actionType.error || actionType.value === undefined)
-					return { error: actionType.error || "Invalid actionType" };
-				const actionTypeName = discordAutomodName(
-					DISCORD_AUTOMOD_ACTION_TYPES,
-					actionType.value,
-				);
+				const actionType = parseDiscordAutomodMappedNumber(entry, DISCORD_AUTOMOD_ACTION_TYPES, "actionType");
+				if (actionType.error || actionType.value === undefined) return { error: actionType.error || "Invalid actionType" };
+				const actionTypeName = discordAutomodName(DISCORD_AUTOMOD_ACTION_TYPES, actionType.value);
 
 				if (mode === "set") {
-					if (
-						triggerTypeName === "MEMBER_PROFILE" &&
-						actionTypeName !== "BLOCK_MEMBER_INTERACTION"
-					) {
+					if (triggerTypeName === "MEMBER_PROFILE" && actionTypeName !== "BLOCK_MEMBER_INTERACTION") {
 						return {
-							error:
-								"Invalid actionType for triggerType MEMBER_PROFILE. Use BLOCK_MEMBER_INTERACTION",
+							error: "Invalid actionType for triggerType MEMBER_PROFILE. Use BLOCK_MEMBER_INTERACTION",
 						};
 					}
-					if (
-						triggerTypeName !== "MEMBER_PROFILE" &&
-						actionTypeName === "BLOCK_MEMBER_INTERACTION"
-					) {
+					if (triggerTypeName !== "MEMBER_PROFILE" && actionTypeName === "BLOCK_MEMBER_INTERACTION") {
 						return {
-							error:
-								"Invalid actionType. BLOCK_MEMBER_INTERACTION requires triggerType MEMBER_PROFILE",
+							error: "Invalid actionType. BLOCK_MEMBER_INTERACTION requires triggerType MEMBER_PROFILE",
 						};
 					}
 				}
@@ -13910,19 +11270,11 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 				const action: any = { type: actionType.value };
 				const metadata: any = {};
 				const customMessage = params.customMessage ?? params.custom_message;
-				if (customMessage !== undefined)
-					metadata.custom_message = String(customMessage);
-				if (
-					actionTypeName === "SEND_ALERT_MESSAGE" &&
-					(alertChannelId === undefined || alertChannelId === "")
-				)
-					return { error: "Missing parameter: alertChannelId" };
-				if (alertChannelId !== undefined && alertChannelId !== "")
-					metadata.channel_id = String(alertChannelId);
-				if (actionTypeName === "TIMEOUT" && timeoutSeconds.value === undefined)
-					return { error: "Missing parameter: timeoutSeconds" };
-				if (timeoutSeconds.value !== undefined)
-					metadata.duration_seconds = timeoutSeconds.value;
+				if (customMessage !== undefined) metadata.custom_message = String(customMessage);
+				if (actionTypeName === "SEND_ALERT_MESSAGE" && (alertChannelId === undefined || alertChannelId === "")) return { error: "Missing parameter: alertChannelId" };
+				if (alertChannelId !== undefined && alertChannelId !== "") metadata.channel_id = String(alertChannelId);
+				if (actionTypeName === "TIMEOUT" && timeoutSeconds.value === undefined) return { error: "Missing parameter: timeoutSeconds" };
+				if (timeoutSeconds.value !== undefined) metadata.duration_seconds = timeoutSeconds.value;
 				if (Object.keys(metadata).length) action.metadata = metadata;
 				actions.push(action);
 			}
@@ -13931,20 +11283,13 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 		}
 	}
 
-	const exemptRoles = parseDiscordAutomodStringArray(
-		params.exemptRoles ?? params.exempt_roles,
-		"exemptRoles",
-	);
+	const exemptRoles = parseDiscordAutomodStringArray(params.exemptRoles ?? params.exempt_roles, "exemptRoles");
 	if (exemptRoles.error) return { error: exemptRoles.error };
 	if (exemptRoles.value !== undefined) payload.exempt_roles = exemptRoles.value;
 
-	const exemptChannels = parseDiscordAutomodStringArray(
-		params.exemptChannels ?? params.exempt_channels,
-		"exemptChannels",
-	);
+	const exemptChannels = parseDiscordAutomodStringArray(params.exemptChannels ?? params.exempt_channels, "exemptChannels");
 	if (exemptChannels.error) return { error: exemptChannels.error };
-	if (exemptChannels.value !== undefined)
-		payload.exempt_channels = exemptChannels.value;
+	if (exemptChannels.value !== undefined) payload.exempt_channels = exemptChannels.value;
 
 	return { payload };
 }
@@ -13958,13 +11303,7 @@ async function fetchDiscordAutomodRule(ruleUrl: string, headers: any) {
 	return { status: req.status, statusText: req.statusText, data };
 }
 
-export const DiscordSetAutomod = async (
-	token: string,
-	guildId: string,
-	ruleId: string | undefined,
-	params: any,
-	mode: "set" | "modify",
-) => {
+export const DiscordSetAutomod = async (token: string, guildId: string, ruleId: string | undefined, params: any, mode: "set" | "modify") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -13974,8 +11313,7 @@ export const DiscordSetAutomod = async (
 		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
 	};
 	const reason = params.reason;
-	if (reason)
-		headers["X-Audit-Log-Reason"] = encodeURIComponent(String(reason));
+	if (reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(String(reason));
 
 	try {
 		const baseUrl = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
@@ -13984,10 +11322,7 @@ export const DiscordSetAutomod = async (
 		let existingRule: any = null;
 
 		if (resolvedRuleId) {
-			const existing = await fetchDiscordAutomodRule(
-				`${baseUrl}/${resolvedRuleId}`,
-				headers,
-			);
+			const existing = await fetchDiscordAutomodRule(`${baseUrl}/${resolvedRuleId}`, headers);
 			if (existing.status === 200) existingRule = existing.data;
 			else if (existing.status !== 404) {
 				return {
@@ -14010,11 +11345,8 @@ export const DiscordSetAutomod = async (
 					},
 				};
 			}
-			if (!Array.isArray(rules.data))
-				return { error: "Invalid automod rules response" };
-			existingRule = rules.data.find(
-				(rule: any) => rule?.name === String(params.name),
-			);
+			if (!Array.isArray(rules.data)) return { error: "Invalid automod rules response" };
+			existingRule = rules.data.find((rule: any) => rule?.name === String(params.name));
 			resolvedRuleId = existingRule?.id;
 		}
 
@@ -14047,16 +11379,7 @@ export const DiscordSetAutomod = async (
 		const payload = built.payload || {};
 
 		if (operationMode === "modify" && existingRule) {
-			for (const field of [
-				"name",
-				"event_type",
-				"trigger_type",
-				"enabled",
-				"trigger_metadata",
-				"actions",
-				"exempt_roles",
-				"exempt_channels",
-			] as const) {
+			for (const field of ["name", "event_type", "trigger_type", "enabled", "trigger_metadata", "actions", "exempt_roles", "exempt_channels"] as const) {
 				if (payload[field] === undefined && existingRule[field] !== undefined) {
 					payload[field] = existingRule[field];
 				}
@@ -14067,14 +11390,11 @@ export const DiscordSetAutomod = async (
 			return { data: [formatDiscordAutomodRule(existingRule), null, 204] };
 		}
 
-		const response = await fetch(
-			operationMode === "modify" ? `${baseUrl}/${resolvedRuleId}` : baseUrl,
-			{
-				method: operationMode === "modify" ? "PATCH" : "POST",
-				headers,
-				body: JSON.stringify(payload),
-			},
-		);
+		const response = await fetch(operationMode === "modify" ? `${baseUrl}/${resolvedRuleId}` : baseUrl, {
+			method: operationMode === "modify" ? "PATCH" : "POST",
+			headers,
+			body: JSON.stringify(payload),
+		});
 
 		let result: any = null;
 		try {
@@ -14083,10 +11403,7 @@ export const DiscordSetAutomod = async (
 
 		if (response.status < 200 || response.status >= 300) {
 			return {
-				data:
-					operationMode === "modify"
-						? [formatDiscordAutomodRule(existingRule), null, response.status]
-						: null,
+				data: operationMode === "modify" ? [formatDiscordAutomodRule(existingRule), null, response.status] : null,
 				error: result || {
 					status: response.status,
 					statusText: response.statusText,
@@ -14095,25 +11412,14 @@ export const DiscordSetAutomod = async (
 		}
 
 		return {
-			data: [
-				operationMode === "modify"
-					? formatDiscordAutomodRule(existingRule)
-					: null,
-				formatDiscordAutomodRule(result),
-				response.status,
-				...(reason ? [String(reason)] : []),
-			],
+			data: [operationMode === "modify" ? formatDiscordAutomodRule(existingRule) : null, formatDiscordAutomodRule(result), response.status, ...(reason ? [String(reason)] : [])],
 		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
 };
 
-export const DiscordInfoAutomod = async (
-	token: string,
-	guildId: string,
-	ruleId: string | null = null,
-) => {
+export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId: string | null = null) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -14124,15 +11430,10 @@ export const DiscordInfoAutomod = async (
 	};
 
 	try {
-		const urlRules = ruleId
-			? `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}`
-			: `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
+		const urlRules = ruleId ? `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}` : `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
 		const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
 
-		const [rulesReq, guildReq] = await Promise.all([
-			fetch(urlRules, { method: "GET", headers }),
-			fetch(urlGuild, { method: "GET", headers }),
-		]);
+		const [rulesReq, guildReq] = await Promise.all([fetch(urlRules, { method: "GET", headers }), fetch(urlGuild, { method: "GET", headers })]);
 
 		let rulesData: any = null;
 		let guildData: any = null;
@@ -14184,13 +11485,10 @@ export const DiscordInfoAutomod = async (
 			};
 
 			formattedRules = formattedRules.map((rule: any) => {
-				const triggerTypeName =
-					DISCORD_AUTOMOD_TRIGGER_TYPES[rule.trigger_type] || "UNKNOWN";
-				const eventTypeName =
-					DISCORD_AUTOMOD_EVENT_TYPES[rule.event_type] || "UNKNOWN";
+				const triggerTypeName = DISCORD_AUTOMOD_TRIGGER_TYPES[rule.trigger_type] || "UNKNOWN";
+				const eventTypeName = DISCORD_AUTOMOD_EVENT_TYPES[rule.event_type] || "UNKNOWN";
 				const resolvedActions = (rule.actions || []).map((action: any) => {
-					const actionTypeName =
-						DISCORD_AUTOMOD_ACTION_TYPES[action.type] || "UNKNOWN";
+					const actionTypeName = DISCORD_AUTOMOD_ACTION_TYPES[action.type] || "UNKNOWN";
 					return {
 						...action,
 						type_name: actionTypeName,
@@ -14199,9 +11497,7 @@ export const DiscordInfoAutomod = async (
 
 				const triggerMetadata = rule.trigger_metadata || {};
 				if (triggerMetadata.presets) {
-					triggerMetadata.presets_resolved = triggerMetadata.presets.map(
-						(p: number) => DISCORD_AUTOMOD_PRESET_TYPES[p] || "UNKNOWN",
-					);
+					triggerMetadata.presets_resolved = triggerMetadata.presets.map((p: number) => DISCORD_AUTOMOD_PRESET_TYPES[p] || "UNKNOWN");
 				}
 
 				return {
@@ -14216,16 +11512,9 @@ export const DiscordInfoAutomod = async (
 		}
 
 		let contentFilters: any = null;
-		if (
-			guildReq.status === 200 &&
-			guildData &&
-			guildData.explicit_content_filter !== undefined
-		) {
+		if (guildReq.status === 200 && guildData && guildData.explicit_content_filter !== undefined) {
 			const filterLevel = guildData.explicit_content_filter;
-			const EXPLICIT_CONTENT_FILTER_LEVELS: Record<
-				number,
-				{ name: string; description: string }
-			> = {
+			const EXPLICIT_CONTENT_FILTER_LEVELS: Record<number, { name: string; description: string }> = {
 				0: { name: "DISABLED", description: "Do not filter" },
 				1: {
 					name: "MEMBERS_WITHOUT_ROLES",
@@ -14275,8 +11564,7 @@ export const DiscordInfoAutomod = async (
 				count.types[eventTypeName] = (count.types[eventTypeName] || 0) + 1;
 
 				const triggerTypeName = rule.trigger_type_name || "UNKNOWN";
-				count.triggers[triggerTypeName] =
-					(count.triggers[triggerTypeName] || 0) + 1;
+				count.triggers[triggerTypeName] = (count.triggers[triggerTypeName] || 0) + 1;
 			});
 		}
 
@@ -14296,64 +11584,37 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
 	if (!query) return null;
 	try {
 		const [res, res2, res3, res4, res5, res6] = await Promise.all([
-			fetch(
-				`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
-			fetch(
-				`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
-			fetch(
-				`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
-			fetch(
-				`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
-			fetch(
-				`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
-			fetch(
-				`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`,
-				{
-					method: "GET",
-					headers: commonHeaders,
-				},
-			),
+			fetch(`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
+			fetch(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
+			fetch(`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
+			fetch(`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
+			fetch(`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
+			fetch(`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+				method: "GET",
+				headers: commonHeaders,
+			}),
 		]);
 
-		const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([
-			res.json(),
-			res2.text(),
-			res3.json(),
-			res4.json(),
-			res5.json(),
-			res6.json(),
-		]);
+		const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([res.json(), res2.text(), res3.json(), res4.json(), res5.json(), res6.json()]);
 
 		let parselks2: any = [];
 		try {
-			const serverDataMatch = lks2.match(
-				/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/,
-			);
+			const serverDataMatch = lks2.match(/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/);
 			if (serverDataMatch) {
 				parselks2 = JSON.parse(serverDataMatch[1]);
 			}
@@ -14382,10 +11643,7 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
 export const stockCake = async function stockCake(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(
-			`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`,
-			{ headers: { ...commonHeaders } },
-		);
+		const req = await fetch(`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`, { headers: { ...commonHeaders } });
 
 		if (req.status === 403) {
 			return {
@@ -14404,21 +11662,18 @@ export const stockCake = async function stockCake(query: string) {
 export const Pixabay = async function Pixabay(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(
-			`https://pixabay.com/en/images/search/${encodeURIComponent(query)}/?pagi=1`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					"x-fetch-bootstrap": "1",
-					"sec-fetch-dest": "empty",
-					"sec-fetch-mode": "cors",
-					"sec-fetch-site": "same-origin",
-					referer: `https://pixabay.com/id/images/search/${encodeURIComponent(query)}/`,
-					"user-agent": commonHeaders["User-Agent"] + " Pixabay",
-				},
+		const req = await fetch(`https://pixabay.com/en/images/search/${encodeURIComponent(query)}/?pagi=1`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				"x-fetch-bootstrap": "1",
+				"sec-fetch-dest": "empty",
+				"sec-fetch-mode": "cors",
+				"sec-fetch-site": "same-origin",
+				referer: `https://pixabay.com/id/images/search/${encodeURIComponent(query)}/`,
+				"user-agent": commonHeaders["User-Agent"] + " Pixabay",
 			},
-		);
+		});
 
 		if (req.status === 403) {
 			return {
@@ -14427,9 +11682,7 @@ export const Pixabay = async function Pixabay(query: string) {
 		}
 
 		const res: any = await req.json();
-		const res2: any = res.page.results
-			?.map((a: any) => (a?.mediaType === "photo" ? a : null))
-			.filter(Boolean);
+		const res2: any = res.page.results?.map((a: any) => (a?.mediaType === "photo" ? a : null)).filter(Boolean);
 		return { total: res.page.total, data: res2 || [] };
 	} catch (e) {
 		console.error(e);
@@ -14440,16 +11693,13 @@ export const Pixabay = async function Pixabay(query: string) {
 export const vectorStock = async function vectorStock(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(
-			`https://${atob("d3d3LnZlY3RvcnN0b2NrLmNvbS9hcGkvc2VhcmNo")}?keywords=${encodeURIComponent(query)}&page=1`,
-			{
-				headers: {
-					...commonHeaders,
-					Accept: "application/json",
-					"x-requested-with": "XMLHttpRequest",
-				},
+		const req = await fetch(`https://${atob("d3d3LnZlY3RvcnN0b2NrLmNvbS9hcGkvc2VhcmNo")}?keywords=${encodeURIComponent(query)}&page=1`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				"x-requested-with": "XMLHttpRequest",
 			},
-		);
+		});
 
 		if (req.status === 403) {
 			return { error: "IP Blocked" };
@@ -14476,14 +11726,11 @@ export const vectorStock = async function vectorStock(query: string) {
 export const SnapchatProfile = async function SnapchatProfile(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(
-			`https://www.snapchat.com/@${encodeURIComponent(query)}`,
-			{
-				headers: {
-					...commonHeaders,
-				},
+		const req = await fetch(`https://www.snapchat.com/@${encodeURIComponent(query)}`, {
+			headers: {
+				...commonHeaders,
 			},
-		);
+		});
 
 		if (req.status === 403) {
 			return { error: "IP Blocked" };
@@ -14492,35 +11739,17 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
 		const res: any = await req.text();
 		let finalres: any;
 		try {
-			finalres = JSON.parse(
-				res
-					.split('script id="__NEXT_DATA__" type="application/json">')?.[1]
-					?.split("</script>")?.[0],
-			);
+			finalres = JSON.parse(res.split('script id="__NEXT_DATA__" type="application/json">')?.[1]?.split("</script>")?.[0]);
 		} catch {}
 
 		if (finalres?.props?.pageProps?.status) return { data: null };
-		const {
-			viewerInfo,
-			localization,
-			showSnapExpiredToast,
-			lensCursor,
-			curatedHighlightsCursor,
-			spotlightHighlightsCursor,
-			gaid,
-			locale,
-			messages,
-			serverSideConfigs,
-			...secres
-		} = finalres.props.pageProps;
+		const { viewerInfo, localization, showSnapExpiredToast, lensCursor, curatedHighlightsCursor, spotlightHighlightsCursor, gaid, locale, messages, serverSideConfigs, ...secres } = finalres.props.pageProps;
 		return {
 			data: {
 				...secres,
 				...(secres?.encodedSpotlightComments
 					? {
-							encodedSpotlightComments: JSON.parse(
-								secres.encodedSpotlightComments,
-							).flat(Infinity),
+							encodedSpotlightComments: JSON.parse(secres.encodedSpotlightComments).flat(Infinity),
 						}
 					: {}),
 				userProfile: secres?.userProfile?.publicProfileInfo || null,
@@ -14536,21 +11765,16 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 	if (!query) return null;
 
 	try {
-		const res = await fetch(
-			atob(
-				"aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl",
-			),
-			{
-				method: "POST",
-				headers: { ...commonHeaders, "Content-Type": "application/json" },
-				body: JSON.stringify({
-					model: "@hf/google/gemma-7b-it",
-					prompt: query,
-					max_tokens: 256,
-					stream: true,
-				}),
-			},
-		);
+		const res = await fetch(atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl"), {
+			method: "POST",
+			headers: { ...commonHeaders, "Content-Type": "application/json" },
+			body: JSON.stringify({
+				model: "@hf/google/gemma-7b-it",
+				prompt: query,
+				max_tokens: 256,
+				stream: true,
+			}),
+		});
 
 		if (!res.ok) {
 			return { error: `${res.status} - Can't process this` };
@@ -14582,11 +11806,7 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 	}
 };
 
-export const DiscordDeleteAutomod = async (
-	token: string,
-	guildId: string,
-	ruleId: string,
-) => {
+export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleId: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	if (!ruleId) return { error: "Missing ruleId" };
@@ -14625,12 +11845,9 @@ export const DiscordDeleteAutomod = async (
 export const RadioSearch = async function RadioSearch(query: string) {
 	if (!query) return null;
 	try {
-		const res = await fetch(
-			`https://all.api.radio-browser.info/json/stations/search?name=${encodeURIComponent(query)}&limit=25&order=votes&reverse=true`,
-			{
-				headers: commonHeaders,
-			},
-		);
+		const res = await fetch(`https://all.api.radio-browser.info/json/stations/search?name=${encodeURIComponent(query)}&limit=25&order=votes&reverse=true`, {
+			headers: commonHeaders,
+		});
 		let data: any;
 		try {
 			data = await res.json();

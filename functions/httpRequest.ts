@@ -5,11 +5,7 @@ import zlib from "zlib";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./logs.js";
 
-const logResponse = <T extends Response>(
-	c: Context,
-	response: T,
-	statusCode = response.status,
-) => {
+const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);
 	return response;
 };
@@ -29,9 +25,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 
 	c.header("X-Enc-Route", "v3");
 
-	const type = headers?.get
-		? headers.get("content-type")
-		: headers?.["content-type"];
+	const type = headers?.get ? headers.get("content-type") : headers?.["content-type"];
 	const filtype1 = type?.split("/")?.[0];
 	const defaultExtensions: Record<string, string> = {
 		video: "mp4",
@@ -41,17 +35,11 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 		application: "octet-stream",
 	};
 	const subtype = type?.split("/")?.[1]?.split(";")?.[0];
-	const filtype2 =
-		subtype === "*" ? defaultExtensions[filtype1] || null : subtype;
-	const contentType = filtype2
-		? `${filtype1}/${filtype2}`
-		: type || "application/octet-stream";
+	const filtype2 = subtype === "*" ? defaultExtensions[filtype1] || null : subtype;
+	const contentType = filtype2 ? `${filtype1}/${filtype2}` : type || "application/octet-stream";
 
 	c.header("Content-Type", contentType);
-	c.header(
-		"Cache-Control",
-		"public, max-age=30, must-revalidate, no-transform",
-	);
+	c.header("Cache-Control", "public, max-age=30, must-revalidate, no-transform");
 
 	return logResponse(
 		c,
@@ -71,9 +59,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 				if (c.req.raw.signal.aborted) return;
 
 				if (resolvedBody?.ok === false) {
-					console.error(
-						`blobDispatch: Upstream returned status ${resolvedBody.status}`,
-					);
+					console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
 					return;
 				}
 
@@ -140,13 +126,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	const useGzip = acceptEncoding.includes("gzip");
 	if (useGzip) c.header("Content-Encoding", "gzip");
-	c.header(
-		"Cache-Control",
-		requrl.pathname?.startsWith("/tools/discord/") ||
-			requrl.pathname?.startsWith("/tools/db/")
-			? "public, max-age=0, must-revalidate"
-			: "public, max-age=5, must-revalidate",
-	);
+	c.header("Cache-Control", requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/") ? "public, max-age=0, must-revalidate" : "public, max-age=5, must-revalidate");
 
 	return logResponse(
 		c,
@@ -173,11 +153,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 			if (c.req.raw.signal.aborted) return;
 
 			const data = await Promise.resolve()
-				.then(() =>
-					typeof promiseFactory === "function"
-						? promiseFactory()
-						: promiseFactory,
-				)
+				.then(() => (typeof promiseFactory === "function" ? promiseFactory() : promiseFactory))
 				.catch((err) => {
 					console.error("Promise error:", err);
 					return null;
@@ -226,11 +202,7 @@ export const processImage = async (c: Context, url?: string) => {
 		const res = await fetch(url, { headers: { ...commonHeaders } });
 		if (!res.ok) return "";
 		const contentType = res.headers.get("content-type");
-		if (
-			!contentType?.startsWith("image/") &&
-			!contentType?.startsWith("video/")
-		)
-			return "";
+		if (!contentType?.startsWith("image/") && !contentType?.startsWith("video/")) return "";
 		const arrayBuffer = await res.arrayBuffer();
 		const buffer = Buffer.from(arrayBuffer);
 		return `data:${contentType};base64,${buffer.toString("base64")}`;

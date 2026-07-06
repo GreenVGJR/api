@@ -6,7 +6,7 @@
 		"discord.js": "^14.26.4",
 		"emojibase-data": "^17.0.0",
 		"entities": "^8.0.0",
-		"hono": "^4.12.27",
+		"hono": "^4.12.28",
 		"httpcloak": "^1.6.8-beta.1",
 		"jsdom": "^29.1.1",
 		"lavalink-client": "^2.10.3",
@@ -23,7 +23,7 @@
 		"start-6": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun --hot --smol --experimental-http2-fetch --experimental-http3-fetch --dns-result-order=ipv6first .\" --name api -i 1 && pm2 save --force",
 		"stop": "npm run pm2-check && pm2 delete api 2>/dev/null && pm2 save --force",
 		"gen": "bun gen-routes.ts",
-		"prettier": "npx prettier --write . --use-tabs",
+		"prettier": "npx prettier --print-width 10000 --write . --use-tabs",
 		"browser-install": "python3 -m venv .venv && ./.venv/bin/pip install \"scrapling[ai]\" && ./.venv/bin/python -m playwright install chromium",
 		"gen-update": "bun run stop; rm -rf node_modules bun.lock functions routes public html && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && bun update --latest && npm install -g pm2 && bun run start && npm update -g",
 		"soft-update": "curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && bun update --latest && npm install -g pm2 && npm update -g"

@@ -1,26 +1,18 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import {
-	getOrCreatePlayer,
-	hasActivePlayer,
-	createMusicStream,
-} from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, hasActivePlayer, createMusicStream } from "../../functions/musicPlayer.js";
 
 app.get("/stats", async (c) => {
 	return await createMusicStream(c, async (log, s) => {
 		const token = c.req.query("token");
 
 		if (!token) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "Missing required params: token", type: { primary: "error", alt: "invalid_query" } })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Missing required params: token", type: { primary: "error", alt: "invalid_query" } })}}`);
 			return;
 		}
 		if (!hasActivePlayer(token)) {
-			await s.write(
-				`],"data":${JSON.stringify({ status: false, message: "No active player found" })}}`,
-			);
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "No active player found" })}}`);
 			return;
 		}
 

@@ -1,26 +1,10 @@
-import {
-	Client,
-	GatewayIntentBits,
-	ChannelType,
-	PermissionsBitField,
-	Options,
-	VoiceChannel,
-} from "discord.js";
-import {
-	LavalinkManager,
-	Player as LavalinkPlayer,
-	Track,
-} from "lavalink-client";
+import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options, VoiceChannel } from "discord.js";
+import { LavalinkManager, Player as LavalinkPlayer, Track } from "lavalink-client";
 import { stream } from "hono/streaming";
 import crypto from "crypto";
 import zlib from "zlib";
 import config from "../config.json" with { type: "json" };
-import {
-	generateChallenge,
-	verifyChallenge,
-	verifyChallengeHash,
-	ipToNumber,
-} from "./musicChallenges.ts";
+import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from "./musicChallenges.ts";
 import { recordRequestLog } from "./logs.js";
 import { radioStreamUrls } from "./radioProxy.js";
 
@@ -52,13 +36,7 @@ function patchNodeTls(node: any) {
 	};
 }
 
-const transientFetchCodes = new Set([
-	"ECONNRESET",
-	"ETIMEDOUT",
-	"ECONNREFUSED",
-	"EPIPE",
-	"UND_ERR_SOCKET",
-]);
+const transientFetchCodes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EPIPE", "UND_ERR_SOCKET"]);
 
 function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -71,39 +49,25 @@ function getFetchErrorCode(err: any): string {
 function isTransientFetchError(err: any): boolean {
 	const code = getFetchErrorCode(err);
 	const message = String(err?.message || err || "").toLowerCase();
-	return (
-		transientFetchCodes.has(code) ||
-		message.includes("socket connection was closed") ||
-		message.includes("fetch failed")
-	);
+	return transientFetchCodes.has(code) || message.includes("socket connection was closed") || message.includes("fetch failed");
 }
 
-export async function setVoiceStatus(
-	channelId: string,
-	token: string,
-	content: string,
-	retries = 3,
-) {
+export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
 	for (let i = 0; i < retries; i++) {
 		try {
-			const res = await fetch(
-				`https://discord.com/api/v10/channels/${channelId}/voice-status`,
-				{
-					method: "PUT",
-					headers: {
-						Authorization: `Bot ${token}`,
-						"Content-Type": "application/json",
-						"User-Agent": "DiscordBot (1.0.0)",
-					},
-					body: JSON.stringify({ status: content.slice(0, 500) }),
+			const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+				method: "PUT",
+				headers: {
+					Authorization: `Bot ${token}`,
+					"Content-Type": "application/json",
+					"User-Agent": "DiscordBot (1.0.0)",
 				},
-			);
+				body: JSON.stringify({ status: content.slice(0, 500) }),
+			});
 
 			if (res.status === 429) {
 				const retryAfter = Number(res.headers.get("Retry-After")) || 5;
-				console.warn(
-					`Voice Status Rate Limited (Attempt ${i + 1}/${retries}). Retrying after ${retryAfter}s...`,
-				);
+				console.warn(`Voice Status Rate Limited (Attempt ${i + 1}/${retries}). Retrying after ${retryAfter}s...`);
 				await sleep(retryAfter * 1000);
 				continue;
 			}
@@ -114,9 +78,7 @@ export async function setVoiceStatus(
 				if (remaining === 0) {
 					const resetAfter = Number(res.headers.get("X-RateLimit-Reset-After"));
 					if (resetAfter > 0) {
-						console.warn(
-							`Voice Status rate limit bucket exhausted, waiting ${resetAfter}s for reset`,
-						);
+						console.warn(`Voice Status rate limit bucket exhausted, waiting ${resetAfter}s for reset`);
 						await sleep(resetAfter * 1000);
 					}
 				}
@@ -126,9 +88,7 @@ export async function setVoiceStatus(
 			if (res.status >= 500 && i < retries - 1) {
 				const retryAfter = Number(res.headers.get("Retry-After"));
 				const delay = retryAfter > 0 ? retryAfter * 1000 : 1000 * (i + 1);
-				console.warn(
-					`Voice Status Server Error ${res.status} (Attempt ${i + 1}/${retries}), retrying in ${delay}ms`,
-				);
+				console.warn(`Voice Status Server Error ${res.status} (Attempt ${i + 1}/${retries}), retrying in ${delay}ms`);
 				await sleep(delay);
 				continue;
 			}
@@ -142,24 +102,17 @@ export async function setVoiceStatus(
 			}
 
 			const delay = 1000 * (i + 1);
-			console.warn(
-				`Voice Status Fetch Retry (${i + 1}/${retries}): ${getFetchErrorCode(err) || "network error"}, retrying in ${delay}ms`,
-			);
+			console.warn(`Voice Status Fetch Retry (${i + 1}/${retries}): ${getFetchErrorCode(err) || "network error"}, retrying in ${delay}ms`);
 			await sleep(delay);
 		}
 	}
 }
 
-export async function updateVoiceStatus(
-	player: LavalinkPlayer,
-	token: string,
-	track?: any,
-) {
+export async function updateVoiceStatus(player: LavalinkPlayer, token: string, track?: any) {
 	const settings = getVoiceStatusSettings(token, player.guildId);
 	const isActive = settings.trackStart.status;
 	const template = settings.trackStart.content;
-	const channelId =
-		player.voiceChannelId || lastVoiceChannel.get(`${token}:${player.guildId}`);
+	const channelId = player.voiceChannelId || lastVoiceChannel.get(`${token}:${player.guildId}`);
 
 	if (isActive === false || template === undefined || !channelId) return;
 
@@ -173,19 +126,13 @@ export async function updateVoiceStatus(
 		const content = applyTemplate(template, currentTrack);
 		await setVoiceStatus(channelId, token, content);
 	} catch (err) {
-		console.error(
-			`[VoiceStatus] Failed to update for guild ${player.guildId}:`,
-			err,
-		);
+		console.error(`[VoiceStatus] Failed to update for guild ${player.guildId}:`, err);
 	}
 }
 
 // ─── Streaming Helper ────────────────────────────────────────────────────────
 
-export async function createMusicStream(
-	c: any,
-	callback: (log: (msg: string) => Promise<void>, s: any) => Promise<void>,
-) {
+export async function createMusicStream(c: any, callback: (log: (msg: string) => Promise<void>, s: any) => Promise<void>) {
 	c.header("Content-Type", "application/json");
 	c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
@@ -200,27 +147,18 @@ export async function createMusicStream(
 			if (referer) {
 				const refUrl = new URL(referer);
 				const reqUrl = new URL(c.req.url);
-				checkReferer =
-					refUrl.host === reqUrl.host && referer.endsWith("/playground");
+				checkReferer = refUrl.host === reqUrl.host && referer.endsWith("/playground");
 			}
 		} catch {}
 		const ipLL = ipToNumber(c.req.header("cf-connecting-ip") || "127.0.0.1");
 		const rrmc = c.req.header("x-challenge-codes") || "";
 		const challengeHash = c.req.header("x-challenge") || "";
-		const checkValidChallenges =
-			!verifyChallengeHash(rrmc, challengeHash) ||
-			!(await verifyChallenge(rrmc, ipLL));
+		const checkValidChallenges = !verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL));
 		if (checkValidChallenges) {
 			c.header("X-Player", "lavalink");
-			c.header(
-				"X-Warning",
-				"Germany (DE) only. Outside that, you need to solve this challenge",
-			);
+			c.header("X-Warning", "Germany (DE) only. Outside that, you need to solve this challenge");
 			c.header("Content-Type", "text/event-stream");
-			c.header(
-				"Cache-Control",
-				"public, no-cache, no-store, no-transform, max-age=0, must-revalidate",
-			);
+			c.header("Cache-Control", "public, no-cache, no-store, no-transform, max-age=0, must-revalidate");
 			if (!(checkAccept && checkReferer)) {
 				c.header("Location", "/playground");
 			}
@@ -310,9 +248,7 @@ export async function createMusicStream(
 			await logPromise;
 			await log(`Error: ${err?.message || "Failed to process stream"}`);
 			await logPromise;
-			await safeWrite(
-				`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to process stream", type: { primary: "error", alt: "critical" } })}}`,
-			);
+			await safeWrite(`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to process stream", type: { primary: "error", alt: "critical" } })}}`);
 		}
 	});
 }
@@ -355,9 +291,7 @@ if (config.useLocalLavalink === 1) {
 LAVALINK_NODES = LAVALINK_NODE_GROUPS[0] || [];
 
 function lavalinkNodeGroups() {
-	return LAVALINK_NODE_GROUPS.map((group) =>
-		group.filter((node) => node.host && node.host.length > 0),
-	).filter((group) => group.length > 0);
+	return LAVALINK_NODE_GROUPS.map((group) => group.filter((node) => node.host && node.host.length > 0)).filter((group) => group.length > 0);
 }
 
 function lavalinkNodeLabel(nodes: any[]) {
@@ -400,11 +334,7 @@ function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 	}
 }
 
-function waitForLavalinkConnection(
-	manager: LavalinkManager,
-	timeoutMs: number,
-	connectNodes: boolean,
-) {
+function waitForLavalinkConnection(manager: LavalinkManager, timeoutMs: number, connectNodes: boolean) {
 	const nodes = [...manager.nodeManager.nodes.values()];
 	if (nodes.some((node) => node.connected)) return Promise.resolve(true);
 
@@ -444,12 +374,7 @@ function waitForLavalinkConnection(
 	});
 }
 
-async function connectLavalinkWithFallback(
-	manager: LavalinkManager,
-	timeoutMs: number,
-	log?: (msg: string) => Promise<void>,
-	useExistingPrimary = false,
-) {
+async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: number, log?: (msg: string) => Promise<void>, useExistingPrimary = false) {
 	const groups = lavalinkNodeGroups();
 	if (groups.length === 0) return false;
 
@@ -462,17 +387,11 @@ async function connectLavalinkWithFallback(
 			createLavalinkNodes(manager, group);
 		}
 
-		const connected = await waitForLavalinkConnection(
-			manager,
-			timeoutMs,
-			!isExistingPrimary,
-		);
+		const connected = await waitForLavalinkConnection(manager, timeoutMs, !isExistingPrimary);
 		if (connected) return true;
 
 		if (i < groups.length - 1 && log) {
-			await log(
-				`Lavalink node group failed (${lavalinkNodeLabel(group)}). Trying fallback...`,
-			);
+			await log(`Lavalink node group failed (${lavalinkNodeLabel(group)}). Trying fallback...`);
 		}
 	}
 
@@ -484,10 +403,7 @@ async function connectLavalinkWithFallback(
  * Used by the radio endpoint to force playback through the local node.
  * Returns the connected node, or null if the local node is unavailable.
  */
-export async function ensureLocalNode(
-	manager: LavalinkManager,
-	log?: (msg: string) => Promise<void>,
-): Promise<any | null> {
+export async function ensureLocalNode(manager: LavalinkManager, log?: (msg: string) => Promise<void>): Promise<any | null> {
 	if (!localNode.host || localNode.host.length === 0) {
 		if (log) await log("Local Lavalink node configuration missing (no host)");
 		return null;
@@ -533,8 +449,7 @@ export async function ensureLocalNode(
 			manager.nodeManager.once("connect", onConnect);
 		});
 		if (!connected) {
-			if (log)
-				await log("Local Lavalink node failed to connect within timeout");
+			if (log) await log("Local Lavalink node failed to connect within timeout");
 			return null;
 		}
 		if (log) await log("Local Lavalink node connected");
@@ -546,10 +461,7 @@ export async function ensureLocalNode(
 // ─── Player Pool ──────────────────────────────────────────────────────────────
 
 const AUTO_DESTROY_DELAY = 1 * 60 * 1000; // 1 minute
-const pendingPlayers = new Map<
-	string,
-	Promise<{ client: Client; player: LavalinkManager }>
->();
+const pendingPlayers = new Map<string, Promise<{ client: Client; player: LavalinkManager }>>();
 
 interface ManagedPlayer {
 	client: Client;
@@ -563,27 +475,19 @@ interface ManagedPlayer {
 
 const g = globalThis as any;
 
-const players: Map<string, ManagedPlayer> =
-	g.__vgjr_players || (g.__vgjr_players = new Map<string, ManagedPlayer>());
-const musicLogCooldowns: Map<string, number> =
-	g.__vgjr_musicLogCooldowns ||
-	(g.__vgjr_musicLogCooldowns = new Map<string, number>());
+const players: Map<string, ManagedPlayer> = g.__vgjr_players || (g.__vgjr_players = new Map<string, ManagedPlayer>());
+const musicLogCooldowns: Map<string, number> = g.__vgjr_musicLogCooldowns || (g.__vgjr_musicLogCooldowns = new Map<string, number>());
 
 // Persistent 24/7 state: "token:guildId" → true/false
 // Stored separately so it survives Lavalink player object recreation
-const state247: Map<string, boolean> =
-	g.__vgjr_state247 || (g.__vgjr_state247 = new Map<string, boolean>());
+const state247: Map<string, boolean> = g.__vgjr_state247 || (g.__vgjr_state247 = new Map<string, boolean>());
 
 // Last known voice channel per guild: "token:guildId" → voiceChannelId
 // Used as fallback when playerDestroy fires after voiceChannelId is already null
-const lastVoiceChannel: Map<string, string> =
-	g.__vgjr_lastVoiceChannel ||
-	(g.__vgjr_lastVoiceChannel = new Map<string, string>());
+const lastVoiceChannel: Map<string, string> = g.__vgjr_lastVoiceChannel || (g.__vgjr_lastVoiceChannel = new Map<string, string>());
 
 // Persistent voice status settings: "token:guildId" → { trackStart: { status, content }, ... }
-export const voiceStatusStore: Map<string, any> =
-	g.__vgjr_voiceStatusStore ||
-	(g.__vgjr_voiceStatusStore = new Map<string, any>());
+export const voiceStatusStore: Map<string, any> = g.__vgjr_voiceStatusStore || (g.__vgjr_voiceStatusStore = new Map<string, any>());
 
 export function getVoiceStatusSettings(token: string, guildId: string) {
 	const key = `${token}:${guildId}`;
@@ -595,13 +499,7 @@ export function getVoiceStatusSettings(token: string, guildId: string) {
 	);
 }
 
-export function setVoiceStatusSetting(
-	token: string,
-	guildId: string,
-	type: string,
-	status: boolean,
-	content: string,
-) {
+export function setVoiceStatusSetting(token: string, guildId: string, type: string, status: boolean, content: string) {
 	const key = `${token}:${guildId}`;
 	const current = getVoiceStatusSettings(token, guildId);
 	if (type === "trackStart") current.trackStart = { status, content };
@@ -632,19 +530,7 @@ function musicErrorMessage(err: any): string {
 
 function isKnownTransientMusicError(err: any): boolean {
 	const msg = musicErrorMessage(err);
-	return (
-		err?.name === "TimeoutError" ||
-		err?.code === 23 ||
-		err?.code === "ConnectionRefused" ||
-		msg.includes("The operation timed out") ||
-		msg.includes("Failed to parse JSON") ||
-		msg.includes("Unable to connect") ||
-		msg.includes("ConnectionRefused") ||
-		msg.includes("The node is not connected") ||
-		msg.includes("Node is not connected") ||
-		msg.includes("fetch failed") ||
-		msg.includes("ECONNREFUSED")
-	);
+	return err?.name === "TimeoutError" || err?.code === 23 || err?.code === "ConnectionRefused" || msg.includes("The operation timed out") || msg.includes("Failed to parse JSON") || msg.includes("Unable to connect") || msg.includes("ConnectionRefused") || msg.includes("The node is not connected") || msg.includes("Node is not connected") || msg.includes("fetch failed") || msg.includes("ECONNREFUSED");
 }
 
 function warnMusicThrottled(key: string, message: string, cooldownMs = 60_000) {
@@ -676,11 +562,7 @@ export function hasActivePlayer(token: string): boolean {
 /**
  * Returns true if the player for the given guild is a radio player (has `__isRadio` flag).
  */
-export async function isRadioActive(
-	token: string,
-	guildId: string,
-	log?: (msg: string) => Promise<void>,
-): Promise<boolean> {
+export async function isRadioActive(token: string, guildId: string, log?: (msg: string) => Promise<void>): Promise<boolean> {
 	if (!hasActivePlayer(token)) return false;
 	const { player: manager } = await getOrCreatePlayer(token, log);
 	const gp = manager.players.get(guildId);
@@ -694,18 +576,14 @@ function scheduleAutoDestroy(token: string) {
 	// Never auto-destroy if any guild under this token has 24/7 active
 	for (const [, p] of managed.player.players) {
 		if (get247(token, p.guildId)) {
-			console.log(
-				`⏭  Auto-destroy skipped — 24/7 active for guild ${p.guildId} (token: ...${token.slice(-6)})`,
-			);
+			console.log(`⏭  Auto-destroy skipped — 24/7 active for guild ${p.guildId} (token: ...${token.slice(-6)})`);
 			return;
 		}
 	}
 	// Also check state247 map directly (player may already be destroyed)
 	for (const [key] of state247) {
 		if (key.startsWith(token + ":") && state247.get(key)) {
-			console.log(
-				`⏭  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`,
-			);
+			console.log(`⏭  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`);
 			return;
 		}
 	}
@@ -719,9 +597,7 @@ function scheduleAutoDestroy(token: string) {
 		// Re-check 24/7 at fire time too
 		for (const [key] of state247) {
 			if (key.startsWith(token + ":") && state247.get(key)) {
-				console.log(
-					`⏭  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`,
-				);
+				console.log(`⏭  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`);
 				return;
 			}
 		}
@@ -735,9 +611,7 @@ function scheduleAutoDestroy(token: string) {
 		}
 
 		if (!hasActivity) {
-			console.log(
-				`🧹 Auto-destroying idle music client (token: ...${token.slice(-6)})`,
-			);
+			console.log(`🧹 Auto-destroying idle music client (token: ...${token.slice(-6)})`);
 			await destroyPlayer(token);
 		}
 	}, AUTO_DESTROY_DELAY);
@@ -758,17 +632,11 @@ if (!g.__vgjr_music_process_handlers_installed) {
 	process.on("uncaughtException", (err) => {
 		const msg = musicErrorMessage(err);
 		if (msg.includes("Argument 'data.encoded' must be present")) {
-			console.error(
-				"Caught and suppressed a crash in lavalink-client (trackStuck event):",
-				msg,
-			);
+			console.error("Caught and suppressed a crash in lavalink-client (trackStuck event):", msg);
 			return;
 		}
 		if (isKnownTransientMusicError(err)) {
-			warnMusicThrottled(
-				"uncaught:" + msg,
-				`Suppressed transient music exception: ${msg}`,
-			);
+			warnMusicThrottled("uncaught:" + msg, `Suppressed transient music exception: ${msg}`);
 			return;
 		}
 		// Bun throws DOMException TimeoutError when discord.js tries to close a dead WebSocket
@@ -782,29 +650,15 @@ if (!g.__vgjr_music_process_handlers_installed) {
 	process.on("unhandledRejection", (reason: any) => {
 		// Suppress known non-fatal WebSocket/network errors from discord.js/lavalink internals
 		const msg = musicErrorMessage(reason);
-		if (
-			isKnownTransientMusicError(reason) ||
-			reason?.name === "TimeoutError" ||
-			(reason as any)?.code === 23 ||
-			msg.includes("The operation timed out") ||
-			msg.includes("WebSocket was closed") ||
-			msg.includes("Cannot send data") ||
-			msg.includes("writableStreamDefaultWriterRelease")
-		) {
-			warnMusicThrottled(
-				"unhandled:" + msg,
-				`Suppressed transient music rejection: ${msg}`,
-			);
+		if (isKnownTransientMusicError(reason) || reason?.name === "TimeoutError" || (reason as any)?.code === 23 || msg.includes("The operation timed out") || msg.includes("WebSocket was closed") || msg.includes("Cannot send data") || msg.includes("writableStreamDefaultWriterRelease")) {
+			warnMusicThrottled("unhandled:" + msg, `Suppressed transient music rejection: ${msg}`);
 			return;
 		}
 		console.error("Unhandled Rejection:", reason);
 	});
 }
 
-export async function getOrCreatePlayer(
-	token: string,
-	log?: (msg: string) => Promise<void>,
-): Promise<{ client: Client; player: LavalinkManager }> {
+export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
 	const existing = players.get(token);
 	if (existing) {
 		if (existing.startup) {
@@ -815,10 +669,7 @@ export async function getOrCreatePlayer(
 		cancelAutoDestroy(token);
 
 		// Safety: Ensure manager has nodes (in case they were lost during a previous cleanup or error)
-		if (
-			existing.player.nodeManager.nodes.size === 0 &&
-			LAVALINK_NODES.length > 0
-		) {
+		if (existing.player.nodeManager.nodes.size === 0 && LAVALINK_NODES.length > 0) {
 			if (log) await log(`Recovering lost Lavalink node configurations...`);
 			for (const nodeConfig of LAVALINK_NODES) {
 				if (nodeConfig.host) {
@@ -834,15 +685,11 @@ export async function getOrCreatePlayer(
 
 		if (connectedCount === 0 && allNodes.length > 0) {
 			if (existing.reconnecting) {
-				if (log)
-					await log(
-						`A reconnection attempt is already in progress, waiting...`,
-					);
+				if (log) await log(`A reconnection attempt is already in progress, waiting...`);
 				await existing.reconnecting;
 			} else {
 				existing.reconnecting = (async () => {
-					if (log)
-						await log(`All Lavalink nodes are disconnected. Reconnecting...`);
+					if (log) await log(`All Lavalink nodes are disconnected. Reconnecting...`);
 					await connectLavalinkWithFallback(existing.player, 8000, log);
 				})();
 
@@ -853,19 +700,12 @@ export async function getOrCreatePlayer(
 				}
 			}
 
-			const finalConnectedCount = [
-				...existing.player.nodeManager.nodes.values(),
-			].filter((n) => n.connected).length;
+			const finalConnectedCount = [...existing.player.nodeManager.nodes.values()].filter((n) => n.connected).length;
 			if (finalConnectedCount === 0) {
 				await destroyPlayer(token);
-				throw new Error(
-					"Lavalink reconnection failed. The music client has been reset for a fresh start. Please ensure your Lavalink server is running and try again.",
-				);
+				throw new Error("Lavalink reconnection failed. The music client has been reset for a fresh start. Please ensure your Lavalink server is running and try again.");
 			}
-			if (log)
-				await log(
-					`Successfully reconnected ${finalConnectedCount} Lavalink node(s).`,
-				);
+			if (log) await log(`Successfully reconnected ${finalConnectedCount} Lavalink node(s).`);
 		}
 
 		if (!existing.contextCached) ensureContextCached(existing);
@@ -886,12 +726,10 @@ export async function getOrCreatePlayer(
 
 	let initResolve: (val: { client: Client; player: LavalinkManager }) => void;
 	let initReject: (err: any) => void;
-	const initPromise = new Promise<{ client: Client; player: LavalinkManager }>(
-		(res, rej) => {
-			initResolve = res;
-			initReject = rej;
-		},
-	);
+	const initPromise = new Promise<{ client: Client; player: LavalinkManager }>((res, rej) => {
+		initResolve = res;
+		initReject = rej;
+	});
 
 	pendingPlayers.set(token, initPromise);
 
@@ -918,8 +756,7 @@ export async function getOrCreatePlayer(
 					// Keep a tiny member cache for the bot itself
 					GuildMemberManager: {
 						maxSize: 50,
-						keepOverLimit: (member: any): boolean =>
-							member.id === member.client.user?.id,
+						keepOverLimit: (member: any): boolean => member.id === member.client.user?.id,
 					},
 				}),
 			});
@@ -968,35 +805,23 @@ export async function getOrCreatePlayer(
 			// ─ Shared 24/7 Reconnect ───────────────
 			const reconnecting247 = new Set<string>(); // dedup concurrent calls per guild
 
-			const reconnect247 = async (
-				guildId: string,
-				voiceChannelId: string,
-				label: string,
-			) => {
+			const reconnect247 = async (guildId: string, voiceChannelId: string, label: string) => {
 				// Bail if this token's client was already destroyed
 				if (!players.has(token)) {
-					console.log(
-						`24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`,
-					);
+					console.log(`24/7 reconnect skipped — client already destroyed (token: ...${token.slice(-6)})`);
 					return;
 				}
 				// Dedup: skip if a reconnect is already in-flight for this guild
 				if (reconnecting247.has(guildId)) {
-					console.log(
-						`24/7 reconnect already in-flight for guild ${guildId}, skipping`,
-					);
+					console.log(`24/7 reconnect already in-flight for guild ${guildId}, skipping`);
 					return;
 				}
 				reconnecting247.add(guildId);
-				console.log(
-					`24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`,
-				);
+				console.log(`24/7 reconnect for guild ${guildId} → VC ${voiceChannelId} (${label})`);
 				await new Promise((r) => setTimeout(r, 1500));
 				try {
 					if (!players.has(token) || client.ws.status !== 0) {
-						console.log(
-							`24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`,
-						);
+						console.log(`24/7 reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
 						return;
 					}
 					let p = manager.players.get(guildId);
@@ -1014,37 +839,22 @@ export async function getOrCreatePlayer(
 					}
 					set247(token, guildId, true);
 					lastVoiceChannel.set(`${token}:${guildId}`, voiceChannelId);
-					console.log(
-						`24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`,
-					);
+					console.log(`24/7 reconnected to VC ${voiceChannelId} for guild ${guildId}`);
 
 					const settings = getVoiceStatusSettings(token, guildId);
 					const currentTrack = p.queue.current;
 					const useTrackStart = !!currentTrack;
-					const setting = useTrackStart
-						? settings.trackStart
-						: settings.queueEnd;
-					const trackToUse =
-						currentTrack || p.queue.previous[p.queue.previous.length - 1];
+					const setting = useTrackStart ? settings.trackStart : settings.queueEnd;
+					const trackToUse = currentTrack || p.queue.previous[p.queue.previous.length - 1];
 
-					if (
-						setting.status &&
-						setting.content &&
-						setting.content.trim() !== ""
-					) {
-						const content = trackToUse
-							? applyTemplate(setting.content, trackToUse)
-							: setting.content;
+					if (setting.status && setting.content && setting.content.trim() !== "") {
+						const content = trackToUse ? applyTemplate(setting.content, trackToUse) : setting.content;
 						setVoiceStatus(voiceChannelId, token, content).catch(() => {});
 					}
 				} catch (err: any) {
 					const msg = musicErrorMessage(err);
 					if (isKnownTransientMusicError(err)) {
-						warnMusicThrottled(
-							`247-reconnect:${guildId}:${msg}`,
-							`24/7 reconnect skipped for guild ${guildId}: ${msg}`,
-							30_000,
-						);
+						warnMusicThrottled(`247-reconnect:${guildId}:${msg}`, `24/7 reconnect skipped for guild ${guildId}: ${msg}`, 30_000);
 					} else {
 						console.error(`24/7 reconnect failed for guild ${guildId}: ${msg}`);
 					}
@@ -1066,66 +876,47 @@ export async function getOrCreatePlayer(
 				const template = settings.queueEnd.content;
 				if (isActive !== false && template && template.trim() !== "") {
 					const lastTrack = p.queue.previous[p.queue.previous.length - 1];
-					const content = lastTrack
-						? applyTemplate(template, lastTrack)
-						: template;
-					if (p.voiceChannelId)
-						setVoiceStatus(p.voiceChannelId, token, content).catch(() => {});
+					const content = lastTrack ? applyTemplate(template, lastTrack) : template;
+					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, content).catch(() => {});
 				} else {
-					if (p.voiceChannelId)
-						setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
+					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
 				}
 				if (get247(token, p.guildId)) {
-					console.log(
-						`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`,
-					);
+					console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
 					reconnect247(p.guildId, p.voiceChannelId!, "queueEnd");
 					return;
 				}
 				if (p.connected && p.voiceChannelId) {
 					const voiceChannelId = p.voiceChannelId;
-					console.log(
-						`Queue empty for guild ${p.guildId}, disconnecting from VC ${voiceChannelId} (24/7 off)`,
-					);
+					console.log(`Queue empty for guild ${p.guildId}, disconnecting from VC ${voiceChannelId} (24/7 off)`);
 					setVoiceStatus(voiceChannelId, token, "").catch(() => {});
 					voiceStatusStore.delete(`${token}:${p.guildId}`);
 					lastVoiceChannel.delete(`${token}:${p.guildId}`);
 					p.destroy().catch((err: any) => {
-						console.error(
-							`Failed to destroy Lavalink player after queueEnd for guild ${p.guildId}:`,
-							err,
-						);
+						console.error(`Failed to destroy Lavalink player after queueEnd for guild ${p.guildId}:`, err);
 					});
 				}
-				console.log(
-					`Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`,
-				);
+				console.log(`Queue empty for guild ${p.guildId}, scheduling auto-destroy (token: ...${token.slice(-6)})`);
 				scheduleAutoDestroy(token);
 			});
 
 			manager.on("playerDestroy", (p) => {
 				// voiceChannelId may already be null by the time this fires, fall back to last known
-				const voiceChannelId =
-					p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
+				const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
 				if (get247(token, p.guildId)) {
 					// Do not update voice status here. We keep the current status (trackStart or queueEnd)
 					// so it persists smoothly through the reconnection.
 					if (voiceChannelId) {
-						console.log(
-							`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`,
-						);
+						console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
 						reconnect247(p.guildId, voiceChannelId, "playerDestroy");
 					} else {
-						console.log(
-							`Player destroyed for guild ${p.guildId} in 24/7 mode — no voiceChannelId to reconnect`,
-						);
+						console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — no voiceChannelId to reconnect`);
 					}
 					return;
 				}
 
 				// Not 24/7 - Clear status and reset configs
-				if (voiceChannelId)
-					setVoiceStatus(voiceChannelId, token, "").catch(() => {});
+				if (voiceChannelId) setVoiceStatus(voiceChannelId, token, "").catch(() => {});
 				voiceStatusStore.delete(`${token}:${p.guildId}`);
 
 				lastVoiceChannel.delete(`${token}:${p.guildId}`);
@@ -1135,15 +926,9 @@ export async function getOrCreatePlayer(
 			});
 
 			manager.nodeManager.on("error", (node, err) => {
-				const hasConnected = [...manager.nodeManager.nodes.values()].some(
-					(n) => n.connected,
-				);
+				const hasConnected = [...manager.nodeManager.nodes.values()].some((n) => n.connected);
 				if (!hasConnected) {
-					warnMusicThrottled(
-						`node-error:${node.id}:${musicErrorMessage(err)}`,
-						`[Lavalink Node Error] ${node.id}: ${musicErrorMessage(err)}`,
-						30_000,
-					);
+					warnMusicThrottled(`node-error:${node.id}:${musicErrorMessage(err)}`, `[Lavalink Node Error] ${node.id}: ${musicErrorMessage(err)}`, 30_000);
 				}
 			});
 
@@ -1173,77 +958,41 @@ export async function getOrCreatePlayer(
 
 									if (player.queue.current) {
 										if (!player.node?.connected) {
-											warnMusicThrottled(
-												`resume-node:${player.guildId}`,
-												`Auto-resume skipped for guild ${player.guildId}: Lavalink node is not connected`,
-												30_000,
-											);
+											warnMusicThrottled(`resume-node:${player.guildId}`, `Auto-resume skipped for guild ${player.guildId}: Lavalink node is not connected`, 30_000);
 											return;
 										}
 
 										const position = safeResumePosition(player);
-										console.log(
-											`Auto-resuming playback for guild ${player.guildId}${position ? ` at ${position}ms` : ""}`,
-										);
+										console.log(`Auto-resuming playback for guild ${player.guildId}${position ? ` at ${position}ms` : ""}`);
 										let playPromise: Promise<any>;
 										try {
-											playPromise =
-												position === undefined
-													? player.play()
-													: player.play({ position });
+											playPromise = position === undefined ? player.play() : player.play({ position });
 										} catch (err: any) {
 											const msg = musicErrorMessage(err);
-											if (
-												isKnownTransientMusicError(err) ||
-												msg.includes("PlayerOption#position")
-											) {
-												warnMusicThrottled(
-													`resume:${player.guildId}:${msg}`,
-													`Auto-resume skipped for guild ${player.guildId}: ${msg}`,
-													30_000,
-												);
+											if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
+												warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
 												return;
 											}
-											console.error(
-												`Failed to auto-resume for guild ${player.guildId}:`,
-												msg,
-											);
+											console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
 											return;
 										}
 										playPromise.catch((err: any) => {
 											const msg = musicErrorMessage(err);
-											if (
-												isKnownTransientMusicError(err) ||
-												msg.includes("PlayerOption#position")
-											) {
-												warnMusicThrottled(
-													`resume:${player.guildId}:${msg}`,
-													`Auto-resume skipped for guild ${player.guildId}: ${msg}`,
-													30_000,
-												);
+											if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
+												warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
 												return;
 											}
-											console.error(
-												`Failed to auto-resume for guild ${player.guildId}:`,
-												msg,
-											);
+											console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
 										});
 									}
 								})
 								.catch((err) => {
 									const msg = musicErrorMessage(err);
 									if (isKnownTransientMusicError(err)) {
-										warnMusicThrottled(
-											`voice-reconnect:${player.guildId}:${msg}`,
-											`Voice reconnect skipped for guild ${player.guildId}: ${msg}`,
-											30_000,
-										);
+										warnMusicThrottled(`voice-reconnect:${player.guildId}:${msg}`, `Voice reconnect skipped for guild ${player.guildId}: ${msg}`, 30_000);
 										return;
 									}
-									console.error(
-										`Failed to re-connect voice for guild ${player.guildId}:`,
-										msg,
-									);
+									console.error(`Failed to re-connect voice for guild ${player.guildId}:`, msg);
 								});
 						}
 					}
@@ -1251,15 +1000,9 @@ export async function getOrCreatePlayer(
 			});
 
 			manager.nodeManager.on("disconnect", (node) => {
-				const hasConnected = [...manager.nodeManager.nodes.values()].some(
-					(n) => n.connected,
-				);
+				const hasConnected = [...manager.nodeManager.nodes.values()].some((n) => n.connected);
 				if (!hasConnected) {
-					warnMusicThrottled(
-						`node-disconnect:${node.id}`,
-						`[Lavalink] Node disconnected: ${node.id}`,
-						30_000,
-					);
+					warnMusicThrottled(`node-disconnect:${node.id}`, `[Lavalink] Node disconnected: ${node.id}`, 30_000);
 				}
 			});
 
@@ -1268,10 +1011,7 @@ export async function getOrCreatePlayer(
 				if (oldState.member?.id !== client.user?.id) return;
 				// Track last known VC whenever bot joins/moves
 				if (newState.channelId) {
-					lastVoiceChannel.set(
-						`${token}:${newState.guild.id}`,
-						newState.channelId,
-					);
+					lastVoiceChannel.set(`${token}:${newState.guild.id}`, newState.channelId);
 				}
 				if (oldState.channel && !newState.channel) {
 					const is247 = get247(token, oldState.guild.id);
@@ -1279,11 +1019,7 @@ export async function getOrCreatePlayer(
 					if (is247) {
 						// Do not update voice status here. We keep the current status (trackStart or queueEnd)
 						// so it persists smoothly through the reconnection.
-						reconnect247(
-							oldState.guild.id,
-							oldState.channelId!,
-							"voiceStateUpdate",
-						);
+						reconnect247(oldState.guild.id, oldState.channelId!, "voiceStateUpdate");
 						return;
 					}
 
@@ -1291,17 +1027,13 @@ export async function getOrCreatePlayer(
 					setVoiceStatus(oldState.channelId!, token, "").catch(() => {});
 					voiceStatusStore.delete(`${token}:${oldState.guild.id}`);
 
-					console.log(
-						`Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`,
-					);
+					console.log(`Bot removed from voice channel "${oldState.channel.name}", scheduling auto-destroy (token: ...${token.slice(-6)})`);
 					scheduleAutoDestroy(token);
 				}
 			});
 
 			client.on("shardDisconnect", () => {
-				console.log(
-					`Client shard disconnected, destroying player (token: ...${token.slice(-6)})`,
-				);
+				console.log(`Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
 				destroyPlayer(token).catch(() => {
 					/* already cleaning up */
 				});
@@ -1331,10 +1063,7 @@ export async function getOrCreatePlayer(
 
 				// Wait for clientReady
 				const readyClient: any = await new Promise((resolve, reject) => {
-					const timeout = setTimeout(
-						() => reject(new Error("Timed out waiting for Discord ready")),
-						15_000,
-					);
+					const timeout = setTimeout(() => reject(new Error("Timed out waiting for Discord ready")), 15_000);
 					client.once("clientReady", (rc: any) => {
 						clearTimeout(timeout);
 						resolve(rc);
@@ -1353,21 +1082,14 @@ export async function getOrCreatePlayer(
 				});
 
 				// Wait for the primary node group; mode 2 then falls back to local only.
-				const nodeConnected = await connectLavalinkWithFallback(
-					manager,
-					30_000,
-					log,
-					true,
-				);
+				const nodeConnected = await connectLavalinkWithFallback(manager, 30_000, log, true);
 
 				if (!nodeConnected) {
 					throw new Error("Timed out waiting for Lavalink node connection");
 				}
 
 				// Verify at least one node is actually connected and usable
-				const connectedNodes = [
-					...managed.player.nodeManager.nodes.values(),
-				].filter((n) => n.connected);
+				const connectedNodes = [...managed.player.nodeManager.nodes.values()].filter((n) => n.connected);
 				if (connectedNodes.length === 0) {
 					throw new Error("No Lavalink nodes available after connection");
 				}
@@ -1438,8 +1160,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 	try {
 		const statusClears: Promise<void>[] = [];
 		for (const p of managed.player.players.values()) {
-			const voiceChannelId =
-				p.voiceChannelId || lastVoiceChannel.get(`${token}:${p.guildId}`);
+			const voiceChannelId = p.voiceChannelId || lastVoiceChannel.get(`${token}:${p.guildId}`);
 			if (voiceChannelId) {
 				statusClears.push(setVoiceStatus(voiceChannelId, token, ""));
 			}
@@ -1500,14 +1221,10 @@ async function ensureContextCached(managed: ManagedPlayer) {
 export function checkVoicePermissions(channel: any, botUser: any) {
 	const permissions = channel.permissionsFor(botUser);
 	if (!permissions?.has(PermissionsBitField.Flags.Connect)) {
-		throw new Error(
-			`I do not have permission to connect to the voice channel: ${channel.name}`,
-		);
+		throw new Error(`I do not have permission to connect to the voice channel: ${channel.name}`);
 	}
 	if (!permissions?.has(PermissionsBitField.Flags.Speak)) {
-		throw new Error(
-			`I do not have permission to speak in the voice channel: ${channel.name}`,
-		);
+		throw new Error(`I do not have permission to speak in the voice channel: ${channel.name}`);
 	}
 }
 
@@ -1516,11 +1233,7 @@ export async function resolveVoiceChannel(client: Client, voiceId: string) {
 	if (!channel) {
 		channel = await client.channels.fetch(voiceId).catch(() => null);
 	}
-	if (
-		!channel ||
-		(channel.type !== ChannelType.GuildVoice &&
-			channel.type !== ChannelType.GuildStageVoice)
-	) {
+	if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
 		throw new Error("Invalid voice channel ID or not a voice channel");
 	}
 
@@ -1529,10 +1242,7 @@ export async function resolveVoiceChannel(client: Client, voiceId: string) {
 	return channel;
 }
 
-export function getQueue(
-	manager: LavalinkManager,
-	guildId: string,
-): LavalinkPlayer | null {
+export function getQueue(manager: LavalinkManager, guildId: string): LavalinkPlayer | null {
 	return manager.players.get(guildId) ?? null;
 }
 
@@ -1542,29 +1252,16 @@ export function formatDuration(ms: number): string {
 	const h = Math.floor(s / 3600);
 	const m = Math.floor((s % 3600) / 60);
 	const sec = s % 60;
-	if (h > 0)
-		return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+	if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 	return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export function formatTrack(
-	track: Track | any,
-	client?: any,
-	guildPlayer?: any,
-) {
-	const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce(
-		(acc: number, track: any) => acc + (track?.duration ?? 0),
-		0,
-	);
+export function formatTrack(track: Track | any, client?: any, guildPlayer?: any) {
+	const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
 	const requester = track.requester || null;
-	const requestedId = requester
-		? String((requester as any).id ?? requester)
-		: null;
-	const cachedRequester = requestedId
-		? client?.users?.cache?.get(requestedId)
-		: null;
-	const requesterData: any =
-		typeof requester === "object" ? { ...requester } : { id: requestedId };
+	const requestedId = requester ? String((requester as any).id ?? requester) : null;
+	const cachedRequester = requestedId ? client?.users?.cache?.get(requestedId) : null;
+	const requesterData: any = typeof requester === "object" ? { ...requester } : { id: requestedId };
 	if (cachedRequester) {
 		requesterData.id = cachedRequester.id;
 		requesterData.username = cachedRequester.username;
@@ -1582,9 +1279,7 @@ export function formatTrack(
 	if (requestedId && !isNaN(Number(requestedId))) {
 		const guild = client?.guilds?.cache?.get(guildPlayer?.guildId);
 		const voiceState = guild?.voiceStates?.cache?.get(requestedId);
-		const channel = client?.channels?.cache?.get(
-			guildPlayer?.voiceChannelId,
-		) as VoiceChannel | null;
+		const channel = client?.channels?.cache?.get(guildPlayer?.voiceChannelId) as VoiceChannel | null;
 
 		if (voiceState) {
 			voiceInfo = {
@@ -1606,10 +1301,7 @@ export function formatTrack(
 		author: track.info.author,
 		url: track.info.uri,
 		source: (track.info as any).sourceName || "",
-		actualSource:
-			(track.info as any).actualSourceName ||
-			(track.info as any).sourceName ||
-			"",
+		actualSource: (track.info as any).actualSourceName || (track.info as any).sourceName || "",
 		thumbnail: track.info.artworkUrl ?? "",
 		duration: formatDuration(track.info.duration),
 		durationMS: String(track.info.duration),
@@ -1670,9 +1362,7 @@ export async function autoInit(): Promise<void> {
 			try {
 				await getOrCreatePlayer(token);
 			} catch (err: any) {
-				console.error(
-					`❌ autoInit: Failed for token ...${token.slice(-6)}: ${err.message}`,
-				);
+				console.error(`❌ autoInit: Failed for token ...${token.slice(-6)}: ${err.message}`);
 			}
 		}),
 	);
@@ -1692,9 +1382,7 @@ function requesterFromUser(user: any) {
 
 function clientRequesterForPlayer(player: LavalinkPlayer) {
 	const manager = (player as any).LavalinkManager;
-	const managed = [...players.values()].find(
-		(entry) => entry.player === manager,
-	);
+	const managed = [...players.values()].find((entry) => entry.player === manager);
 	const requester = requesterFromUser(managed?.client.user);
 	if (requester) return requester;
 
@@ -1714,24 +1402,17 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 	player.set("isFillingAutoplay", true);
 
 	try {
-		let currentAutoplayCount = player.queue.tracks.filter(
-			(t) => (t.requester as any)?.isAutoplay,
-		).length;
+		let currentAutoplayCount = player.queue.tracks.filter((t) => (t.requester as any)?.isAutoplay).length;
 		let attempts = 0;
 		const TARGET = 50;
 
 		while (currentAutoplayCount < TARGET && attempts < 3) {
 			attempts++;
 
-			const track =
-				player.queue.tracks[player.queue.tracks.length - 1] ||
-				player.queue.current ||
-				baseTrack;
+			const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
 			if (!track) break;
 
-			const previousTracks = player.queue.previous.map(
-				(t) => t.info.identifier,
-			);
+			const previousTracks = player.queue.previous.map((t) => t.info.identifier);
 			const queueTracks = player.queue.tracks.map((t) => t.info.identifier);
 
 			const source = track.info.sourceName;
@@ -1755,10 +1436,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 				}
 			}
 
-			const res = await player.search(
-				{ query: searchStr },
-				(track.requester as any)?.isAutoplay ? undefined : track.requester,
-			);
+			const res = await player.search({ query: searchStr }, (track.requester as any)?.isAutoplay ? undefined : track.requester);
 			if (!res.tracks?.length) break;
 
 			const needed = TARGET - currentAutoplayCount;
@@ -1766,12 +1444,10 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 				.filter((t) => {
 					const id = t.info.identifier;
 					if (!id) return false;
-					const isDuplicate =
-						previousTracks.includes(id) || queueTracks.includes(id);
+					const isDuplicate = previousTracks.includes(id) || queueTracks.includes(id);
 					const titleA = t.info.title.toLowerCase();
 					const titleB = track.info.title.toLowerCase();
-					const isSimilarTitle =
-						titleA.includes(titleB) || titleB.includes(titleA);
+					const isSimilarTitle = titleA.includes(titleB) || titleB.includes(titleA);
 					return !isDuplicate && !isSimilarTitle;
 				})
 				.slice(0, needed);
@@ -1780,17 +1456,13 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 
 			for (const t of toAdd) {
 				t.requester = {
-					...((track.requester as any) ||
-						clientRequesterForPlayer(player) ||
-						{}),
+					...((track.requester as any) || clientRequesterForPlayer(player) || {}),
 					isAutoplay: true,
 				};
 				await player.queue.add(t);
 			}
 
-			currentAutoplayCount = player.queue.tracks.filter(
-				(t) => (t.requester as any)?.isAutoplay,
-			).length;
+			currentAutoplayCount = player.queue.tracks.filter((t) => (t.requester as any)?.isAutoplay).length;
 			if (!player.playing && !player.paused) {
 				if (!player.node?.connected) break;
 				await player.play();
@@ -1799,11 +1471,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 	} catch (err) {
 		const msg = musicErrorMessage(err);
 		if (isKnownTransientMusicError(err)) {
-			warnMusicThrottled(
-				`autoplay:${player.guildId}:${msg}`,
-				`Autoplay skipped for guild ${player.guildId}: ${msg}`,
-				60_000,
-			);
+			warnMusicThrottled(`autoplay:${player.guildId}:${msg}`, `Autoplay skipped for guild ${player.guildId}: ${msg}`, 60_000);
 		} else {
 			console.error(`Autoplay failed for guild ${player.guildId}:`, msg);
 		}

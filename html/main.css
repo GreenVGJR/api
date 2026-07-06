@@ -105,12 +105,7 @@
 }
 
 .waiting-loading {
-	background: linear-gradient(
-		90deg,
-		rgba(156, 163, 175, 0.8) 25%,
-		rgba(255, 255, 255, 0.9) 50%,
-		rgba(156, 163, 175, 0.8) 75%
-	);
+	background: linear-gradient(90deg, rgba(156, 163, 175, 0.8) 25%, rgba(255, 255, 255, 0.9) 50%, rgba(156, 163, 175, 0.8) 75%);
 	background-size: 200% 100%;
 	background-clip: text;
 	-webkit-background-clip: text;
@@ -239,19 +234,7 @@ html {
 
 body {
 	background-color: #000;
-	background-image:
-		radial-gradient(
-			at 100% 0% in oklch,
-			oklch(40% 0.01 250 / 15%) 0%,
-			transparent 40%
-		),
-		radial-gradient(
-			at 0% 100% in oklch,
-			oklch(45% 0.02 250 / 30%) 0%,
-			transparent 70%
-		),
-		linear-gradient(to bottom, #000 0%, transparent 10%),
-		linear-gradient(to top, #000 0%, transparent 10%);
+	background-image: radial-gradient(at 100% 0% in oklch, oklch(40% 0.01 250 / 15%) 0%, transparent 40%), radial-gradient(at 0% 100% in oklch, oklch(45% 0.02 250 / 30%) 0%, transparent 70%), linear-gradient(to bottom, #000 0%, transparent 10%), linear-gradient(to top, #000 0%, transparent 10%);
 	background-attachment: fixed;
 	height: 100vh;
 	height: 100dvh;
@@ -269,16 +252,7 @@ body {
 
 .panel-gradient {
 	/* Multi-stop 'eased' steel white gradient - higher visibility */
-	background: linear-gradient(
-		to bottom left in oklch,
-		oklch(35% 0.02 250 / 30%) 0%,
-		oklch(30% 0.01 250 / 35%) 10%,
-		oklch(25% 0.01 250 / 40%) 20%,
-		oklch(20% 0.01 250 / 45%) 35%,
-		oklch(15% 0 250 / 55%) 50%,
-		oklch(10% 0 250 / 65%) 70%,
-		oklch(0% 0 0 / 80%) 100%
-	) !important;
+	background: linear-gradient(to bottom left in oklch, oklch(35% 0.02 250 / 30%) 0%, oklch(30% 0.01 250 / 35%) 10%, oklch(25% 0.01 250 / 40%) 20%, oklch(20% 0.01 250 / 45%) 35%, oklch(15% 0 250 / 55%) 50%, oklch(10% 0 250 / 65%) 70%, oklch(0% 0 0 / 80%) 100%) !important;
 }
 
 /* Hide scrollbar for tabs row */
@@ -307,9 +281,7 @@ body {
 	padding: 4px 8px;
 	font-size: 11px;
 	color: #ffffff;
-	font-family:
-		ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
-		"Liberation Mono", "Courier New", monospace;
+	font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
 	outline: none;
 	width: 100%;
 	transition:
@@ -387,9 +359,7 @@ body {
 	color: #d1d5db;
 	cursor: pointer;
 	display: block;
-	font-family:
-		ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
-		"Liberation Mono", "Courier New", monospace;
+	font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
 	font-size: 11px;
 	padding: 6px 8px;
 	text-align: left;
@@ -445,9 +415,7 @@ body {
 	min-width: 60px;
 	max-width: 100px;
 	font-size: 10px;
-	font-family:
-		ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas",
-		"Liberation Mono", "Courier New", monospace;
+	font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
 	color: #4ade80;
 	text-align: right;
 	overflow: hidden;

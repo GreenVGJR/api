@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, formatDuration, setVoiceStatus, voiceStatusStore, ensureLocalNode } from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, setVoiceStatus, voiceStatusStore, ensureLocalNode } from "../../functions/musicPlayer.js";
 import { commonHeaders } from "../../functions/request.js";
 import { radioStreamUrls } from "../../functions/radioProxy.js";
 import { getActiveFilters } from "./filters.js";

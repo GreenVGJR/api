@@ -12,7 +12,8 @@
 		"allowSyntheticDefaultImports": true,
 		"forceConsistentCasingInFileNames": true,
 		"allowJs": false,
-		"types": ["bun-types"]
+		"types": ["bun-types"],
+		"noUnusedLocals": true
 	},
 	"exclude": ["node_modules"],
 	"include": ["functions/**/*", "routes/**/*", "index.ts", "gen-routes.ts"]

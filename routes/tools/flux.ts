@@ -3,7 +3,7 @@ import { Buffer } from "buffer";
 const app = new Hono();
 
 import { blobDispatch } from "../../functions/httpRequest.js";
-import { commonHeaders, userAgent } from "../../functions/request.js";
+import { commonHeaders } from "../../functions/request.js";
 
 async function resizeImage(input: Buffer | ArrayBuffer) {
 	return await new Bun.Image(input).resize(1024, 1024, { filter: "mks2021" }).buffer();

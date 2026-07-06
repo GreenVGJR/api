@@ -17,8 +17,6 @@ import { Buffer } from "buffer";
 import { PSM } from "tesseract.js";
 import { getOCRWorker } from "./ocrWorker.js";
 import sharp from "sharp";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import emojibaseData from "emojibase-data/en/data.json" with { type: "json" };
 import emojibaseGroups from "emojibase-data/meta/groups.json" with { type: "json" };
 
@@ -561,21 +559,6 @@ function deepFind(obj: unknown, key: string): unknown | null {
 		if (result != null) return result;
 	}
 	return null;
-}
-
-function filterCookies(cookie: string | string[]) {
-	if (typeof cookie !== "string" && !Array.isArray(cookie)) return "";
-	const cookieStr = Array.isArray(cookie) ? cookie.join("; ") : cookie;
-	return (
-		cookieStr
-			.split(";")
-			.map((c) => c.trim())
-			.filter((c) => {
-				const key = c.split("=")[0];
-				return key && !/^(domain|path|expires|max-age|secure|httponly|samesite)$/i.test(key);
-			})
-			.join("; ") + ";"
-	);
 }
 
 function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] = []) {
@@ -1518,7 +1501,6 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 		});
 
 		const [res2] = await Promise.all([pull.json()]);
-		const covermusic: any = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer.contents?.[0]?.playlistPanelVideoRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
 
 		responseBody["data"] = { ...(container || {}) };
 		responseBody["lyrics"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;

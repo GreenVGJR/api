@@ -89,7 +89,7 @@ const API_ROUTES = {
 			["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
 			["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
 			["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],
-			["/tools/discord/listMember/tags?token=&guildId=&type=&limit=", "string", "number", "enum_multi:all,oldest,newest,oldest_guild,newest_guild", "number"],
+			["/tools/discord/listMember/tags?token=&guildId=&type=&limit=&self=", "string", "number", "enum_multi:all,oldest,newest,oldest_guild,newest_guild", "number", "boolean"],
 		],
 		channel: [
 			["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum_multi:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],

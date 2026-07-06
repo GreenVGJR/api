@@ -11898,7 +11898,7 @@ export const AppstoreSearch = async function AppstoreSearch(query: string, type:
 	}
 };
 
-export const DiscordListMemberTags = async (token: string, guildId: string, type: string = "all", outputLimit: number | null = null) => {
+export const DiscordListMemberTags = async (token: string, guildId: string, type: string = "all", outputLimit: number | null = null, self: boolean = false) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 
@@ -11966,7 +11966,7 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 			entry.members[userId] = formatDiscordUser(user);
 		}
 
-		const dataArray = Object.entries(guildMap).map(([id, val]) => ({ [id]: val }));
+		let dataArray = Object.entries(guildMap).map(([id, val]) => ({ [id]: val }));
 
 		if (type) {
 			const typeSet = type.split(",").map((t: string) => t.trim());
@@ -11984,6 +11984,11 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 						return parseInt(bId) - parseInt(aId);
 					});
 			}
+		}
+
+		if (self) {
+			const selfEntry = dataArray.find((e: any) => Object.keys(e)[0] === guildId);
+			dataArray = selfEntry ? [selfEntry] : [];
 		}
 
 		const output = outputLimit ? dataArray.slice(0, outputLimit) : dataArray;

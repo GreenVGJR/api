@@ -31,11 +31,14 @@ app.get("/discord/listMember/tags", async (c) => {
 	}
 	const type = queryType;
 
+	const querySelf = c.req.query("self");
+	const self = querySelf === "true";
+
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
 	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () => DiscordListMemberTags(token!, guildId!, type, limit));
+	return await dispatch(c, () => DiscordListMemberTags(token!, guildId!, type, limit, self));
 });
 
 export default app;

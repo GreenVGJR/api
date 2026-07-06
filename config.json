@@ -2,5 +2,6 @@
 	"buildId": false,
 	"restrictLocal": false,
 	"useLocalLavalink": 2,
-	"disableTLSMusic": false
+	"disableTLSMusic": false,
+	"playgroundChallenge": false
 }

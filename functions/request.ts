@@ -11841,3 +11841,264 @@ export const RadioSearch = async function RadioSearch(query: string) {
 		return null;
 	}
 };
+
+// Helper to recursively replace placeholder pattern "{w}x{h}{c}.{f}" with "1x1ss.png" in any string values within an object
+function replacePlaceholdersInLockup(value: any): any {
+	if (typeof value === "string") {
+		return value.replace(/\{w\}x\{h\}\{c\}\.\{f\}/g, "1x1ss.png");
+	}
+	if (Array.isArray(value)) {
+		return value.map(replacePlaceholdersInLockup);
+	}
+	if (value && typeof value === "object") {
+		const newObj: any = {};
+		for (const k in value) {
+			newObj[k] = replacePlaceholdersInLockup(value[k]);
+		}
+		return newObj;
+	}
+	return value;
+}
+
+export const AppstoreSearch = async function AppstoreSearch(query: string, type: string) {
+	if (!query) return null;
+	try {
+		const req = await fetch(`https://apps.apple.com/us/${type}/search?term=${query}`, { headers: commonHeaders });
+
+		let parseres: any;
+		try {
+			const res = await req.text();
+			const serverDataMatch = res.match(/<script[^>]*id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/);
+			if (serverDataMatch) {
+				parseres = JSON.parse(serverDataMatch[1]);
+			}
+		} catch (e) {
+			console.error("App Store parse error:", e);
+		}
+
+		const finalres: any = parseres?.data?.[0]?.data?.shelves?.[0]?.items
+			?.filter((a: any) => !!a?.lockup)
+			?.map((a: any) => {
+				const processedLockup = replacePlaceholdersInLockup(a.lockup);
+				const processedAppEvent = replacePlaceholdersInLockup(a?.appEvent);
+				return {
+					...processedLockup,
+					currentEvent: processedAppEvent || null,
+				};
+			});
+
+		return {
+			_warning: "Strict rate-limiting. Response may return null",
+			searchType: type,
+			data: finalres || null,
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const DiscordListMemberTags = async (token: string, guildId: string, type: string = "all", outputLimit: number | null = null) => {
+	if (!token || token === "null") return { error: "Missing token" };
+	if (!guildId) return { error: "Missing guildId" };
+
+	const headers: any = {
+		Authorization: `Bot ${token}`,
+		"Content-Type": "application/json",
+		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+	};
+
+	try {
+		let data: any[] = [];
+		let lastMemberId: string | null = null;
+
+		while (true) {
+			const currentFetchLimit = 1000;
+			let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}`;
+			if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
+
+			const memberRes = await fetch(urlMembers, { headers });
+			if (memberRes.status !== 200) break;
+
+			const batch: any = await memberRes.json();
+			if (!Array.isArray(batch) || batch.length === 0) break;
+
+			data.push(...batch);
+			if (batch.length < currentFetchLimit) break;
+			lastMemberId = batch[batch.length - 1].user?.id;
+		}
+
+		if (type) {
+			const typeSet = type.split(",").map((t: string) => t.trim());
+			for (const t of typeSet) {
+				if (t === "oldest") data.sort((a: any, b: any) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime());
+				else if (t === "newest") data.sort((a: any, b: any) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime());
+			}
+		}
+
+		const guildMap: Record<string, any> = {};
+
+		for (const member of data) {
+			const user = member.user || member;
+			const userId = user.id;
+			const clan = member.clan || user.clan || member.primary_guild || user.primary_guild;
+			const identityGuildId = clan?.identity_guild_id || (clan ? guildId : null);
+
+			if (!identityGuildId) continue;
+
+			if (!guildMap[identityGuildId]) {
+				guildMap[identityGuildId] = {
+					tag: null,
+					badge: null,
+					badge_url: null,
+					identify_enabled: null,
+					members: {},
+				};
+			}
+
+			const entry = guildMap[identityGuildId];
+			if (clan) {
+				entry.tag = clan.tag || null;
+				entry.badge = clan.badge || null;
+				entry.badge_url = clan.badge ? `https://cdn.discordapp.com/clan-badges/${identityGuildId}/${clan.badge}.png` : null;
+				entry.identify_enabled = clan.identity_enabled ?? null;
+			}
+			entry.members[userId] = formatDiscordUser(user);
+		}
+
+		const dataArray = Object.entries(guildMap).map(([id, val]) => ({ [id]: val }));
+
+		if (type) {
+			const typeSet = type.split(",").map((t: string) => t.trim());
+			for (const t of typeSet) {
+				if (t === "oldest_guild")
+					dataArray.sort((a: any, b: any) => {
+						const aId = Object.keys(a)[0];
+						const bId = Object.keys(b)[0];
+						return parseInt(aId) - parseInt(bId);
+					});
+				else if (t === "newest_guild")
+					dataArray.sort((a: any, b: any) => {
+						const aId = Object.keys(a)[0];
+						const bId = Object.keys(b)[0];
+						return parseInt(bId) - parseInt(aId);
+					});
+			}
+		}
+
+		const output = outputLimit ? dataArray.slice(0, outputLimit) : dataArray;
+
+		return { data: output };
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
+
+// Country metadata cache
+let countriesCache: any = null;
+let countriesCachePromise: Promise<void> | null = null;
+
+async function ensureCountriesCache() {
+	if (countriesCache) return;
+	if (countriesCachePromise) return countriesCachePromise;
+	countriesCachePromise = (async () => {
+		try {
+			const res = await fetch("https://countries.altoal.com/api/v1/metadata.json", { headers: commonHeaders });
+			const json: any = await res.json();
+			countriesCache = json?.countries || null;
+		} catch (e) {
+			console.error("Failed to fetch countries metadata:", e);
+		}
+	})();
+	return countriesCachePromise;
+}
+
+export const CountrySearch = async (query: string) => {
+	if (!query) return { error: "Missing query" };
+	await ensureCountriesCache();
+	if (!countriesCache) return { error: "Failed to load countries data" };
+
+	const lowerQuery = query.toLowerCase();
+	let matchedKey: string | null = null;
+
+	if (countriesCache[lowerQuery]) matchedKey = lowerQuery;
+
+	if (!matchedKey) {
+		for (const [key, country] of Object.entries<any>(countriesCache)) {
+			if (country.name?.toLowerCase() === lowerQuery || country.code?.iso2?.toLowerCase() === lowerQuery || country.code?.iso3?.toLowerCase() === lowerQuery) {
+				matchedKey = key;
+				break;
+			}
+		}
+	}
+
+	if (!matchedKey) {
+		for (const [key, country] of Object.entries<any>(countriesCache)) {
+			if (country.name?.toLowerCase().includes(lowerQuery)) {
+				matchedKey = key;
+				break;
+			}
+		}
+	}
+
+	if (!matchedKey) return { error: "Country not found" };
+
+	const allMatches = [matchedKey];
+	for (const [key, country] of Object.entries<any>(countriesCache)) {
+		if (key !== matchedKey && (country.name?.toLowerCase().includes(lowerQuery) || country.code?.iso2?.toLowerCase().includes(lowerQuery) || country.code?.iso3?.toLowerCase().includes(lowerQuery))) {
+			allMatches.push(key);
+		}
+	}
+
+	const similarNames = allMatches.slice(1).map((key: string) => ({
+		key,
+		name: countriesCache[key]?.name,
+	}));
+
+	try {
+		const res = await fetch(`https://countries.altoal.com/api/v1/name/${encodeURIComponent(matchedKey)}.json`, { headers: commonHeaders });
+		const detail: any = await res.json();
+		return { data: detail?.data || null, similarName: similarNames.length > 0 ? similarNames : null };
+	} catch (e: any) {
+		return { error: e.message || "Failed to fetch country details" };
+	}
+};
+
+export const MealRecipe = async (query: string) => {
+	if (!query) return { error: "Missing query" };
+	try {
+		const res = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`, {
+			headers: commonHeaders,
+		});
+		const json: any = await res.json();
+		const meals = json?.meals || null;
+		if (!meals) return { data: null };
+
+		const simplified = meals.map((meal: any) => {
+			const ingredients: { name: string; measure: string }[] = [];
+			for (let i = 1; i <= 20; i++) {
+				const name = meal[`strIngredient${i}`];
+				const measure = meal[`strMeasure${i}`];
+				if (name?.trim()) {
+					ingredients.push({ name: name.trim(), measure: (measure || "").trim() });
+				}
+			}
+
+			const ingredientsString = ingredients.map((i) => `${i.name}: ${i.measure}`).join(", ");
+
+			// 😭
+			const { strIngredient1, strMeasure1, strIngredient2, strMeasure2, strIngredient3, strMeasure3, strIngredient4, strMeasure4, strIngredient5, strMeasure5, strIngredient6, strMeasure6, strIngredient7, strMeasure7, strIngredient8, strMeasure8, strIngredient9, strMeasure9, strIngredient10, strMeasure10, strIngredient11, strMeasure11, strIngredient12, strMeasure12, strIngredient13, strMeasure13, strIngredient14, strMeasure14, strIngredient15, strMeasure15, strIngredient16, strMeasure16, strIngredient17, strMeasure17, strIngredient18, strMeasure18, strIngredient19, strMeasure19, strIngredient20, strMeasure20, strCreativeCommonsConfirmed, strImageSource, dateModified, ...rest } = meal;
+
+			return {
+				...rest,
+				ingredients,
+				ingredientsString,
+				dateModified: dateModified ? Math.floor(new Date(dateModified).getTime() / 1000) : null,
+			};
+		});
+
+		return { data: simplified };
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};

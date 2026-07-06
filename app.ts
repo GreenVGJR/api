@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
 const API_ROUTES = {
-	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=", "string"], ["/search/spotify?q=", "string"], ["/search/applemusic?q=", "string"], ["/search/radio?q=", "string"], ["/search/shazam?q=", "string"], ["/search/deezer?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/tidal?q=", "string"], ["/search/tidal/v2?q=", "string"], ["/search/genius?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=", "string"], ["/search/google?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/vectorstock?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/otodb?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=", "string"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=", "string"], ["/search/tiktok/music?q=", "string"], ["/search/tiktok/users?q=", "string"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=", "string"], ["/search/spotify?q=", "string"], ["/search/applemusic?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/shazam?q=", "string"], ["/search/deezer?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/tidal?q=", "string"], ["/search/tidal/v2?q=", "string"], ["/search/genius?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=", "string"], ["/search/google?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/vectorstock?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/otodb?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=", "string"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=", "string"], ["/search/tiktok/music?q=", "string"], ["/search/tiktok/users?q=", "string"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -63,6 +63,8 @@ const API_ROUTES = {
 			["/tools/emoji?q=&limit=", "string", "number"],
 			["/tools/emoji/kitchen?q1=&q2=&imageOnly=", "string", "string", "boolean"],
 			["/tools/md5?q=", "string"],
+			["/tools/country?q=", "string"],
+			["/tools/mealRecipe?q=", "string"],
 		],
 		db: [
 			["/tools/db/get?q=&hash=", "string", "string"],
@@ -87,6 +89,7 @@ const API_ROUTES = {
 			["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
 			["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
 			["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],
+			["/tools/discord/listMember/tags?token=&guildId=&type=&limit=", "string", "number", "enum_multi:all,oldest,newest,oldest_guild,newest_guild", "number"],
 		],
 		channel: [
 			["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum_multi:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],
@@ -195,7 +198,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge } = config;
 
 const app = new Hono({ strict: false });
 
@@ -480,14 +483,9 @@ app.get("/robots.txt", (c: Context) => {
 	return c.text(robots, 200);
 });
 
-app.get("/err/451", (c: Context) => {
-	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
-	return c.body(null, 451);
-});
-
 app.get("/logs", async (c: Context) => {
 	c.header("Refresh", "3");
-	c.header("Cache-Control", "no-store, no-cache, max-age=2, must-revalidate");
+	c.header("Cache-Control", "public, max-age=2, must-revalidate");
 	c.header("Content-Type", "text/plain");
 
 	return stream(c, async (s) => {
@@ -520,7 +518,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	setPlaygroundAssetCache(c);
 	c.header("Content-Type", "text/html");
 	c.header("Content-Encoding", "gzip");
-	if (typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) {
+	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
 		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
 
 		return stream(c, async (s) => {
@@ -534,7 +532,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 		return c.body(null);
 	}
 
-	c.header("Refresh", `0; url=${c.req.path}?fm=${PLAYGROUND_CHALLENGE}`);
+	c.header("Refresh", `0; url=${c.req.path}?fm=${PLAYGROUND_CHALLENGE}&l=1`);
 	c.status(200);
 	return c.body(zlib.gzipSync(challengeHtml));
 });

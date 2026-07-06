@@ -1015,7 +1015,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       try {
         const data = JSON.parse(decryptedText);
         if (decryptedText === text) {
-          formatted = JSON.stringify(data, null, 0);
+          formatted = JSON.stringify(data, null, 1);
           isJson = true;
         }
         resultData = data;

@@ -12063,7 +12063,38 @@ export const CountrySearch = async (query: string) => {
 	try {
 		const res = await fetch(`https://countries.altoal.com/api/v1/name/${encodeURIComponent(matchedKey)}.json`, { headers: commonHeaders });
 		const detail: any = await res.json();
-		return { data: detail?.data || null, similarName: similarNames.length > 0 ? similarNames : null };
+		const d = detail?.data;
+
+		const altData: Record<string, any> = {};
+		if (d) {
+			const langs = d.people_and_society?.languages?.value?.map((l: any) => l.label) || [];
+			altData.name = d.name;
+			altData.description = d.introduction?.background?.value?.string ?? null;
+			altData.icon = d.identity?.iso?.alpha2 ? `https://flagcdn.com/w320/${d.identity.iso.alpha2.toLowerCase()}.png` : null;
+			altData.area = d.geography?.area?.value?.total?.measurement ?? null;
+			altData.area_unit = d.geography?.area?.value?.total?.unit ?? null;
+			altData.calling_code = d.identity?.communication?.calling_code ?? null;
+			altData.capital = d.government?.capital?.value?.name?.string ?? null;
+			altData.continent = d.identity?.classification?.continent ?? null;
+			altData.cca2 = d.identity?.iso?.alpha2 ?? null;
+			altData.cca3 = d.identity?.iso?.alpha3 ?? null;
+			altData.ccn3 = d.identity?.iso?.numeric ?? null;
+			altData.currency_symbol = d.identity?.currency?.symbol ?? null;
+			altData.currency_name = d.identity?.currency?.name ?? null;
+			altData.sovereign_type = d.identity?.classification?.type ?? null;
+			altData.landlocked = d.identity?.classification?.landlocked ?? null;
+			altData.population = d.people_and_society?.population?.value?.total?.number ?? null;
+			altData.region = d.identity?.classification?.region ?? null;
+			altData.subregion = d.identity?.classification?.subregion ?? null;
+			altData.tld = d.identity?.communication?.tld ?? null;
+			altData.un_member = d.identity?.memberships?.united_nations?.member ?? null;
+			altData.languages = {
+				array: langs,
+				string: langs.join(", "),
+			};
+		}
+
+		return { data: d || null, altData: Object.keys(altData).length > 0 ? altData : null, similarName: similarNames.length > 0 ? similarNames : null };
 	} catch (e: any) {
 		return { error: e.message || "Failed to fetch country details" };
 	}

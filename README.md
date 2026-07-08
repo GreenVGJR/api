@@ -9,4 +9,7 @@
 - [Chocomilk API](https://choco.amira.us.kg)
 - [Popcat API](https://popcat.xyz/api)
 
+### Credits
+- Tev, for ideas mostly for discord endpoints
+
 License: [Unlicense](LICENSE)

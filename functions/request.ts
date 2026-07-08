@@ -2430,7 +2430,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 						error: "Can't continue this conversation. Try again but without conversation id",
 					};
 				}
-				return { error: "Rate-limited" };
+				return { error: `Can't continue stream response`, code: errorCode || null };
 			}
 			await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
 			return await Gemini(que, convo, retry + 1);
@@ -4245,7 +4245,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
 		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1233&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
 			headers: {
 				...commonHeaders,
-				'X-Khronos': String(Math.floor(Date.now() / 1000))
+				"X-Khronos": String(Math.floor(Date.now() / 1000)),
 			},
 		});
 
@@ -12141,7 +12141,63 @@ export const MealRecipe = async (query: string) => {
 };
 
 export const holidaysTime = async (query: string, year: string) => {
-	if (!query) return { error: "Missing query" };
+	const getEaster = (y: number): Date => {
+		const a = y % 19;
+		const b = Math.floor(y / 100);
+		const c = y % 100;
+		const d = Math.floor(b / 4);
+		const e = b % 4;
+		const f = Math.floor((b + 8) / 25);
+		const g = Math.floor((b - f + 1) / 3);
+		const h = (19 * a + b - d - g + 15) % 30;
+		const i = Math.floor(c / 4);
+		const k = c % 4;
+		const l = (32 + 2 * e + 2 * i - h - k) % 7;
+		const m = Math.floor((a + 11 * h + 22 * l) / 451);
+		const month = Math.floor((h + l - 7 * m + 114) / 31);
+		const day = ((h + l - 7 * m + 114) % 31) + 1;
+		return new Date(y, month - 1, day);
+	};
+
+	const getThanksgiving = (y: number): Date => {
+		const d = new Date(y, 10, 1);
+		const dow = d.getDay();
+		const firstThu = 1 + ((4 - dow + 7) % 7);
+		return new Date(y, 10, firstThu + 21);
+	};
+
+	if (!query) {
+		const yearNum = year && /^\d{4}$/.test(year) ? parseInt(year) : new Date().getFullYear();
+		const now = Math.floor(Date.now() / 1000);
+		const pad = (n: number) => String(n).padStart(2, "0");
+		const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		const easter = getEaster(yearNum);
+		const thanksgiving = getThanksgiving(yearNum);
+		const defaults = [
+			{ key: "new_years_day", name: "New Year's Day", date: `${yearNum}-01-01`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
+			{ key: "valentines_day", name: "Valentine's Day", date: `${yearNum}-02-14`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+			{ key: "april_fools", name: "April Fools' Day", date: `${yearNum}-04-01`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+			{ key: "easter_egg", name: "Easter", date: fmt(easter), countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+			{ key: "halloween", name: "Halloween", date: `${yearNum}-10-31`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+			{ key: "thanksgiving_day", name: "Thanksgiving Day", date: fmt(thanksgiving), countryCode: "US", nationalHoliday: true, types: ["Public"] },
+			{ key: "christmas_day", name: "Christmas Day", date: `${yearNum}-12-25`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
+		];
+		const data: Record<string, any> = {};
+		for (const h of defaults) {
+			const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
+			data[h.key] = {
+				date: h.date,
+				name: h.name,
+				countryCode: h.countryCode,
+				nationalHoliday: h.nationalHoliday,
+				types: h.types,
+				timestamp,
+				remainTimestamp: timestamp - now,
+			};
+		}
+		return { data, altData: null };
+	}
+
 	if (!year || !/^\d{4}$/.test(year)) return { error: "Missing or invalid year" };
 
 	await ensureCountriesCache();

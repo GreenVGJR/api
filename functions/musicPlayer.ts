@@ -266,8 +266,8 @@ export const localNode = {
 	port: parseInt(process.env.LAVALINK_PORT || "2333"),
 	authorization: process.env.LAVALINK_PASS || "youshallnotpass",
 	secure: process.env.LAVALINK_SSL === "true",
-	retryAmount: 10,
-	retryDelay: 10000,
+	retryAmount: 3,
+	retryDelay: 4000,
 };
 
 const serentiaNode = {
@@ -276,8 +276,8 @@ const serentiaNode = {
 	port: 443,
 	authorization: "https://seretia.link/discord",
 	secure: true,
-	retryAmount: 10,
-	retryDelay: 10000,
+	retryAmount: 3,
+	retryDelay: 4000,
 };
 
 if (config.useLocalLavalink === 1) {
@@ -1082,7 +1082,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				});
 
 				// Wait for the primary node group; mode 2 then falls back to local only.
-				const nodeConnected = await connectLavalinkWithFallback(manager, 30_000, log, true);
+				const nodeConnected = await connectLavalinkWithFallback(manager, 4000, log, true);
 
 				if (!nodeConnected) {
 					throw new Error("Timed out waiting for Lavalink node connection");

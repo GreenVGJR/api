@@ -2428,7 +2428,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 					return { error: "Timeout / Bad Request", code: errorCode };
 				}
 				if (errorCode == 1060) {
-					return { error: "Google asking to verify you're not a bot", code: errorCode }
+					return { error: "Google asking to verify you're not a bot", code: errorCode };
 				}
 				if (["1096", "1100", "1152"].includes(String(errorCode))) {
 					return {
@@ -12177,29 +12177,33 @@ export const holidaysTime = async (query: string, year: string) => {
 		const now = Math.floor(Date.now() / 1000);
 		const pad = (n: number) => String(n).padStart(2, "0");
 		const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-		const easter = getEaster(yearNum);
-		const thanksgiving = getThanksgiving(yearNum);
-		const defaults = [
-			{ key: "new_years_day", name: "New Year's Day", date: `${yearNum}-01-01`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
-			{ key: "valentines_day", name: "Valentine's Day", date: `${yearNum}-02-14`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
-			{ key: "april_fools", name: "April Fools' Day", date: `${yearNum}-04-01`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
-			{ key: "easter_egg", name: "Easter", date: fmt(easter), countryCode: "US", nationalHoliday: false, types: ["Observance"] },
-			{ key: "halloween", name: "Halloween", date: `${yearNum}-10-31`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
-			{ key: "thanksgiving_day", name: "Thanksgiving Day", date: fmt(thanksgiving), countryCode: "US", nationalHoliday: true, types: ["Public"] },
-			{ key: "christmas_day", name: "Christmas Day", date: `${yearNum}-12-25`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
-		];
 		const data: Record<string, any> = {};
-		for (const h of defaults) {
-			const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
-			data[h.key] = {
-				date: h.date,
-				name: h.name,
-				countryCode: h.countryCode,
-				nationalHoliday: h.nationalHoliday,
-				types: h.types,
-				timestamp,
-				remainTimestamp: timestamp - now,
-			};
+		for (const y of [yearNum, yearNum + 1]) {
+			const easter = getEaster(y);
+			const thanksgiving = getThanksgiving(y);
+			const defaults = [
+				{ key: "new_years_day", name: "New Year's Day", date: `${y}-01-01`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
+				{ key: "valentines_day", name: "Valentine's Day", date: `${y}-02-14`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+				{ key: "april_fools", name: "April Fools' Day", date: `${y}-04-01`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+				{ key: "easter_egg", name: "Easter", date: fmt(easter), countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+				{ key: "halloween", name: "Halloween", date: `${y}-10-31`, countryCode: "US", nationalHoliday: false, types: ["Observance"] },
+				{ key: "thanksgiving_day", name: "Thanksgiving Day", date: fmt(thanksgiving), countryCode: "US", nationalHoliday: true, types: ["Public"] },
+				{ key: "christmas_day", name: "Christmas Day", date: `${y}-12-25`, countryCode: "US", nationalHoliday: true, types: ["Public"] },
+			];
+			for (const h of defaults) {
+				const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
+				if (timestamp - now < 0) continue;
+				if (data[h.key]) continue;
+				data[h.key] = {
+					date: h.date,
+					name: h.name,
+					countryCode: h.countryCode,
+					nationalHoliday: h.nationalHoliday,
+					types: h.types,
+					timestamp,
+					remainTimestamp: timestamp - now,
+				};
+			}
 		}
 		return { data, altData: null };
 	}
@@ -12242,11 +12246,24 @@ export const holidaysTime = async (query: string, year: string) => {
 	if (!countryCode) return { error: "Country not found" };
 
 	try {
-		const [holidayRes, countryRes] = await Promise.all([fetch(`https://date.nager.at/api/v4/Holidays/${countryCode.toUpperCase()}/${year}`, { headers: commonHeaders }), fetch(`https://countries.altoal.com/api/v1/name/${countryNameSlug}.json`, { headers: commonHeaders }).catch(() => null)]);
+		const yNum = parseInt(year);
+		const [holidayRes, holidayResNext, countryRes] = await Promise.all([fetch(`https://date.nager.at/api/v4/Holidays/${countryCode.toUpperCase()}/${yNum}`, { headers: commonHeaders }), fetch(`https://date.nager.at/api/v4/Holidays/${countryCode.toUpperCase()}/${yNum + 1}`, { headers: commonHeaders }), fetch(`https://countries.altoal.com/api/v1/name/${countryNameSlug}.json`, { headers: commonHeaders }).catch(() => null)]);
 
 		if (holidayRes.status === 204) return { error: "Access restricted" };
 		else if (holidayRes.status !== 200) return { error: await holidayRes.json() };
-		const holidays: any[] = await holidayRes.json();
+
+		let holidays: any[] = [];
+		try {
+			const cur = await holidayRes.json();
+			if (Array.isArray(cur)) holidays = holidays.concat(cur);
+		} catch {}
+		if (holidayResNext.status === 200) {
+			try {
+				const nxt = await holidayResNext.json();
+				if (Array.isArray(nxt)) holidays = holidays.concat(nxt);
+			} catch {}
+		}
+
 		const countryJson = countryRes?.ok ? await countryRes.json().catch(() => null) : null;
 		const identity = countryJson?.data?.identity || null;
 
@@ -12272,13 +12289,15 @@ export const holidaysTime = async (query: string, year: string) => {
 		const now = Math.floor(Date.now() / 1000);
 		const data: Record<string, any> = {};
 		for (const h of holidays) {
+			const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
+			if (timestamp - now < 0) continue;
 			const key = h.name
 				.replace(/'/g, "")
 				.replace(/[^a-zA-Z0-9]/g, "_")
 				.replace(/_+/g, "_")
 				.replace(/^_|_$/g, "")
 				.toLowerCase();
-			const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
+			if (data[key]) continue;
 			data[key] = {
 				date: h.date,
 				name: h.name,

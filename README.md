@@ -10,6 +10,6 @@
 - [Popcat API](https://popcat.xyz/api)
 
 ### Credits
-- Tev, for ideas mostly for discord endpoints
+- Tev, for assisting with api / giving ideas
 
 License: [Unlicense](LICENSE)

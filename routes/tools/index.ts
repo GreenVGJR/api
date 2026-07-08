@@ -36,5 +36,6 @@ import discordInfoSticker from "./discordInfoSticker.js";
 import discordListMemberTags from "./discordListMemberTags.js";
 import country from "./country.js";
 import mealRecipe from "./mealRecipe.js";
+import timeEvents from "./timeEvents.js";
 
-export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, ocr, discordInfoSticker, discordListMemberTags, country, mealRecipe] as any[];
+export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, ocr, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents] as any[];

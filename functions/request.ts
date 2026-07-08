@@ -12138,3 +12138,97 @@ export const MealRecipe = async (query: string) => {
 		return { error: e.message || "Something just happened" };
 	}
 };
+
+export const holidaysTime = async (query: string, year: string) => {
+	if (!query) return { error: "Missing query" };
+	if (!year || !/^\d{4}$/.test(year)) return { error: "Missing or invalid year" };
+
+	await ensureCountriesCache();
+	if (!countriesCache) return { error: "Failed to load countries data" };
+
+	const lowerQuery = query.toLowerCase();
+	let countryCode: string | null = null;
+	let countryNameSlug: string | null = null;
+
+	for (const [, country] of Object.entries<any>(countriesCache)) {
+		if (country.name?.toLowerCase() === lowerQuery || country.code?.iso2?.toLowerCase() === lowerQuery || country.code?.iso3?.toLowerCase() === lowerQuery) {
+			countryCode = country.code?.iso2;
+			countryNameSlug = country.name
+				?.toLowerCase()
+				.replace(/[^a-z]/g, "-")
+				.replace(/-+/g, "-")
+				.replace(/^-|-$/g, "");
+			break;
+		}
+	}
+
+	if (!countryCode) {
+		for (const [, country] of Object.entries<any>(countriesCache)) {
+			if (country.name?.toLowerCase().includes(lowerQuery)) {
+				countryCode = country.code?.iso2;
+				countryNameSlug = country.name
+					?.toLowerCase()
+					.replace(/[^a-z]/g, "-")
+					.replace(/-+/g, "-")
+					.replace(/^-|-$/g, "");
+				break;
+			}
+		}
+	}
+
+	if (!countryCode) return { error: "Country not found" };
+
+	try {
+		const [holidayRes, countryRes] = await Promise.all([fetch(`https://date.nager.at/api/v4/Holidays/${countryCode.toUpperCase()}/${year}`, { headers: commonHeaders }), fetch(`https://countries.altoal.com/api/v1/name/${countryNameSlug}.json`, { headers: commonHeaders }).catch(() => null)]);
+
+		if (holidayRes.status === 204) return { error: "Access restricted" };
+		else if (holidayRes.status !== 200) return { error: await holidayRes.json() };
+		const holidays: any[] = await holidayRes.json();
+		const countryJson = countryRes?.ok ? await countryRes.json().catch(() => null) : null;
+		const identity = countryJson?.data?.identity || null;
+
+		const altData: Record<string, any> | null = identity
+			? {
+					icon: `https://flagcdn.com/w320/${identity.iso?.alpha2?.toLowerCase()}.png`,
+					name: identity.names?.common,
+					official_name: identity.names?.official,
+					native_name: identity.names?.native,
+					cca2: identity.iso?.alpha2,
+					cca3: identity.iso?.alpha3,
+					ccn3: identity.iso?.numeric,
+					type: identity.classification?.type,
+					region: identity.classification?.region,
+					subregion: identity.classification?.subregion,
+					continent: identity.classification?.continent,
+					island_nation: identity.classification?.island_nation,
+					calling_code: identity.communication?.calling_code,
+					tld: identity.communication?.tld,
+				}
+			: null;
+
+		const now = Math.floor(Date.now() / 1000);
+		const data: Record<string, any> = {};
+		for (const h of holidays) {
+			const key = h.name
+				.replace(/'/g, "")
+				.replace(/[^a-zA-Z0-9]/g, "_")
+				.replace(/_+/g, "_")
+				.replace(/^_|_$/g, "")
+				.toLowerCase();
+			const timestamp = Math.floor(new Date(h.date).getTime() / 1000);
+			data[key] = {
+				date: h.date,
+				name: h.name,
+				countryCode: h.countryCode,
+				nationalHoliday: h.nationalHoliday,
+				types: h.holidayTypes,
+				timestamp,
+				remainTimestamp: timestamp - now,
+			};
+		}
+
+		return { data, altData };
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};

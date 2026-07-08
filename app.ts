@@ -65,6 +65,7 @@ const API_ROUTES = {
 			["/tools/md5?q=", "string"],
 			["/tools/country?q=", "string"],
 			["/tools/mealRecipe?q=", "string"],
+			["/tools/holidays?q=&year=", "string", "number"],
 		],
 		db: [
 			["/tools/db/get?q=&hash=", "string", "string"],
@@ -198,7 +199,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal, playgroundChallenge } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge } = config;
 
 const app = new Hono({ strict: false });
 
@@ -373,7 +374,7 @@ function isBrowserBackChallengeRequest(c: Context): boolean {
 	const userAgent = c.req.header("user-agent") || "";
 	const fetchMode = c.req.header("sec-fetch-mode");
 
-	return c.req.method === "GET" && userAgent.startsWith("Mozilla/5.0") && !userAgent.includes("Discordbot") && fetchMode !== "same-origin" && fetchMode === "navigate";
+	return c.req.method === "GET" && userAgent.startsWith("Mozilla/5.0") && !userAgent.includes("Discordbot") && fetchMode !== "same-origin" && fetchMode === "navigate" && endpointChallenge === true;
 }
 
 function hostHeaderName(host: string | undefined): string {

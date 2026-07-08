@@ -3,5 +3,6 @@
 	"restrictLocal": false,
 	"useLocalLavalink": 2,
 	"disableTLSMusic": false,
-	"playgroundChallenge": false
+	"playgroundChallenge": false,
+	"endpointChallenge": false
 }

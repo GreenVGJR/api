@@ -2430,7 +2430,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 						error: "Can't continue this conversation. Try again but without conversation id",
 					};
 				}
-				return { error: `Can't continue stream response`, code: errorCode || null };
+				return { error: `Can't continue stream response`, code: errorCode || null, _debugText: resText };
 			}
 			await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
 			return await Gemini(que, convo, retry + 1);

@@ -3970,7 +3970,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(`https://discord.com/api/v10/discovery/search?query=${encodeURIComponent(que)}&limit=10`, {
+		const per = await fetch(`https://discord.com/api/v10/index/servers/search?limit=10&query=${encodeURIComponent(que)}`, {
 			headers: {
 				...commonHeaders,
 			},
@@ -3983,7 +3983,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
 		}
 
 		const res: any = await per.json();
-		return { data: res?.hits || null };
+		return { data: res?.data?.hits || null };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -4206,7 +4206,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { data: testres?.aweme_list || null };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: testres?.aweme_list || null };
 	} catch {
 		return null;
 	}
@@ -4232,7 +4232,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { data: [testres?.music || null, testres?.music_info_list || null] };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: [testres?.music || null, testres?.music_info_list || null] };
 	} catch {
 		return null;
 	}
@@ -4242,9 +4242,10 @@ export const TiktokUser = async function TiktokUser(que: string) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1180&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1233&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
 			headers: {
 				...commonHeaders,
+				'X-Khronos': String(Math.floor(Date.now() / 1000))
 			},
 		});
 
@@ -4258,7 +4259,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { data: testres?.user_list?.map((a: any) => a.user_info) || null };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: testres?.user_list?.map((a: any) => a.user_info) || null };
 	} catch {
 		return null;
 	}
@@ -4393,7 +4394,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 				}),
 			);
 
-			return { data: data?.[0] || null };
+			return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: data?.[0] || null };
 		} catch (err) {
 			if (i === 2) return null;
 			await new Promise((r) => setTimeout(r, 1000));

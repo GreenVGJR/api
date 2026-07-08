@@ -2339,7 +2339,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			...(qCookies ? { Cookie: qCookies } : {}),
 			"Content-Type": "application/x-www-form-urlencoded",
 			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
-			"x-goog-ext-525001261-jspb": `[1,null,null,null,"",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
+			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
 			"x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
 			"x-goog-ext-73010989-jspb": "[0]",
 			"x-goog-ext-73010990-jspb": "[0,0,0]",
@@ -2399,7 +2399,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 						innerData = check;
 					}
 					if (!errorCode) {
-						errorCode = check?.[5]?.[2]?.[0]?.[1]?.[0] ?? null;
+						errorCode = check?.[5]?.[2]?.[0]?.[1]?.[0] ?? dt?.[5]?.[2]?.[0]?.[1]?.[0] ?? null;
 					}
 					if (innerData) break;
 				}
@@ -2415,22 +2415,28 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 				if (errorCode == 13) {
 					return {
 						error: "Can't process this due high-demand model, rate-limited or bad request",
+						code: errorCode,
 					};
 				}
 				if (errorCode == 1097) {
 					return {
 						error: "Can't continue this conversation. Gemini might block this request",
+						code: errorCode,
 					};
 				}
 				if (errorCode == 1076) {
-					return { error: "Timeout / Bad Request" };
+					return { error: "Timeout / Bad Request", code: errorCode };
+				}
+				if (errorCode == 1060) {
+					return { error: "Google asking to verify you're not a bot", code: errorCode }
 				}
 				if (["1096", "1100", "1152"].includes(String(errorCode))) {
 					return {
 						error: "Can't continue this conversation. Try again but without conversation id",
+						code: errorCode,
 					};
 				}
-				return { error: `Can't continue stream response`, code: errorCode || null, _debugText: resText };
+				return { error: `Can't continue stream response`, code: errorCode || null };
 			}
 			await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
 			return await Gemini(que, convo, retry + 1);

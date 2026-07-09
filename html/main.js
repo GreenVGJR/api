@@ -130,7 +130,7 @@ const initSPA = () => {
     </div>`;
 };
 
-const DEFAULT_PHRASES = ["What you gonna try?", "Now what?", "Hello!", "What's on your mind?"];
+const DEFAULT_PHRASES = ["What you gonna try?", "What's on your mind?"];
 function getDefaultResponseHTML() {
   const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
   return `<div class="flex flex-col items-center justify-center">

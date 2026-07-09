@@ -479,7 +479,7 @@ app.get("/play", async (c) => {
 				await log("Radio player disconnected");
 
 				try {
-					manager.nodeManager.nodes.delete(localNode.id);
+					if (localNode.id) manager.nodeManager.nodes.delete(localNode.id);
 				} catch {}
 				gp = undefined;
 			}

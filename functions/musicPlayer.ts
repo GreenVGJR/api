@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options, VoiceChannel } from "discord.js";
 import { LavalinkManager, Player as LavalinkPlayer, Track } from "lavalink-client";
 import { stream } from "hono/streaming";
-import crypto from "crypto";
+
 import zlib from "zlib";
 import config from "../config.json" with { type: "json" };
 import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from "./musicChallenges.ts";
@@ -27,12 +27,21 @@ function patchNodeTls(node: any) {
 		try {
 			return origConnect(...args);
 		} finally {
-			// Restore after the synchronous WebSocket constructor call.
-			// The actual TLS handshake happens async but Bun/ws captures the
-			// env value at construction time.
 			if (prev === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
 			else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
 		}
+	};
+}
+
+/** Patch a node to suppress DOMException from invalid WebSocket close code 500 (lavalink-client bug). */
+function patchNodeClose(node: any) {
+	if (node.__closePatched) return;
+	node.__closePatched = true;
+	const origError = node.error.bind(node);
+	node.error = (error: any) => {
+		try {
+			origError(error);
+		} catch {}
 	};
 }
 
@@ -255,47 +264,67 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 
 // ─── Lavalink Node Config ─────────────────────────────────────────────────────
 
-const sg = crypto.randomUUID();
-
 let LAVALINK_NODES: any[] = [];
-let LAVALINK_NODE_GROUPS: any[][] = [];
 
-export const localNode = {
-	id: "vgjr_" + sg,
-	host: process.env.LAVALINK_HOST || "",
-	port: parseInt(process.env.LAVALINK_PORT || "2333"),
-	authorization: process.env.LAVALINK_PASS || "youshallnotpass",
-	secure: process.env.LAVALINK_SSL === "true",
-	retryAmount: 3,
-	retryDelay: 4000,
-};
+function parseLavalinkHostEntry(entry: string): any | null {
+	const parts = entry.split(":");
+	if (parts.length < 5) return null;
+	const id = parts[0];
+	const host = parts[1] || "";
+	if (!host) return null;
+	const port = parseInt(parts[2]);
+	if (isNaN(port)) return null;
+	const authorization = parts.length >= 4 ? parts.slice(3, parts[parts.length - 1] === "true" || parts[parts.length - 1] === "false" ? -1 : undefined).join(":") : "";
+	const secure = parts[parts.length - 1] === "true";
 
-const serentiaNode = {
-	id: "serenetia_" + sg,
-	host: "lavalinkv4.serenetia.com",
-	port: 443,
-	authorization: "https://seretia.link/discord",
-	secure: true,
-	retryAmount: 3,
-	retryDelay: 4000,
-};
-
-if (config.useLocalLavalink === 1) {
-	LAVALINK_NODE_GROUPS = [[localNode]];
-} else if (config.useLocalLavalink === 2) {
-	LAVALINK_NODE_GROUPS = [[serentiaNode], [localNode]];
-} else {
-	LAVALINK_NODE_GROUPS = [[serentiaNode]];
+	return { id, host, port, authorization, secure };
 }
 
-LAVALINK_NODES = LAVALINK_NODE_GROUPS[0] || [];
+function parseLavalinkNodesFromEnv(): any[] {
+	const raw = process.env.LAVALINK_HOST || "";
+	if (!raw) return [];
 
-function lavalinkNodeGroups() {
-	return LAVALINK_NODE_GROUPS.map((group) => group.filter((node) => node.host && node.host.length > 0)).filter((group) => group.length > 0);
+	let hosts: string[];
+	try {
+		hosts = JSON.parse(raw);
+		if (!Array.isArray(hosts)) hosts = [];
+	} catch {
+		hosts = [raw];
+	}
+	return hosts
+		.filter((h: any) => typeof h === "string" && h.length > 0)
+		.map(parseLavalinkHostEntry)
+		.filter((n: any) => n !== null);
 }
 
-function lavalinkNodeLabel(nodes: any[]) {
-	return nodes.map((node) => node.id).join(", ");
+export const localNode: { id: string | null; host: string; port: number; authorization: string; secure: boolean } = {
+	id: null,
+	host: "",
+	port: 2333,
+	authorization: "youshallnotpass",
+	secure: false,
+};
+
+const allNodes = parseLavalinkNodesFromEnv();
+for (const n of allNodes) {
+	if (n.host === "localhost" || n.host === "127.0.0.1" || n.host === "::1") {
+		localNode.id = n.id;
+		localNode.host = n.host;
+		localNode.port = n.port;
+		localNode.authorization = n.authorization;
+		localNode.secure = n.secure;
+		break;
+	}
+}
+
+LAVALINK_NODES = allNodes;
+
+function lavalinkNodeList(): any[] {
+	return LAVALINK_NODES.filter((n) => n.host && n.host.length > 0);
+}
+
+export function getLavalinkNodeIds(): string[] {
+	return lavalinkNodeList().map((n: any) => n.id);
 }
 
 function clearLavalinkNodes(manager: LavalinkManager) {
@@ -330,6 +359,7 @@ function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 		if (nodeConfig.host) {
 			const node = manager.nodeManager.createNode(nodeConfig);
 			patchNodeTls(node);
+			patchNodeClose(node);
 		}
 	}
 }
@@ -374,25 +404,24 @@ function waitForLavalinkConnection(manager: LavalinkManager, timeoutMs: number, 
 	});
 }
 
-async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: number, log?: (msg: string) => Promise<void>, useExistingPrimary = false) {
-	const groups = lavalinkNodeGroups();
-	if (groups.length === 0) return false;
+async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: number, log?: (msg: string) => Promise<void>) {
+	const nodes = lavalinkNodeList();
+	if (nodes.length === 0) return false;
 
-	for (let i = 0; i < groups.length; i++) {
-		const group = groups[i];
-		const isExistingPrimary = i === 0 && useExistingPrimary;
+	const nodeList = nodes.map((n: any) => n.id).join(", ");
+	if (log) await log(`Connecting to Lavalink node(s): ${nodeList}`);
 
-		if (!isExistingPrimary) {
-			clearLavalinkNodes(manager);
-			createLavalinkNodes(manager, group);
+	for (const nodeConfig of nodes) {
+		clearLavalinkNodes(manager);
+		createLavalinkNodes(manager, [nodeConfig]);
+
+		if (log) await log(`Trying Lavalink node "${nodeConfig.id}"...`);
+		const connected = await waitForLavalinkConnection(manager, timeoutMs, true);
+		if (connected) {
+			if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);
+			return true;
 		}
-
-		const connected = await waitForLavalinkConnection(manager, timeoutMs, !isExistingPrimary);
-		if (connected) return true;
-
-		if (i < groups.length - 1 && log) {
-			await log(`Lavalink node group failed (${lavalinkNodeLabel(group)}). Trying fallback...`);
-		}
+		if (log) await log(`Lavalink node "${nodeConfig.id}" failed to connect`);
 	}
 
 	return false;
@@ -404,8 +433,8 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
  * Returns the connected node, or null if the local node is unavailable.
  */
 export async function ensureLocalNode(manager: LavalinkManager, log?: (msg: string) => Promise<void>): Promise<any | null> {
-	if (!localNode.host || localNode.host.length === 0) {
-		if (log) await log("Local Lavalink node configuration missing (no host)");
+	if (!localNode.id) {
+		if (log) await log("No localhost Lavalink node is configured in LAVALINK_HOST");
 		return null;
 	}
 
@@ -415,7 +444,12 @@ export async function ensureLocalNode(manager: LavalinkManager, log?: (msg: stri
 
 	// Register or re-register the node
 	if (!node) {
-		node = manager.nodeManager.createNode(localNode);
+		const nodeConfig = LAVALINK_NODES.find((n) => n.id === localNode.id);
+		if (!nodeConfig) {
+			if (log) await log("Localhost node config not found in LAVALINK_NODES");
+			return null;
+		}
+		node = manager.nodeManager.createNode(nodeConfig);
 		patchNodeTls(node);
 		if (log) await log(`Local Lavalink node registered: ${localNode.id}`);
 	}
@@ -794,9 +828,10 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				},
 			});
 
-			// Patch all nodes for scoped TLS bypass before init() connects them
+			// Patch all nodes for scoped TLS bypass and close suppression before init() connects them
 			for (const node of manager.nodeManager.nodes.values()) {
 				patchNodeTls(node);
+				patchNodeClose(node);
 			}
 
 			// Forward Discord gateway events to Lavalink
@@ -1082,7 +1117,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				});
 
 				// Wait for the primary node group; mode 2 then falls back to local only.
-				const nodeConnected = await connectLavalinkWithFallback(manager, 4000, log, true);
+				const nodeConnected = await connectLavalinkWithFallback(manager, config.nodeConnectTimeout ?? 4000, log);
 
 				if (!nodeConnected) {
 					throw new Error("Timed out waiting for Lavalink node connection");

@@ -1,8 +1,8 @@
 {
 	"buildId": false,
 	"restrictLocal": false,
-	"useLocalLavalink": 2,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
-	"endpointChallenge": false
+	"endpointChallenge": false,
+	"nodeConnectTimeout": 4000
 }

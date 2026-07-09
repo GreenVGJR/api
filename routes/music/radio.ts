@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, setVoiceStatus, voiceStatusStore, ensureLocalNode } from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, setVoiceStatus, voiceStatusStore, getLavalinkNodeIds } from "../../functions/musicPlayer.js";
 import { commonHeaders } from "../../functions/request.js";
 import { radioStreamUrls } from "../../functions/radioProxy.js";
 import { getActiveFilters } from "./filters.js";
@@ -150,30 +150,17 @@ app.get("/radio", async (c) => {
 
 		// Store original URL for the proxy endpoint (AFTER force disconnect to avoid playerDestroy cleanup)
 		radioStreamUrls.set(guildId, resolvedStreamUrl);
-		const streamUrl = `http://localhost:3000/radio-proxy/${guildId}`;
-		await log(`Using proxy URL: ${streamUrl}`);
+		const proxyUrl = `http://localhost:3000/radio-proxy/${guildId}`;
+		const streamUrls = [resolvedStreamUrl, proxyUrl];
+		await log(`Stream URLs: proxy="${proxyUrl}" / direct="${resolvedStreamUrl}"`);
 
-		// 5. Ensure local Lavalink node is connected (radio strictly uses local)
-		const radioNode = await ensureLocalNode(manager, log);
-		if (!radioNode) {
-			await s.write(
-				`],"data":${JSON.stringify({
-					status: false,
-					message: "Local Lavalink node is not available for radio streaming",
-					type: { primary: "error", alt: "critical" },
-				})}}`,
-			);
-			return;
-		}
-
-		// Create new Player & Connect (force use of local node)
+		// Create new Player & Connect
 		await log("Creating Lavalink player for radio streaming...");
 		const guildPlayer = await manager.createPlayer({
 			guildId,
 			voiceChannelId: channel.id,
 			selfDeaf: isDeaf,
 			selfMute: false,
-			node: radioNode.id,
 		});
 
 		if (!guildPlayer.connected) {
@@ -188,45 +175,72 @@ app.get("/radio", async (c) => {
 			set247(token!, guildId, is247);
 		}
 
-		// 6. Search and load stream URL
+		// 6. Search and load radio stream URL, trying each Lavalink node on failure
 		await log("Searching and loading radio stream via Lavalink...");
 		const requester = authorId ? await client.users.fetch(authorId as string).catch(() => ({ id: authorId, username: "Discord User" })) : client.user;
-
+		const nodeIds = getLavalinkNodeIds();
 		let searchResult: any;
-		try {
-			searchResult = await guildPlayer.search({ query: streamUrl, source: undefined as any }, requester, radioNode);
-		} catch (err: any) {
-			const msg = err?.message || "unknown error";
-			await log(`Lavalink search failed: ${msg}`);
-			const isBlocked = msg.includes("Failed to parse JSON") || msg.includes("422");
-			await s.write(
-				`],"data":${JSON.stringify({
-					status: false,
-					message: isBlocked ? "This radio stream is blocked on public Lavalink nodes." : `Lavalink failed to resolve the radio stream: ${msg}`,
-					type: { primary: "error", alt: isBlocked ? "blocked" : "critical" },
-				})}}`,
-			);
-			return;
+		let lastError: string | null = null;
+
+		for (let i = 0; i < nodeIds.length; i++) {
+			const currentNodeId = guildPlayer.node?.id || "unknown";
+
+			if (i > 0) {
+				await log(`Search failed on "${currentNodeId}", trying next node "${nodeIds[i]}"...`);
+				try {
+					await guildPlayer.moveNode(nodeIds[i]);
+				} catch {
+					await log(`Failed to move player to node "${nodeIds[i]}"`);
+					continue;
+				}
+			}
+
+			// Try direct URL first, then fallback to proxy stream URL
+			for (let u = 0; u < streamUrls.length; u++) {
+				const url = streamUrls[u];
+				const urlLabel = u === 0 ? "direct" : "proxy";
+				await log(`Using ${urlLabel} stream URL on "${guildPlayer.node?.id || currentNodeId}"`);
+				try {
+					searchResult = await guildPlayer.search({ query: url, source: undefined as any }, requester);
+				} catch (err: any) {
+					lastError = err?.message || "unknown error";
+					await log(`Lavalink search failed on "${guildPlayer.node?.id || currentNodeId}": ${lastError}`);
+					continue;
+				}
+
+				if (searchResult?.tracks?.length) break;
+
+				lastError = "No tracks found";
+				await log(`Lavalink search returned no tracks on "${guildPlayer.node?.id || currentNodeId}"`);
+			}
+
+			if (searchResult?.tracks?.length) break;
 		}
+
 		if (!searchResult?.tracks?.length) {
+			const isBlocked = lastError && (lastError.includes("Failed to parse JSON") || lastError.includes("422"));
 			await log("Lavalink failed to resolve radio stream");
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: false,
-					message: "Lavalink failed to load the radio stream URL",
-					type: { primary: "error", alt: "invalid_query" },
+					message: isBlocked ? "This radio stream is blocked on public Lavalink nodes." : "Lavalink failed to load the radio stream URL",
+					type: { primary: "error", alt: isBlocked ? "blocked" : "invalid_query" },
 				})}}`,
 			);
 			return;
 		}
 
 		const track = searchResult.tracks[0];
+		const domain = new URL(resolvedStreamUrl).hostname;
 
 		// Inject station metadata
 		track.info.title = stationInfo.name || track.info.title || "Live Radio";
 		track.info.author = stationInfo.country || track.info.author || "Radio Station";
 		if (stationInfo.favicon) {
 			track.info.artworkUrl = stationInfo.favicon;
+		}
+		if (!track.info.artworkUrl) {
+			track.info.artworkUrl = `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`;
 		}
 
 		// Add track to queue
@@ -250,8 +264,7 @@ app.get("/radio", async (c) => {
 		}
 
 		const formattedTrack = formatTrack(track, client, guildPlayer);
-		// Override proxy URL with actual stream URL in response
-		formattedTrack.id = resolvedStreamUrl;
+		formattedTrack.id = domain;
 		formattedTrack.url = resolvedStreamUrl;
 		const activeFilters = getActiveFilters(guildPlayer);
 

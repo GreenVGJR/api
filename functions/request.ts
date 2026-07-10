@@ -2323,6 +2323,8 @@ const getGeminiWiz = async () => {
 	return geminiWiz;
 };
 
+let geminiReqId = 0;
+
 export const Gemini = async function Gemini(que: string, convo: any, retry: number = 0) {
 	if (!que) return null;
 
@@ -2368,7 +2370,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
 	const wiz = await getGeminiWiz();
-	let geminiQuery = "hl=en-US&_reqid=0&rt=c";
+	geminiReqId = (geminiReqId + 1) % 100000;
+	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
 	if (wiz) {
 		geminiQuery = `bl=${encodeURIComponent(wiz.bl)}&f.sid=${encodeURIComponent(wiz.fSid)}&${geminiQuery}`;
 	}

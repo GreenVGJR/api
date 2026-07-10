@@ -916,6 +916,24 @@ async function performRequest(targetUrl, retryCount = 0) {
                     <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
                 </div>
             `;
+    } else if (contentType.startsWith("audio/")) {
+      verboseFetch.line("Reading audio body...");
+      const blob = await response.blob();
+      duration = Math.round(performance.now() - startTime);
+      verboseFetch.done(
+        `Audio body received (${blob.size.toLocaleString()} bytes)`,
+      );
+      updateStatusUI(response.ok, response.status, duration);
+      const audioUrl = URL.createObjectURL(blob);
+
+      lastRawResponse = "";
+
+      responseArea.classList.add("empty-state");
+      responseArea.innerHTML = `
+                <div class="w-full h-full flex items-center justify-center p-4">
+                    <audio src="${audioUrl}" controls class="w-full max-w-full rounded-lg shadow-lg"></audio>
+                </div>
+            `;
     } else {
       responseArea.classList.remove("empty-state");
 

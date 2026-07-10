@@ -66,6 +66,8 @@ const API_ROUTES = {
 			["/tools/country?q=", "string"],
 			["/tools/mealRecipe?q=", "string"],
 			["/tools/holidays?q=&year=", "string", "number"],
+			["/tools/tts?q=&lang=", "string", "string"],
+			["/tools/cloud-tts?q=&lang=", "string", "string"],
 		],
 		db: [
 			["/tools/db/get?q=&hash=", "string", "string"],

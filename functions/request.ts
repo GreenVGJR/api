@@ -2306,6 +2306,23 @@ function decryptConvo(encoded: string): string {
 	return decipher.update(encrypted) + decipher.final("utf-8");
 }
 
+let geminiWiz: { fSid: string; bl: string; expire: number } | null = null;
+
+const getGeminiWiz = async () => {
+	if (geminiWiz && geminiWiz.expire > Date.now()) return geminiWiz;
+	try {
+		const res = await fetch("https://gemini.google.com", { headers: { ...commonHeaders } });
+		const text = await res.text();
+		const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
+		const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];
+		if (!fSid || !bl) return null;
+		geminiWiz = { fSid, bl, expire: Date.now() + 3600 * 1000 };
+	} catch {
+		return null;
+	}
+	return geminiWiz;
+};
+
 export const Gemini = async function Gemini(que: string, convo: any, retry: number = 0) {
 	if (!que) return null;
 
@@ -2329,10 +2346,33 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 	const qCookies = objectbody.cookies || null;
 
-	const inner = [[que, 0, null, null, null, null, 0], ["en-US"], [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, null, ""]];
+	const requestUuid = crypto.randomUUID().toUpperCase();
+	const inner = new Array(69).fill(null);
+	inner[0] = [que, 0, null, null, null, null, 0];
+	inner[1] = ["en-US"];
+	inner[2] = [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, ""];
+	inner[4] = crypto.randomUUID().replace(/-/g, "");
+	inner[6] = [1];
+	inner[7] = 1;
+	inner[10] = 1;
+	inner[11] = 0;
+	inner[17] = [[0]];
+	inner[18] = 0;
+	inner[27] = 1;
+	inner[30] = [4];
+	inner[41] = [1];
+	inner[53] = 0;
+	inner[59] = requestUuid;
+	inner[61] = [];
+	inner[68] = 2;
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
-	const req = await fetch(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?hl=en-US&rt=c&_reqid=0`, {
+	const wiz = await getGeminiWiz();
+	let geminiQuery = "hl=en-US&_reqid=0&rt=c";
+	if (wiz) {
+		geminiQuery = `bl=${encodeURIComponent(wiz.bl)}&f.sid=${encodeURIComponent(wiz.fSid)}&${geminiQuery}`;
+	}
+	const req = await fetch(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?${geminiQuery}`, {
 		method: "POST",
 		headers: {
 			...commonHeaders,
@@ -2340,7 +2380,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			"Content-Type": "application/x-www-form-urlencoded",
 			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
 			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
-			"x-goog-ext-525005358-jspb": `["${crypto.randomUUID().toUpperCase()}",1]`,
+			"x-goog-ext-525005358-jspb": `["${requestUuid}",1]`,
 			"x-goog-ext-73010989-jspb": "[0]",
 			"x-goog-ext-73010990-jspb": "[0,0,0]",
 			Referer: "https://gemini.google.com",
@@ -2472,23 +2512,23 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	return responseBody;
 };
 
+const findLangCode = (input?: string): string | null => {
+	if (!input) return null;
+	const lower = input.toLowerCase();
+	const byCode = listcodes.find((l) => l.code.toLowerCase() === lower);
+	if (byCode) return byCode.code;
+	const byName = listcodes.find((l) => l.name.toLowerCase() === lower);
+	if (byName) return byName.code;
+	const byPartial = listcodes.find((l) => l.name.toLowerCase().includes(lower));
+	if (byPartial) return byPartial.code;
+	return null;
+};
+
 export const Translate = async function Translate(que: string, from?: string, to?: string) {
 	if (!que) return null;
 
 	const lFrom = from?.toLowerCase();
 	const lTo = to?.toLowerCase();
-
-	const findLangCode = (input?: string) => {
-		if (!input) return null;
-		const lower = input.toLowerCase();
-		const byCode = listcodes.find((l) => l.code.toLowerCase() === lower);
-		if (byCode) return byCode.code;
-		const byName = listcodes.find((l) => l.name.toLowerCase() === lower);
-		if (byName) return byName.code;
-		const byPartial = listcodes.find((l) => l.name.toLowerCase().includes(lower));
-		if (byPartial) return byPartial.code;
-		return null;
-	};
 
 	const sourceLang = findLangCode(lFrom) || "auto";
 	const targetLang = findLangCode(lTo) || "en";
@@ -12312,5 +12352,180 @@ export const holidaysTime = async (query: string, year: string) => {
 		return { data, altData };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
+	}
+};
+
+let googleTtsWiz: { fSid: string; bl: string; at: string | null; expire: number } | null = null;
+
+const getGoogleTtsWiz = async () => {
+	if (googleTtsWiz && googleTtsWiz.expire > Date.now()) return googleTtsWiz;
+	const res = await fetch("https://translate.google.com", { headers: { ...commonHeaders } });
+	const text = await res.text();
+	const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
+	const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];
+	const at = text.match(/"SNlM0e":"(.*?)"/)?.[1] || null;
+	if (!fSid || !bl) throw new Error("Failed to fetch Google Translate wiz data");
+	googleTtsWiz = { fSid, bl, at, expire: Date.now() + 3600 * 1000 };
+	return googleTtsWiz!;
+};
+
+const MAX_TTS_CHUNK = 100;
+
+const splitTtsText = (text: string): string[] => {
+	const out: string[] = [];
+	let cur = "";
+	for (const word of text.split(/\s+/)) {
+		if (!word) continue;
+		if (!cur) cur = word;
+		else if (cur.length + 1 + word.length <= MAX_TTS_CHUNK) cur += " " + word;
+		else {
+			out.push(cur);
+			cur = word;
+		}
+	}
+	if (cur) out.push(cur);
+	return out.flatMap((c) => (c.length <= MAX_TTS_CHUNK ? [c] : (c.match(new RegExp(`.{1,${MAX_TTS_CHUNK}}`, "g")) as string[])));
+};
+
+const synthTtsChunk = async (text: string, langCode: string): Promise<Buffer | null> => {
+	try {
+		const wiz = await getGoogleTtsWiz();
+		const rpcId = "jQ1olc";
+		const payload = [text, langCode, null];
+		const query = new URLSearchParams({
+			rpcids: rpcId,
+			"f.sid": wiz.fSid,
+			bl: wiz.bl,
+			hl: "en",
+			"soc-app": "1",
+			"soc-platform": "1",
+			"soc-device": "1",
+			_reqid: String(Math.floor(1000 + Math.random() * 9000)),
+			rt: "c",
+		});
+		const body = new URLSearchParams();
+		body.set("f.req", JSON.stringify([[[rpcId, JSON.stringify(payload), null, "generic"]]]));
+		if (wiz.at) body.set("at", wiz.at);
+
+		const res = await fetch(`https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?${query.toString()}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+				...commonHeaders,
+				// Actually need 'X-Goog-BatchExecute-Bgr' header but not yet
+			},
+			body: body.toString(),
+		});
+		if (!res.ok) return null;
+		const respText = await res.text();
+		const match = respText.match(/\d+/);
+		if (!match) return null;
+		const start = (match.index ?? 0) + match[0].length;
+		const jsonStr = respText.slice(start, start + Number(match[0]));
+		const envelopes = JSON.parse(jsonStr);
+		const payloadStr = envelopes?.[0]?.[2];
+		if (!payloadStr) return null;
+		const parsed = JSON.parse(payloadStr);
+		const audioB64 = parsed?.[0];
+		if (!audioB64) return null;
+		return Buffer.from(audioB64, "base64");
+	} catch (e: any) {
+		console.error("googleTTS error:", e);
+		return null;
+	}
+};
+
+export const googleTTS = async (text: string, lang: string): Promise<Buffer | null> => {
+	const langCode = findLangCode(lang) || "en";
+	const chunks = splitTtsText(text);
+	const buffers: Buffer[] = [];
+	for (const chunk of chunks) {
+		const buf = await synthTtsChunk(chunk, langCode);
+		if (!buf) return null;
+		buffers.push(buf);
+	}
+	return buffers.length ? Buffer.concat(buffers) : null;
+};
+
+const GOOGLE_TTS_REGION: Record<string, string> = {
+	en: "US",
+	zh: "CN",
+	ja: "JP",
+	ko: "KR",
+	ar: "XA",
+	hi: "IN",
+	vi: "VN",
+	pt: "BR",
+	th: "TH",
+	no: "NO",
+	nb: "NO",
+	nn: "NO",
+	uk: "UA",
+	cs: "CZ",
+	da: "DK",
+	fi: "FI",
+	hu: "HU",
+	el: "GR",
+	he: "IL",
+	ro: "RO",
+	sk: "SK",
+	sr: "RS",
+	hr: "HR",
+	bg: "BG",
+	ca: "ES",
+	eu: "ES",
+	gl: "ES",
+	sv: "SE",
+	pl: "PL",
+	ru: "RU",
+	tr: "TR",
+	id: "ID",
+	ms: "MY",
+	fa: "IR",
+	ur: "PK",
+	bn: "IN",
+	ta: "IN",
+	te: "IN",
+	mr: "IN",
+	gu: "IN",
+	kn: "IN",
+	ml: "IN",
+	pa: "IN",
+	fil: "PH",
+	nl: "NL",
+	it: "IT",
+	es: "ES",
+	fr: "FR",
+	de: "DE",
+};
+
+export const googleCloudTTS = async (text: string, lang: string): Promise<Buffer | null> => {
+	try {
+		const langCode = findLangCode(lang) || "en";
+		const region = GOOGLE_TTS_REGION[langCode] || langCode.toUpperCase();
+		const languageCode = `${langCode}-${region}`;
+		const url = `https://content-texttospeech.googleapis.com/v1/text:synthesize?prettyPrint=false&alt=json`;
+		const res = await fetch(url, {
+			method: "POST",
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
+				Referer: process.env.GOOG_RX || "",
+				"X-Goog-Api-Key": process.env.GOOG_EX || "",
+			},
+			body: JSON.stringify({
+				input: { text },
+				voice: { languageCode },
+				audioConfig: { audioEncoding: "MP3" },
+			}),
+		});
+		if (!res.ok) return null;
+		const data: any = await res.json();
+		const audioB64 = data?.audioContent;
+		if (!audioB64) return null;
+		return Buffer.from(audioB64, "base64");
+	} catch (e: any) {
+		console.error("googleCloudTTS error:", e);
+		return null;
 	}
 };

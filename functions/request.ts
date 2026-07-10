@@ -910,7 +910,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 							url: "https://www.youtube.com/" + k?.macroMarkersListItemRenderer?.onTap?.commandMetadata?.webCommandMetadata?.url,
 						})) || null,
 					isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE") || false,
-					isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer.icon.iconType === "MUSIC") || false,
+					isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer?.icon?.iconType === "MUSIC") || false,
 					isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
 					isShorts: a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts"),
 					mixPlaylist: mixData,
@@ -1424,7 +1424,7 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
 			return await SPMusic(que, true);
 		} else {
 			const pes2: any = await per2.json();
-			const finalpes: any = pes2?.data?.searchV2;
+			const finalpes: any = pes2?.data?.searchV2 || {};
 			return {
 				data: {
 					albums: finalpes.albumsV2.items?.map((a: any) => a.data) || null,

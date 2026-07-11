@@ -1512,6 +1512,8 @@ function setupEnumControls() {
 }
 
 function renderParams() {
+  const page = pageFromPath(window.location.pathname);
+  if (page === "terms" || page === "privacy") return;
   paramsPanel.classList.remove("hidden");
   const endpointQuery = getEndpointQuery(currentEndpoint);
 

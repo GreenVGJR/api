@@ -225,8 +225,8 @@ app.get("/skip", async (c) => {
 				status: true,
 				data: {
 					action: "skipped",
-					skippedTrack: skippedTrack ? formatTrack(skippedTrack, client, queue) : null,
-					currentTrack: nextTrack ? formatTrack(nextTrack, client, queue) : null,
+					skippedTrack: skippedTrack ? formatTrack(skippedTrack, client, queue).data : null,
+					currentTrack: nextTrack ? formatTrack(nextTrack, client, queue).data : null,
 				},
 				type: { primary: "final", alt: "success" },
 			})}}`,
@@ -651,8 +651,8 @@ app.get("/remove", async (c) => {
 				status: true,
 				data: {
 					action: "removed",
-					removedTrack: formatTrack(trackToRemove, client, queue),
-					currentTrack: current ? formatTrack(current, client, queue) : null,
+					removedTrack: formatTrack(trackToRemove, client, queue).data,
+					currentTrack: current ? formatTrack(current, client, queue).data : null,
 				},
 				type: { primary: "final", alt: "success" },
 			})}}`,
@@ -748,7 +748,7 @@ app.get("/jump", async (c) => {
 				status: true,
 				data: {
 					action: "jumped",
-					track: formatTrack(targetTrack, client, queue),
+					track: formatTrack(targetTrack, client, queue).data,
 					index,
 				},
 				type: { primary: "final", alt: "success" },
@@ -802,8 +802,8 @@ app.get("/move", async (c) => {
 					status: true,
 					data: {
 						action: "moved",
-						fromTrack: formatTrack(fromTrack, client, queue),
-						toTrack: formatTrack(toTrack, client, queue),
+						fromTrack: formatTrack(fromTrack, client, queue).data,
+						toTrack: formatTrack(toTrack, client, queue).data,
 						from,
 						to,
 					},
@@ -827,8 +827,8 @@ app.get("/move", async (c) => {
 				status: true,
 				data: {
 					action: "moved",
-					fromTrack: formatTrack(fromTrack, client, queue),
-					toTrack: formatTrack(toTrack, client, queue),
+					fromTrack: formatTrack(fromTrack, client, queue).data,
+					toTrack: formatTrack(toTrack, client, queue).data,
 					from,
 					to,
 				},
@@ -890,8 +890,8 @@ app.get("/back", async (c) => {
 				status: true,
 				data: {
 					action: "back",
-					skippedTrack: skipped ? formatTrack(skipped, client, queue) : null,
-					currentTrack: prevTrack ? formatTrack(prevTrack, client, queue) : null,
+					skippedTrack: skipped ? formatTrack(skipped, client, queue).data : null,
+					currentTrack: prevTrack ? formatTrack(prevTrack, client, queue).data : null,
 				},
 				type: { primary: "final", alt: "success" },
 			})}}`,

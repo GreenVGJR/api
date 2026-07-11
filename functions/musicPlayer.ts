@@ -277,7 +277,7 @@ function parseLavalinkHostEntry(entry: string): any | null {
 	const authorization = parts.length >= 4 ? parts.slice(3, parts[parts.length - 1] === "true" || parts[parts.length - 1] === "false" ? -1 : undefined).join(":") : "";
 	const secure = parts[parts.length - 1] === "true";
 
-	return { id, host, port, authorization, secure };
+	return { id, host, port, authorization, secure, retryAmount: 1, retryDelay: 300000 };
 }
 
 function parseLavalinkNodesFromEnv(): any[] {
@@ -323,40 +323,26 @@ function lavalinkNodeList(): any[] {
 	return LAVALINK_NODES.filter((n) => n.host && n.host.length > 0);
 }
 
-export function getLavalinkNodeIds(): string[] {
-	return lavalinkNodeList().map((n: any) => n.id);
+/**
+ * Returns node configs ordered by preference.
+ * preferLocal=true  → local (vgjr) node first, then remote nodes.
+ * preferLocal=false → remote nodes first, then local (vgjr) node last.
+ */
+function orderedNodeList(preferLocal: boolean): any[] {
+	const nodes = lavalinkNodeList();
+	if (!localNode.id) return nodes;
+	const local = nodes.filter((n) => n.id === localNode.id);
+	const remote = nodes.filter((n) => n.id !== localNode.id);
+	return preferLocal ? [...local, ...remote] : [...remote, ...local];
 }
 
-function clearLavalinkNodes(manager: LavalinkManager) {
-	const nodesToKill = [...manager.nodeManager.nodes.values()];
-	for (const node of nodesToKill) {
-		try {
-			(node as any).resetReconnectionAttempts?.();
-		} catch {}
-		try {
-			manager.nodeManager.nodes.delete(node.id);
-		} catch {}
-		try {
-			node.disconnect();
-		} catch {}
-		try {
-			(node as any).socket?.close();
-		} catch {}
-		try {
-			(node as any).ws?.close();
-		} catch {}
-		try {
-			(node as any).socket = null;
-		} catch {}
-		try {
-			(node as any).ws = null;
-		} catch {}
-	}
+export function getLavalinkNodeIds(preferLocal = false): string[] {
+	return orderedNodeList(preferLocal).map((n: any) => n.id);
 }
 
 function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 	for (const nodeConfig of nodeConfigs) {
-		if (nodeConfig.host) {
+		if (nodeConfig.host && !manager.nodeManager.nodes.has(nodeConfig.id)) {
 			const node = manager.nodeManager.createNode(nodeConfig);
 			patchNodeTls(node);
 			patchNodeClose(node);
@@ -364,14 +350,26 @@ function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 	}
 }
 
-function waitForLavalinkConnection(manager: LavalinkManager, timeoutMs: number, connectNodes: boolean) {
-	const nodes = [...manager.nodeManager.nodes.values()];
-	if (nodes.some((node) => node.connected)) return Promise.resolve(true);
+/** Wait for a SPECIFIC node (by id) to connect, without touching/deleting other registered nodes. */
+// Concurrent requests can independently ask to connect the same node (e.g. bootstrap +
+// an endpoint's explicit node pick racing each other). Without a lock each caller would
+// call node.connect() again, opening a duplicate WebSocket to the same Lavalink server —
+// which then logs multiple disconnects on shutdown. This dedupes in-flight connect attempts.
+const nodeConnectLocks = new WeakMap<any, Promise<boolean>>();
 
-	return new Promise<boolean>((resolve) => {
+function waitForSpecificNodeConnection(manager: LavalinkManager, nodeId: string, timeoutMs: number, connectNode: boolean) {
+	const node = manager.nodeManager.nodes.get(nodeId);
+	if (node?.connected) return Promise.resolve(true);
+	if (!node) return Promise.resolve(false);
+
+	const existingLock = nodeConnectLocks.get(node);
+	if (existingLock) return existingLock;
+
+	const promise = new Promise<boolean>((resolve) => {
 		let settled = false;
 
-		const onConnect = () => {
+		const onConnect = (n: any) => {
+			if (n?.id !== nodeId) return;
 			if (settled) return;
 			settled = true;
 			clearTimeout(timeout);
@@ -390,38 +388,91 @@ function waitForLavalinkConnection(manager: LavalinkManager, timeoutMs: number, 
 			resolve(false);
 		}, timeoutMs);
 
-		manager.nodeManager.once("connect", onConnect);
+		manager.nodeManager.on("connect", onConnect);
 
-		if (connectNodes) {
-			for (const node of nodes) {
-				if (!node.connected) {
-					try {
-						node.connect();
-					} catch {}
-				}
-			}
+		// Only call connect() if the node has no active socket at all. A node can already be
+		// mid-handshake (e.g. manager.init() started connecting every node in the background);
+		// calling connect() again on top of that races with the in-flight WebSocket and can
+		// null out `node.socket` mid-open, crashing the library with
+		// "TypeError: null is not an object (evaluating 'this.socket.on')".
+		const sock: any = (node as any).socket;
+		const alreadyHandshaking = !!sock && typeof sock.readyState === "number" && (sock.readyState === 0 || sock.readyState === 1);
+		if (connectNode && !node.connected && !alreadyHandshaking) {
+			try {
+				node.connect();
+			} catch {}
 		}
+	}).finally(() => {
+		nodeConnectLocks.delete(node);
 	});
+
+	nodeConnectLocks.set(node, promise);
+	return promise;
 }
 
-async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: number, log?: (msg: string) => Promise<void>) {
-	const nodes = lavalinkNodeList();
+/**
+ * Ensures a specific Lavalink node (by id) is registered and connected.
+ * Registers it if missing, connects it if not connected, and waits up to timeoutMs.
+ * Leaves all other registered nodes untouched (does not delete/disconnect them),
+ * so fallback between nodes keeps working.
+ */
+export async function ensureNodeConnected(manager: LavalinkManager, nodeId: string, log?: (msg: string) => Promise<void>, timeoutMs = 8000): Promise<any | null> {
+	let node = manager.nodeManager.nodes.get(nodeId);
+	if (node?.connected) return node;
+
+	if (!node) {
+		const nodeConfig = LAVALINK_NODES.find((n) => n.id === nodeId);
+		if (!nodeConfig) {
+			if (log) await log(`Lavalink node config not found: "${nodeId}"`);
+			return null;
+		}
+		node = manager.nodeManager.createNode(nodeConfig);
+		patchNodeTls(node);
+		patchNodeClose(node);
+	}
+
+	if (log) await log(`Connecting Lavalink node "${nodeId}"...`);
+	const connected = await waitForSpecificNodeConnection(manager, nodeId, timeoutMs, true);
+	if (!connected) {
+		if (log) await log(`Lavalink node "${nodeId}" failed to connect`);
+		return null;
+	}
+	if (log) await log(`Lavalink node "${nodeId}" connected`);
+	return manager.nodeManager.nodes.get(nodeId) ?? null;
+}
+
+async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: number, log?: (msg: string) => Promise<void>, preferLocal = true, connectNodes = true) {
+	const nodes = orderedNodeList(preferLocal);
 	if (nodes.length === 0) return false;
 
 	const nodeList = nodes.map((n: any) => n.id).join(", ");
 	if (log) await log(`Connecting to Lavalink node(s): ${nodeList}`);
 
-	for (const nodeConfig of nodes) {
-		clearLavalinkNodes(manager);
-		createLavalinkNodes(manager, [nodeConfig]);
+	// Register all configured nodes up front (without deleting any that already exist),
+	// so nodes that aren't tried first remain available for later fallback/moveNode calls.
+	createLavalinkNodes(manager, nodes);
 
-		if (log) await log(`Trying Lavalink node "${nodeConfig.id}"...`);
-		const connected = await waitForLavalinkConnection(manager, timeoutMs, true);
-		if (connected) {
-			if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);
+	for (const nodeConfig of nodes) {
+		const node = manager.nodeManager.nodes.get(nodeConfig.id);
+		if (node?.connected) {
+			if (log) await log(`Already connected to Lavalink node "${nodeConfig.id}"`);
 			return true;
 		}
-		if (log) await log(`Lavalink node "${nodeConfig.id}" failed to connect`);
+
+		if (log) await log(`Trying Lavalink node "${nodeConfig.id}"...`);
+		const connected = await waitForSpecificNodeConnection(manager, nodeConfig.id, timeoutMs, connectNodes);
+		if (connected) {
+			// Stability check: wait briefly to see if the node stays connected
+			await new Promise((r) => setTimeout(r, 500));
+			const stableNode = manager.nodeManager.nodes.get(nodeConfig.id);
+			if (stableNode?.connected) {
+				if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);
+				return true;
+			}
+			if (log) await log(`Lavalink node "${nodeConfig.id}" dropped immediately — trying next`);
+		} else {
+			if (log) await log(`Lavalink node "${nodeConfig.id}" failed to connect`);
+		}
 	}
 
 	return false;
@@ -437,59 +488,7 @@ export async function ensureLocalNode(manager: LavalinkManager, log?: (msg: stri
 		if (log) await log("No localhost Lavalink node is configured in LAVALINK_HOST");
 		return null;
 	}
-
-	// Check if the node is already registered and connected
-	let node = manager.nodeManager.nodes.get(localNode.id);
-	if (node?.connected) return node;
-
-	// Register or re-register the node
-	if (!node) {
-		const nodeConfig = LAVALINK_NODES.find((n) => n.id === localNode.id);
-		if (!nodeConfig) {
-			if (log) await log("Localhost node config not found in LAVALINK_NODES");
-			return null;
-		}
-		node = manager.nodeManager.createNode(nodeConfig);
-		patchNodeTls(node);
-		if (log) await log(`Local Lavalink node registered: ${localNode.id}`);
-	}
-
-	// Connect and wait
-	if (!node.connected) {
-		try {
-			node.connect();
-		} catch {}
-		if (log) await log("Waiting for local Lavalink node to connect...");
-		const connected = await new Promise<boolean>((resolve) => {
-			if (node!.connected) return resolve(true);
-			let settled = false;
-			const onConnect = () => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timer);
-				try {
-					(manager.nodeManager as any).off("connect", onConnect);
-				} catch {}
-				resolve(true);
-			};
-			const timer = setTimeout(() => {
-				if (settled) return;
-				settled = true;
-				try {
-					(manager.nodeManager as any).off("connect", onConnect);
-				} catch {}
-				resolve(false);
-			}, 8000);
-			manager.nodeManager.once("connect", onConnect);
-		});
-		if (!connected) {
-			if (log) await log("Local Lavalink node failed to connect within timeout");
-			return null;
-		}
-		if (log) await log("Local Lavalink node connected");
-	}
-
-	return node;
+	return ensureNodeConnected(manager, localNode.id, log, 8000);
 }
 
 // ─── Player Pool ──────────────────────────────────────────────────────────────
@@ -692,7 +691,7 @@ if (!g.__vgjr_music_process_handlers_installed) {
 	});
 }
 
-export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>): Promise<{ client: Client; player: LavalinkManager }> {
+export async function getOrCreatePlayer(token: string, log?: (msg: string) => Promise<void>, preferLocal = true): Promise<{ client: Client; player: LavalinkManager }> {
 	const existing = players.get(token);
 	if (existing) {
 		if (existing.startup) {
@@ -724,7 +723,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			} else {
 				existing.reconnecting = (async () => {
 					if (log) await log(`All Lavalink nodes are disconnected. Reconnecting...`);
-					await connectLavalinkWithFallback(existing.player, 8000, log);
+					await connectLavalinkWithFallback(existing.player, 8000, log, preferLocal);
 				})();
 
 				try {
@@ -960,24 +959,52 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				scheduleAutoDestroy(token);
 			});
 
+			// Track which nodes have failed since the last successful connection, so we
+			// only surface a console error once every configured node has been exhausted
+			// (avoids spamming a warning per-node while others are still trying).
+			const failedNodeIds = new Set<string>();
+
 			manager.nodeManager.on("error", (node, err) => {
 				const hasConnected = [...manager.nodeManager.nodes.values()].some((n) => n.connected);
-				if (!hasConnected) {
-					warnMusicThrottled(`node-error:${node.id}:${musicErrorMessage(err)}`, `[Lavalink Node Error] ${node.id}: ${musicErrorMessage(err)}`, 30_000);
+				if (hasConnected) return;
+				failedNodeIds.add(node.id);
+				const total = manager.nodeManager.nodes.size;
+				if (failedNodeIds.size >= total) {
+					warnMusicThrottled(`node-error-final`, `[Lavalink] All Lavalink nodes failed to connect. Last error on "${node.id}": ${musicErrorMessage(err)}`, 30_000);
 				}
 			});
 
-			manager.nodeManager.on("connect", (node) => {
-				console.log(`Lavalink node connected: ${node.id}`);
+			// Track which node ids have dropped, so the "connect" handler below can tell
+			// a genuine reconnect (needs auto-resume) apart from a brand-new node connecting
+			// for the first time (e.g. right after a player was just created — nothing to resume).
+			const droppedNodeIds = new Set<string>();
+			const lastConnectLog = new Map<string, number>();
 
-				// Stop other nodes from retrying if we already have a connected node
-				for (const n of manager.nodeManager.nodes.values()) {
-					if (n.id !== node.id && !n.connected) {
-						try {
-							n.disconnect();
-						} catch {}
-					}
+			manager.nodeManager.on("connect", (node) => {
+				if (!players.has(token)) {
+					try {
+						(node as any).destroy?.("Zombie client destroyed", true);
+					} catch {}
+					return;
 				}
+
+				failedNodeIds.clear();
+
+				const now = Date.now();
+				const lastLog = lastConnectLog.get(node.id) ?? 0;
+				const isReconnect = droppedNodeIds.has(node.id);
+				droppedNodeIds.delete(node.id);
+
+				if (!isReconnect) {
+					console.log(`Lavalink node connected: ${node.id}`);
+					lastConnectLog.set(node.id, now);
+				} else if (now - lastLog > 300_000) {
+					console.log(`Lavalink node reconnected: ${node.id}`);
+					lastConnectLog.set(node.id, now);
+				}
+
+				if (!isReconnect) return; // first-time connect — nothing was playing before, skip auto-resume
+
 				// Auto-resume: Find any players that were on this node and should be playing
 				for (const player of manager.players.values()) {
 					if (player.node && player.node.id === node.id) {
@@ -1035,9 +1062,28 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			});
 
 			manager.nodeManager.on("disconnect", (node) => {
+				droppedNodeIds.add(node.id);
+
+				// Auto-switch: move any players stranded on this disconnected node to another connected node
+				const connectedNodes = [...manager.nodeManager.nodes.values()].filter((n) => n.connected && n.id !== node.id);
+				if (connectedNodes.length > 0) {
+					const fallbackNode = connectedNodes[0];
+					for (const player of manager.players.values()) {
+						if (player.node && player.node.id === node.id) {
+							try {
+								player.node = fallbackNode;
+								warnMusicThrottled(`node-switch:${player.guildId}`, `Switched guild ${player.guildId} from "${node.id}" to "${fallbackNode.id}"`, 10_000);
+							} catch {}
+						}
+					}
+				}
+
 				const hasConnected = [...manager.nodeManager.nodes.values()].some((n) => n.connected);
-				if (!hasConnected) {
-					warnMusicThrottled(`node-disconnect:${node.id}`, `[Lavalink] Node disconnected: ${node.id}`, 30_000);
+				if (hasConnected) return;
+				failedNodeIds.add(node.id);
+				const total = manager.nodeManager.nodes.size;
+				if (failedNodeIds.size >= total) {
+					warnMusicThrottled(`node-disconnect-final`, `[Lavalink] All Lavalink nodes disconnected (last: "${node.id}")`, 30_000);
 				}
 			});
 
@@ -1117,7 +1163,10 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				});
 
 				// Wait for the primary node group; mode 2 then falls back to local only.
-				const nodeConnected = await connectLavalinkWithFallback(manager, config.nodeConnectTimeout ?? 4000, log);
+				// connectNodes=false: manager.init() above already kicked off connections for
+				// every registered node in the background — calling node.connect() again here
+				// races with that in-flight handshake and corrupts the node's socket state.
+				const nodeConnected = await connectLavalinkWithFallback(manager, config.nodeConnectTimeout ?? 4000, log, preferLocal, false);
 
 				if (!nodeConnected) {
 					throw new Error("Timed out waiting for Lavalink node connection");
@@ -1291,7 +1340,7 @@ export function formatDuration(ms: number): string {
 	return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export function formatTrack(track: Track | any, client?: any, guildPlayer?: any) {
+export function formatTrack(track: Track | any, client?: any, guildPlayer?: any, activeFilters?: string[], is247?: boolean) {
 	const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
 	const requester = track.requester || null;
 	const requestedId = requester ? String((requester as any).id ?? requester) : null;
@@ -1326,40 +1375,70 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any)
 		} else {
 			voiceInfo = {
 				isInVC: false,
-				_warning: "This information is not available at moment",
 			};
 		}
 	}
+
+	const filters = activeFilters ?? [];
+	const totalQueueDuration = guildPlayer?.queue?.tracks?.reduce((acc: number, t: any) => acc + (t?.info?.duration ?? 0), 0) ?? 0;
+
 	return {
-		id: track.info.identifier,
-		title: track.info.title,
-		author: track.info.author,
-		url: track.info.uri,
-		source: (track.info as any).sourceName || "",
-		actualSource: (track.info as any).actualSourceName || (track.info as any).sourceName || "",
-		thumbnail: track.info.artworkUrl ?? "",
-		duration: formatDuration(track.info.duration),
-		durationMS: String(track.info.duration),
-		isSeekable: track.info.isSeekable,
-		isStream: track.info.isStream,
-		requestedBy: requestedId,
-		requester: requester ? { ...requesterData, ...(voiceInfo ?? {}) } : null,
-		playlist: (track as any).playlist
-			? {
-					name: (track as any).playlist.name,
-					size: (track as any).playlist.tracks?.length,
-					// ig this might result slow response
-					elapsedTime: {
-						label: formatDuration(totalPlaylistTrack),
-						value: String(totalPlaylistTrack),
-					},
-				}
-			: null,
+		data: {
+			nodeId: guildPlayer?.node?.id ?? null,
+			client: guildPlayer?.options ? { ...guildPlayer.options, node: guildPlayer.node?.id || guildPlayer.options.node } : null,
+			id: track.info.identifier,
+			title: track.info.title,
+			author: track.info.author,
+			url: track.info.uri,
+			source: (track.info as any).sourceName || "",
+			actualSource: (track.info as any).actualSourceName || (track.info as any).sourceName || "",
+			thumbnail: track.info.artworkUrl ?? "",
+			duration: formatDuration(track.info.duration),
+			durationMS: String(track.info.duration),
+			isSeekable: track.info.isSeekable,
+			isStream: track.info.isStream,
+			requestedBy: requestedId,
+			requester: requester ? { ...requesterData, ...(voiceInfo ?? {}) } : null,
+			playlist: (track as any).playlist
+				? {
+						name: (track as any).playlist.name,
+						size: (track as any).playlist.tracks?.length,
+						elapsedTime: {
+							label: formatDuration(totalPlaylistTrack),
+							value: String(totalPlaylistTrack),
+						},
+					}
+				: null,
+			is247: is247 ?? false,
+			playing: guildPlayer?.playing ?? false,
+			paused: guildPlayer?.paused ?? false,
+			volume: guildPlayer?.volume ?? 100,
+			loop: guildPlayer?.get?.("autoplay") ? "autoplay" : (guildPlayer?.repeatMode ?? "off"),
+			filters: {
+				array: filters,
+				string: filters.length > 0 ? filters.join(", ") : "",
+			},
+			queueSize: guildPlayer?.queue?.tracks?.length ?? 0,
+			queueElapsedTime: {
+				label: formatDuration(totalQueueDuration),
+				value: String(totalQueueDuration),
+			},
+			progress: {
+				current: {
+					label: formatDuration(guildPlayer?.position ?? 0),
+					value: String(guildPlayer?.position ?? 0),
+				},
+				total: {
+					label: formatDuration(track.info.duration),
+					value: String(track.info.duration),
+				},
+			},
+		},
 	};
 }
 
 function applyTemplate(template: string, track: any): string {
-	const data = formatTrack(track);
+	const data = formatTrack(track).data;
 	return template.replace(/{([\w.]+)}/g, (match, path) => {
 		const parts = path.split(".");
 		const value = parts.reduce((obj: any, key: string) => obj?.[key], data);

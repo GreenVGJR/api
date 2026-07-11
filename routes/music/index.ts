@@ -6,7 +6,7 @@ import queue from "./queue.js";
 import stats from "./stats.js";
 import voiceStatus from "./voiceStatus.js";
 import controls from "./controls.js";
-import radio from "./radio.js";
 import play from "./play.js";
+import radio from "./radio.js";
 
-export default [connect, disconnect, filters, queue, stats, voiceStatus, controls, radio, play] as any[];
+export default [connect, disconnect, filters, queue, stats, voiceStatus, controls, play, radio] as any[];

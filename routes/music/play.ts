@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, formatDuration, setVoiceStatus, voiceStatusStore, PLATFORM_SEARCH, localNode } from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, formatDuration, setVoiceStatus, voiceStatusStore, PLATFORM_SEARCH, localNode, getLavalinkNodeIds, ensureNodeConnected } from "../../functions/musicPlayer.js";
 import { SCMusic, SPMusic, YTMusic, YTVideo, Deezer, Tidal, infoYoutube, infoSpotify, infoITunes, infoSoundcloud, infoSoundcloudStreams, commonHeaders } from "../../functions/request.js";
 import { getActiveFilters } from "./filters.js";
 import { parseYtInitial } from "../../functions/request.ts";
@@ -391,9 +391,9 @@ app.get("/play", async (c) => {
 
 		const effectivePlatform = isUrl ? getPlatformFromUrl(queryStr) || platform : platform;
 
-		if (!isUrl) await log(`[Attempt 1] Custom ${platform} search: "${queryStr}"`);
-		const pCustom = customSearchWithTimeout(effectivePlatform, queryStr, CUSTOM_SEARCH_TIMEOUT_MS, log, isUrl ? "[Attempt 1] URL metadata lookup" : `[Attempt 1] Custom ${platform} search`);
-		const { client, player: manager } = await getOrCreatePlayer(token, log);
+		if (!isUrl) await log(`Custom ${platform} search: "${queryStr}"`);
+		const pCustom = customSearchWithTimeout(effectivePlatform, queryStr, CUSTOM_SEARCH_TIMEOUT_MS, log, isUrl ? "URL metadata lookup" : `Custom ${platform} search`);
+		const { client, player: manager } = await getOrCreatePlayer(token, log, false);
 
 		await log(isNew ? "Discord.js client ready" : "Client retrieved");
 		await log("Lavalink manager active");
@@ -488,11 +488,42 @@ app.get("/play", async (c) => {
 
 			if (!gp) {
 				await log("Creating Lavalink player...");
+				// Prefer a remote node first, only falling back to local (vgjr). Explicitly
+				// pick + connect it so the manager doesn't silently auto-assign a different,
+				// possibly-unconnected node.
+				const preferredNodeIds = getLavalinkNodeIds(false);
+				let chosenNodeId: string | null = null;
+				// 1. Try to find an already connected node
+				for (const id of preferredNodeIds) {
+					const existingNode = manager.nodeManager.nodes.get(id);
+					if (existingNode?.connected) {
+						chosenNodeId = id;
+						break;
+					}
+				}
+				// 2. If none connected, try to connect one and verify stability
+				if (!chosenNodeId) {
+					for (const id of preferredNodeIds) {
+						const node = await ensureNodeConnected(manager, id, log);
+						if (node) {
+							await new Promise((r) => setTimeout(r, 500)); // Stability check
+							if (node.connected) {
+								chosenNodeId = id;
+								break;
+							} else {
+								if (log) await log(`Lavalink node "${id}" dropped immediately — trying next`);
+							}
+						}
+					}
+				}
+				if (!chosenNodeId) throw new Error("No Lavalink node is currently reachable");
+				await log(`Using Lavalink node "${chosenNodeId}"`);
 				gp = await manager.createPlayer({
 					guildId,
 					voiceChannelId: channel.id,
 					selfDeaf: isDeaf,
 					selfMute: false,
+					node: chosenNodeId as any,
 				});
 			} else {
 				gp.options.selfDeaf = isDeaf;
@@ -522,15 +553,46 @@ app.get("/play", async (c) => {
 
 			const doSearch = async (q: string, src: string) => {
 				const normalizedQ = normalizeUrl(q);
-				const res = await gp.search(
-					{
-						query: normalizedQ,
-						source: (src === "url" ? undefined : src) as any,
-					},
-					requester,
-				);
-				if (!res?.tracks?.length) throw new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
-				return res;
+				const nodeIds = getLavalinkNodeIds(false);
+				let lastErr: any = null;
+
+				const nodesToTry = new Set([gp.node?.id, ...nodeIds].filter(Boolean));
+
+				for (const nodeId of nodesToTry) {
+					const targetNode = await ensureNodeConnected(manager, nodeId as string);
+					if (!targetNode || !targetNode.connected) continue;
+
+					if (gp.node?.id !== nodeId) {
+						try {
+							await gp.moveNode(nodeId as string);
+						} catch {
+							continue;
+						}
+					}
+
+					try {
+						await log(`Searching for "${q}" on Lavalink node "${nodeId}"...`);
+						const res = await gp.search(
+							{
+								query: normalizedQ,
+								source: (src === "url" ? undefined : src) as any,
+							},
+							requester,
+						);
+						if (res?.tracks?.length) return res;
+						await log(`Lavalink node "${nodeId}" returned no tracks for "${q}"`);
+						lastErr = new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
+					} catch (err: any) {
+						lastErr = err;
+						const msg = err?.message || String(err);
+						if (msg.includes("not connected") || msg.includes("Failed to parse JSON") || msg.includes("422")) {
+							await log(`Lavalink search failed on "${nodeId}": ${msg} — trying next node...`);
+							continue; // Try next node
+						}
+					}
+				}
+
+				throw lastErr || new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
 			};
 
 			const startLavalinkPlatformSearch = (searchPlatform: string, q: string) => {
@@ -545,14 +607,14 @@ app.get("/play", async (c) => {
 			const useLavalinkPlatformSearch = async (attempt: string, label: string, searchPlatform: string, q: string, searchPromise = startLavalinkPlatformSearch(searchPlatform, q)) => {
 				if (!PLATFORM_SEARCH[searchPlatform]) return null;
 
-				await log(`[Attempt ${attempt}] Lavalink ${label} search: "${q}"`);
+				await log(`Lavalink ${label} search: "${q}"`);
 				const { result: lavalinkResult, error } = await searchPromise;
 				if (lavalinkResult) {
-					await log(`[Attempt ${attempt}] Lavalink ${label} search succeeded`);
+					await log(`Lavalink ${label} search succeeded`);
 					return lavalinkResult;
 				}
 
-				await log(`[Attempt ${attempt}] Lavalink ${label} search failed (${error?.message || "No results"})`);
+				await log(`Lavalink ${label} search failed (${error?.message || "No results"})`);
 				return null;
 			};
 
@@ -563,21 +625,21 @@ app.get("/play", async (c) => {
 			const loadSoundCloudManual = async (sourceUrl: string, attempt: string | number, overlaySource: CustomSearchResult | null): Promise<boolean> => {
 				const streams = await infoSoundcloudStreams(sourceUrl);
 				if (streams.length === 0) {
-					await log(`[Attempt ${attempt}] No SoundCloud manual streams found`);
+					await log(`No SoundCloud manual streams found`);
 					return false;
 				}
 
 				for (const stream of streams) {
 					const protocol = stream.protocol === "progressive" ? "progressive/legacy" : stream.protocol;
 					const mime = stream.mimeType ? ` (${stream.mimeType})` : "";
-					await log(`[Attempt ${attempt}] Manual ${protocol}${mime} stream resolved — loading via Lavalink`);
+					await log(`Manual ${protocol}${mime} stream resolved — loading via Lavalink`);
 					try {
 						result = await doSearch(stream.url, "url");
 						applyOverlay(result, overlaySource);
-						await log(`[Attempt ${attempt}] "SoundCloud Manual ${protocol}" succeeded`);
+						await log(`"SoundCloud Manual ${protocol}" succeeded`);
 						return true;
 					} catch (err: any) {
-						await log(`[Attempt ${attempt}] "SoundCloud Manual ${protocol}" failed: ${err?.message || err}`);
+						await log(`"SoundCloud Manual ${protocol}" failed: ${err?.message || err}`);
 					}
 				}
 
@@ -600,11 +662,11 @@ app.get("/play", async (c) => {
 				await log(`Loading URL directly: "${queryStr}"`);
 				try {
 					if (isYtMix) {
-						await log(`[Attempt 1] YouTube Mix (list=${ytListParam}) detected — fetching track list from watch page...`);
+						await log(`YouTube Mix (list=${ytListParam}) detected — fetching track list from watch page...`);
 						const splitqueryStr = new URL(queryStr);
 						const mixTrackUrls = await fetchYouTubeMixTracks(`https://youtube.com/watch?v=&list=${splitqueryStr.searchParams.get("list")}`);
 						if (mixTrackUrls?.list?.length) {
-							await log(`[Attempt 1] Fetched ${mixTrackUrls.list.length} tracks from mix — loading individually...`);
+							await log(`Fetched ${mixTrackUrls.list.length} tracks from mix — loading individually...`);
 							const trackResults = await Promise.allSettled(mixTrackUrls.list.map((u) => doSearch(u, "url")));
 							const tracks = trackResults.filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled").flatMap((r) => r.value.tracks ?? []);
 							if (tracks.length > 0) {
@@ -613,7 +675,7 @@ app.get("/play", async (c) => {
 									tracks,
 									playlist: { name: mixTrackUrls.title, uri: queryStr },
 								};
-								await log(`[Attempt 1] Mix loaded: ${tracks.length}/${mixTrackUrls.list.length} tracks`);
+								await log(`Mix loaded: ${tracks.length}/${mixTrackUrls.list.length} tracks`);
 							} else {
 								throw new Error("No tracks could be loaded from YouTube Mix");
 							}
@@ -621,7 +683,7 @@ app.get("/play", async (c) => {
 							throw new Error("Failed to extract tracks from YouTube Mix page");
 						}
 					} else if (ytPlaylistUrl) {
-						await log(`[Attempt 1] YouTube playlist detected. Trying playlist first: "${ytPlaylistUrl}"`);
+						await log(`YouTube playlist detected. Trying playlist first: "${ytPlaylistUrl}"`);
 						result = await doSearch(ytPlaylistUrl, "url");
 					} else {
 						result = await doSearch(queryStr, "url");
@@ -629,20 +691,20 @@ app.get("/play", async (c) => {
 					}
 				} catch (e: any) {
 					if (effectivePlatform === "soundcloud") {
-						await log(`[Attempt 1] SoundCloud direct load failed — attempting manual stream resolution`);
+						await log(`SoundCloud direct load failed — attempting manual stream resolution`);
 						await loadSoundCloudManual(queryStr, 2, customResult);
 					}
 
 					// Playlist URL fallback: if playlist load failed, try the video-only URL
 					if (!result && ytVideoUrl) {
-						await log(`[Attempt 1] YouTube playlist load failed (${e?.message}) — falling back to video-only URL`);
+						await log(`YouTube playlist load failed (${e?.message}) — falling back to video-only URL`);
 						try {
-							await log(`[Attempt 2] Loading video-only URL: "${ytVideoUrl}"`);
+							await log(`Loading video-only URL: "${ytVideoUrl}"`);
 							result = await doSearch(ytVideoUrl, "url");
 							applyOverlay(result, customResult);
-							await log(`[Attempt 2] Video-only fallback succeeded`);
+							await log(`Video-only fallback succeeded`);
 						} catch (e2: any) {
-							await log(`[Attempt 2] Video-only fallback also failed (${e2?.message}) — giving up`);
+							await log(`Video-only fallback also failed (${e2?.message}) — giving up`);
 						}
 					}
 				}
@@ -653,11 +715,11 @@ app.get("/play", async (c) => {
 				const metaQuery = customResult?.title ? (customResult.author ? `${customResult.title} ${customResult.author}` : customResult.title) : null;
 
 				if (!metaQuery || !result) {
-					await log(`[Attempt 1] Could not extract track title from URL — skipping fallback search`);
+					await log(`Could not extract track title from URL — skipping fallback search`);
 					throw new Error(`Direct load failed and no metadata found for "${queryStr}"`);
 				}
 
-				await log(`[Attempt 1] Extracted metadata: "${metaQuery}" — starting fallback search`);
+				await log(`Extracted metadata: "${metaQuery}" — starting fallback search`);
 				const urlFallbackQuery = metaQuery;
 				const urlFallbacks: Array<{
 					label: string;
@@ -711,28 +773,28 @@ app.get("/play", async (c) => {
 				let currentAttempt = 2;
 				for (const attempt of urlFallbacks) {
 					const pFallbackLavalink = startLavalinkPlatformSearch(attempt.searchPlatform, attempt.query);
-					await log(`[Attempt ${currentAttempt}] Custom ${attempt.label} search: "${attempt.query}"`);
+					await log(`Custom ${attempt.label} search: "${attempt.query}"`);
 					try {
-						const fallbackResult = await customSearchWithTimeout(attempt.searchPlatform, attempt.query, CUSTOM_SEARCH_TIMEOUT_MS, log, `[Attempt ${currentAttempt}] "${attempt.label}" search`);
+						const fallbackResult = await customSearchWithTimeout(attempt.searchPlatform, attempt.query, CUSTOM_SEARCH_TIMEOUT_MS, log, `"${attempt.label}" search`);
 						if (!fallbackResult?.url) {
-							await log(`[Attempt ${currentAttempt}] "${attempt.label}" returned no results`);
+							await log(`"${attempt.label}" returned no results`);
 						} else {
-							await log(`[Attempt ${currentAttempt}] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
+							await log(`Got URL: "${fallbackResult.url}" — loading via Lavalink`);
 							try {
 								result = await doSearch(fallbackResult.url, "url");
 								applyOverlay(result, customResult ?? fallbackResult);
-								await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
+								await log(`"${attempt.label}" succeeded`);
 								break;
 							} catch (err: any) {
 								if (attempt.searchPlatform === "soundcloud" && fallbackResult.url) {
-									await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
+									await log(`SoundCloud direct load failed — attempting manual stream resolution`);
 									if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
 								}
-								await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
+								await log(`"${attempt.label}" failed: ${err?.message}`);
 							}
 						}
 					} catch (err: any) {
-						await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
+						await log(`"${attempt.label}" failed: ${err?.message}`);
 					}
 
 					currentAttempt++;
@@ -746,21 +808,21 @@ app.get("/play", async (c) => {
 				let currentAttempt = 2;
 
 				if (customResult) {
-					await log(`[Attempt 1] Got URL: "${customResult.url}" — loading via Lavalink`);
+					await log(`Got URL: "${customResult.url}" — loading via Lavalink`);
 					try {
 						result = await doSearch(customResult.url, "url");
 						applyOverlay(result, customResult);
 					} catch (e: any) {
 						if (platform === "soundcloud" && customResult?.url) {
-							await log(`[Attempt 1] SoundCloud direct load failed (${e?.message || e}) — attempting manual stream resolution`);
+							await log(`SoundCloud direct load failed (${e?.message || e}) — attempting manual stream resolution`);
 							const manualAttempt = currentAttempt++;
 							await loadSoundCloudManual(customResult.url, manualAttempt, customResult);
 						} else {
-							await log(`[Attempt 1] ${platform} direct URL load failed (${e?.message || e})${allowFallback ? " — falling back to Lavalink search" : ""}`);
+							await log(`${platform} direct URL load failed (${e?.message || e})${allowFallback ? " — falling back to Lavalink search" : ""}`);
 						}
 					}
 				} else {
-					await log(`[Attempt 1] No URL returned${allowFallback ? " — falling back to Lavalink search" : " — fallback disabled"}`);
+					await log(`No URL returned${allowFallback ? " — falling back to Lavalink search" : " — fallback disabled"}`);
 				}
 
 				if (!result && allowFallback) {
@@ -826,28 +888,28 @@ app.get("/play", async (c) => {
 
 					for (const attempt of fallbacks) {
 						const pFallbackLavalink = startLavalinkPlatformSearch(attempt.searchPlatform, attempt.query);
-						await log(`[Attempt ${currentAttempt}] Custom ${attempt.label} search: "${attempt.query}"`);
+						await log(`Custom ${attempt.label} search: "${attempt.query}"`);
 						try {
-							const fallbackResult = await customSearchWithTimeout(attempt.searchPlatform, attempt.query, CUSTOM_SEARCH_TIMEOUT_MS, log, `[Attempt ${currentAttempt}] "${attempt.label}" search`);
+							const fallbackResult = await customSearchWithTimeout(attempt.searchPlatform, attempt.query, CUSTOM_SEARCH_TIMEOUT_MS, log, `"${attempt.label}" search`);
 							if (!fallbackResult?.url) {
-								await log(`[Attempt ${currentAttempt}] "${attempt.label}" returned no results`);
+								await log(`"${attempt.label}" returned no results`);
 							} else {
-								await log(`[Attempt ${currentAttempt}] Got URL: "${fallbackResult.url}" — loading via Lavalink`);
+								await log(`Got URL: "${fallbackResult.url}" — loading via Lavalink`);
 								try {
 									result = await doSearch(fallbackResult.url, "url");
 									applyOverlay(result, customResult ?? fallbackResult);
-									await log(`[Attempt ${currentAttempt}] "${attempt.label}" succeeded`);
+									await log(`"${attempt.label}" succeeded`);
 									break;
 								} catch (err: any) {
 									if (attempt.searchPlatform === "soundcloud" && fallbackResult.url) {
-										await log(`[Attempt ${currentAttempt}] SoundCloud direct load failed — attempting manual stream resolution`);
+										await log(`SoundCloud direct load failed — attempting manual stream resolution`);
 										if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
 									}
-									await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
+									await log(`"${attempt.label}" failed: ${err?.message}`);
 								}
 							}
 						} catch (err: any) {
-							await log(`[Attempt ${currentAttempt}] "${attempt.label}" failed: ${err?.message}`);
+							await log(`"${attempt.label}" failed: ${err?.message}`);
 						}
 
 						currentAttempt++;
@@ -949,30 +1011,21 @@ app.get("/play", async (c) => {
 			}
 		}
 
-		const formattedTrack = formatTrack(responseTrack, client, guildPlayer);
-		const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map((t) => {
-			const track = t as any;
-			return track.info?.identifier === responseTrack.info?.identifier ? formattedTrack : formatTrack(track, client, guildPlayer);
-		});
 		const totalQueueDuration = guildPlayer.queue.tracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(guildPlayer);
+		const formattedTrack = formatTrack(responseTrack, client, guildPlayer, activeFilters, is247);
+		const queueTracks = guildPlayer.queue.tracks.slice(0, 3).map((t) => {
+			const track = t as any;
+			return track.info?.identifier === responseTrack.info?.identifier ? formattedTrack.data : formatTrack(track, client, guildPlayer, activeFilters, is247).data;
+		});
 
 		await s.write(
 			`],"data":${JSON.stringify({
 				status: true,
-				nodeId: guildPlayer.node?.id ?? null,
 				data: {
 					isNewPlayer: isNewGuildPlayer,
-					client: guildPlayer?.options || null,
-					track: formattedTrack,
+					...formattedTrack.data,
 					platform,
-					is247,
-					isPlaying: guildPlayer.playing,
-					isPaused: guildPlayer.paused,
-					filters: {
-						array: activeFilters.length > 0 ? activeFilters : [],
-						string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
-					},
 					queue: {
 						size: guildPlayer.queue.tracks.length,
 						limit_size: 3,

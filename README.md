@@ -1,9 +1,9 @@
 > [!NOTE]
-> Most of codes are vibecoded.
+> Most of codes are vibecoded
 
 ### Reference
 
-- [AMC](https://github.com/GreenVGJR/amc-discord-bot)
+- [AMC](https://github.com/GreenVGJR/amc)
 - [Yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Downr](https://downr.org)
 - [Chocomilk API](https://choco.amira.us.kg)

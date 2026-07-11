@@ -36,41 +36,21 @@ app.get("/nowplaying", async (c) => {
 		const next: any = upcomingTracks[0];
 		const totalQueueDuration = upcomingTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
+		const is247 = get247(token!, guildId!);
 
 		await log(`Now playing: "${current.info.title}"`);
 
 		await s.write(
 			`],"data":${JSON.stringify({
 				status: true,
-				nodeId: queue.node?.id ?? null,
 				data: {
-					client: queue?.options || null,
-					current: formatTrack(current, client, queue),
-					previous: previous ? formatTrack(previous, client, queue) : null,
-					next: next ? formatTrack(next, client, queue) : null,
-					is247: get247(token!, guildId!),
-					playing: queue.playing,
-					paused: queue.paused,
-					volume: queue.volume,
-					loop: queue.get("autoplay") ? "autoplay" : queue.repeatMode,
-					filters: {
-						array: activeFilters.length > 0 ? activeFilters : [],
-						string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
-					},
+					...formatTrack(current, client, queue, activeFilters, is247).data,
+					previous: previous ? formatTrack(previous, client, queue, activeFilters, is247).data : null,
+					next: next ? formatTrack(next, client, queue, activeFilters, is247).data : null,
 					queueSize: upcomingTracks.length,
 					queueElapsedTime: {
 						label: formatDuration(totalQueueDuration),
 						value: String(totalQueueDuration),
-					},
-					progress: {
-						current: {
-							label: formatDuration(queue.position),
-							value: String(queue.position),
-						},
-						total: {
-							label: formatDuration(current.info.duration),
-							value: String(current.info.duration),
-						},
 					},
 				},
 				type: { primary: "final", alt: "success" },
@@ -194,7 +174,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 						source,
 						footer,
 						client: queue?.options || null,
-						track: formatTrack(track, client, queue),
+						track: formatTrack(track, client, queue, activeFilters, get247(token!, guildId!)).data,
 						is247: get247(token!, guildId!),
 						playing: queue.playing,
 						paused: queue.paused,
@@ -265,25 +245,15 @@ app.get("/queue", async (c) => {
 		const allPreviousTracks = queue.queue.previous;
 		const totalQueueDuration = allTracks.reduce((acc, track) => acc + (track.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
+		const is247 = get247(token!, guildId!);
 
 		await s.write(
 			`],"data":${JSON.stringify({
 				status: true,
-				nodeId: queue.node?.id ?? null,
 				data: {
-					client: queue?.options || null,
-					current: queue.queue.current ? formatTrack(queue.queue.current, client, queue) : null,
-					is247: get247(token!, guildId!),
-					playing: queue.playing,
-					paused: queue.paused,
-					volume: queue.volume,
-					loop: queue.get("autoplay") ? "autoplay" : queue.repeatMode,
-					filters: {
-						array: activeFilters.length > 0 ? activeFilters : [],
-						string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
-					},
-					tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue)) : null,
-					previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue)) : null,
+					...(queue.queue.current ? formatTrack(queue.queue.current, client, queue, activeFilters, is247).data : {}),
+					tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247).data) : null,
+					previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247).data) : null,
 					total: allTracks.length,
 					limit,
 					offset,

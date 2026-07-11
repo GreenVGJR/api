@@ -1,8 +1,9 @@
 {
+	"targetDomain": "api.vgjr.top",
 	"buildId": false,
 	"restrictLocal": false,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
 	"endpointChallenge": false,
-	"nodeConnectTimeout": 4000
+	"nodeConnectTimeout": 3000
 }

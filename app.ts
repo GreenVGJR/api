@@ -78,6 +78,7 @@ const API_ROUTES = {
 	},
 	discord_tools: {
 		stream: [["/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=", "string", "number", "number", "url", "string", "boolean", "boolean", "boolean"]],
+		tts: [["/tools/discord/tts?token=&channelId=&quality=&q=&file_name=&messageId=&clone=&lang=", "string", "number", "enum:low,high", "string", "string", "number", "boolean", "string"]],
 		tiktok: [["/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code=", "string", "number", "number", "string"]],
 		server: [
 			["/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=", "string", "number", "string", "string", "string", "number", "url", "url", "url"],
@@ -201,7 +202,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain } = config;
 
 const app = new Hono({ strict: false });
 
@@ -209,13 +210,13 @@ app.use("*", async (c: Context, next: Next) => {
 	if (restrictLocal) {
 		const host = c.req.header("host");
 		const isLocal = isLocalRequest(host);
-		const isAllowed = host === "api.vgjr.top";
+		const isAllowed = host === targetDomain;
 
 		if (!isAllowed && !isLocal) {
 			const isMozilla = c.req.header("user-agent")?.startsWith("Mozilla/5.0");
 			if (!isMozilla || c.req.header("Accept") === "application/json") return c.text("Forbidden", 403);
 			const url = new URL(c.req.url);
-			url.host = "api.vgjr.top";
+			url.host = targetDomain;
 			url.protocol = "https:";
 			if (url.pathname === "/") url.pathname = "/playground";
 
@@ -239,7 +240,7 @@ app.use("*", async (c: Context, next: Next) => {
 		if (val && (val.startsWith("http://") || val.startsWith("https://"))) {
 			try {
 				const parsed = new URL(val);
-				if (parsed.host === currentHost || parsed.hostname === currentHostname || parsed.hostname === "api.vgjr.top" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]") {
+				if (parsed.host === currentHost || parsed.hostname === currentHostname || parsed.hostname === targetDomain || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]") {
 					return c.json({ error: "Query not allowed" });
 				}
 			} catch {}
@@ -522,7 +523,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	c.header("Content-Type", "text/html");
 	c.header("Content-Encoding", "gzip");
 	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
-		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
+		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/loadRich.js>; as=script; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
 
 		return stream(c, async (s) => {
 			await s.write("");
@@ -562,7 +563,7 @@ const servePlaygroundMainJs = (c: Context) =>
 
 		const host = (c.req.header("host") || "").toLowerCase();
 		const isLocal = isLocalRequest(host);
-		const apiBaseUrl = isLocal ? `http://${host}` : "https://api.vgjr.top";
+		const apiBaseUrl = isLocal ? `http://${host}` : `https://${targetDomain}`;
 
 		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";`;
 		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
@@ -599,7 +600,7 @@ app.get("/", (c: Context) =>
 		const renderJson = c.req.query("json") !== undefined || c.req.header("accept")?.includes("application/json");
 		const typeRender = renderJson ? "application/json" : "text/plain";
 		c.header("Content-Type", typeRender);
-		c.header("Cache-Control", "public, no-store, no-cache, max-age=1, must-revalidate");
+		c.header("Cache-Control", "public, no-store, max-age=1, must-revalidate");
 		if (!renderJson) c.header("Location", "/playground");
 
 		c.status(renderJson ? 200 : 302);
@@ -628,12 +629,16 @@ app.get("/", (c: Context) =>
 			{
 				source: [
 					{
+						title: "Support Me",
+						url: "https://ko-fi.com/greenvgjr",
+					},
+					{
 						title: "Source Code",
 						url: "https://github.com/GreenVGJR/api",
 					},
 					{
 						title: "Playground",
-						url: "https://api.vgjr.top/playground",
+						url: `https://${targetDomain}/playground`,
 					},
 				],
 				domRendering: typeRender,
@@ -649,7 +654,6 @@ app.get("/", (c: Context) =>
 				},
 			},
 			{
-				routes: API_ROUTES,
 				_visitor: clientHeaders,
 			},
 		];
@@ -657,6 +661,12 @@ app.get("/", (c: Context) =>
 		await l.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
 	}),
 );
+
+app.get("/playground/loadRich.js", (c: Context) => {
+	c.header("Content-Type", "application/javascript");
+	setPlaygroundAssetCache(c);
+	return c.body(`window.API_ROUTES = ${JSON.stringify(API_ROUTES)};`);
+});
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : "";
 const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "/music"];

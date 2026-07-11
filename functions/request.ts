@@ -181,17 +181,18 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0";
+export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
 	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 	"Accept-Encoding": "gzip, deflate, br, zstd",
-	"Accept-Language": "en-US",
-	Connection: "keep-alive",
+	"Accept-Language": "en-US,en;q=0.9",
 	Priority: "u=0, i",
 	"Sec-Fetch-Dest": "document",
 	"Sec-Fetch-Mode": "navigate",
 	"Sec-Fetch-Site": "none",
+	TE: "trailers",
 	"User-Agent": userAgent,
 };
 
@@ -2353,6 +2354,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[0] = [que, 0, null, null, null, null, 0];
 	inner[1] = ["en-US"];
 	inner[2] = [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, ""];
+	inner[3] = "1.";
 	inner[4] = crypto.randomUUID().replace(/-/g, "");
 	inner[6] = [1];
 	inner[7] = 1;
@@ -3579,7 +3581,7 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 		});
 
@@ -3617,7 +3619,7 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 				...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
 			},
 			body: JSON.stringify(payload),
@@ -3659,7 +3661,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 			body: JSON.stringify({}),
 		});
@@ -3715,7 +3717,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 				...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
 			},
 			body: JSON.stringify(payload),
@@ -3733,7 +3735,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 						headers: {
 							Authorization: `Bot ${token}`,
 							"Content-Type": "application/json",
-							"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+							"User-Agent": discordUserAgent,
 							...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
 						},
 						body: JSON.stringify(retryPayload),
@@ -3787,7 +3789,6 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 
 	const webhookId = payload.webhookId || (action !== "create" && action !== "list" ? guildId : null);
 	const channelId = payload.channelId || (action === "create" || action === "list" ? guildId : null);
-	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 
 	let url = "";
 	let method = "GET";
@@ -3840,7 +3841,7 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 	try {
 		const headers: any = {
 			"Content-Type": "application/json",
-			"User-Agent": botUserAgent,
+			"User-Agent": discordUserAgent,
 		};
 
 		if (token && token !== "null") {
@@ -4461,7 +4462,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 		});
 
@@ -4476,7 +4477,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
-					"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+					"User-Agent": discordUserAgent,
 				},
 			});
 
@@ -4576,7 +4577,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 			method: messageId ? "PATCH" : "POST",
 			headers: {
 				Authorization: `Bot ${token}`,
-				"User-Agent": "DiscordBot (https://discord.com, 1.0)",
+				"User-Agent": discordUserAgent,
 			},
 			body: form,
 		});
@@ -4749,13 +4750,115 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 			method: messageId ? "PATCH" : "POST",
 			headers: {
 				Authorization: `Bot ${token}`,
-				"User-Agent": "DiscordBot (https://discord.com, 1.0)",
+				"User-Agent": discordUserAgent,
 			},
 			body: form,
 		});
 
 		const resJson: any = await response.json();
 		return { data: resJson };
+	} catch (e: any) {
+		return { error: "Failed to upload to Discord: " + e.message };
+	}
+};
+
+export const DiscordTTS = async function DiscordTTS(token: string, channelId: string, q: string, file_name?: string, messageId?: string, clone?: boolean, lang?: string, quality?: string) {
+	if (!token) return { error: "Missing token" };
+	if (!channelId) return { error: "Missing channelId" };
+	if (!q) return { error: "Missing q" };
+
+	let messageData: any = null;
+
+	try {
+		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+			headers: {
+				Authorization: `Bot ${token}`,
+				"Content-Type": "application/json",
+			},
+		});
+
+		const channelData: any = await channelCheck.json();
+
+		if (channelCheck.status !== 200) {
+			return { error: channelData || "Channel verification failed" };
+		}
+
+		if (messageId) {
+			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+				headers: {
+					Authorization: `Bot ${token}`,
+					"Content-Type": "application/json",
+				},
+			});
+
+			messageData = await messageCheck.json();
+
+			if (messageCheck.status !== 200) {
+				return { error: messageData || "Message verification failed" };
+			}
+		}
+	} catch (e: any) {
+		return { error: e.message || "Failed to verify Discord resources" };
+	}
+
+	const audio = quality && quality !== "low" ? await googleCloudTTS(q, lang || "en") : await googleTTS(q, lang || "en");
+	if (!audio || audio.byteLength === 0) return { error: "Failed to synthesize speech" };
+
+	const MAX_DISCORD_SIZE = 10485760;
+	if (audio.byteLength > MAX_DISCORD_SIZE) {
+		return { error: "Synthesized audio exceeds Discord's 10MB limit" };
+	}
+
+	let filename = file_name && file_name.length > 0 ? file_name : "tts.mp3";
+	if (!filename.includes(".")) filename += ".mp3";
+
+	const form = new FormData();
+	const payload: any = { content: "" };
+
+	if (clone && messageId && messageData) {
+		payload.content = messageData.content || "";
+		if (messageData.embeds && messageData.embeds.length > 0) {
+			payload.embeds = messageData.embeds;
+		}
+		if (messageData.components && messageData.components.length > 0) {
+			payload.components = messageData.components;
+		}
+	} else if (messageId) {
+		payload.embeds = [];
+		payload.components = [];
+	}
+
+	payload.attachments = [
+		{
+			id: 0,
+			filename,
+		},
+	];
+	// @ts-ignore
+	form.append("files[0]", new Blob([audio]), filename);
+	form.append("payload_json", JSON.stringify(payload));
+
+	try {
+		const discordUrl = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
+
+		const response = await fetch(discordUrl, {
+			method: messageId ? "PATCH" : "POST",
+			headers: {
+				Authorization: `Bot ${token}`,
+				"User-Agent": discordUserAgent,
+			},
+			body: form,
+		});
+
+		const resJson: any = await response.json();
+		const ttsData = {
+			text: q,
+			lang: [lang || "en", findLangCode(lang || "en")],
+			quality: quality || "low",
+			size: audio.byteLength,
+			filename,
+		};
+		return { data: resJson, altData: ttsData };
 	} catch (e: any) {
 		return { error: "Failed to upload to Discord: " + e.message };
 	}
@@ -7510,11 +7613,10 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!userId) return { error: "Missing userId" };
 
-	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": botUserAgent,
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -7597,7 +7699,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 
 	const headers: any = {
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 	if (token) headers["Authorization"] = `Bot ${token}`;
 
@@ -7718,7 +7820,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -7907,7 +8009,7 @@ export const DiscordListMemberRole = async (token: string, guildId: string, role
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8020,7 +8122,7 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8129,7 +8231,7 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8244,7 +8346,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8431,11 +8533,10 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 
 	if (stickerCache.has(stickerId)) return { data: stickerCache.get(stickerId) };
 
-	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": botUserAgent,
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8645,7 +8746,7 @@ export const DiscordCreateSticker = async (token: string, guildId: string, paylo
 
 		const headers: any = {
 			Authorization: `Bot ${token}`,
-			"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+			"User-Agent": discordUserAgent,
 		};
 		if (payload.reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(payload.reason);
 
@@ -8694,7 +8795,7 @@ export const DiscordDeleteSticker = async (token: string, guildId: string, stick
 			method: "DELETE",
 			headers: {
 				Authorization: `Bot ${token}`,
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 		});
 
@@ -8818,11 +8919,10 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 
-	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": botUserAgent,
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8863,11 +8963,10 @@ export const DiscordInfoMessage = async (token: string, channelId: string, messa
 	if (!channelId) return { error: "Missing channelId" };
 	if (!messageId) return { error: "Missing messageId" };
 
-	const botUserAgent = "DiscordBot (https://github.com/discord-bot, 1.0.0)";
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": botUserAgent,
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -8906,7 +9005,7 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
 
 	const headers: any = {
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 	if (token) headers["Authorization"] = `Bot ${token}`;
 
@@ -8975,7 +9074,7 @@ export const DiscordListInvite = async (token: string, guildId: string, limit: n
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -9067,7 +9166,7 @@ export const DiscordInfoChannel = async (token: string, channelId: string, guild
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -9132,7 +9231,7 @@ export const DiscordInfoRole = async (token: string, roleId: string, guildId: st
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -9196,7 +9295,7 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -9768,7 +9867,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 			body: JSON.stringify({ status: content || "" }),
 		});
@@ -9800,7 +9899,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
-				"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+				"User-Agent": discordUserAgent,
 			},
 			body: JSON.stringify(data),
 		});
@@ -11342,7 +11441,7 @@ export const DiscordSetAutomod = async (token: string, guildId: string, ruleId: 
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 	const reason = params.reason;
 	if (reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(String(reason));
@@ -11458,7 +11557,7 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -11846,7 +11945,7 @@ export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleI
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {
@@ -11955,7 +12054,7 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 	const headers: any = {
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
-		"User-Agent": "DiscordBot (https://github.com/discord-bot, 1.0.0)",
+		"User-Agent": discordUserAgent,
 	};
 
 	try {

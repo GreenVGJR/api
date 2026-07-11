@@ -461,3 +461,36 @@ body {
 	-ms-overflow-style: none; /* IE and Edge */
 	scrollbar-width: none; /* Firefox */
 }
+
+/* Status text slide animation */
+@keyframes slideTextUp {
+	from {
+		transform: translateY(0);
+		opacity: 1;
+	}
+	to {
+		transform: translateY(-100%);
+		opacity: 0;
+	}
+}
+@keyframes slideTextDown {
+	from {
+		transform: translateY(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+#statusTextWrap {
+	transition: width 0.2s ease;
+}
+
+.status-slide-out {
+	animation: slideTextUp 0.2s ease-in forwards;
+}
+.status-slide-in {
+	animation: slideTextDown 0.2s ease-out forwards;
+}

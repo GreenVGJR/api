@@ -62,8 +62,12 @@ const initSPA = () => {
                         <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
                             <div id="responseHeader" class="flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
                                 <span class="text-xs text-gray-500 font-mono inline-flex items-center">
-                                    <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span> 
-                                    <span id="responseTitle" class="font-semibold text-gray-400">Idle</span>&nbsp;|&nbsp;<span id="uptimeDisplay" class="text-gray-500">00:00:00</span>
+                                    <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span>
+                                    <span id="statusTextWrap" class="relative inline-block overflow-hidden h-[1.2em] whitespace-nowrap">
+                                        <span id="responseTitle" class="font-semibold text-gray-400 absolute inset-0 flex items-center"></span>
+                                        <span id="responseTitleNext" class="font-semibold text-gray-400 absolute inset-0 flex items-center" style="display:none"></span>
+                                        <span id="statusSizer" class="invisible" aria-hidden="true"></span>
+                                    </span><span class="text-gray-600 mx-1.5">|</span><span id="uptimeDisplay" class="text-gray-500">00:00:00</span>
                                 </span>
                                 <div id="responseActions" class="flex items-center gap-3">
                                     <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
@@ -134,7 +138,7 @@ const DEFAULT_PHRASES = ["What you gonna try?", "What's on your mind?"];
 function getDefaultResponseHTML() {
   const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
   return `<div class="flex flex-col items-center justify-center">
-    <div class="text-white-500 text-s">${randomPhrase}</div>
+    <div class="text-white-500 text-xs">${randomPhrase}</div>
     <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
     <div class="flex items-center gap-2 mt-1 text-dark-500 text-xs flex-wrap justify-center">
       <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
@@ -172,11 +176,11 @@ let endpoints = {
 
 let currentCategory = "search";
 let currentEndpoint = { path: "/loading...", query: "", types: [] };
-let isLoading = false;
+let isLoading = true;
 let lastRawResponse = "";
 let isCoolingDown = false;
 
-const apiBaseUrl = window.API_BASE_URL || "https://api.vgjr.top";
+const apiBaseUrl = window.API_BASE_URL;
 const endpointCategories = Object.keys(endpoints);
 
 function flattenRoutes(obj) {
@@ -241,7 +245,47 @@ const categoryTabs = document.querySelectorAll(".category-tabs");
 const urlBar = document.getElementById("urlBar");
 const responseHeader = document.getElementById("responseHeader");
 const responseTitle = document.getElementById("responseTitle");
+const responseTitleNext = document.getElementById("responseTitleNext");
 const responseActions = document.getElementById("responseActions");
+
+let slideAnimTimeout = null;
+
+const STATUS_BASE_CLASS = "absolute inset-0 flex items-center";
+const statusTextWrap = document.getElementById("statusTextWrap");
+const statusSizer = document.getElementById("statusSizer");
+
+function syncStatusWidth() {
+  if (statusSizer && statusTextWrap) statusTextWrap.style.width = statusSizer.offsetWidth + "px";
+}
+syncStatusWidth();
+
+function slideStatusText(text, className) {
+  setTimeout(() => {
+    if (slideAnimTimeout) clearTimeout(slideAnimTimeout);
+    if (statusSizer) statusSizer.textContent = text;
+    syncStatusWidth();
+    if (!responseTitleNext) {
+      responseTitle.textContent = text;
+      responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
+      return;
+    }
+
+    responseTitleNext.textContent = text;
+    responseTitleNext.className = `${STATUS_BASE_CLASS} ${className}`;
+    responseTitleNext.style.display = "";
+    responseTitleNext.classList.add("status-slide-in");
+    responseTitle.classList.add("status-slide-out");
+
+    slideAnimTimeout = setTimeout(() => {
+      responseTitle.textContent = text;
+      responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
+      responseTitle.classList.remove("status-slide-out");
+      responseTitleNext.style.display = "none";
+      responseTitleNext.classList.remove("status-slide-in");
+    }, 200);
+  }, 0);
+}
+
 const sendRow = document.getElementById("sendRow");
 const paramsPanel = document.getElementById("paramsPanel");
 const paramsToggle = document.getElementById("paramsToggle");
@@ -406,7 +450,6 @@ function renderPlaygroundPage() {
   responseHeader.classList.remove("hidden");
   responseActions.classList.remove("hidden");
   sendRow.classList.remove("hidden");
-  responseTitle.textContent = "Idle";
   responseArea.classList.add("font-mono");
   responseArea.classList.remove("font-sans");
 
@@ -417,7 +460,7 @@ function renderPlaygroundPage() {
     setStatusDotColor("gray-500");
     statusText.textContent = "Idle";
     statusText.className = "text-gray-500";
-    responseTitle.textContent = statusText.textContent;
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
   }
 
   renderEndpoints();
@@ -486,7 +529,7 @@ window.addEventListener("resize", adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
   const statusDot = statusDotEl;
-  responseTitle.textContent = `${status} • ${duration}ms`;
+  slideStatusText(`${status} • ${duration}ms`, "font-semibold text-gray-400");
   if (ok) {
     setStatusDotColor("mint-400");
     statusText.textContent = "OK";
@@ -656,12 +699,12 @@ function updateConnectionUI() {
       setStatusDotColor("red-500");
       statusText.textContent = "Offline";
       statusText.className = "text-red-400";
-      responseTitle.textContent = statusText.textContent;
+      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
     }
     return false;
   }
 
-  if (!isLoading && !isCoolingDown) {
+  if (!isLoading && !isCoolingDown && statusText.textContent !== "Connecting") {
     setSendButtonLabel("Send");
     sendBtn.classList.remove("opacity-50", "cursor-not-allowed", "opacity-70");
 
@@ -669,7 +712,7 @@ function updateConnectionUI() {
       setStatusDotColor("gray-500");
       statusText.textContent = "Idle";
       statusText.className = "text-gray-500";
-      responseTitle.textContent = statusText.textContent;
+      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
     }
   }
   return true;
@@ -713,9 +756,7 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
   responseArea.innerHTML = `
         <div class="relative w-full h-full min-h-[180px] overflow-hidden rounded-lg">
             <pre id="verboseFetchLog" class="absolute inset-0 overflow-auto no-scrollbar whitespace-pre-wrap break-all p-3 sm:p-4 text-[10px] sm:text-xs leading-5 text-gray-600 blur-[0.2px] opacity-70 select-text"></pre>
-            <div id="verboseFetchOverlay" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10">
-                <span class="waiting-loading text-sm sm:text-base">Fetching...</span>
-            </div>
+            <div id="verboseFetchOverlay" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10"></div>
         </div>
     `;
 
@@ -751,9 +792,7 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
       const elapsed = Math.round(performance.now() - startedAt);
       lines.push(`* [${elapsed}ms] ${label}`);
       render();
-      if (overlayEl)
-        overlayEl.innerHTML =
-          '<span class="waiting-loading text-sm sm:text-base">Rendering response...</span>';
+      if (overlayEl) overlayEl.innerHTML = "";
     },
     fail(error) {
       const elapsed = Math.round(performance.now() - startedAt);
@@ -776,13 +815,11 @@ async function performRequest(targetUrl, retryCount = 0) {
     setSendButtonLabel("Loading...");
     sendBtn.classList.add("opacity-70");
     responseArea.classList.add("empty-state");
-    responseArea.innerHTML =
-      '<span class="text-gray-500 flex h-full items-center justify-center">Fetching...</span>';
 
     setStatusDotColor("yellow-400", true);
     statusText.textContent = "Fetching";
     statusText.className = "text-yellow-400";
-    responseTitle.textContent = statusText.textContent;
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
   }
 
   let resultData = null;
@@ -827,6 +864,10 @@ async function performRequest(targetUrl, retryCount = 0) {
     verboseFetch.line("Waiting for response headers...");
     const response = await fetch(fetchUrl, fetchOptions);
     verboseFetch.response(response);
+    setStatusDotColor("blue-400", true);
+    statusText.textContent = "Rendering";
+    statusText.className = "text-gray-400";
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
 
     let duration;
 
@@ -870,9 +911,6 @@ async function performRequest(targetUrl, retryCount = 0) {
         } catch (e) {}
       }
     }
-
-    statusText.textContent = "Fetching";
-    responseTitle.textContent = statusText.textContent;
 
     const contentType = response.headers.get("content-type") || "";
 
@@ -1010,8 +1048,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         try {
           const data = JSON.parse(decryptedText);
           if (data && data.c && data._challenge && typeof d === "function") {
-            responseArea.innerHTML =
-              '<div class="loading flex h-full flex-col items-center justify-center text-center"><span class="text-white">Solving challenges...</span><span class="mt-2 text-xs text-gray-400">This may take a while</span></div>';
+            responseArea.innerHTML = "";
             await new Promise((resolve) =>
               requestAnimationFrame(() => requestAnimationFrame(resolve)),
             );
@@ -1026,7 +1063,6 @@ async function performRequest(targetUrl, retryCount = 0) {
         solvedChallengeCode = null;
       }
 
-      updateStatusUI(response.ok, response.status, duration);
       let formatted = text;
       let isJson = false;
 
@@ -1049,13 +1085,13 @@ async function performRequest(targetUrl, retryCount = 0) {
         preElement.innerHTML = linkifyText(formatted);
       } else {
         const lines = formatted.split("\n");
-        const CHUNK_SIZE = 1;
+        const CHUNK_SIZE = 10;
         let chunkIndex = 0;
 
         const processChunk = () => {
           if (chunkIndex >= lines.length) return;
 
-          const deadline = performance.now() + 10;
+          const deadline = performance.now() + 100;
           const fragments = [];
 
           while (chunkIndex < lines.length && performance.now() < deadline) {
@@ -1077,6 +1113,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         };
 
         processChunk();
+        updateStatusUI(response.ok, response.status, duration);
       }
     }
   } catch (err) {
@@ -1086,7 +1123,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     setStatusDotColor("red-500");
     statusText.textContent = "Failed";
     statusText.className = "text-red-400";
-    responseTitle.textContent = statusText.textContent;
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
   } finally {
     if (retryCount === 0) {
       isLoading = false;
@@ -1634,37 +1671,60 @@ function setActiveCategoryTab() {
 
 async function refreshEndpointsFromJson() {
   try {
-    const res = await fetch("/?json", {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) return false;
+    const richPayload = window.API_ROUTES ? { routes: window.API_ROUTES } : null;
+    if (richPayload) {
+      const freshEndpoints = normalizeEndpointPayload(richPayload);
+      if (freshEndpoints) {
+        const previousPath = currentEndpoint?.path;
+        endpoints = freshEndpoints;
+        const categoryList = endpoints[currentCategory] || [];
+        currentEndpoint =
+          (previousPath && categoryList.find((ep) => ep.path === previousPath)) ||
+          categoryList[0] ||
+          null;
 
-    const payload = await res.json();
-    setUptimeFromJsonPayload(payload);
-    const freshEndpoints = normalizeEndpointPayload(payload);
-    if (!freshEndpoints) return false;
+        if (currentEndpoint) {
+          urlInput.value = buildEndpointUrl(currentEndpoint);
+          adjustHeight();
+        }
 
-    const previousPath = currentEndpoint?.path;
-    endpoints = freshEndpoints;
-    const categoryList = endpoints[currentCategory] || [];
-    currentEndpoint =
-      (previousPath && categoryList.find((ep) => ep.path === previousPath)) ||
-      categoryList[0] ||
-      null;
-
-    if (currentEndpoint) {
-      urlInput.value = buildEndpointUrl(currentEndpoint);
-      adjustHeight();
+        renderEndpoints();
+        renderParams();
+        if (currentEndpoint) {
+          syncUrlToParams();
+          syncParamsToUrl();
+        }
+      }
     }
 
-    renderEndpoints();
-    renderParams();
-    if (currentEndpoint) {
-      syncUrlToParams();
-      syncParamsToUrl();
+    setStatusDotColor("blue-400", true);
+    statusText.textContent = "Connecting";
+    statusText.className = "text-gray-400";
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+
+    let statsRes = null;
+    try {
+      statsRes = await fetch("/?json", { headers: { Accept: "application/json" } });
+      if (statsRes.ok) {
+        const statsPayload = await statsRes.json();
+        isLoading = false;
+        setUptimeFromJsonPayload(statsPayload);
+      }
+    } catch {}
+
+    if (statusText.textContent === "Connecting") {
+      setStatusDotColor("gray-500");
+      statusText.textContent = statsRes && !statsRes.ok ? `${statsRes.status} - Failed` : "Idle";
+      statusText.className = "text-gray-500";
+      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
     }
     return true;
   } catch {
+    setStatusDotColor("red-500");
+    statusText.textContent = "Failed";
+    statusText.className = "text-red-400";
+    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    sendBtn.classList.remove("opacity-50", "cursor-not-allowed");
     return false;
   }
 }
@@ -1674,17 +1734,6 @@ async function fetchInitialEndpoints() {
     endpoints[currentCategory] && endpoints[currentCategory].length > 0;
 
   selectInitialEndpointFromCurrentCategory();
-  setActiveCategoryTab();
-
-  if (hasInitialEndpoints) {
-    refreshEndpointsFromJson().then((updated) => {
-      if (updated) setActiveCategoryTab();
-    });
-    return;
-  }
-
-  const updated = await refreshEndpointsFromJson();
-  if (!updated) selectInitialEndpointFromCurrentCategory();
   setActiveCategoryTab();
 }
 
@@ -1816,6 +1865,11 @@ tabBtns.forEach((btn) => {
 });
 
 urlInput.addEventListener("keydown", (e) => {
+  if (statusText.textContent === "Connecting" || isLoading) {
+    e.preventDefault();
+    urlInput.blur();
+    return;
+  }
   if (e.key === "Enter" && !isLoading) {
     e.preventDefault();
     urlInput.blur();
@@ -2039,17 +2093,19 @@ copyResponseBtn.addEventListener("click", async () => {
 });
 
 clearResponseBtn.addEventListener("click", () => {
+  if (statusText.textContent === "Connecting" || lastRawResponse === "" || lastRawResponse === null) return;
   lastRawResponse = "";
   responseArea.classList.add("empty-state");
   responseArea.innerHTML = getDefaultResponseHTML();
   setStatusDotColor("gray-500");
   statusText.textContent = "Idle";
   statusText.className = "text-gray-500";
-  responseTitle.textContent = statusText.textContent;
+  slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
   updateConnectionUI();
 });
 
 sendBtn.addEventListener("click", () => {
+  if(isLoading) return;
   if (pageFromPath(window.location.pathname) !== "playground") return;
   if (!hasConnection()) {
     updateConnectionUI();
@@ -2255,8 +2311,12 @@ fetchInitialEndpoints().then(() => {
 
   // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
   if (document.fonts) {
-    document.fonts.ready.then(() => {
+    document.fonts.ready.then(async () => {
       adjustHeight();
+      syncStatusWidth();
+
+      const updated = await refreshEndpointsFromJson();
+      if (!updated) selectInitialEndpointFromCurrentCategory();
     });
   }
 });

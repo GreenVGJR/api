@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, setVoiceStatus, voiceStatusStore, getLavalinkNodeIds } from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, resolveVoiceChannel, formatTrack, hasActivePlayer, set247, get247, clear247, createMusicStream, checkVoicePermissions, setVoiceStatus, voiceStatusStore, getLavalinkNodeIds, ensureNodeConnected } from "../../functions/musicPlayer.js";
 import { commonHeaders } from "../../functions/request.js";
 import { radioStreamUrls } from "../../functions/radioProxy.js";
 import { getActiveFilters } from "./filters.js";
@@ -93,7 +93,7 @@ app.get("/radio", async (c) => {
 		const isNew = !hasActivePlayer(token);
 		await log(isNew ? "Creating new discord.js client..." : "Reusing existing discord.js client");
 
-		const { client, player: manager } = await getOrCreatePlayer(token, log);
+		const { client, player: manager } = await getOrCreatePlayer(token, log, true);
 		await log(isNew ? "Discord.js client ready" : "Client retrieved");
 
 		// 3. Resolve Voice Channel
@@ -156,11 +156,52 @@ app.get("/radio", async (c) => {
 
 		// Create new Player & Connect
 		await log("Creating Lavalink player for radio streaming...");
+		// Prefer the local (vgjr) node first, only falling back to remote. Explicitly
+		// pick + connect it so the manager doesn't silently auto-assign a different,
+		// possibly-unconnected node.
+		const preferredNodeIds = getLavalinkNodeIds(true);
+		let chosenNodeId: string | null = null;
+		// 1. Try to find an already connected node
+		for (const id of preferredNodeIds) {
+			const existingNode = manager.nodeManager.nodes.get(id);
+			if (existingNode?.connected) {
+				chosenNodeId = id;
+				break;
+			}
+		}
+		// 2. If none connected, try to connect one and verify stability
+		if (!chosenNodeId) {
+			for (const id of preferredNodeIds) {
+				const node = await ensureNodeConnected(manager, id, log);
+				if (node) {
+					await new Promise((r) => setTimeout(r, 500)); // Stability check
+					if (node.connected) {
+						chosenNodeId = id;
+						break;
+					} else {
+						if (log) await log(`Lavalink node "${id}" dropped immediately — trying next`);
+					}
+				}
+			}
+		}
+		if (!chosenNodeId) {
+			await log("No Lavalink node is currently reachable");
+			await s.write(
+				`],"data":${JSON.stringify({
+					status: false,
+					message: "No Lavalink node is currently reachable",
+					type: { primary: "error", alt: "critical" },
+				})}}`,
+			);
+			return;
+		}
+		await log(`Using Lavalink node "${chosenNodeId}"`);
 		const guildPlayer = await manager.createPlayer({
 			guildId,
 			voiceChannelId: channel.id,
 			selfDeaf: isDeaf,
 			selfMute: false,
+			node: chosenNodeId as any,
 		});
 
 		if (!guildPlayer.connected) {
@@ -178,19 +219,27 @@ app.get("/radio", async (c) => {
 		// 6. Search and load radio stream URL, trying each Lavalink node on failure
 		await log("Searching and loading radio stream via Lavalink...");
 		const requester = authorId ? await client.users.fetch(authorId as string).catch(() => ({ id: authorId, username: "Discord User" })) : client.user;
-		const nodeIds = getLavalinkNodeIds();
+		// Radio: prefer the local (vgjr) node first, falling back to remote nodes on failure.
+		const nodeIds = getLavalinkNodeIds(true);
 		let searchResult: any;
 		let lastError: string | null = null;
 
-		for (let i = 0; i < nodeIds.length; i++) {
+		const nodesToTry = new Set([guildPlayer.node?.id, ...nodeIds].filter(Boolean));
+
+		for (const nodeId of nodesToTry) {
 			const currentNodeId = guildPlayer.node?.id || "unknown";
 
-			if (i > 0) {
-				await log(`Search failed on "${currentNodeId}", trying next node "${nodeIds[i]}"...`);
+			if (nodeId !== currentNodeId) {
+				await log(`Search failed on "${currentNodeId}", trying next node "${nodeId}"...`);
+				const target = await ensureNodeConnected(manager, nodeId as string, log);
+				if (!target || !target.connected) {
+					await log(`Node "${nodeId}" is unavailable, skipping...`);
+					continue;
+				}
 				try {
-					await guildPlayer.moveNode(nodeIds[i]);
+					await guildPlayer.moveNode(nodeId as string);
 				} catch {
-					await log(`Failed to move player to node "${nodeIds[i]}"`);
+					await log(`Failed to move player to node "${nodeId}"`);
 					continue;
 				}
 			}
@@ -205,6 +254,10 @@ app.get("/radio", async (c) => {
 				} catch (err: any) {
 					lastError = err?.message || "unknown error";
 					await log(`Lavalink search failed on "${guildPlayer.node?.id || currentNodeId}": ${lastError}`);
+					const msg = String(lastError);
+					if (msg.includes("not connected") || msg.includes("Failed to parse JSON") || msg.includes("422")) {
+						break; // Try next node for both URLs
+					}
 					continue;
 				}
 
@@ -263,31 +316,22 @@ app.get("/radio", async (c) => {
 			return;
 		}
 
-		const formattedTrack = formatTrack(track, client, guildPlayer);
-		formattedTrack.id = domain;
-		formattedTrack.url = resolvedStreamUrl;
 		const activeFilters = getActiveFilters(guildPlayer);
+		const formattedTrack = formatTrack(track, client, guildPlayer, activeFilters, is247);
+		formattedTrack.data.id = domain;
+		formattedTrack.data.url = resolvedStreamUrl;
 
 		await s.write(
 			`],"data":${JSON.stringify({
 				status: true,
-				nodeId: guildPlayer.node?.id ?? null,
 				data: {
 					isNewPlayer: true,
-					client: guildPlayer.options || null,
-					track: formattedTrack,
+					...formattedTrack.data,
 					platform: "radio",
-					is247,
-					isPlaying: guildPlayer.playing,
-					isPaused: guildPlayer.paused,
-					filters: {
-						array: activeFilters.length > 0 ? activeFilters : [],
-						string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
-					},
 					queue: {
 						size: guildPlayer.queue.tracks.length,
 						limit_size: 3,
-						tracks: [formattedTrack],
+						tracks: [formattedTrack.data],
 						elapsedTime: {
 							label: "Live Stream",
 							value: "0",

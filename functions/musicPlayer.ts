@@ -1524,69 +1524,73 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 
 	try {
 		let currentAutoplayCount = player.queue.tracks.filter((t) => (t.requester as any)?.isAutoplay).length;
-		let attempts = 0;
-		const TARGET = 50;
+		const TARGET = 20;
+		const REFETCH_THRESHOLD = 10;
 
-		while (currentAutoplayCount < TARGET && attempts < 3) {
-			attempts++;
+		if (currentAutoplayCount < REFETCH_THRESHOLD) {
+			let attempts = 0;
 
-			const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
-			if (!track) break;
+			while (currentAutoplayCount < TARGET && attempts < 3) {
+				attempts++;
 
-			const previousTracks = player.queue.previous.map((t) => t.info.identifier);
-			const queueTracks = player.queue.tracks.map((t) => t.info.identifier);
+				const track = player.queue.tracks[player.queue.tracks.length - 1] || player.queue.current || baseTrack;
+				if (!track) break;
 
-			const source = track.info.sourceName;
-			let searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
+				const previousTracks = player.queue.previous.map((t) => t.info.identifier);
+				const queueTracks = player.queue.tracks.map((t) => t.info.identifier);
 
-			if (source === "spotify") {
-				searchStr = `sprec:${track.info.identifier}`;
-			} else if (source === "applemusic") {
-				searchStr = `amrec:${track.info.identifier}`;
-			} else if (source === "deezer") {
-				searchStr = `dzrec:${track.info.identifier}`;
-			} else if (source === "youtube" || source === "youtubemusic") {
-				searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
-			}
+				const source = track.info.sourceName;
+				let searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
 
-			if (!player.node?.connected) {
-				try {
-					await player.moveNode();
-				} catch {
-					break;
+				if (source === "spotify") {
+					searchStr = `sprec:${track.info.identifier}`;
+				} else if (source === "applemusic") {
+					searchStr = `amrec:${track.info.identifier}`;
+				} else if (source === "deezer") {
+					searchStr = `dzrec:${track.info.identifier}`;
+				} else if (source === "youtube" || source === "youtubemusic") {
+					searchStr = `ytmsearch:${track.info.author} ${track.info.title}`;
 				}
-			}
 
-			const res = await player.search({ query: searchStr }, (track.requester as any)?.isAutoplay ? undefined : track.requester);
-			if (!res.tracks?.length) break;
+				if (!player.node?.connected) {
+					try {
+						await player.moveNode();
+					} catch {
+						break;
+					}
+				}
 
-			const needed = TARGET - currentAutoplayCount;
-			const toAdd = res.tracks
-				.filter((t) => {
-					const id = t.info.identifier;
-					if (!id) return false;
-					const isDuplicate = previousTracks.includes(id) || queueTracks.includes(id);
-					const titleA = t.info.title.toLowerCase();
-					const titleB = track.info.title.toLowerCase();
-					const isSimilarTitle = titleA.includes(titleB) || titleB.includes(titleA);
-					return !isDuplicate && !isSimilarTitle;
-				})
-				.slice(0, needed);
+				const res = await player.search({ query: searchStr }, (track.requester as any)?.isAutoplay ? undefined : track.requester);
+				if (!res.tracks?.length) break;
 
-			if (toAdd.length === 0) break;
+				const needed = TARGET - currentAutoplayCount;
+				const toAdd = res.tracks
+					.filter((t) => {
+						const id = t.info.identifier;
+						if (!id) return false;
+						const isDuplicate = previousTracks.includes(id) || queueTracks.includes(id);
+						const titleA = t.info.title.toLowerCase();
+						const titleB = track.info.title.toLowerCase();
+						const isSimilarTitle = titleA.includes(titleB) || titleB.includes(titleA);
+						return !isDuplicate && !isSimilarTitle;
+					})
+					.slice(0, needed);
 
-			for (const t of toAdd) {
-				t.requester = {
-					...((track.requester as any) || clientRequesterForPlayer(player) || {}),
-					isAutoplay: true,
-				};
-				await player.queue.add(t);
-			}
+				if (toAdd.length === 0) break;
 
-			currentAutoplayCount = player.queue.tracks.filter((t) => (t.requester as any)?.isAutoplay).length;
-			if (!player.playing && !player.paused) {
-				if (!player.node?.connected) break;
-				await player.play();
+				for (const t of toAdd) {
+					t.requester = {
+						...((track.requester as any) || clientRequesterForPlayer(player) || {}),
+						isAutoplay: true,
+					};
+					await player.queue.add(t);
+				}
+
+				currentAutoplayCount = player.queue.tracks.filter((t) => (t.requester as any)?.isAutoplay).length;
+				if (!player.playing && !player.paused) {
+					if (!player.node?.connected) break;
+					await player.play();
+				}
 			}
 		}
 	} catch (err) {

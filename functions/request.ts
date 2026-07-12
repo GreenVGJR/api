@@ -2349,7 +2349,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 	const qCookies = objectbody.cookies || null;
 
-	const requestUuid = crypto.randomUUID().toUpperCase();
+	// const requestUuid = crypto.randomUUID().toUpperCase();
 	const inner = new Array(69).fill(null);
 	inner[0] = [que, 0, null, null, null, null, 0];
 	inner[1] = ["en-US"];
@@ -2366,7 +2366,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[30] = [4];
 	inner[41] = [1];
 	inner[53] = 0;
-	inner[59] = requestUuid;
+	inner[59] = null;
 	inner[61] = [];
 	inner[68] = 2;
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
@@ -2375,7 +2375,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	geminiReqId = (geminiReqId + 1) % 100000;
 	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
 	if (wiz) {
-		geminiQuery = `bl=${encodeURIComponent(wiz.bl)}&f.sid=${encodeURIComponent(wiz.fSid)}&${geminiQuery}`;
+		geminiQuery = `bl=${encodeURIComponent(wiz!.bl)}&f.sid=${encodeURIComponent(wiz!.fSid)}&${geminiQuery}`;
 	}
 	const req = await fetch(`https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?${geminiQuery}`, {
 		method: "POST",
@@ -2385,7 +2385,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			"Content-Type": "application/x-www-form-urlencoded",
 			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
 			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
-			"x-goog-ext-525005358-jspb": `["${requestUuid}",1]`,
+			"x-goog-ext-525005358-jspb": `["",1]`,
 			"x-goog-ext-73010989-jspb": "[0]",
 			"x-goog-ext-73010990-jspb": "[0,0,0]",
 			Referer: "https://gemini.google.com",
@@ -7676,6 +7676,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 		const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
 
 		const result: any = {
+			_warning: "Using this endpoint can put your bot rate-limits faster",
 			dmChannelId: dmData?.id || null,
 			...data,
 			...perms,
@@ -7807,7 +7808,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		const firstCount = (key: string) => countSources.find((source) => source[key] !== undefined && source[key] !== null)?.[key];
 		data.serverCount = firstCount("approximate_guild_count") ?? directory?.directory_entry?.guild_count ?? 0;
 
-		return { data };
+		return { _warning: "Using this endpoint with token can put your bot rate-limits faster", data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -7981,6 +7982,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 			}
 
 			return {
+				_warning: "Using this endpoint can put your bot rate-limits faster",
 				botsCount,
 				usersCount,
 				cachedMembersCount,
@@ -8211,6 +8213,7 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 			rolesData = rolesData.slice(0, limit);
 
 			return {
+				_warning: "Using this endpoint can put your bot rate-limits faster",
 				rolesCount: totalRoles,
 				cachedRolesCount,
 				limit: limit,
@@ -8330,6 +8333,7 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 			data = data.slice(0, sliceLimit);
 
 			return {
+				_warning: "Using this endpoint can put your bot rate-limits faster",
 				data,
 				totalChannel,
 			};
@@ -8516,7 +8520,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 
 		data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
 
-		return { data };
+		return { _warning: "Using this endpoint can put your bot rate-limits faster", data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -8952,7 +8956,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 			data = await Promise.all(data.map((m) => processDiscordMessage(m, token)));
 		}
 
-		return { limit, data };
+		return { _warning: "Using this endpoint can put your bot rate-limits faster", limit, data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -9329,7 +9333,7 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 			}
 		}
 
-		return { data };
+		return { _warning: "Using this endpoint can put your bot rate-limits faster", data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -12060,11 +12064,31 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 	try {
 		let data: any[] = [];
 		let lastMemberId: string | null = null;
+		let guildInfo: any = null;
 
-		while (true) {
+		const [memberStartRes, guildRes] = await Promise.all([fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, { headers }), fetch(`https://discord.com/api/v10/guilds/${guildId}`, { headers })]);
+
+		if (guildRes.status === 200) {
+			try {
+				guildInfo = await guildRes.json();
+			} catch {}
+		}
+
+		if (memberStartRes.status === 200) {
+			try {
+				const batch: any = await memberStartRes.json();
+				if (Array.isArray(batch) && batch.length > 0) {
+					data.push(...batch);
+					if (batch.length >= 1000) {
+						lastMemberId = batch[batch.length - 1].user?.id;
+					}
+				}
+			} catch {}
+		}
+
+		while (lastMemberId) {
 			const currentFetchLimit = 1000;
-			let urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}`;
-			if (lastMemberId) urlMembers += `&after=${lastMemberId}`;
+			const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}&after=${lastMemberId}`;
 
 			const memberRes = await fetch(urlMembers, { headers });
 			if (memberRes.status !== 200) break;
@@ -12089,7 +12113,6 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 
 		for (const member of data) {
 			const user = member.user || member;
-			const userId = user.id;
 			const clan = member.clan || user.clan || member.primary_guild || user.primary_guild;
 			const identityGuildId = clan?.identity_guild_id || (clan ? guildId : null);
 
@@ -12097,11 +12120,12 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 
 			if (!guildMap[identityGuildId]) {
 				guildMap[identityGuildId] = {
+					id: identityGuildId,
 					tag: null,
 					badge: null,
 					badge_url: null,
 					identify_enabled: null,
-					members: {},
+					members: [],
 				};
 			}
 
@@ -12112,37 +12136,61 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 				entry.badge_url = clan.badge ? `https://cdn.discordapp.com/clan-badges/${identityGuildId}/${clan.badge}.png` : null;
 				entry.identify_enabled = clan.identity_enabled ?? null;
 			}
-			entry.members[userId] = formatDiscordUser(user);
+			entry.members.push(formatDiscordUser(user));
 		}
 
-		let dataArray = Object.entries(guildMap).map(([id, val]) => ({ [id]: val }));
+		if (guildInfo && !guildMap[guildId]) {
+			if (guildInfo.tag) {
+				guildMap[guildId] = {
+					id: guildId,
+					tag: guildInfo.tag || null,
+					badge: guildInfo.badge || null,
+					badge_url: guildInfo.badge ? `https://cdn.discordapp.com/clan-badges/${guildId}/${guildInfo.badge}.png` : null,
+					identify_enabled: guildInfo.identity_enabled ?? null,
+					members: [],
+				};
+			} else {
+				guildMap[guildId] = { id: guildId };
+			}
+		} else if (guildInfo?.tag && guildMap[guildId]) {
+			guildMap[guildId].tag = guildMap[guildId].tag || guildInfo.tag;
+			guildMap[guildId].badge = guildMap[guildId].badge || guildInfo.badge;
+			guildMap[guildId].badge_url = guildMap[guildId].badge_url || (guildInfo.badge ? `https://cdn.discordapp.com/clan-badges/${guildId}/${guildInfo.badge}.png` : null);
+			guildMap[guildId].identify_enabled = guildMap[guildId].identify_enabled ?? guildInfo.identity_enabled ?? null;
+		}
+
+		let dataArray = Object.values(guildMap);
 
 		if (type) {
 			const typeSet = type.split(",").map((t: string) => t.trim());
 			for (const t of typeSet) {
-				if (t === "oldest_guild")
-					dataArray.sort((a: any, b: any) => {
-						const aId = Object.keys(a)[0];
-						const bId = Object.keys(b)[0];
-						return parseInt(aId) - parseInt(bId);
-					});
-				else if (t === "newest_guild")
-					dataArray.sort((a: any, b: any) => {
-						const aId = Object.keys(a)[0];
-						const bId = Object.keys(b)[0];
-						return parseInt(bId) - parseInt(aId);
-					});
+				if (t === "oldest_guild") dataArray.sort((a: any, b: any) => parseInt(a.id || "0") - parseInt(b.id || "0"));
+				else if (t === "newest_guild") dataArray.sort((a: any, b: any) => parseInt(b.id || "0") - parseInt(a.id || "0"));
 			}
 		}
 
 		if (self) {
-			const selfEntry = dataArray.find((e: any) => Object.keys(e)[0] === guildId);
-			dataArray = selfEntry ? [selfEntry] : [];
+			dataArray = dataArray.filter((e: any) => e.id === guildId);
 		}
 
 		const output = outputLimit ? dataArray.slice(0, outputLimit) : dataArray;
+		const outputMap: Record<string, any> = {};
+		for (const entry of output) {
+			const { id, ...rest } = entry;
+			outputMap[id] = rest;
+		}
 
-		return { data: output };
+		const tagsCount = Object.values(guildMap).filter((e: any) => e.tag).length;
+		const usersCount = Object.values(guildMap).reduce((acc: number, e: any) => acc + (e.members?.length || 0), 0);
+		const cachedMembersCount = data.length;
+
+		return {
+			_warning: "Using this endpoint can put your bot rate-limits faster",
+			tagsCount,
+			usersCount,
+			cachedMembersCount,
+			data: outputMap,
+		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}

@@ -252,8 +252,8 @@ app.get("/queue", async (c) => {
 				status: true,
 				data: {
 					...(queue.queue.current ? formatTrack(queue.queue.current, client, queue, activeFilters, is247).data : {}),
-					tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247).data) : null,
-					previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247).data) : null,
+					tracks: allTracks.length ? allTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247, true).data) : null,
+					previousTracks: allPreviousTracks.length ? allPreviousTracks.slice(offset, offset + limit).map((t) => formatTrack(t as any, client, queue, activeFilters, is247, true).data) : null,
 					total: allTracks.length,
 					limit,
 					offset,

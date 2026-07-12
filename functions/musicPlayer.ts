@@ -1340,7 +1340,7 @@ export function formatDuration(ms: number): string {
 	return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export function formatTrack(track: Track | any, client?: any, guildPlayer?: any, activeFilters?: string[], is247?: boolean) {
+export function formatTrack(track: Track | any, client?: any, guildPlayer?: any, activeFilters?: string[], is247?: boolean, onQueue?: boolean) {
 	const totalPlaylistTrack = (track as any)?.playlist?.tracks?.reduce((acc: number, track: any) => acc + (track?.duration ?? 0), 0);
 	const requester = track.requester || null;
 	const requestedId = requester ? String((requester as any).id ?? requester) : null;
@@ -1382,7 +1382,7 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 	const filters = activeFilters ?? [];
 	const totalQueueDuration = guildPlayer?.queue?.tracks?.reduce((acc: number, t: any) => acc + (t?.info?.duration ?? 0), 0) ?? 0;
 
-	return {
+	const result: { data: any } = {
 		data: {
 			nodeId: guildPlayer?.node?.id ?? null,
 			client: guildPlayer?.options ? { ...guildPlayer.options, node: guildPlayer.node?.id || guildPlayer.options.node } : null,
@@ -1435,6 +1435,13 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 			},
 		},
 	};
+
+	if (onQueue) {
+		const { is247: _a, playing: _b, paused: _c, volume: _d, loop: _e, filters: _f, queueSize: _g, queueElapsedTime: _h, progress: _i, ...rest } = result.data;
+		result.data = rest;
+	}
+
+	return result;
 }
 
 function applyTemplate(template: string, track: any): string {

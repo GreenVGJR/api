@@ -4,6 +4,7 @@ type RequestLogEntry = {
 	path: [string, number];
 	UA: string;
 	timestamp: string;
+	localTimestamp?: string;
 };
 
 const MAX_REQUEST_LOGS = 30;

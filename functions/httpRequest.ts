@@ -3,7 +3,7 @@ import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
 import zlib from "zlib";
 import { commonHeaders } from "./request.js";
-import { recordRequestLog } from "./logs.js";
+import { recordRequestLog } from "./telemetry.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);

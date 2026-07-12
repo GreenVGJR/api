@@ -10,7 +10,7 @@ import crypto from "crypto";
 import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
-import { getLastRequestedLogs } from "./functions/logs.js";
+import { getLastRequestedLogs } from "./functions/telemetry.js";
 import { rateLimit } from "./functions/httpRequest.js";
 import { commonHeaders } from "./functions/request.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
@@ -492,21 +492,35 @@ app.get("/logs", async (c: Context) => {
 	c.header("Cache-Control", "public, max-age=2, must-revalidate");
 	c.header("Content-Type", "text/plain");
 
-	return stream(c, async (s) => {
-		await s.write(""); // Initial flush
+		return stream(c, async (s) => {
+			await s.write(""); // Initial flush
 
-		await s.write(
-			JSON.stringify(
-				{
-					_message: "Refreshing every 3 seconds.",
-					limit: 30,
-					requested: getLastRequestedLogs(),
-				},
-				null,
-				1,
-			),
-		);
-	});
+			const timezone = c.req.header("cf-timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+			let resolvedTimezone = timezone;
+			try {
+				new Intl.DateTimeFormat("en-US", { timeZone: resolvedTimezone }).format(new Date());
+			} catch {
+				resolvedTimezone = "UTC";
+			}
+
+			const requested = getLastRequestedLogs().map((entry) => ({
+				localTimestamp: new Date(entry.timestamp).toLocaleString("en-US", { timeZone: resolvedTimezone }),
+				...entry,
+			}));
+
+			await s.write(
+				JSON.stringify(
+					{
+						_message: "Refreshing every 3 seconds.",
+						limit: 30,
+						timezone: resolvedTimezone,
+						requested,
+					},
+					null,
+					1,
+				),
+			);
+		});
 });
 
 function setPlaygroundAssetCache(c: Context) {

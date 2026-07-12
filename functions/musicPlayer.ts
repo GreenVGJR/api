@@ -5,7 +5,7 @@ import { stream } from "hono/streaming";
 import zlib from "zlib";
 import config from "../config.json" with { type: "json" };
 import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from "./musicChallenges.ts";
-import { recordRequestLog } from "./logs.js";
+import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
 
 // import { Number_random } from './request.ts';

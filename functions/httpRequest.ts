@@ -125,16 +125,14 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	c.header("Content-Type", "application/json");
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	const useGzip = acceptEncoding.includes("gzip");
-	const onPlayground = c.req.header("referer")?.endsWith("/playground") || false;
-	if (useGzip && !onPlayground) c.header("Content-Encoding", "gzip");
+	if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];
 	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
 		cacheDirectives.push("max-age=0");
 	} else {
-		cacheDirectives.push("max-age=5");
+		cacheDirectives.push("max-age=8");
 	}
 	cacheDirectives.push("must-revalidate");
-	if (onPlayground) cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
 
 	return logResponse(

@@ -756,12 +756,10 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
   responseArea.innerHTML = `
         <div class="relative w-full h-full min-h-[180px] overflow-hidden rounded-lg">
             <pre id="verboseFetchLog" class="absolute inset-0 overflow-auto no-scrollbar whitespace-pre-wrap break-all p-3 sm:p-4 text-[10px] sm:text-xs leading-5 text-gray-600 blur-[0.2px] opacity-70 select-text"></pre>
-            <div id="verboseFetchOverlay" class="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10"></div>
         </div>
     `;
 
   const logEl = document.getElementById("verboseFetchLog");
-  const overlayEl = document.getElementById("verboseFetchOverlay");
 
   const render = () => {
     if (!logEl) return;
@@ -792,7 +790,6 @@ function createVerboseFetchView(targetUrl, fetchOptions) {
       const elapsed = Math.round(performance.now() - startedAt);
       lines.push(`* [${elapsed}ms] ${label}`);
       render();
-      if (overlayEl) overlayEl.innerHTML = "";
     },
     fail(error) {
       const elapsed = Math.round(performance.now() - startedAt);
@@ -830,23 +827,6 @@ async function performRequest(targetUrl, retryCount = 0) {
     const headers = {
       Accept: "application/json",
     };
-    headers["x-tel-data"] = btoa(
-      JSON.stringify([
-        [
-          String(screen.height),
-          String(screen.width),
-          String(window.innerHeight),
-          String(window.innerWidth),
-          String(lastCursorX ?? ""),
-          String(lastCursorY ?? ""),
-        ],
-        solvedChallengeCode !== null,
-        window.location.pathname,
-      ]),
-    )
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
     if (solvedChallengeCode && parseUrl.pathname.startsWith("/music/")) {
       headers["x-challenge-codes"] = solvedChallengeCode;
       headers["x-challenge"] = formatChallengeHash(md5(solvedChallengeCode));
@@ -980,9 +960,12 @@ async function performRequest(targetUrl, retryCount = 0) {
       const bodyReader = response.body.getReader();
       const { value: firstChunk, done: firstDone } = await bodyReader.read();
 
-      const needsDecompress = !firstDone && firstChunk && firstChunk[0] === 0x78;
+      const isGzip = !firstDone && firstChunk && firstChunk[0] === 0x1f && firstChunk[1] === 0x8b;
+      const isDeflate = !firstDone && firstChunk && firstChunk[0] === 0x78;
+      const decompressFormat = isGzip ? "gzip" : isDeflate ? "deflate" : null;
+      const needsDecompress = !!decompressFormat;
       if (needsDecompress) {
-        verboseFetch.line("Decompressing deflate body...");
+        verboseFetch.line(`Decompressing ${decompressFormat} body...`);
       }
 
       // Rebuild a stream starting with the already-peeked first chunk,
@@ -1000,7 +983,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       });
 
       const finalStream = needsDecompress
-        ? rebuiltStream.pipeThrough(new DecompressionStream("deflate"))
+        ? rebuiltStream.pipeThrough(new DecompressionStream(decompressFormat))
         : rebuiltStream;
 
       const streamReader = finalStream.getReader();
@@ -1083,37 +1066,65 @@ async function performRequest(targetUrl, retryCount = 0) {
 
       if (!isJson) {
         preElement.innerHTML = linkifyText(formatted);
+        updateStatusUI(response.ok, response.status, duration);
       } else {
         const lines = formatted.split("\n");
-        const CHUNK_SIZE = 10;
-        let chunkIndex = 0;
 
-        const processChunk = () => {
-          if (chunkIndex >= lines.length) return;
+        if (formatted.length > 5000) {
+          preElement.textContent = formatted;
 
-          const deadline = performance.now() + 100;
-          const fragments = [];
+          const CHUNK_SIZE = 100;
+          let chunkIndex = 0;
+          let colorfulHTML = "";
 
-          while (chunkIndex < lines.length && performance.now() < deadline) {
+          const buildColorfulChunk = () => {
             const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
-            const chunkLines = lines.slice(chunkIndex, end);
-            const chunkString = chunkLines.join("\n");
-            const highlighted = syntaxHighlight(chunkString);
-            fragments.push(highlighted + (end < lines.length ? "\n" : ""));
+            const chunkString = lines.slice(chunkIndex, end).join("\n");
+            colorfulHTML += syntaxHighlight(chunkString) + (end < lines.length ? "\n" : "");
             chunkIndex = end;
-          }
 
-          if (fragments.length > 0) {
-            preElement.insertAdjacentHTML("beforeend", fragments.join(""));
-          }
+            if (chunkIndex < lines.length) {
+              requestAnimationFrame(buildColorfulChunk);
+            } else {
+              const scrollTop = preElement.scrollTop;
+              preElement.innerHTML = colorfulHTML;
+              preElement.scrollTop = scrollTop;
+              updateStatusUI(response.ok, response.status, duration);
+            }
+          };
 
-          if (chunkIndex < lines.length) {
-            requestAnimationFrame(processChunk);
-          }
-        };
+          requestAnimationFrame(buildColorfulChunk);
+        } else {
+          const CHUNK_SIZE = 100;
+          let chunkIndex = 0;
 
-        processChunk();
-        updateStatusUI(response.ok, response.status, duration);
+          const processChunk = () => {
+            if (chunkIndex >= lines.length) return;
+
+            const deadline = performance.now() + 100;
+            const fragments = [];
+
+            while (chunkIndex < lines.length && performance.now() < deadline) {
+              const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
+              const chunkLines = lines.slice(chunkIndex, end);
+              const chunkString = chunkLines.join("\n");
+              const highlighted = syntaxHighlight(chunkString);
+              fragments.push(highlighted + (end < lines.length ? "\n" : ""));
+              chunkIndex = end;
+            }
+
+            if (fragments.length > 0) {
+              preElement.insertAdjacentHTML("beforeend", fragments.join(""));
+            }
+
+            if (chunkIndex < lines.length) {
+              requestAnimationFrame(processChunk);
+            }
+          };
+
+          processChunk();
+          updateStatusUI(response.ok, response.status, duration);
+        }
       }
     }
   } catch (err) {
@@ -2244,13 +2255,6 @@ function syntaxHighlight(json) {
   }
   return result;
 }
-
-let lastCursorX = null;
-let lastCursorY = null;
-document.addEventListener("mousemove", (e) => {
-  lastCursorX = e.clientX;
-  lastCursorY = e.clientY;
-});
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {

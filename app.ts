@@ -492,35 +492,35 @@ app.get("/logs", async (c: Context) => {
 	c.header("Cache-Control", "public, max-age=2, must-revalidate");
 	c.header("Content-Type", "text/plain");
 
-		return stream(c, async (s) => {
-			await s.write(""); // Initial flush
+	return stream(c, async (s) => {
+		await s.write(""); // Initial flush
 
-			const timezone = c.req.header("cf-timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-			let resolvedTimezone = timezone;
-			try {
-				new Intl.DateTimeFormat("en-US", { timeZone: resolvedTimezone }).format(new Date());
-			} catch {
-				resolvedTimezone = "UTC";
-			}
+		const timezone = c.req.header("cf-timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+		let resolvedTimezone = timezone;
+		try {
+			new Intl.DateTimeFormat("en-US", { timeZone: resolvedTimezone }).format(new Date());
+		} catch {
+			resolvedTimezone = "UTC";
+		}
 
-			const requested = getLastRequestedLogs().map((entry) => ({
-				localTimestamp: new Date(entry.timestamp).toLocaleString("en-US", { timeZone: resolvedTimezone }),
-				...entry,
-			}));
+		const requested = getLastRequestedLogs().map((entry) => ({
+			localTimestamp: new Date(entry.timestamp).toLocaleString("en-US", { timeZone: resolvedTimezone }),
+			...entry,
+		}));
 
-			await s.write(
-				JSON.stringify(
-					{
-						_message: "Refreshing every 3 seconds.",
-						limit: 30,
-						timezone: resolvedTimezone,
-						requested,
-					},
-					null,
-					1,
-				),
-			);
-		});
+		await s.write(
+			JSON.stringify(
+				{
+					_message: "Refreshing every 3 seconds.",
+					limit: 30,
+					timezone: resolvedTimezone,
+					requested,
+				},
+				null,
+				1,
+			),
+		);
+	});
 });
 
 function setPlaygroundAssetCache(c: Context) {

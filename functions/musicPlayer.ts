@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, Options, VoiceChannel } from "discord.js";
+import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, VoiceChannel } from "discord.js";
 import { LavalinkManager, Player as LavalinkPlayer, Track } from "lavalink-client";
 import { stream } from "hono/streaming";
 
@@ -773,25 +773,6 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			const client: Client = new Client({
 				intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 				presence: { status: "invisible" },
-				// Speed up loading by disabling caches we don't use
-				makeCache: Options.cacheWithLimits({
-					...Options.DefaultMakeCacheSettings,
-					MessageManager: 0,
-					ThreadManager: 0,
-					PresenceManager: 0,
-					ReactionManager: 0,
-					GuildEmojiManager: 0,
-					GuildStickerManager: 0,
-					GuildScheduledEventManager: 0,
-					ApplicationCommandManager: 0,
-					BaseGuildEmojiManager: 0,
-					GuildInviteManager: 0,
-					// Keep a tiny member cache for the bot itself
-					GuildMemberManager: {
-						maxSize: 50,
-						keepOverLimit: (member: any): boolean => member.id === member.client.user?.id,
-					},
-				}),
 			});
 
 			// Placeholder until the client is ready (id filled in on clientReady)
@@ -894,6 +875,54 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 					}
 				} finally {
 					reconnecting247.delete(guildId);
+				}
+			};
+
+			// Re-establish voice connections + resume playback for all players after a
+			// gateway shard resumes. The Lavalink manager/node stays intact across a
+			// Discord disconnect, but the voice server state is lost and must be re-sent.
+			const reconnectAllVoiceAfterShardResume = async () => {
+				if (!players.has(token)) return;
+				// Give the gateway a moment to re-sync guild/voice caches before reconnecting
+				await new Promise((r) => setTimeout(r, 1500));
+				if (!players.has(token) || client.ws.status !== 0) {
+					console.log(`Shard resume voice reconnect aborted — client not ready (token: ...${token.slice(-6)})`);
+					return;
+				}
+				for (const p of manager.players.values()) {
+					const guildId = p.guildId;
+					const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${guildId}`);
+					if (!voiceChannelId) continue;
+
+					if (get247(token, guildId)) {
+						reconnect247(guildId, voiceChannelId, "shardResume");
+						continue;
+					}
+
+					if (!p.connected) {
+						try {
+							p.voiceChannelId = voiceChannelId;
+							await p.connect();
+							// Wait for voice state updates to reach the node before playing
+							await new Promise((r) => setTimeout(r, 2500));
+							if (p.queue.current && p.node?.connected) {
+								const position = safeResumePosition(p);
+								console.log(`Resuming playback after shard resume for guild ${guildId}${position ? ` at ${position}ms` : ""}`);
+								const playPromise = position === undefined ? p.play() : p.play({ position });
+								playPromise.catch((err: any) => {
+									const msg = musicErrorMessage(err);
+									if (!isKnownTransientMusicError(err) && !msg.includes("PlayerOption#position")) {
+										console.error(`Failed to resume after shard resume for guild ${guildId}: ${msg}`);
+									}
+								});
+							}
+						} catch (err: any) {
+							const msg = musicErrorMessage(err);
+							if (!isKnownTransientMusicError(err)) {
+								console.error(`Failed to re-establish voice after shard resume for guild ${guildId}: ${msg}`);
+							}
+						}
+					}
 				}
 			};
 
@@ -1113,10 +1142,15 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				}
 			});
 
-			client.on("shardDisconnect", () => {
-				console.log(`Client shard disconnected, destroying player (token: ...${token.slice(-6)})`);
-				destroyPlayer(token).catch(() => {
-					/* already cleaning up */
+			client.on("shardDisconnect", (closeEvent: any, id: number) => {
+				console.log(`Client shard ${id} disconnected — keeping player alive, waiting for auto-reconnect (token: ...${token.slice(-6)})`);
+				cancelAutoDestroy(token);
+			});
+
+			client.on("shardResume", (id: number) => {
+				console.log(`Client shard ${id} resumed — re-establishing voice connections (token: ...${token.slice(-6)})`);
+				reconnectAllVoiceAfterShardResume().catch((err: any) => {
+					console.error(`Failed to re-establish voice after shard resume (token: ...${token.slice(-6)}):`, musicErrorMessage(err));
 				});
 			});
 

@@ -121,12 +121,21 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
 	const requrl = new URL(c.req.url);
 
-	c.header("X-Enc-Route", "v4");
+	c.header("X-Enc-Route", "v5");
 	c.header("Content-Type", "application/json");
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	const useGzip = acceptEncoding.includes("gzip");
-	if (useGzip) c.header("Content-Encoding", "gzip");
-	c.header("Cache-Control", requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/") ? "public, max-age=0, must-revalidate" : "public, max-age=5, must-revalidate");
+	const onPlayground = c.req.header("referer")?.endsWith("/playground") || false;
+	if (useGzip && !onPlayground) c.header("Content-Encoding", "gzip");
+	const cacheDirectives = ["public"];
+	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
+		cacheDirectives.push("max-age=0");
+	} else {
+		cacheDirectives.push("max-age=5");
+	}
+	cacheDirectives.push("must-revalidate");
+	if (onPlayground) cacheDirectives.push("no-transform");
+	c.header("Cache-Control", cacheDirectives.join(", "));
 
 	return logResponse(
 		c,

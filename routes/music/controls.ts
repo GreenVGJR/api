@@ -943,8 +943,6 @@ app.get("/247", async (c) => {
 	});
 });
 
-export default app;
-
 app.get("/where", async (c) => {
 	return await createMusicStream(c, async (log, s) => {
 		const token = c.req.query("token");
@@ -1068,3 +1066,5 @@ app.get("/where", async (c) => {
 		);
 	});
 });
+
+export default app;

@@ -219,12 +219,15 @@ app.get("/radio", async (c) => {
 		// 6. Search and load radio stream URL, trying each Lavalink node on failure
 		await log("Searching and loading radio stream via Lavalink...");
 		const requester = authorId ? await client.users.fetch(authorId as string).catch(() => ({ id: authorId, username: "Discord User" })) : client.user;
-		// Radio: prefer the local (vgjr) node first, falling back to remote nodes on failure.
+		// Radio: strictly prefer the local (vgjr) node first, falling back to remote
+		// nodes only if the local node fails. Note we do NOT prepend guildPlayer.node
+		// (the node it was created on) ahead of the local node — after a track was
+		// just played, that could be a remote node and would otherwise be tried first.
 		const nodeIds = getLavalinkNodeIds(true);
 		let searchResult: any;
 		let lastError: string | null = null;
 
-		const nodesToTry = new Set([guildPlayer.node?.id, ...nodeIds].filter(Boolean));
+		const nodesToTry = new Set([...nodeIds, guildPlayer.node?.id].filter(Boolean));
 
 		for (const nodeId of nodesToTry) {
 			const currentNodeId = guildPlayer.node?.id || "unknown";

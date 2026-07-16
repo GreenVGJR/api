@@ -87,7 +87,7 @@ const API_ROUTES = {
 			["/tools/discord/infoApp?token=&botId=", "string", "number"],
 			["/tools/discord/infoAutomod?token=&guildId=&ruleId=", "string", "number", "number"],
 			["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "json", "json", "enum_multi:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum_multi:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
-			["/tools/discord/deleteAutomod?token=&guildId=&ruleId=", "string", "number", "number"],
+			["/tools/discord/deleteAutomod?token=&guildId=&ruleId=&reason=", "string", "number", "number", "string"],
 		],
 		member: [
 			["/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "string", "url", "url", "string", "string"],

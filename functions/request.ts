@@ -11941,7 +11941,7 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 	}
 };
 
-export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleId: string) => {
+export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleId: string, reasonAudit?: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
 	if (!ruleId) return { error: "Missing ruleId" };
@@ -11950,6 +11950,7 @@ export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleI
 		Authorization: `Bot ${token}`,
 		"Content-Type": "application/json",
 		"User-Agent": discordUserAgent,
+		...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
 	};
 
 	try {

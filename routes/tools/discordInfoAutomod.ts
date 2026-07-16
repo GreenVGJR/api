@@ -36,13 +36,14 @@ app.get("/discord/deleteAutomod", async (c) => {
 	const token = getToken(c);
 	const guildId = parseSnowflake(c.req.query("guildId"));
 	const ruleId = parseSnowflake(c.req.query("ruleId"));
+	const reason = c.req.query("reason");
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
 	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!ruleId) return c.json({ error: "Missing valid parameter: ruleId" }, 202);
 
 	c.header("X-Route", "discord.com");
-	return await dispatch(c, () => DiscordDeleteAutomod(token, guildId, ruleId));
+	return await dispatch(c, () => DiscordDeleteAutomod(token, guildId, ruleId, reason || undefined));
 });
 
 export default app;

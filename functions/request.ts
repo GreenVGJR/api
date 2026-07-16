@@ -2303,6 +2303,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[68] = 2;
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
+	return { error: "Google blocked the access for unknown time" };
+
 	const wiz = await getGeminiWiz();
 	geminiReqId = (geminiReqId + 1) % 100000;
 	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
@@ -2444,86 +2446,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	};
 
 	return responseBody;
-};
-
-export const GeminiApi = async function GeminiApi(que: string, convo: any) {
-	if (!que) return null;
-
-	const apiKey = process.env.GOOG_GEMINI;
-	if (!apiKey) {
-		return { error: "Missing Google AI Studio API key" };
-	}
-
-	let messages: any[] = [];
-
-	if (convo) {
-		try {
-			const parsed = JSON.parse(decryptConvo(convo));
-			if (Array.isArray(parsed)) messages = parsed;
-		} catch {
-			return { error: "JSON parsing error" };
-		}
-	}
-
-	messages.push({ role: "user", content: que });
-
-	const model = "gemini-3.1-flash-lite";
-
-	try {
-		const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				contents: messages.map((m) => ({
-					role: m.role === "assistant" ? "model" : "user",
-					parts: [{ text: m.content }],
-				})),
-				generationConfig: {
-					temperature: 1,
-					topP: 0.95,
-					topK: 40,
-					maxOutputTokens: 32768,
-				},
-			}),
-		});
-
-		if (res.status === 400) {
-			return { error: "Bad Request / Failed precondition" };
-		}
-		if (res.status === 403) {
-			return { error: "API key invalid or blocked" };
-		}
-		if (res.status === 429) {
-			return { error: "Rate-limited" };
-		}
-		if (!res.ok) {
-			return { error: "Service unavailable" };
-		}
-
-		const data: any = await res.json();
-		const response = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || null;
-
-		if (response) {
-			messages.push({ role: "assistant", content: response });
-		}
-
-		if (messages.length > 20) {
-			messages = messages.slice(-20);
-		}
-
-		return {
-			response: response || null,
-			data: {
-				usageMetadata: data?.usageMetadata || null,
-				conversation: encryptConvo(JSON.stringify(messages)),
-				model,
-			},
-		};
-	} catch {
-		return null;
-	}
 };
 
 const findLangCode = (input?: string): string | null => {

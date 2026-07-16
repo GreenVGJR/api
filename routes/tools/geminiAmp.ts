@@ -4,7 +4,7 @@ const app = new Hono();
 import { Gemini } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
-app.get("/chat/gemini/web", async (c) => {
+app.get("/chat/gemini", async (c) => {
 	const query = c.req.query("prompt");
 	if (query === undefined) {
 		return c.json({ error: "Missing parameter required" }, 202);

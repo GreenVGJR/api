@@ -50,7 +50,6 @@ const API_ROUTES = {
 			chat: [
 				["/tools/chat/gemma?prompt=", "string"],
 				["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
-				["/tools/chat/gemini/web?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
 			],
 			image_generation: [

@@ -103,6 +103,7 @@ const API_ROUTES = {
 		role: [
 			["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:all,oldest,newest", "string"],
 			["/tools/discord/infoRole?token=&roleId=&guildId=", "string", "number", "number"],
+			["/tools/discord/modifyRole?token=&guildId=&roleId=&reason=&name=&color=&permissions=&position=&hoist=&mentionable=&unicodeEmoji=&roleIcon=", "string", "number", "number", "string", "string", "number", "number", "boolean", "boolean", "string", "url"],
 		],
 		invite: [
 			["/tools/discord/infoInvite?q=&token=&guildId=", "string", "string", "number"],
@@ -680,7 +681,7 @@ app.get("/", (c: Context) =>
 
 app.get("/playground/loadRich.js", (c: Context) => {
 	c.header("Content-Type", "application/javascript");
-	setPlaygroundAssetCache(c);
+	c.header("Cache-Control", "public, no-store, max-age=1, must-revalidate");
 	return c.body(`window.API_ROUTES = ${JSON.stringify(API_ROUTES)};`);
 });
 

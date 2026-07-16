@@ -9223,6 +9223,75 @@ export const DiscordInfoRole = async (token: string, roleId: string, guildId: st
 	}
 };
 
+export const DiscordModifyRole = async (token: string, roleId: string, guildId: string, payload: any, reasonAudit?: string) => {
+	if (!token || token === "null") return { error: "Missing token" };
+	if (!roleId) return { error: "Missing roleId" };
+	if (!guildId) return { error: "Missing guildId" };
+
+	const headers: any = {
+		Authorization: `Bot ${token}`,
+		"Content-Type": "application/json",
+		"User-Agent": discordUserAgent,
+		...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
+	};
+
+	const url = `https://discord.com/api/v10/guilds/${guildId}/roles/${roleId}`;
+
+	try {
+		const getReq = await fetch(url, { method: "GET", headers });
+
+		let currentInfo: any = null;
+		try {
+			currentInfo = await getReq.json();
+		} catch {}
+
+		if (getReq.status !== 200) {
+			return {
+				data: [null, null],
+				error: currentInfo || { status: getReq.status, statusText: getReq.statusText },
+			};
+		}
+
+		if (Object.keys(payload).length === 0) {
+			return { data: [currentInfo, null] };
+		}
+
+		const allSame = Object.keys(payload).every((key) => {
+			const currentVal = currentInfo[key] ?? null;
+			const payloadVal = payload[key] ?? null;
+			return currentVal === payloadVal;
+		});
+
+		if (allSame) {
+			return { data: [false, null, 204] };
+		}
+
+		const response = await fetch(url, {
+			method: "PATCH",
+			headers,
+			body: JSON.stringify(payload),
+		});
+
+		let patchResponse: any = null;
+		try {
+			patchResponse = await response.json();
+		} catch {}
+
+		if (response.status < 200 || response.status >= 300) {
+			return {
+				data: [currentInfo, null],
+				error: patchResponse || { status: response.status },
+			};
+		}
+
+		return {
+			data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
+		};
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
+
 export const DiscordListWebhooks = async (token: string, guildId: string, type: string = "all") => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };

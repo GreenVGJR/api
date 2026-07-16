@@ -31,7 +31,6 @@ import md5 from "./md5.js";
 import discordListMemberRole from "./discordListMemberRole.js";
 import discordInfoApp from "./discordInfoApp.js";
 import gemma from "./gemma.js";
-import ocr from "./ocr.js";
 import discordInfoSticker from "./discordInfoSticker.js";
 import discordListMemberTags from "./discordListMemberTags.js";
 import country from "./country.js";
@@ -42,4 +41,4 @@ import cloudTts from "./cloudTts.js";
 import tts from "./tts.js";
 import geminiAiStudio from "./geminiAiStudio.js";
 
-export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, ocr, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, geminiAiStudio] as any[];
+export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, geminiAiStudio] as any[];

@@ -14,9 +14,6 @@ import { parseHTML } from "linkedom";
 import { decodeHTML } from "entities";
 import crypto from "crypto";
 import { Buffer } from "buffer";
-import { PSM } from "tesseract.js";
-import { getOCRWorker } from "./ocrWorker.js";
-import sharp from "sharp";
 import emojibaseData from "emojibase-data/en/data.json" with { type: "json" };
 import emojibaseGroups from "emojibase-data/meta/groups.json" with { type: "json" };
 
@@ -954,71 +951,6 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 		const finalTask2 = mappedTasks2.filter(Boolean).flat();
 
 		return { searchParams: queryId, data: alk?.concat(finalTask2) };
-	} catch (e) {
-		console.error(e);
-		return null;
-	}
-};
-
-// Running this will create 'eng.traineddata' file
-export const ImageOCR = async function ImageOCR(imageUrl: string) {
-	if (!imageUrl || !imageUrl.startsWith("http")) return { error: "Must be image" };
-
-	try {
-		new URL(imageUrl);
-	} catch {
-		return { error: "Must be image" };
-	}
-
-	try {
-		const res = await fetch(imageUrl, { headers: { ...commonHeaders } });
-		if (!res.ok) return { error: "Can't download the image" };
-
-		const contentType = res.headers.get("content-type");
-		if (!contentType?.startsWith("image/")) return { error: "Must be image" };
-
-		const arrayBuffer = await res.arrayBuffer();
-		let buffer = Buffer.from(arrayBuffer);
-
-		const metadata = await sharp(buffer).metadata();
-		const width = metadata.width || 0;
-		const height = metadata.height || 0;
-
-		// large image path — remove grayscale/normalise, just sharpen
-		if (width < 1000) {
-			const scale = Math.ceil(1000 / Math.max(width, 1));
-			buffer = Buffer.from(
-				await sharp(buffer)
-					.resize(width * scale, height * scale, { kernel: "lanczos3" })
-					.withMetadata({ density: 300 })
-					.toBuffer(),
-			);
-		} else {
-			buffer = Buffer.from(await sharp(buffer).withMetadata({ density: 300 }).sharpen().toBuffer());
-		}
-
-		const worker = await getOCRWorker();
-
-		// try AUTO first, fall back to SPARSE_TEXT if empty
-		await worker.setParameters({
-			tessedit_pageseg_mode: PSM.AUTO,
-		});
-		let { data } = await worker.recognize(buffer);
-		let text = data.text;
-
-		if (text.length < 5) {
-			await worker.setParameters({
-				tessedit_pageseg_mode: PSM.SPARSE_TEXT,
-			});
-			({ data } = await worker.recognize(buffer));
-			text = data.text;
-		}
-
-		return {
-			_message: "Experimental endpoint",
-			data: { ...data, text },
-			altData: metadata,
-		};
 	} catch (e) {
 		console.error(e);
 		return null;

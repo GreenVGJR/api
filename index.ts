@@ -1,6 +1,5 @@
 import app from "./app.js";
 import { getBotGuardChallenge, getYoutubei, getPoToken } from "./functions/request.js";
-import { getOCRWorker } from "./functions/ocrWorker.js";
 import { destroyAllPlayers } from "./functions/musicPlayer.js";
 
 const port = 3000;
@@ -17,13 +16,13 @@ if (!g.__vgjr_initialized) {
 		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
 	}, 0);
 
-	Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getOCRWorker(), getPoToken()])
+	Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getPoToken()])
 		.then((results) => {
 			const failed = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-			if (failed) console.error("YouTube/OCR warmup failed:", failed.reason);
+			if (failed) console.error("YouTube warmup failed:", failed.reason);
 		})
 		.catch((err) => {
-			console.error("YouTube/OCR warmup failed:", err);
+			console.error("YouTube warmup failed:", err);
 		});
 
 	console.log(`\n🚀 Bun Server is running!`);

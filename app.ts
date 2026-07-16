@@ -60,7 +60,6 @@ const API_ROUTES = {
 			],
 		},
 		misc: [
-			["/tools/ocr?imageUrl=", "string"],
 			["/tools/translate?q=&from=&to=", "string", "string", "string"],
 			["/tools/timezone?q=", "string"],
 			["/tools/emoji?q=&limit=", "string", "number"],

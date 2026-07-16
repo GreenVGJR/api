@@ -2490,7 +2490,7 @@ export const GeminiApi = async function GeminiApi(que: string, convo: any) {
 		});
 
 		if (res.status === 400) {
-			return { error: "Bad Request - Invalid prompt or conversation" };
+			return { error: "Bad Request / Failed precondition" };
 		}
 		if (res.status === 403) {
 			return { error: "API key invalid or blocked" };

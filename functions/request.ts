@@ -2385,9 +2385,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			"Content-Type": "application/x-www-form-urlencoded",
 			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
 			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
-			"x-goog-ext-525005358-jspb": `["",1]`,
-			"x-goog-ext-73010989-jspb": "[0]",
-			"x-goog-ext-73010990-jspb": "[0,0,0]",
 			Referer: "https://gemini.google.com",
 			Origin: "https://gemini.google.com",
 			"X-Same-Domain": "1",
@@ -2515,6 +2512,86 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	};
 
 	return responseBody;
+};
+
+export const GeminiApi = async function GeminiApi(que: string, convo: any) {
+	if (!que) return null;
+
+	const apiKey = process.env.GOOG_GEMINI;
+	if (!apiKey) {
+		return { error: "Missing Google AI Studio API key" };
+	}
+
+	let messages: any[] = [];
+
+	if (convo) {
+		try {
+			const parsed = JSON.parse(decryptConvo(convo));
+			if (Array.isArray(parsed)) messages = parsed;
+		} catch {
+			return { error: "JSON parsing error" };
+		}
+	}
+
+	messages.push({ role: "user", content: que });
+
+	const model = "gemini-3.1-flash-lite";
+
+	try {
+		const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				contents: messages.map((m) => ({
+					role: m.role === "assistant" ? "model" : "user",
+					parts: [{ text: m.content }],
+				})),
+				generationConfig: {
+					temperature: 1,
+					topP: 0.95,
+					topK: 40,
+					maxOutputTokens: 32768,
+				},
+			}),
+		});
+
+		if (res.status === 400) {
+			return { error: "Bad Request - Invalid prompt or conversation" };
+		}
+		if (res.status === 403) {
+			return { error: "API key invalid or blocked" };
+		}
+		if (res.status === 429) {
+			return { error: "Rate-limited" };
+		}
+		if (!res.ok) {
+			return { error: "Service unavailable" };
+		}
+
+		const data: any = await res.json();
+		const response = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || null;
+
+		if (response) {
+			messages.push({ role: "assistant", content: response });
+		}
+
+		if (messages.length > 20) {
+			messages = messages.slice(-20);
+		}
+
+		return {
+			response: response || null,
+			data: {
+				usageMetadata: data?.usageMetadata || null,
+				conversation: encryptConvo(JSON.stringify(messages)),
+				model,
+			},
+		};
+	} catch {
+		return null;
+	}
 };
 
 const findLangCode = (input?: string): string | null => {

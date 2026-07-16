@@ -4,6 +4,7 @@ import { stream } from "hono/streaming";
 import zlib from "zlib";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
+import { autoGenBuild, autoGenBuildPara } from "../app.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);
@@ -125,7 +126,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	c.header("Content-Type", "application/json");
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	const useGzip = acceptEncoding.includes("gzip");
-	if (useGzip) c.header("Content-Encoding", "gzip");
+	if (useGzip && !(c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild)) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];
 	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
 		cacheDirectives.push("max-age=0");

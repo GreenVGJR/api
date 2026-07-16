@@ -174,6 +174,8 @@ let endpoints = {
   music: [],
 };
 
+let prt = "";
+let lfprt = "";
 let currentCategory = "search";
 let currentEndpoint = { path: "/loading...", query: "", types: [] };
 let isLoading = true;
@@ -827,12 +829,18 @@ async function performRequest(targetUrl, retryCount = 0) {
     const headers = {
       Accept: "application/json",
     };
+    let fetchUrl = targetUrl;
+    if (prt) {
+      headers["x-sz-token"] = prt;
+      const url = new URL(targetUrl);
+      url.searchParams.set(lfprt, prt);
+      fetchUrl = url.toString();
+    }
     if (solvedChallengeCode && parseUrl.pathname.startsWith("/music/")) {
       headers["x-challenge-codes"] = solvedChallengeCode;
       headers["x-challenge"] = formatChallengeHash(md5(solvedChallengeCode));
     }
 
-    let fetchUrl = targetUrl;
     const isDownload = parseUrl.pathname.startsWith("/download/");
     if (isDownload) {
       const url = new URL(targetUrl);
@@ -1101,7 +1109,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           const processChunk = () => {
             if (chunkIndex >= lines.length) return;
 
-            const deadline = performance.now() + 100;
+            const deadline = performance.now() + 50;
             const fragments = [];
 
             while (chunkIndex < lines.length && performance.now() < deadline) {
@@ -1721,6 +1729,8 @@ async function refreshEndpointsFromJson() {
       if (statsRes.ok) {
         const statsPayload = await statsRes.json();
         isLoading = false;
+        prt = statsPayload[1]._build[1];
+        lfprt = statsPayload[1]._build[0];
         setUptimeFromJsonPayload(statsPayload);
       }
     } catch {}

@@ -17,6 +17,8 @@ import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+export const autoGenBuild: any = crypto.randomBytes(16).toString("base64url");
+export const autoGenBuildPara: any = crypto.randomBytes(64).toString("base64url");
 
 const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
@@ -48,6 +50,7 @@ const API_ROUTES = {
 			chat: [
 				["/tools/chat/gemma?prompt=", "string"],
 				["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
+				["/tools/chat/gemini/web?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
 			],
 			image_generation: [
@@ -85,7 +88,7 @@ const API_ROUTES = {
 			["/tools/discord/infoServer?token=&guildId=", "string", "number"],
 			["/tools/discord/infoApp?token=&botId=", "string", "number"],
 			["/tools/discord/infoAutomod?token=&guildId=&ruleId=", "string", "number", "number"],
-			["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "json", "string", "enum_multi:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum_multi:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
+			["/tools/discord/setAutomod?token=&guildId=&ruleId=&name=&eventType=&triggerType=&enabled=&keywordFilter=&regexPatterns=&presets=&allowList=&mentionTotalLimit=&mentionRaidProtection=&actions=&actionType=&alertChannelId=&timeoutSeconds=&customMessage=&exemptRoles=&exemptChannels=&reason=&payload=", "string", "number", "number", "string", "enum:MESSAGE_SEND,GUILD_MEMBER_JOIN_OR_UPDATE", "enum:KEYWORD,SPAM,KEYWORD_PRESET,MENTION_SPAM,MEMBER_PROFILE", "boolean", "json", "json", "enum_multi:PROFANITY,SEXUAL_CONTENT,SLURS", "string", "number", "boolean", "json", "enum_multi:BLOCK_MESSAGE,SEND_ALERT_MESSAGE,TIMEOUT,BLOCK_MEMBER_INTERACTION", "number", "number", "string", "string", "string", "string", "json"],
 			["/tools/discord/deleteAutomod?token=&guildId=&ruleId=", "string", "number", "number"],
 		],
 		member: [
@@ -669,6 +672,7 @@ app.get("/", (c: Context) =>
 			},
 			{
 				_visitor: clientHeaders,
+				_build: [autoGenBuildPara, autoGenBuild],
 			},
 		];
 

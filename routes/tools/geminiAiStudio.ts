@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { Gemini } from "../../functions/request.js";
+import { GeminiApi } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
-app.get("/chat/gemini/web", async (c) => {
+app.get("/chat/gemini", async (c) => {
 	const query = c.req.query("prompt");
 	if (query === undefined) {
 		return c.json({ error: "Missing parameter required" }, 202);
@@ -12,8 +12,8 @@ app.get("/chat/gemini/web", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 	const conversation = c.req.query("conversation");
-	c.header("X-Route", "gemini.google.com");
-	return await dispatch(c, () => Gemini(query, conversation));
+	c.header("X-Route", "generativelanguage.googleapis.com");
+	return await dispatch(c, () => GeminiApi(query, conversation));
 });
 
 export default app;

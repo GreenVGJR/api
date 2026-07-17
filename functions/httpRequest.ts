@@ -129,7 +129,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	if (c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild) {
 		c.header("Content-Type", "video/webm");
 		c.header("Content-Range", "bytes 0-0/0");
-		c.status(206);
+		c.status(200);
 		useGzip = true;
 	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];

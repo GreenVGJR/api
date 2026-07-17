@@ -82,7 +82,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 };
 
 // Rate limiting config and state
-const MAX_REQUESTS_PER_SECOND = 10;
+const MAX_REQUESTS_PER_SECOND = 5;
 let requestCount = 0;
 const queue: (() => void)[] = [];
 
@@ -112,21 +112,27 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		return logResponse(c, c.text("", 403));
 	}
 
-	await rateLimit();
-
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
 		return logResponse(c, c.text("", 200));
 	}
 
+	await rateLimit();
+
 	const requrl = new URL(c.req.url);
 
 	c.header("X-Enc-Route", "v5");
 	c.header("Content-Type", "application/json");
 	const acceptEncoding = c.req.header("accept-encoding") || "";
-	const useGzip = acceptEncoding.includes("gzip");
-	if (useGzip && !(c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild)) c.header("Content-Encoding", "gzip");
+	let useGzip = acceptEncoding.includes("gzip");
+	if (c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild) {
+		c.header("Content-Encoding", "0, 1, 2, 3");
+		c.header("Content-Type", "video/webm");
+		c.header("Content-Range", "bytes 0-0/0");
+		c.status(206);
+		useGzip = true;
+	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];
 	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
 		cacheDirectives.push("max-age=0");
@@ -134,6 +140,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		cacheDirectives.push("max-age=8");
 	}
 	cacheDirectives.push("must-revalidate");
+	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
 
 	return logResponse(

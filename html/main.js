@@ -9,12 +9,12 @@ const initSPA = () => {
   const fontsLink = document.createElement("link");
   fontsLink.rel = "stylesheet";
   fontsLink.href =
-    "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap";
+    "https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap";
   document.head.appendChild(fontsLink);
 
   // Build the UI structure
   document.body.className =
-    "bg-black text-white font-sans antialiased overflow-hidden";
+    "bg-black text-white font-sans overflow-hidden";
   document.body.innerHTML = `
     <div class="h-dvh flex flex-col max-w-5xl xl:max-w-[84rem] mx-auto px-4 sm:px-6 py-3 sm:py-6">
         <section id="playgroundView" class="flex flex-col flex-1 min-h-0">
@@ -53,12 +53,12 @@ const initSPA = () => {
                     </nav>
                 </aside>
 
-                <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[260px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
-                    <div id="endpointPane" class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
+                <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[300px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
+                    <div id="endpointPane" class="overflow-y-auto pr-1 flex-[2] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
                         <div id="endpointsList" class="space-y-1"></div>
                     </div>
 
-                    <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[6] md:flex-[7]">
+                    <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[8] md:flex-[7]">
                         <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
                             <div id="responseHeader" class="flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
                                 <span class="text-xs text-gray-500 font-mono inline-flex items-center">
@@ -107,7 +107,7 @@ const initSPA = () => {
                             </div>
                         </div>
 
-                        <div id="sendRow" class="mt-2 sm:mt-3 flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
+                        <div id="sendRow" class="mt-2 sm:mt-3 mb-4 md:mb-0 pb-[env(safe-area-inset-bottom)] flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
                             <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
                                 <span class="send-label">Send</span><span class="send-arrow">➜</span>
                             </button>
@@ -134,14 +134,14 @@ const initSPA = () => {
     </div>`;
 };
 
-const DEFAULT_PHRASES = ["What you gonna try?", "What's on your mind?"];
+const DEFAULT_PHRASES = ["Wanna test something?", "Six and Seven.", "Howdy.", "Hai this is playground ok."];
 function getDefaultResponseHTML() {
   const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
   return `<div class="flex flex-col items-center justify-center">
     <div class="text-white-500 text-xs">${randomPhrase}</div>
-    <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#1BA1E3] via-[#9B72CB] to-[#F49C46] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
-    <div class="flex items-center gap-2 mt-1 text-dark-500 text-xs flex-wrap justify-center">
-      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-dark-500">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-dark-500">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support Me?</a>
+    <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#9EF3A7] via-[#1BA1E3] to-[#1B6EE3] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
+    <div class="flex items-center gap-2 mt-2 text-gray-400 text-xs flex-wrap justify-center">
+      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
     </div>
   </div>`;
 }
@@ -149,6 +149,12 @@ const DEFAULT_RESPONSE_HTML = getDefaultResponseHTML();
 
 // Start SPA immediately
 initSPA();
+
+// Force a full reload if the page was restored from bfcache (back/forward cache)
+// so a stale/cached instance is never reused.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) window.location.reload();
+});
 
 // Sync --url-bar-h so the right sidebar "Categories" label fills the same
 // vertical space as the URL bar (desktop view gap fix).
@@ -262,30 +268,28 @@ function syncStatusWidth() {
 syncStatusWidth();
 
 function slideStatusText(text, className) {
-  setTimeout(() => {
-    if (slideAnimTimeout) clearTimeout(slideAnimTimeout);
-    if (statusSizer) statusSizer.textContent = text;
-    syncStatusWidth();
-    if (!responseTitleNext) {
-      responseTitle.textContent = text;
-      responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
-      return;
-    }
+  if (slideAnimTimeout) clearTimeout(slideAnimTimeout);
+  if (statusSizer) statusSizer.textContent = text;
+  syncStatusWidth();
+  if (!responseTitleNext) {
+    responseTitle.textContent = text;
+    responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
+    return;
+  }
 
-    responseTitleNext.textContent = text;
-    responseTitleNext.className = `${STATUS_BASE_CLASS} ${className}`;
-    responseTitleNext.style.display = "";
-    responseTitleNext.classList.add("status-slide-in");
-    responseTitle.classList.add("status-slide-out");
+  responseTitleNext.textContent = text;
+  responseTitleNext.className = `${STATUS_BASE_CLASS} ${className}`;
+  responseTitleNext.style.display = "";
+  responseTitleNext.classList.add("status-slide-in");
+  responseTitle.classList.add("status-slide-out");
 
-    slideAnimTimeout = setTimeout(() => {
-      responseTitle.textContent = text;
-      responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
-      responseTitle.classList.remove("status-slide-out");
-      responseTitleNext.style.display = "none";
-      responseTitleNext.classList.remove("status-slide-in");
-    }, 200);
-  }, 0);
+  slideAnimTimeout = setTimeout(() => {
+    responseTitle.textContent = text;
+    responseTitle.className = `${STATUS_BASE_CLASS} ${className}`;
+    responseTitle.classList.remove("status-slide-out");
+    responseTitleNext.style.display = "none";
+    responseTitleNext.classList.remove("status-slide-in");
+  }, 200);
 }
 
 const sendRow = document.getElementById("sendRow");
@@ -504,6 +508,9 @@ document.addEventListener("click", (event) => {
   if (!["playground", "terms", "privacy"].includes(nextPage)) return;
 
   event.preventDefault();
+  const isLeavingPlayground = window.location.pathname !== targetUrl.pathname && pageFromPath(window.location.pathname) === "playground";
+  if (isLeavingPlayground && !confirmDiscardParams()) return;
+  if (isLeavingPlayground) clearAllInputs();
   if (targetUrl.pathname !== window.location.pathname) {
     history.pushState({}, "", targetUrl.pathname);
   }
@@ -518,15 +525,17 @@ let currentParams = [];
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith("/") ? "" : "/");
 
 function adjustHeight() {
-  urlInput.style.height = "auto";
-  const newHeight = Math.min(urlInput.scrollHeight, 100);
-  urlInput.style.height = newHeight + "px";
-  urlInput.style.overflowY = urlInput.scrollHeight > 100 ? "auto" : "hidden";
+  setTimeout(() => {
+    urlInput.style.height = "auto";
+    const newHeight = Math.min(urlInput.scrollHeight, 100);
+    urlInput.style.height = newHeight + "px";
+    urlInput.style.overflowY = urlInput.scrollHeight > 100 ? "auto" : "hidden";
+  }, 0);
 }
 
 adjustHeight();
 urlInput.addEventListener("input", adjustHeight);
-urlInput.addEventListener("focus", () => setTimeout(adjustHeight, 0));
+urlInput.addEventListener("focus", adjustHeight);
 window.addEventListener("resize", adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
@@ -815,7 +824,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     sendBtn.classList.add("opacity-70");
     responseArea.classList.add("empty-state");
 
-    setStatusDotColor("yellow-400", true);
+    setStatusDotColor("yellow-400", false);
     statusText.textContent = "Fetching";
     statusText.className = "text-yellow-400";
     slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
@@ -852,7 +861,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     verboseFetch.line("Waiting for response headers...");
     const response = await fetch(fetchUrl, fetchOptions);
     verboseFetch.response(response);
-    setStatusDotColor("blue-400", true);
+    setStatusDotColor("blue-400", false);
     statusText.textContent = "Rendering";
     statusText.className = "text-gray-400";
     slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
@@ -901,8 +910,23 @@ async function performRequest(targetUrl, retryCount = 0) {
     }
 
     const contentType = response.headers.get("content-type") || "";
+    const encHeader = (response.headers.get("Content-Encoding") || "").trim();
 
-    if (contentType.startsWith("image/")) {
+    const nonStandardCoding = encHeader.length > 0 && !/^(gzip|deflate|br|compress)(\s*,\s*(gzip|deflate|br|compress))*$/i.test(encHeader);
+
+    let payloadLooksTextual = false;
+    if (contentType.startsWith("image/") || nonStandardCoding) {
+      try {
+        const probeReader = response.clone().body.getReader();
+        const { value: probeChunk, done: probeDone } = await probeReader.read();
+        if (!probeDone && probeChunk && probeChunk.length) {
+          const f = probeChunk[0];
+          if (f === 0x7b || f === 0x5b || f === 0x22) payloadLooksTextual = true;
+        }
+      } catch {}
+    }
+
+    if ((contentType.startsWith("image/") && !payloadLooksTextual) && !nonStandardCoding) {
       verboseFetch.line("Reading image body...");
       const blob = await response.blob();
       duration = Math.round(performance.now() - startTime);
@@ -923,7 +947,8 @@ async function performRequest(targetUrl, retryCount = 0) {
     } else if (
       (contentType.startsWith("video/") ||
         contentType === "application/octet-stream") &&
-      response.headers.get("x-player") !== "lavalink"
+      response.headers.get("x-player") !== "lavalink" &&
+      !nonStandardCoding
     ) {
       verboseFetch.line("Reading binary body...");
       const blob = await response.blob();
@@ -942,7 +967,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                     <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
                 </div>
             `;
-    } else if (contentType.startsWith("audio/")) {
+    } else if (contentType.startsWith("audio/") && !nonStandardCoding) {
       verboseFetch.line("Reading audio body...");
       const blob = await response.blob();
       duration = Math.round(performance.now() - startTime);
@@ -1059,9 +1084,11 @@ async function performRequest(targetUrl, retryCount = 0) {
 
       try {
         const data = JSON.parse(decryptedText);
-        if (decryptedText === text) {
+        if (typeof data === "object" || Array.isArray(data)) {
           formatted = JSON.stringify(data, null, 1);
           isJson = true;
+        } else {
+          formatted = String(data);
         }
         resultData = data;
       } catch {}
@@ -1081,14 +1108,18 @@ async function performRequest(targetUrl, retryCount = 0) {
         if (formatted.length > 5000) {
           preElement.textContent = formatted;
 
-          const CHUNK_SIZE = 100;
+          const CHUNK_SIZE = 500;
           let chunkIndex = 0;
           let colorfulHTML = "";
 
           const buildColorfulChunk = () => {
             const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
             const chunkString = lines.slice(chunkIndex, end).join("\n");
-            colorfulHTML += syntaxHighlight(chunkString) + (end < lines.length ? "\n" : "");
+            try {
+              colorfulHTML += syntaxHighlight(chunkString) + (end < lines.length ? "\n" : "");
+            } catch {
+              colorfulHTML += escapeHTML(chunkString) + (end < lines.length ? "\n" : "");
+            }
             chunkIndex = end;
 
             if (chunkIndex < lines.length) {
@@ -1103,7 +1134,7 @@ async function performRequest(targetUrl, retryCount = 0) {
 
           requestAnimationFrame(buildColorfulChunk);
         } else {
-          const CHUNK_SIZE = 100;
+          const CHUNK_SIZE = 500;
           let chunkIndex = 0;
 
           const processChunk = () => {
@@ -1116,7 +1147,12 @@ async function performRequest(targetUrl, retryCount = 0) {
               const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
               const chunkLines = lines.slice(chunkIndex, end);
               const chunkString = chunkLines.join("\n");
-              const highlighted = syntaxHighlight(chunkString);
+              let highlighted;
+              try {
+                highlighted = syntaxHighlight(chunkString);
+              } catch {
+                highlighted = escapeHTML(chunkString);
+              }
               fragments.push(highlighted + (end < lines.length ? "\n" : ""));
               chunkIndex = end;
             }
@@ -1530,6 +1566,26 @@ function setupEnumControls() {
   });
 }
 
+function hasParamInputValues() {
+  return Array.from(paramsContainer.querySelectorAll(".param-input")).some(
+    (input) => input.value && input.value.trim() !== "",
+  );
+}
+
+function clearAllInputs() {
+  urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith("/") ? "" : "/");
+  paramsContainer.querySelectorAll(".param-input").forEach((input) => {
+    input.value = "";
+  });
+  currentParams.forEach((p) => (p.value = ""));
+  adjustHeight();
+}
+
+function confirmDiscardParams() {
+  if (!hasParamInputValues()) return true;
+  return window.confirm("Switch anyway?");
+}
+
 function renderParams() {
   const page = pageFromPath(window.location.pathname);
   if (page === "terms" || page === "privacy") return;
@@ -1718,7 +1774,7 @@ async function refreshEndpointsFromJson() {
       }
     }
 
-    setStatusDotColor("blue-400", true);
+    setStatusDotColor("blue-400", false);
     statusText.textContent = "Connecting";
     statusText.className = "text-gray-400";
     slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
@@ -1830,6 +1886,8 @@ function attachEndpointListeners() {
   endpointsList.querySelectorAll(".endpoint-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const index = parseInt(btn.dataset.index);
+      if (currentEndpoint && endpoints[currentCategory][index] === currentEndpoint) return;
+      if (!confirmDiscardParams()) return;
       currentEndpoint = endpoints[currentCategory][index];
       urlInput.value = buildEndpointUrl(currentEndpoint);
       adjustHeight();
@@ -1849,6 +1907,8 @@ tabBtns.forEach((btn) => {
 
     // Prevent re-rendering and animating if clicking the already active tab
     if (!wasLegalPage && currentCategory === nextCategory) return;
+
+    if (!confirmDiscardParams()) return;
 
     const wasOpen = !wasLegalPage && paramsOpen;
 
@@ -2323,7 +2383,7 @@ fetchInitialEndpoints().then(() => {
   updateConnectionUI();
 
   // Final height adjustment after everything is loaded and rendered
-  setTimeout(adjustHeight, 0);
+  adjustHeight();
 
   // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
   if (document.fonts) {

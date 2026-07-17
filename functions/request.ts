@@ -6480,10 +6480,11 @@ let gunsCookies: string | null = null;
 
 export async function GunsProfile(query: string): Promise<any> {
 	if (!query) return null;
-	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-	if (!username || ["robots.txt", "favicon.ico", "register", "pricing", "login", "reset", "cdn-cgi", "account", "terms", "privacy", "dashboard", "leaderboard", "api", "de", "fr", "es", "tr", "ru", "pt", "ar"].includes(username.toLowerCase())) return null;
+	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop()?.trim();
+	if (!username || !/^[a-zA-Z0-9._-]+$/.test(username) || ["robots.txt", "favicon.ico", "register", "pricing", "login", "reset", "cdn-cgi", "account", "terms", "privacy", "dashboard", "leaderboard", "api", "de", "fr", "es", "tr", "ru", "pt", "ar"].includes(username.toLowerCase())) return null;
 
 	let browserGuns: boolean = false;
+	let is429: boolean = false;
 	let dataResults: any[] = [];
 
 	try {
@@ -6505,13 +6506,13 @@ export async function GunsProfile(query: string): Promise<any> {
 					const status = responseStatus(res);
 
 					if (status === 429) {
-						return { error: "IP Blocked" };
+						is429 = true;
 					}
 
 					const html = await responseText(res);
 					const { document: doc } = parseHTML(html);
 					const pageTitle = doc.querySelector("title")?.textContent?.trim() || "";
-					const isChallenge = status === 401 || status === 403 || pageTitle === "Just a moment...";
+					const isChallenge = status === 401 || status === 403 || status === 429 || pageTitle === "Just a moment...";
 
 					if (!isChallenge) {
 						break;
@@ -6528,7 +6529,7 @@ export async function GunsProfile(query: string): Promise<any> {
 						});
 
 						if (browserRes.status === 429) {
-							return { error: "IP Blocked" };
+							return { error: is429 ? "rate-limited" : "IP Blocked" };
 						}
 
 						const browserChallenge = !browserRes.success || browserRes.status === 401 || browserRes.status === 403;

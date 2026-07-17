@@ -18,9 +18,9 @@ app.get("/discord/modifyRole", async (c) => {
 	const guildId = queryGuildId && Number.isInteger(parseInt(queryGuildId)) ? queryGuildId : null;
 	const roleId = c.req.query("roleId");
 
-	if (!token) return c.json(["Missing valid parameter: token"], 202);
-	if (!guildId) return c.json(["Missing valid parameter: guildId"], 202);
-	if (!roleId) return c.json(["Missing valid parameter: roleId"], 202);
+	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
+	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
+	if (!roleId) return c.json({ error: "Missing valid parameter: roleId" }, 202);
 
 	const getQuery = (key: string): string | undefined => {
 		const val = c.req.query(key);

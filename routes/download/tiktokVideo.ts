@@ -2,6 +2,7 @@ import { Hono } from "hono";
 const app = new Hono();
 import { SavetikVideo } from "../../functions/request.js";
 import { rateLimit } from "../../functions/httpRequest.js";
+import { recordRequestLog } from "../../functions/telemetry.js";
 
 app.get("/tiktok/video", async (c) => {
 	const query = c.req.query("url");
@@ -13,13 +14,16 @@ app.get("/tiktok/video", async (c) => {
 	await rateLimit();
 	const result = await SavetikVideo(query);
 	if (!result || !result.video_url) {
+		recordRequestLog(c, 404);
 		return c.json({ error: "Video not found" }, 404);
 	}
 	const target = result.video_url;
 	c.header("X-Route", "savetik.io");
 	if (c.req.query("json") === "1") {
+		recordRequestLog(c, 200);
 		return c.json({ url: target, type: "video" });
 	}
+	recordRequestLog(c, 302);
 	return c.text(target, 302, { Location: target });
 });
 

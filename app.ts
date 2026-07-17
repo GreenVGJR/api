@@ -11,14 +11,13 @@ import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/telemetry.js";
-import { rateLimit } from "./functions/httpRequest.js";
 import { commonHeaders } from "./functions/request.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const autoGenBuild: any = crypto.randomBytes(16).toString("base64url");
-export const autoGenBuildPara: any = crypto.randomBytes(64).toString("base64url");
+export const autoGenBuild: any = crypto.randomBytes(6).toString("base64url");
+export const autoGenBuildPara: any = crypto.randomBytes(6).toString("base64url");
 
 const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
@@ -243,7 +242,7 @@ app.use("*", async (c: Context, next: Next) => {
 			try {
 				const parsed = new URL(val);
 				if (parsed.host === currentHost || parsed.hostname === currentHostname || parsed.hostname === targetDomain || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]") {
-					return c.json({ error: "Query not allowed" });
+					return c.json({ error: "Query not allowed" }, 400);
 				}
 			} catch {}
 		}
@@ -379,7 +378,7 @@ function isBrowserBackChallengeRequest(c: Context): boolean {
 	const userAgent = c.req.header("user-agent") || "";
 	const fetchMode = c.req.header("sec-fetch-mode");
 
-	return c.req.method === "GET" && userAgent.startsWith("Mozilla/5.0") && !userAgent.includes("Discordbot") && fetchMode !== "same-origin" && fetchMode === "navigate" && endpointChallenge === true;
+	return c.req.method === "GET" && userAgent.startsWith("Mozilla/5.0") && !userAgent.includes("Discordbot") && fetchMode !== "same-origin" && fetchMode === "navigate";
 }
 
 function hostHeaderName(host: string | undefined): string {
@@ -444,8 +443,14 @@ if (BUILD_ID) {
 }
 
 app.use("*", async (c: Context, next: Next) => {
+	if (c.req.header("x-sz-token") && c.req.header("x-sz-token") !== autoGenBuild) {
+		c.header("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+		return c.json({ error: "Refresh the playground page for verify signature" }, 403);
+	}
+
 	const url = new URL(c.req.url);
-	if (!isBackChallengePath(url.pathname)) {
+
+	if (!isBackChallengePath(url.pathname) || !endpointChallenge) {
 		await next();
 		return;
 	}
@@ -479,13 +484,13 @@ app.use("*", async (c: Context, next: Next) => {
 });
 
 app.get("/favicon.ico", (c: Context) => {
-	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 	c.header("Content-Type", "image/x-icon");
 	return c.body(favicon);
 });
 
 app.get("/robots.txt", (c: Context) => {
-	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 	return c.text(robots, 200);
 });
 
@@ -526,7 +531,7 @@ app.get("/logs", async (c: Context) => {
 });
 
 function setPlaygroundAssetCache(c: Context) {
-	c.header("Cache-Control", "public, no-transform, max-age=3600, stale-while-revalidate=86400");
+	c.header("Cache-Control", "public, no-transform, no-store");
 }
 
 const PLAYGROUND_CHALLENGE = crypto.randomBytes(32).toString("hex");
@@ -788,8 +793,7 @@ app.use("*", async (c: Context, next: Next) => {
 	const checkexists = c.notFound();
 
 	if (checkexists) {
-		await rateLimit();
-		c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+		c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 		return c.body(null, 404);
 	}
 	await next();

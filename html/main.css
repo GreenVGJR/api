@@ -1,11 +1,10 @@
 * {
-	scrollbar-width: thin;
-	scrollbar-color: #3a3a3a transparent;
+	scrollbar-width: auto;
 }
 
 *::-webkit-scrollbar {
-	width: 6px;
-	height: 6px;
+	width: 10px;
+	height: 10px;
 }
 
 *::-webkit-scrollbar-track {
@@ -13,8 +12,7 @@
 }
 
 *::-webkit-scrollbar-thumb {
-	background-color: #3a3a3a;
-	border-radius: 3px;
+	border-radius: 5px;
 }
 
 .endpoint-item {
@@ -233,9 +231,7 @@ html {
 }
 
 body {
-	background-color: #000;
-	background-image: radial-gradient(at 100% 0% in oklch, oklch(40% 0.01 250 / 15%) 0%, transparent 40%), radial-gradient(at 0% 100% in oklch, oklch(45% 0.02 250 / 30%) 0%, transparent 70%), linear-gradient(to bottom, #000 0%, transparent 10%), linear-gradient(to top, #000 0%, transparent 10%);
-	background-attachment: fixed;
+	background-color: black;
 	height: 100vh;
 	height: 100dvh;
 	width: 100%;
@@ -278,7 +274,7 @@ body {
 	background: rgba(255, 255, 255, 0.03);
 	border: 1px solid #3a3a3a;
 	border-radius: 6px;
-	padding: 4px 8px;
+	padding: 8px 10px;
 	font-size: 11px;
 	color: #ffffff;
 	font-family: ui-monospace, "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Consolas", "Liberation Mono", "Courier New", monospace;
@@ -293,7 +289,7 @@ body {
 	.params-body .param-input,
 	.params-body .param-enum-button {
 		border-radius: 8px;
-		padding: 6px 10px;
+		padding: 8px 12px;
 		font-size: 12px;
 	}
 }

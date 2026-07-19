@@ -3,8 +3,8 @@
 }
 
 *::-webkit-scrollbar {
-	width: 10px;
-	height: 10px;
+	width: 16px;
+	height: 16px;
 }
 
 *::-webkit-scrollbar-track {
@@ -12,7 +12,16 @@
 }
 
 *::-webkit-scrollbar-thumb {
-	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.3);
+	border-radius: 8px;
+	border: 7px solid transparent;
+	background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.5);
+	border: 7px solid transparent;
+	background-clip: padding-box;
 }
 
 .endpoint-item {
@@ -178,9 +187,57 @@
 	}
 }
 
-.response-area {
-	width: 0;
-	min-width: 100%;
+/* Desktop Firefox gets its default native scrollbar. Desktop Chromium/Safari
+   get a styled 8px scrollbar. */
+#responseArea::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+#responseArea::-webkit-scrollbar-track {
+	background: transparent;
+}
+#responseArea::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.3);
+	border-radius: 8px;
+}
+#responseArea::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.5);
+}
+
+/* Mobile custom scrollbar — indicator only, no JS drag. */
+@media (pointer: coarse) {
+	#responseArea {
+		scrollbar-width: none;
+	}
+	#responseArea::-webkit-scrollbar {
+		display: none;
+	}
+
+	.custom-scrollbar-track {
+		display: block;
+		position: absolute;
+		top: 2px;
+		bottom: 2px;
+		right: 2px;
+		width: 14px;
+		z-index: 5;
+		touch-action: none;
+	}
+	.custom-scrollbar-thumb {
+		position: absolute;
+		left: 3px;
+		right: 3px;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.35);
+		min-height: 24px;
+		touch-action: none;
+		cursor: pointer;
+	}
+}
+@media (pointer: fine) {
+	.custom-scrollbar-track {
+		display: none;
+	}
 }
 
 #urlInput {
@@ -207,6 +264,10 @@ pre {
 	font-size: 12px;
 }
 
+#responseArea pre {
+	overflow: visible;
+}
+
 .response-link {
 	color: inherit;
 	text-decoration: underline;
@@ -226,20 +287,19 @@ pre {
 }
 
 html {
-	overflow: hidden;
+	overflow-x: hidden;
 	height: 100%;
 }
 
 body {
 	background-color: black;
-	height: 100vh;
-	height: 100dvh;
+	min-height: 100vh;
+	min-height: 100dvh;
 	width: 100%;
 	max-width: 100%;
 	margin: 0;
 	position: relative;
-	overflow: hidden;
-	overscroll-behavior: none;
+	overflow-x: hidden;
 	padding-left: env(safe-area-inset-left);
 	padding-right: env(safe-area-inset-right);
 	padding-bottom: env(safe-area-inset-bottom);

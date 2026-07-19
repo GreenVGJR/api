@@ -14,7 +14,7 @@ const initSPA = () => {
 
   // Build the UI structure
   document.body.className =
-    "bg-black text-white font-sans overflow-hidden";
+    "bg-black text-white font-sans";
   document.body.innerHTML = `
     <div class="h-dvh flex flex-col max-w-5xl xl:max-w-[84rem] mx-auto px-4 sm:px-6 py-3 sm:py-6">
         <section id="playgroundView" class="flex flex-col flex-1 min-h-0">
@@ -59,8 +59,8 @@ const initSPA = () => {
                     </div>
 
                     <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[8] md:flex-[7]">
-                        <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 overflow-hidden flex flex-col min-h-0">
-                            <div id="responseHeader" class="flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                        <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 flex flex-col min-h-0">
+                            <div id="responseHeader" class="rounded-t-lg sm:rounded-t-xl flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
                                 <span class="text-xs text-gray-500 font-mono inline-flex items-center">
                                     <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span>
                                     <span id="statusTextWrap" class="relative inline-block overflow-hidden h-[1.2em] whitespace-nowrap">
@@ -84,8 +84,13 @@ const initSPA = () => {
                                     </button>
                                 </div>
                             </div>
-                            <div id="responseArea" class="response-area font-mono text-sm text-gray-300 p-3 sm:p-4 overflow-auto flex-1 empty-state w-0 min-w-full">
-                                ${getDefaultResponseHTML()}
+                            <div id="responseAreaWrap" class="relative flex-1 min-h-0">
+                                <div id="responseArea" class="response-area rounded-b-lg sm:rounded-b-xl font-mono text-sm text-gray-300 p-3 sm:p-4 absolute inset-0 overflow-auto empty-state">
+                                    ${getDefaultResponseHTML()}
+                                </div>
+                                <div id="customScrollTrack" class="custom-scrollbar-track" aria-hidden="true">
+                                    <div id="customScrollThumb" class="custom-scrollbar-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -184,9 +189,10 @@ let prt = "";
 let lfprt = "";
 let currentCategory = "search";
 let currentEndpoint = { path: "/loading...", query: "", types: [] };
-let isLoading = true;
+let isLoading = false;
 let lastRawResponse = "";
 let isCoolingDown = false;
+let isConnecting = true;
 
 const apiBaseUrl = window.API_BASE_URL;
 const endpointCategories = Object.keys(endpoints);
@@ -409,7 +415,7 @@ function renderLegalPage(page) {
   endpointsList.innerHTML = "";
 
   responseArea.classList.remove("empty-state", "font-mono");
-  responseArea.classList.add("font-sans");
+  responseArea.classList.add("font-sans", "no-scrollbar");
   responseArea.innerHTML = `
         <section class="rounded-xl sm:rounded-2xl border border-dark-500 bg-black/30 p-5 sm:p-8 mb-4 sm:mb-5">
             <h1 class="text-3xl sm:text-5xl font-bold tracking-[-0.06em] text-white">${legal.title}</h1>
@@ -445,6 +451,8 @@ function renderLegalPage(page) {
   lastRawResponse = legal.sections
     .map(([title, text]) => `${title}\n${text}`)
     .join("\n\n");
+  const scrollTrack = document.getElementById("customScrollTrack");
+  if (scrollTrack) scrollTrack.style.display = "none";
   activePage = page;
 }
 
@@ -457,7 +465,7 @@ function renderPlaygroundPage() {
   responseActions.classList.remove("hidden");
   sendRow.classList.remove("hidden");
   responseArea.classList.add("font-mono");
-  responseArea.classList.remove("font-sans");
+  responseArea.classList.remove("font-sans", "no-scrollbar");
 
   if (activePage && activePage !== "playground") {
     lastRawResponse = "";
@@ -473,6 +481,8 @@ function renderPlaygroundPage() {
   renderParams();
   setActiveCategoryTab();
   activePage = "playground";
+  const scrollTrack = document.getElementById("customScrollTrack");
+  if (scrollTrack) scrollTrack.style.display = "";
 }
 
 function renderCurrentPage() {
@@ -741,88 +751,19 @@ function removeOfflinePlayground() {
 
 removeOfflinePlayground();
 
-function formatVerboseHeaders(headers) {
-  return Object.entries(headers)
-    .map(([key, value]) => `> ${key}: ${value}`)
-    .join("\n");
-}
-
-function createVerboseFetchView(targetUrl, fetchOptions) {
-  const requestUrl = new URL(targetUrl);
-  const method = (fetchOptions?.method || "GET").toUpperCase();
-  const headers = fetchOptions?.headers || {};
-  const startedAt = performance.now();
-  const lines = [
-    `* URL: ${requestUrl.href}`,
-    `* Host: ${requestUrl.host}`,
-    `* Scheme: ${requestUrl.protocol.replace(":", "")}`,
-    `* Method: ${method}`,
-    `> ${method} ${requestUrl.pathname}${requestUrl.search}`,
-    `> Host: ${requestUrl.host}`,
-    formatVerboseHeaders(headers),
-    `* Request dispatched`,
-  ].filter(Boolean);
-
-  responseArea.classList.add("empty-state");
-  responseArea.innerHTML = `
-        <div class="relative w-full h-full min-h-[180px] overflow-hidden rounded-lg">
-            <pre id="verboseFetchLog" class="absolute inset-0 overflow-auto no-scrollbar whitespace-pre-wrap break-all p-3 sm:p-4 text-[10px] sm:text-xs leading-5 text-gray-600 blur-[0.2px] opacity-70 select-text"></pre>
-        </div>
-    `;
-
-  const logEl = document.getElementById("verboseFetchLog");
-
-  const render = () => {
-    if (!logEl) return;
-    logEl.textContent = lines.join("\n");
-    logEl.scrollTop = logEl.scrollHeight;
-  };
-
-  render();
-
-  return {
-    line(text) {
-      const elapsed = Math.round(performance.now() - startedAt);
-      lines.push(`* [${elapsed}ms] ${text}`);
-      render();
-    },
-    response(response) {
-      const elapsed = Math.round(performance.now() - startedAt);
-      lines.push(
-        `< HTTP ${response.status} ${response.statusText || ""}`.trimEnd(),
-      );
-      response.headers.forEach((value, key) =>
-        lines.push(`< ${key}: ${value}`),
-      );
-      lines.push(`* [${elapsed}ms] Response headers received`);
-      render();
-    },
-    done(label = "Response body received") {
-      const elapsed = Math.round(performance.now() - startedAt);
-      lines.push(`* [${elapsed}ms] ${label}`);
-      render();
-    },
-    fail(error) {
-      const elapsed = Math.round(performance.now() - startedAt);
-      lines.push(`* [${elapsed}ms] Fetch failed: ${error?.message || error}`);
-      render();
-    },
-  };
-}
-
 async function performRequest(targetUrl, retryCount = 0) {
   if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
   if (retryCount === 0 && !hasConnection()) {
     updateConnectionUI();
     return null;
   }
-  let verboseFetch = null;
 
   if (retryCount === 0) {
     isLoading = true;
     setSendButtonLabel("Loading...");
     sendBtn.classList.add("opacity-70");
     responseArea.classList.add("empty-state");
+    responseArea.innerHTML = "";
 
     setStatusDotColor("yellow-400", false);
     statusText.textContent = "Fetching";
@@ -857,10 +798,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = url.toString();
     }
     const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
-    verboseFetch = createVerboseFetchView(fetchUrl, fetchOptions);
-    verboseFetch.line("Waiting for response headers...");
     const response = await fetch(fetchUrl, fetchOptions);
-    verboseFetch.response(response);
     setStatusDotColor("blue-400", false);
     statusText.textContent = "Rendering";
     statusText.className = "text-gray-400";
@@ -881,7 +819,6 @@ async function performRequest(targetUrl, retryCount = 0) {
 
             duration = Math.round(performance.now() - startTime);
             updateStatusUI(true, 200, duration);
-            verboseFetch.done(`Media URL received (${json.type})`);
 
             isLoading = false;
             setSendButtonLabel("Send");
@@ -927,12 +864,8 @@ async function performRequest(targetUrl, retryCount = 0) {
     }
 
     if ((contentType.startsWith("image/") && !payloadLooksTextual) && !nonStandardCoding) {
-      verboseFetch.line("Reading image body...");
       const blob = await response.blob();
       duration = Math.round(performance.now() - startTime);
-      verboseFetch.done(
-        `Image body received (${blob.size.toLocaleString()} bytes)`,
-      );
       updateStatusUI(response.ok, response.status, duration);
       const imageUrl = URL.createObjectURL(blob);
 
@@ -950,12 +883,8 @@ async function performRequest(targetUrl, retryCount = 0) {
       response.headers.get("x-player") !== "lavalink" &&
       !nonStandardCoding
     ) {
-      verboseFetch.line("Reading binary body...");
       const blob = await response.blob();
       duration = Math.round(performance.now() - startTime);
-      verboseFetch.done(
-        `Binary body received (${blob.size.toLocaleString()} bytes)`,
-      );
       updateStatusUI(response.ok, response.status, duration);
       const videoUrl = URL.createObjectURL(blob);
 
@@ -968,12 +897,8 @@ async function performRequest(targetUrl, retryCount = 0) {
                 </div>
             `;
     } else if (contentType.startsWith("audio/") && !nonStandardCoding) {
-      verboseFetch.line("Reading audio body...");
       const blob = await response.blob();
       duration = Math.round(performance.now() - startTime);
-      verboseFetch.done(
-        `Audio body received (${blob.size.toLocaleString()} bytes)`,
-      );
       updateStatusUI(response.ok, response.status, duration);
       const audioUrl = URL.createObjectURL(blob);
 
@@ -988,8 +913,6 @@ async function performRequest(targetUrl, retryCount = 0) {
     } else {
       responseArea.classList.remove("empty-state");
 
-      verboseFetch.line("Reading response body...");
-
       const bodyReader = response.body.getReader();
       const { value: firstChunk, done: firstDone } = await bodyReader.read();
 
@@ -997,9 +920,6 @@ async function performRequest(targetUrl, retryCount = 0) {
       const isDeflate = !firstDone && firstChunk && firstChunk[0] === 0x78;
       const decompressFormat = isGzip ? "gzip" : isDeflate ? "deflate" : null;
       const needsDecompress = !!decompressFormat;
-      if (needsDecompress) {
-        verboseFetch.line(`Decompressing ${decompressFormat} body...`);
-      }
 
       // Rebuild a stream starting with the already-peeked first chunk,
       // then continue draining the original reader.
@@ -1024,10 +944,6 @@ async function performRequest(targetUrl, retryCount = 0) {
 
       let text = "";
 
-      // Body is fully drained here (streamed under the hood via
-      // pipeThrough), but nothing touches the DOM yet — the verbose
-      // log stays on screen until we're actually done reading, matching
-      // verboseFetch.done() below, instead of disappearing early.
       try {
         while (true) {
           const { value, done } = await streamReader.read();
@@ -1035,17 +951,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           text += decoder.decode(value, { stream: true });
         }
         text += decoder.decode(); // flush any remaining bytes
-
-        verboseFetch.done(
-          needsDecompress
-            ? `Decompressed body received (${text.length.toLocaleString()} chars)`
-            : `Text body received (${text.length.toLocaleString()} chars)`,
-        );
-      } catch {
-        verboseFetch.done(
-          `Text body received (${text.length.toLocaleString()} chars)`,
-        );
-      }
+      } catch {}
 
       duration = Math.round(performance.now() - startTime);
 
@@ -1172,7 +1078,6 @@ async function performRequest(targetUrl, retryCount = 0) {
       }
     }
   } catch (err) {
-    verboseFetch?.fail(err);
     responseArea.classList.remove("empty-state");
     responseArea.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
     setStatusDotColor("red-500");
@@ -2188,7 +2093,7 @@ clearResponseBtn.addEventListener("click", () => {
 });
 
 sendBtn.addEventListener("click", () => {
-  if(isLoading) return;
+  if(isLoading || isCoolingDown) return;
   if (pageFromPath(window.location.pathname) !== "playground") return;
   if (!hasConnection()) {
     updateConnectionUI();
@@ -2396,3 +2301,85 @@ fetchInitialEndpoints().then(() => {
     });
   }
 });
+
+// Mobile custom scrollbar — draggable, rAF-batched.
+(() => {
+  const track = document.getElementById("customScrollTrack");
+  const thumb = document.getElementById("customScrollThumb");
+  if (!track || !thumb) return;
+
+  let isDragging = false;
+  let dragStartY = 0;
+  let dragStartScrollTop = 0;
+  let lastClientY = 0;
+  let dragRafId = null;
+
+  const update = () => {
+    const { scrollHeight, clientHeight, scrollTop } = responseArea;
+    const scrollable = scrollHeight - clientHeight;
+    if (scrollable <= 1) {
+      thumb.style.display = "none";
+      return;
+    }
+    thumb.style.display = "";
+    const trackHeight = track.clientHeight;
+    const thumbHeight = Math.max(24, (clientHeight / scrollHeight) * trackHeight);
+    const maxTop = trackHeight - thumbHeight;
+    thumb.style.height = thumbHeight + "px";
+    thumb.style.top = (scrollTop / scrollable) * maxTop + "px";
+  };
+
+  const applyDrag = () => {
+    if (!isDragging) { dragRafId = null; return; }
+    const { scrollHeight, clientHeight } = responseArea;
+    const scrollable = scrollHeight - clientHeight;
+    const trackHeight = track.clientHeight;
+    const thumbHeight = thumb.offsetHeight;
+    const maxThumbTop = trackHeight - thumbHeight;
+    if (maxThumbTop > 0) {
+      const deltaY = lastClientY - dragStartY;
+      const deltaRatio = deltaY / maxThumbTop;
+      responseArea.scrollTop = dragStartScrollTop + deltaRatio * scrollable;
+    }
+    dragRafId = requestAnimationFrame(applyDrag);
+  };
+
+  const stopDrag = () => {
+    if (!isDragging) return;
+    if (dragRafId) cancelAnimationFrame(dragRafId);
+    dragRafId = null;
+    isDragging = false;
+    thumb.classList.remove("dragging");
+  };
+
+  thumb.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    isDragging = true;
+    dragStartY = e.clientY;
+    lastClientY = e.clientY;
+    dragStartScrollTop = responseArea.scrollTop;
+    thumb.classList.add("dragging");
+    thumb.setPointerCapture(e.pointerId);
+    dragRafId = requestAnimationFrame(applyDrag);
+  });
+
+  thumb.addEventListener("pointermove", (e) => {
+    if (!isDragging) return;
+    lastClientY = e.clientY;
+  });
+
+  thumb.addEventListener("pointerup", stopDrag);
+  thumb.addEventListener("pointercancel", stopDrag);
+
+  track.addEventListener("pointerdown", (e) => {
+    if (e.target === thumb) return;
+    const trackRect = track.getBoundingClientRect();
+    const clickRatio = (e.clientY - trackRect.top) / trackRect.height;
+    const { scrollHeight, clientHeight } = responseArea;
+    responseArea.scrollTop = clickRatio * (scrollHeight - clientHeight);
+  });
+
+  responseArea.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(responseArea);
+  update();
+})();

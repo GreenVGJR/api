@@ -11,8 +11,10 @@ app.get("/spotify", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api.spotify.com, api-partner.spotify.com");
-	return await dispatch(c, () => SPMusic(query));
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 1 : Math.min(20, Math.max(1, parseInt(limitStr, 10)));
+	c.header("X-Route", "api-partner.spotify.com");
+	return await dispatch(c, () => SPMusic(query, false, limit));
 });
 
 export default app;

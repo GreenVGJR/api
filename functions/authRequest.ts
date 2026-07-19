@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import { Buffer } from "buffer";
 import { commonHeaders, userAgent } from "./request.js";
+import { ClientTransaction } from "x-client-transaction-id";
+import { parseHTML } from "linkedom";
+
+export let twitterDocument: any = null;
+export let twitterTransaction: any = null;
+export const twitterObj: Record<string, any> = {};
 
 export let keytidal: string | undefined = "txNoH4kkV41MfH25";
 export const keytidalopen: string = "txNoH4kkV41MfH25";
@@ -8,24 +14,44 @@ export function setKeyTidal(val: string | undefined) {
 	keytidal = val;
 }
 
+/**
+ * Normalizes cookies into a request-ready `Cookie` header value.
+ * Accepts either an array of raw `Set-Cookie` strings (with attributes) or a
+ * single `set-cookie` header string, and returns only `name=value` pairs
+ * joined by `; ` (strips expires/path/domain/Secure/HttpOnly/SameSite).
+ */
+export function normalizeCookies(cookies: string | string[] | undefined | null): string {
+	if (!cookies) return "";
+	const list = Array.isArray(cookies) ? cookies : cookies.split(",");
+	return list
+		.map((c: string) => c.trim().split(";")[0])
+		.filter(Boolean)
+		.join("; ");
+}
+
 export async function youtubeVisitorKey(): Promise<{
 	visitor_data: string;
 	cookie: string;
+	client_version: string;
+	platform_type: string;
 } | null> {
 	try {
-		const res = await fetch("https://www.youtube.com/", {
+		const res = await fetch("https://www.youtube.com/sw.js_data", {
 			headers: commonHeaders,
 		});
 		const text = await res.text();
-		const visitor_data = text.split('"visitorData":"')[1]?.split('"')[0] || null;
+		const finaltext: any = JSON.parse(text.split("\n")?.[2] || "null");
+		const visitor_data = finaltext?.[0]?.[2]?.[6];
+		if (!visitor_data) return null;
+		const client_version = finaltext?.[0]?.[2]?.[0]?.[0]?.[16];
+		const platform_type = finaltext?.[0]?.[2]?.[0]?.[0]?.[17];
 		let cookie = "";
 		if (res.headers.getSetCookie) {
-			cookie = res.headers.getSetCookie().join("; ");
+			cookie = normalizeCookies(res.headers.getSetCookie());
 		} else {
-			cookie = res.headers.get("set-cookie") || "";
+			cookie = normalizeCookies(res.headers.get("set-cookie"));
 		}
-		if (!visitor_data) return null;
-		return { visitor_data, cookie };
+		return { visitor_data, cookie, client_version, platform_type };
 	} catch (e) {
 		console.error("Error fetching visitorData:", e);
 		return null;
@@ -433,12 +459,52 @@ export const instagramKey = async function instagramKey(): Promise<string | null
 		const res = await fetch("https://www.instagram.com/", {
 			headers: commonHeaders,
 		});
+		let cookie = "";
 		if (res.headers.getSetCookie) {
-			return res.headers.getSetCookie().join("; ");
+			cookie = normalizeCookies(res.headers.getSetCookie());
+		} else {
+			cookie = normalizeCookies(res.headers.get("set-cookie"));
 		}
-		return res.headers.get("set-cookie") || null;
+		return cookie;
 	} catch (e) {
 		console.error(e);
 		return null;
+	}
+};
+
+export const twitterKey = async function twitterKey(typeName: string) {
+	try {
+		const response = await fetch("https://x.com/i/jf/onboarding/web", {
+			headers: { ...commonHeaders },
+		});
+		const html = await response.text();
+		const { document } = parseHTML(html);
+		twitterDocument = document;
+
+		twitterTransaction = new ClientTransaction(twitterDocument);
+		await twitterTransaction.initialize();
+
+		const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split("client-web/main")[1].split('"')[0], { headers: { ...commonHeaders } });
+
+		const res1 = await pul1.text();
+
+		const queryId_user = res1
+			.split("e.exports={queryId:")
+			.find((e: any) => e.includes(`operationName:"${typeName}"`))
+			?.split('"')[1];
+		const features_user = JSON.parse(
+			res1
+				.split("e.exports={queryId:")
+				.find((e: any) => e.includes(`operationName:"${typeName}"`))
+				?.split("featureSwitches:")[1]
+				.split(",field")[0] || "{}",
+		).reduce((acc: any, key: any) => {
+			acc[key] = true;
+			return acc;
+		}, {});
+
+		twitterObj[typeName] = [queryId_user, features_user, await twitterTransaction.generateTransactionId("GET", "/graphql/" + queryId_user + "/" + typeName)];
+	} catch (e) {
+		console.error(e);
 	}
 };

@@ -1,5 +1,5 @@
 import app from "./app.js";
-import { getBotGuardChallenge, getYoutubei, getPoToken } from "./functions/request.js";
+import { getBotGuardChallenge, getYoutubei } from "./functions/request.js";
 import { destroyAllPlayers } from "./functions/musicPlayer.js";
 
 const port = 3000;
@@ -9,6 +9,10 @@ g.__vgjr_refresh_count = (g.__vgjr_refresh_count || 0) + 1;
 g.__vgjr_last_reload = Date.now();
 
 if (!g.__vgjr_initialized) {
+	getBotGuardChallenge();
+	getYoutubei();
+	console.log(`\n🚀 Bun Server is running!`);
+	console.log(`🏠 Local:    http://localhost:${port}/playground`);
 	g.__vgjr_initialized = true;
 	g.__vgjr_starttime = Date.now();
 	g.__vgjr_refresh_count = 0;
@@ -16,17 +20,6 @@ if (!g.__vgjr_initialized) {
 		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
 	}, 0);
 
-	Promise.allSettled([getBotGuardChallenge(), getYoutubei(), getPoToken()])
-		.then((results) => {
-			const failed = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-			if (failed) console.error("YouTube warmup failed:", failed.reason);
-		})
-		.catch((err) => {
-			console.error("YouTube warmup failed:", err);
-		});
-
-	console.log(`\n🚀 Bun Server is running!`);
-	console.log(`🏠 Local:    http://localhost:${port}/playground`);
 	if (!g.__vgjr_shutdown_handlers) {
 		g.__vgjr_shutdown_handlers = true;
 		process.on("SIGINT", async () => {

@@ -11,8 +11,10 @@ app.get("/soundcloud", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 1 : Math.min(30, Math.max(1, parseInt(limitStr, 10)));
 	c.header("X-Route", "api-v2.soundcloud.com, mobi.soundcloud.com");
-	return await dispatch(c, () => SCMusic(query));
+	return await dispatch(c, () => SCMusic(query, false, limit));
 });
 
 export default app;

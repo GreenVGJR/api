@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj } from "./authRequest.js";
 
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
@@ -9,7 +9,8 @@ import signBogus from "./tiktok_signature/xbogus.mjs";
 import signGnarly from "./tiktok_signature/xgnarly.mjs";
 
 import { Innertube, Log, ProtoUtils } from "youtubei.js";
-import BG from "bgutils-js";
+import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
+import { createColdStartToken, WebPoMinter } from "bgutils-js/webpo";
 import { parseHTML } from "linkedom";
 import { decodeHTML } from "entities";
 import crypto from "crypto";
@@ -29,9 +30,28 @@ Log.setLevel(Log.Level.ERROR);
 
 let youtubeiPromise: Promise<any> | null = null;
 let poTokenCache: { po_token: string; visitor_data: string } | null = null;
-let botGuardChallengePromise: Promise<any> | null = null;
-const captionPoTokenCache = new Map<string, string>();
+
 const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || "";
+const YOUTUBE_API_KEY = process.env.YTAPI_KEY || "";
+
+let bgProgram: string | null = null;
+let bgGlobalName: string | null = null;
+let bgInitPromise: Promise<void> | null = null;
+let bgRefreshPromise: Promise<void> | null = null;
+let bgVisitorData: string | null = null;
+let bgIntegrityExp = 0;
+const CAPTION_POT_TTL_FALLBACK = 30 * 60 * 1000;
+
+const captionPoTokenCache = new Map<string, { token: string; exp: number }>();
+function getCachedCaptionPot(videoId: string) {
+	const entry = captionPoTokenCache.get(videoId);
+	if (entry && entry.exp > Date.now()) return entry.token;
+	captionPoTokenCache.delete(videoId);
+	return null;
+}
+function setCachedCaptionPot(videoId: string, token: string) {
+	captionPoTokenCache.set(videoId, { token, exp: bgIntegrityExp || Date.now() + CAPTION_POT_TTL_FALLBACK });
+}
 
 async function ensureBotGuardDom() {
 	if (typeof (globalThis as any).window !== "undefined" && typeof (globalThis as any).document !== "undefined") return;
@@ -48,68 +68,140 @@ function getFallbackPoToken() {
 	const ts = Math.floor(Date.now() / 1000);
 	const visitorData = ProtoUtils.encodeVisitorData(id, ts);
 	return {
-		po_token: BG.PoToken.generateColdStartToken(id),
+		po_token: createColdStartToken(id),
 		visitor_data: visitorData,
 	};
 }
 
+// Cold-start (session-bound) token for initial playback, built from a fresh visitor id.
+async function installBotGuardInterpreter() {
+	await ensureBotGuardDom();
+	const challenge = await getChallenge({
+		requestKey: YOUTUBE_PO_TOKEN_REQUEST_KEY,
+		fetchFunction: fetch as any,
+		useYouTubeAPI: true,
+	});
+	const interpreterJavascript = challenge?.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
+	if (!challenge || !interpreterJavascript) throw new Error("Could not load BotGuard challenge");
+	new Function(interpreterJavascript)();
+	bgProgram = challenge.program as string;
+	bgGlobalName = challenge.globalName as string;
+}
+
+async function refreshBotGuardIntegrity() {
+	if (bgRefreshPromise) return bgRefreshPromise;
+	bgRefreshPromise = (async () => {
+		if (!bgProgram || !bgGlobalName) await installBotGuardInterpreter();
+		const botguard = await BotGuardClient.create({
+			program: bgProgram as string,
+			globalName: bgGlobalName as string,
+			globalObject: globalThis,
+		});
+		const webPoSignalOutput: any[] = [];
+		// Bind the snapshot to the same visitorData the Innertube session uses,
+		// otherwise the integrity token (and thus the caption pot) is visitor-less
+		// and YouTube intermittently rejects it (empty 200).
+		const botguardResponse = await botguard.snapshot({
+			webPoSignalOutput,
+			contentBinding: bgVisitorData || poTokenCache?.visitor_data ? { c: bgVisitorData || poTokenCache?.visitor_data! } : undefined,
+		});
+		const integrityTokenResponse = await fetch("https://jnn-pa.googleapis.com/$rpc/google.internal.waa.v1.Waa/GenerateIT", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json+protobuf",
+				"x-goog-api-key": YOUTUBE_API_KEY,
+				"x-user-agent": "grpc-web-javascript/0.1",
+			},
+			body: JSON.stringify([YOUTUBE_PO_TOKEN_REQUEST_KEY, botguardResponse]),
+		});
+		const integrityTokenJson = (await integrityTokenResponse.json()) as [string, number, number, string];
+		const [integrityToken] = integrityTokenJson;
+		if (!integrityToken) throw new Error("BotGuard integrity token unavailable");
+	})().finally(() => {
+		bgRefreshPromise = null;
+	});
+	return bgRefreshPromise;
+}
+
+export async function initBotGuard() {
+	if (bgProgram && bgGlobalName) return;
+	if (bgInitPromise) return bgInitPromise;
+	bgInitPromise = (async () => {
+		await installBotGuardInterpreter();
+		await refreshBotGuardIntegrity();
+	})().finally(() => {
+		bgInitPromise = null;
+	});
+	return bgInitPromise;
+}
+
+// Content-bound token: fresh challenge + full generate (no cached integrity).
+async function generateCbPotFall(videoId: string) {
+	await ensureBotGuardDom();
+	const challenge = await getChallenge({
+		requestKey: YOUTUBE_PO_TOKEN_REQUEST_KEY,
+		fetchFunction: fetch as any,
+		useYouTubeAPI: true,
+	});
+	const interpreterJavascript = challenge?.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
+	if (!challenge || !interpreterJavascript) throw new Error("Could not load BotGuard challenge");
+	new Function(interpreterJavascript)();
+	const botguard = await BotGuardClient.create({
+		program: challenge.program as string,
+		globalName: challenge.globalName as string,
+		globalObject: globalThis,
+	});
+	const webPoSignalOutput: any[] = [];
+	const botguardResponse = await botguard.snapshot({
+		webPoSignalOutput,
+		contentBinding: bgVisitorData || poTokenCache?.visitor_data ? { c: bgVisitorData || poTokenCache?.visitor_data! } : undefined,
+	});
+	const integrityTokenResponse = await fetch("https://jnn-pa.googleapis.com/$rpc/google.internal.waa.v1.Waa/GenerateIT", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json+protobuf",
+			"x-goog-api-key": YOUTUBE_API_KEY,
+			"x-user-agent": "grpc-web-javascript/0.1",
+		},
+		body: JSON.stringify([YOUTUBE_PO_TOKEN_REQUEST_KEY, botguardResponse]),
+	});
+	const integrityTokenJson = (await integrityTokenResponse.json()) as [string, number, number, string];
+	const integrityToken = integrityTokenJson[0];
+	const estimatedTtlSecs = integrityTokenJson[1];
+	if (estimatedTtlSecs) bgIntegrityExp = estimatedTtlSecs * 1000;
+	else bgIntegrityExp = CAPTION_POT_TTL_FALLBACK;
+	if (!integrityToken) throw new Error("BotGuard integrity token unavailable");
+	const minter = await WebPoMinter.create({ integrityToken }, webPoSignalOutput as any);
+	const token = await minter.mintAsWebsafeString(videoId);
+	if (!token) throw new Error("poToken generation produced no token");
+	return token;
+}
+
 export async function getBotGuardChallenge() {
-	if (botGuardChallengePromise) return botGuardChallengePromise;
-	botGuardChallengePromise = (async () => {
-		const session = await Innertube.create({ retrieve_player: false });
-		const visitorData = session.session.context.client.visitorData;
-		if (!visitorData) throw new Error("Could not get YouTube visitor data");
-
-		await ensureBotGuardDom();
-		const bgConfig = {
-			fetch: fetch as any,
-			globalObj: globalThis,
-			identifier: visitorData,
-			requestKey: YOUTUBE_PO_TOKEN_REQUEST_KEY,
-		};
-		const challenge = await BG.Challenge.create(bgConfig);
-		const interpreterJavascript = challenge?.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
-		if (!challenge || !interpreterJavascript) throw new Error("Could not load BotGuard challenge");
-
-		new Function(interpreterJavascript)();
-		return { visitorData, challenge, bgConfig };
-	})().catch((e) => {
-		botGuardChallengePromise = null;
-		throw e;
-	});
-	return botGuardChallengePromise;
+	await initBotGuard();
+	if (!keyYoutubeVisitor) {
+		keyYoutubeVisitor = await youtubeVisitorKey();
+	}
+	const visitorData = keyYoutubeVisitor?.visitor_data;
+	if (!visitorData) throw new Error("Could not get YouTube visitor data");
+	return { visitorData };
 }
 
-async function mintYoutubePoToken(identifier: string) {
-	const { challenge, bgConfig } = await getBotGuardChallenge();
-	const result = await BG.PoToken.generate({
-		program: challenge.program,
-		globalName: challenge.globalName,
-		bgConfig: { ...bgConfig, identifier },
-	});
-	return result.poToken;
-}
-
-async function generateYoutubePoToken() {
+export async function generateYoutubePoToken() {
 	const { visitorData } = await getBotGuardChallenge();
+	bgVisitorData = visitorData;
 	return {
-		po_token: await mintYoutubePoToken(visitorData),
+		po_token: await generateCbPotFall(visitorData),
 		visitor_data: visitorData,
 	};
 }
 
 async function getYoutubeCaptionPoToken(videoId: string) {
-	const cached = captionPoTokenCache.get(videoId);
+	const cached = getCachedCaptionPot(videoId);
 	if (cached) return cached;
-	try {
-		const token = await mintYoutubePoToken(videoId);
-		captionPoTokenCache.set(videoId, token);
-		return token;
-	} catch (e) {
-		console.error("Failed to generate YouTube caption PO token:", e);
-		const { po_token } = await getPoToken();
-		return po_token;
-	}
+	const token = await generateCbPotFall(videoId);
+	setCachedCaptionPot(videoId, token);
+	return token;
 }
 
 export async function getPoToken() {
@@ -125,21 +217,27 @@ export async function getPoToken() {
 
 function withYoutubePoToken(baseUrl: any, poToken: string) {
 	if (!baseUrl) return null;
+	const clientVersion = keyYoutubeVisitor?.client_version || "2.20261230";
+	const platformType = keyYoutubeVisitor?.platform_type || "X11";
 	try {
 		const url = new URL(String(baseUrl));
 		url.searchParams.set("fmt", "json3");
 		url.searchParams.set("potc", "1");
-		url.searchParams.set("pot", poToken);
+		url.searchParams.set("pot", encodeURIComponent(poToken));
 		url.searchParams.set("xorb", "2");
 		url.searchParams.set("xobt", "3");
 		url.searchParams.set("xovt", "3");
 		url.searchParams.set("cbr", "Firefox");
-		url.searchParams.set("cbrver", "153.0");
+		url.searchParams.set("cbrver", "152.0");
 		url.searchParams.set("c", "WEB");
+		url.searchParams.set("cver", clientVersion);
+		url.searchParams.set("cplayer", "UNIPLAYER");
+		url.searchParams.set("cos", platformType);
+		url.searchParams.set("cplatform", "DESKTOP");
 		return url.toString();
 	} catch {
 		const separator = String(baseUrl).includes("?") ? "&" : "?";
-		return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=153.0&c=WEB`;
+		return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=152.0&c=WEB&cver=${clientVersion}&cplayer=UNIPLAYER&cos=${platformType}&cplatform=DESKTOP`;
 	}
 }
 
@@ -178,7 +276,7 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -202,7 +300,7 @@ const responseText = async (response: any): Promise<string> => {
 	return "";
 };
 
-let keyYoutubeVisitor: { visitor_data: string; cookie: string } | null = null;
+let keyYoutubeVisitor: { visitor_data: string; cookie: string; client_version: string; platform_type: string } | null = null;
 
 export const getQuery = (c: Context, key: string) => {
 	const val = c.req.query(key);
@@ -526,6 +624,7 @@ let keycrunchy: string | undefined;
 let keytumblr: string | undefined = process.env.TUMBLR;
 let keyInstagram: string | null = null;
 let saweriaBuildId: string | undefined;
+let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
 type DiscordListCacheEntry = {
@@ -555,72 +654,6 @@ function deepFind(obj: unknown, key: string): unknown | null {
 	for (const val of Object.values(record)) {
 		const result = deepFind(val, key);
 		if (result != null) return result;
-	}
-	return null;
-}
-
-function filterSpecificCookies(cookie: string | string[], allowedKeys: string[] = []) {
-	if (typeof cookie !== "string" && !Array.isArray(cookie)) return "";
-	const cookieStr = Array.isArray(cookie) ? cookie.join("; ") : cookie;
-	return cookieStr
-		.split(";")
-		.map((c) => c.trim())
-		.filter((c) => allowedKeys.includes(c.split("=")[0]))
-		.join("; ");
-}
-
-// Helper to extract SSR data from Twitter's HTML
-function extractTwitterSSR(html: string): any {
-	const match = html.match(/<script[^>]*class="\$tsr"[^>]*id="\$tsr-stream-barrier"[^>]*>([\s\S]*?)<\/script>/);
-	if (!match) return null;
-	const scriptContent = match[1];
-	const $R: any = { tsr: [] };
-	const self: any = { $R };
-	const document = { currentScript: { remove: () => {} } };
-	const $_TSR: any = {};
-	const ReadableStream = (globalThis as any).ReadableStream;
-	try {
-		const fn = new Function("self", "document", "$_TSR", "ReadableStream", "$R", scriptContent + "; return self.$R.tsr[0];");
-		return fn(self, document, $_TSR, ReadableStream, self.$R);
-	} catch (e) {
-		console.error("Failed to evaluate Twitter SSR script", e);
-		return null;
-	}
-}
-
-// Extract user profile from SSR data
-// Resolve __ref pointers within relay records (with cycle detection via visited set)
-function resolveRefs(obj: any, records: Record<string, any>, visited: Set<string> = new Set()): any {
-	if (!obj || typeof obj !== "object") return obj;
-	if (obj.__ref) {
-		if (visited.has(obj.__ref)) return `[ref] ${obj.__ref}`;
-		visited.add(obj.__ref);
-		return resolveRefs(records[obj.__ref], records, visited);
-	}
-	if (obj.__refs)
-		return (obj.__refs as string[]).map((ref: string) => {
-			if (visited.has(ref)) return `[ref] ${ref}`;
-			visited.add(ref);
-			return resolveRefs(records[ref], records, visited);
-		});
-	if (Array.isArray(obj)) return obj.map((item) => resolveRefs(item, records, new Set(visited)));
-	const resolved: Record<string, any> = {};
-	for (const [key, val] of Object.entries(obj)) {
-		if (key === "__id" || key === "__typename") continue;
-		resolved[key] = resolveRefs(val, records, new Set(visited));
-	}
-	return resolved;
-}
-
-// Extract and resolve tweet from SSR data (relayRecords)
-function parseTweetFromSSR(ssr: any): any {
-	const records = ssr?.dehydratedData?.relayRecords;
-	if (!records) return null;
-	for (const key of Object.keys(records)) {
-		const rec = records[key];
-		if (rec && rec.__typename === "Tweet") {
-			return resolveRefs(rec, records);
-		}
 	}
 	return null;
 }
@@ -730,67 +763,43 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 		if (!keyYoutubeVisitor) {
 			keyYoutubeVisitor = await youtubeVisitorKey();
 		}
-		let response: any = null;
-		let currentUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(que)}`;
-		const seenRedirects = new Set<string>();
-		const cookieJar = new Map<string, string>([["CONSENT", "YES+1"]]);
-		const cookieAttributes = new Set(["domain", "expires", "httponly", "max-age", "partitioned", "path", "priority", "samesite", "secure"]);
+		const bodyload = JSON.stringify({
+			query: que,
+			context: {
+				client: {
+					clientName: "WEB",
+					clientVersion: "2.20261230",
+					hl: "en",
+					gl: "US",
+					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+				},
+			},
+			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+		});
 
-		// Bun can loop when following YouTube's cookie-setting redirects without a jar.
-		for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
-			const cookieHeader = Array.from(cookieJar)
-				.map(([name, value]) => `${name}=${value}`)
-				.join("; ");
-
-			const fullCookieHeader = [cookieHeader, keyYoutubeVisitor?.cookie].filter(Boolean).join("; ");
-			response = await fetch(currentUrl, {
+		const [response, rescomplete] = await Promise.all([
+			fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
 				headers: {
 					...commonHeaders,
-					...(fullCookieHeader ? { Cookie: fullCookieHeader } : {}),
+					"content-type": "application/json",
+					...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
 				},
-				redirect: "manual" as const,
-			});
+				body: bodyload,
+				method: "POST",
+			}),
+			fetch(`https://suggestqueries-clients6.youtube.com/complete/search?ds=yt&hl=en&client=youtube&gs_ri=youtube&ytvs=1&q=${que}`, { headers: commonHeaders }),
+		]);
 
-			const setCookie = response.headers?.["set-cookie"];
-			if (setCookie) {
-				String(setCookie)
-					.split(";")
-					.forEach((part) => {
-						const trimmed = part.trim();
-						const equalIndex = trimmed.indexOf("=");
-						if (equalIndex <= 0) return;
-
-						const name = trimmed.slice(0, equalIndex);
-						if (cookieAttributes.has(name.toLowerCase())) return;
-
-						const value = trimmed.slice(equalIndex + 1);
-						if (value) cookieJar.set(name, value);
-						else cookieJar.delete(name);
-					});
-			}
-
-			if (![301, 302, 303, 307, 308].includes(response.status)) break;
-
-			const location = response.headers?.location;
-			if (typeof location !== "string" || !location) break;
-
-			const nextUrl = new URL(location, currentUrl).toString();
-			if (seenRedirects.has(nextUrl)) break;
-
-			seenRedirects.add(currentUrl);
-			currentUrl = nextUrl;
-		}
-
-		if (!response) return { data: null };
-
-		let res: any = await response.text();
-
-		res = parseYtInitial(res);
-		if (!res) {
-			return { data: null };
-		}
-
+		const res: any = await response.json();
+		const autoresText = (await rescomplete.text()).slice(19, -1);
 		let alk: any[] = [];
+		let alj: any[] = [];
+		try {
+			const autores = JSON.parse(autoresText);
+			(autores?.[1] || []).forEach((o: any) => {
+				if (o?.[0]) alj.push(o[0]);
+			});
+		} catch {}
 		const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 		const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
@@ -813,7 +822,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 			if (checkmix && deepSearch) {
 				try {
 					const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
-						headers: { ...commonHeaders },
+						headers: commonHeaders,
 					});
 
 					let rlkresText = await rlkreq.text();
@@ -839,7 +848,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 										altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 										title: c.playlistPanelVideoRenderer?.title?.simpleText,
 										duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
-										thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
+										thumbnail: "https://i.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
 										owner: {
 											name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
 											url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
@@ -857,7 +866,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 												url: "https://www.youtube.com/watch?v=" + rId,
 												altUrl: "https://www.youtube.com" + nUrl,
 												title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
-												thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+												thumbnail: "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
 												owner: {
 													name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
 													url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
@@ -881,9 +890,9 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 					videoId: a.videoId,
 					url: "https://www.youtube.com/watch?v=" + a.videoId,
 					altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
-					thumbnail: "https://s.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
+					thumbnail: "https://i.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
 					movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
-					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts") ? "https://s.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
+					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts") ? "https://i.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
 					title: a.title?.runs?.[0]?.text,
 					description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join("") || "",
 					owners: {
@@ -932,9 +941,9 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 				videoId: e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
 				url: "https://www.youtube.com/watch?v=" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
 				altUrl: "https://www.youtube.com" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
-				thumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
+				thumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
 				movingThumbnail: null,
-				previewThumbnail: "https://s.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
+				previewThumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
 				title: e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content || null,
 				description: "",
 				owners: {},
@@ -950,7 +959,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 		});
 		const finalTask2 = mappedTasks2.filter(Boolean).flat();
 
-		return { searchParams: queryId, data: alk?.concat(finalTask2) };
+		return { searchParams: queryId, autocomplete: alj, data: alk?.concat(finalTask2) };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -973,9 +982,10 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 			context: {
 				client: {
 					clientName: "WEB_REMIX",
-					clientVersion: "1.20251212",
+					clientVersion: "1.20261230",
 					hl: "en",
 					gl: "US",
+					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 				},
 			},
 			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
@@ -1047,7 +1057,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 				if (muspl && deepSearch) {
 					try {
 						const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${muspl}`, {
-							headers: { ...commonHeaders },
+							headers: commonHeaders,
 						});
 
 						let rlkresText = await rlkreq.text();
@@ -1073,7 +1083,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 											altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 											title: c.playlistPanelVideoRenderer?.title?.simpleText,
 											duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
-											thumbnail: "https://s.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
+											thumbnail: "https://i.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
 											owner: {
 												name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
 												url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
@@ -1091,7 +1101,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 													url: "https://www.youtube.com/watch?v=" + rId,
 													altUrl: "https://www.youtube.com" + nUrl,
 													title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
-													thumbnail: "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+													thumbnail: "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
 													owner: {
 														name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
 														url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
@@ -1109,6 +1119,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 
 				return {
 					duration: durationRun?.text || null,
+					backgroundColors: a?.overlay?.musicItemThumbnailOverlayRenderer?.background?.verticalGradient?.gradientLayerColors || null,
 					browseId: artistRunsFinal[0]?.navigationEndpoint?.browseEndpoint?.browseId || null,
 					albumBrowseId: albumRun?.navigationEndpoint?.browseEndpoint?.browseId || null,
 					playlistId: muspl,
@@ -1166,9 +1177,10 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 			context: {
 				client: {
 					clientName: "WEB",
-					clientVersion: "2.20251212",
+					clientVersion: "2.20261230",
 					hl: "en",
 					gl: "US",
+					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 				},
 			},
 			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
@@ -1260,7 +1272,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 	}
 };
 
-export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
+export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolean, limit_number: number = 1): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keysc) {
@@ -1270,28 +1282,28 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
 	try {
 		const [per, per2] = await Promise.all([
 			fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}&client_id=${keysc}&limit=${limit_number}&linked_partitioning=0`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 			fetch(`https://mobi.soundcloud.com/search/tracks?q=${encodeURIComponent(que)}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 		]);
 
 		if (per.status === 401) {
-			return await SCMusic(que, true);
+			return await SCMusic(que, true, limit_number);
 		}
 		const pes = per.status === 200 ? await per.json() : null;
-		let testpes: any = null;
+		let testpes: any = {};
 		try {
 			const per2Text = await per2.text();
 			testpes = JSON.parse(per2Text.split('type="application/json">')[1].split("</script>")[0]);
 		} catch {}
+		const entities = testpes?.props?.pageProps?.initialStoreState?.entities || {};
+		const trackData = Object.values(entities?.tracks || {})
+			.map((t: any) => t?.data)
+			.filter(Boolean);
 		return {
-			data: [pes?.collection || null, testpes?.props?.pageProps?.initialStoreState?.entities || null],
+			data: [pes?.collection || null, trackData.length ? trackData : null],
 		};
 	} catch (e) {
 		console.error(e);
@@ -1299,7 +1311,7 @@ export const SCMusic = async function SCMusic(que: string, refresh_auth?: boolea
 	}
 };
 
-export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 10): Promise<any> {
+export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean = false, limit_number: number = 1): Promise<any> {
 	if (!que) return null;
 
 	if (refresh_auth || !keysp || !keysptoken) {
@@ -1387,6 +1399,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	try {
 		const responseBody: any = {
 			data: null,
+			syncLyrics: null,
 			lyrics: null,
 			footer: null,
 		};
@@ -1396,7 +1409,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 			context: {
 				client: {
 					clientName: "WEB_REMIX",
-					clientVersion: "1.20261212",
+					clientVersion: "1.20261230",
 					hl: "en",
 					gl: "US",
 				},
@@ -1411,33 +1424,63 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 			method: "POST",
 		});
 		const res: any = await response.json();
+		const browseId: string = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId || "";
 
-		const bodyload2 = JSON.stringify({
-			browseId: res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId,
-			context: {
-				client: {
-					clientName: "WEB_REMIX",
-					clientVersion: "1.20261212",
-					hl: "en",
-					gl: "US",
+		if (browseId) {
+			const bodyload2 = JSON.stringify({
+				browseId: browseId,
+				context: {
+					client: {
+						clientName: "WEB_REMIX",
+						clientVersion: "1.20261230",
+						hl: "en",
+						gl: "US",
+					},
 				},
-			},
-		});
+			});
 
-		const pull = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents", {
-			headers: {
-				...commonHeaders,
-				"Content-Type": "application/json",
-			},
-			body: bodyload2,
-			method: "POST",
-		});
+			const bodyload3 = JSON.stringify({
+				browseId: browseId,
+				context: {
+					client: {
+						clientName: "ANDROID_MUSIC",
+						clientVersion: "9.25.50",
+						hl: "en",
+						gl: "US",
+					},
+				},
+			});
 
-		const [res2] = await Promise.all([pull.json()]);
+			const [pull, pull3] = await Promise.all([
+				fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents", {
+					headers: {
+						...commonHeaders,
+						"Content-Type": "application/json",
+					},
+					body: bodyload2,
+					method: "POST",
+				}),
+				fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents.elementRenderer.newElement.type.componentType.model.timedLyricsModel.lyricsData(timedLyricsData(lyricLine,cueRange(startTimeMilliseconds)))", {
+					headers: {
+						...commonHeaders,
+						"Content-Type": "application/json",
+					},
+					body: bodyload3,
+					method: "POST",
+				}),
+			]);
+
+			const [res2, res3] = await Promise.all([pull.json(), pull3.json()]);
+			responseBody["lyrics"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
+			responseBody["syncLyrics"] =
+				(res3 as any)?.contents?.elementRenderer?.newElement?.type?.componentType?.model?.timedLyricsModel?.lyricsData?.timedLyricsData?.map((j: any) => ({
+					...j,
+					...(j?.cueRange ? {} : { cueRange: {} }),
+				})) || null;
+			responseBody["footer"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
+		}
 
 		responseBody["data"] = { ...(container || {}) };
-		responseBody["lyrics"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
-		responseBody["footer"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.footer?.runs?.[0]?.text || null;
 
 		return responseBody;
 	} catch (e) {
@@ -1450,9 +1493,7 @@ export const Shazam = async function Shazam(que: string) {
 	if (!que) return null;
 	try {
 		const pull = await fetch(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 		const res: any = await pull.json();
 		return { data: res?.results?.songs?.data || null };
@@ -1464,7 +1505,7 @@ export const Shazam = async function Shazam(que: string) {
 export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<any> {
 	if (!que) return null;
 	try {
-		const itunesRes = await fetch(`https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`, { method: "GET", headers: commonHeaders });
+		const itunesRes = await fetch(`https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`, { headers: commonHeaders });
 		const itunesData: any = await itunesRes.json();
 		const tracks = itunesData?.results;
 
@@ -1496,9 +1537,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 		if (shazamUrl) {
 			try {
 				const shazamRes = await fetch(shazamUrl, {
-					headers: {
-						...commonHeaders,
-					},
+					headers: commonHeaders,
 				});
 
 				const html = await shazamRes.text();
@@ -1673,9 +1712,7 @@ export const Deezer = async function Deezer(que: string, limits: number = 10) {
 	if (!que) return null;
 	try {
 		const pull = await fetch(`https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 		const res: any = await pull.json();
 		return { data: res?.data || null };
@@ -1689,9 +1726,11 @@ async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<str
 
 	for (let i = 0; i < maxRedirects; i++) {
 		const res = await fetch(currentUrl, {
-			method: "GET",
 			redirect: "manual" as const,
-			headers: commonHeaders,
+			headers: {
+				...commonHeaders,
+				Range: "bytes=0-1",
+			},
 		});
 
 		if (![301, 302, 303, 307, 308].includes(res.status)) break;
@@ -1741,7 +1780,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		let savetikData: any = null;
 		for (let i = 0; i < 3; i++) {
 			try {
-				const [response, svData] = await Promise.all([fetch(targetUrl, { headers: { ...commonHeaders } }), SavetikVideo(targetUrl)]);
+				const [response, svData] = await Promise.all([fetch(targetUrl, { headers: commonHeaders }), SavetikVideo(targetUrl)]);
 				const html = await response.text();
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
 				savetikData = svData;
@@ -1838,7 +1877,9 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		}
 
 		return {
+			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
 			data: responseData,
+			altData: videoDetail,
 		};
 	} catch (e) {
 		console.error(e);
@@ -2181,14 +2222,10 @@ export const Genius = async function Genius(que: string) {
 	try {
 		const [per, per2] = await Promise.all([
 			fetch(`https://genius.com/api/search/song?&per_page=10&q=${encodeURIComponent(que)}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 			fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(que)}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 		]);
 
@@ -2240,16 +2277,22 @@ function decryptConvo(encoded: string): string {
 }
 
 let geminiWiz: { fSid: string; bl: string; expire: number } | null = null;
+let geminiCookies: string | null = null;
 
 const getGeminiWiz = async () => {
 	if (geminiWiz && geminiWiz.expire > Date.now()) return geminiWiz;
 	try {
-		const res = await fetch("https://gemini.google.com", { headers: { ...commonHeaders } });
+		const res = await fetch("https://gemini.google.com", { headers: commonHeaders });
 		const text = await res.text();
 		const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
 		const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];
 		if (!fSid || !bl) return null;
-		geminiWiz = { fSid, bl, expire: Date.now() + 3600 * 1000 };
+		geminiWiz = { fSid, bl, expire: Date.now() + 21600 * 1000 };
+		if (res.headers.getSetCookie) {
+			geminiCookies = normalizeCookies(res.headers.getSetCookie());
+		} else {
+			geminiCookies = normalizeCookies(res.headers.get("set-cookie"));
+		}
 	} catch {
 		return null;
 	}
@@ -2263,6 +2306,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 	let objectbody: any = { cid: null, rid: null, rcid: null, cookies: null };
 	let parsebody = null;
+	let lastUUID: string | null = null;
 
 	if (convo) {
 		try {
@@ -2276,17 +2320,17 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 		objectbody["cid"] = parsebody?.cid;
 		objectbody["rid"] = parsebody?.rid;
 		objectbody["rcid"] = parsebody?.rcid;
-		objectbody["cookies"] = parsebody?.cookies ? filterSpecificCookies(parsebody.cookies, ["NID"]) : undefined;
+		lastUUID = parsebody?.contentUUID;
 	}
 
-	const qCookies = objectbody.cookies || null;
+	const qCookies = geminiCookies;
 
-	// const requestUuid = crypto.randomUUID().toUpperCase();
+	if (!lastUUID) lastUUID = crypto.randomUUID().toUpperCase();
 	const inner = new Array(69).fill(null);
 	inner[0] = [que, 0, null, null, null, null, 0];
-	inner[1] = ["en-US"];
+	inner[1] = ["en"];
 	inner[2] = [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, ""];
-	inner[3] = "1.";
+	inner[3] = null;
 	inner[4] = crypto.randomUUID().replace(/-/g, "");
 	inner[6] = [1];
 	inner[7] = 1;
@@ -2303,8 +2347,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[68] = 2;
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
-	return { error: "Google blocked the access for unknown time" };
-
 	const wiz = await getGeminiWiz();
 	geminiReqId = (geminiReqId + 1) % 100000;
 	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
@@ -2316,11 +2358,16 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 		headers: {
 			...commonHeaders,
 			...(qCookies ? { Cookie: qCookies } : {}),
+			Accept: "*/*",
 			"Content-Type": "application/x-www-form-urlencoded",
-			//  "Content-Length": Buffer.byteLength(reqPayload).toString(),
-			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${crypto.randomUUID().toUpperCase()}"]`,
 			Referer: "https://gemini.google.com",
 			Origin: "https://gemini.google.com",
+			"x-goog-ext-525001261-jspb": `[1,null,null,null,"56fdd199312815e2",null,null,0,[4,6],null,null,1,null,null,1,null,"${lastUUID}"]`,
+			"x-goog-ext-73010989-jspb": "[0]",
+			"x-goog-ext-73010990-jspb": "[0,0,0]",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
 			"X-Same-Domain": "1",
 		},
 		body: reqPayload,
@@ -2352,7 +2399,6 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 		};
 	}
 
-	const cookiess: any = req.headers.getSetCookie?.().join("; ") ?? req.headers.get("set-cookie");
 	const resText = await req.text();
 	let response;
 	let finalres;
@@ -2388,65 +2434,65 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 				if (convo) {
 					return await Gemini(que, null, retry);
 				}
-				if (errorCode == 13) {
-					return {
-						error: "Can't process this due high-demand model, rate-limited or bad request",
-						code: errorCode,
-					};
-				}
-				if (errorCode == 1097) {
-					return {
-						error: "Can't continue this conversation. Gemini might block this request",
-						code: errorCode,
-					};
-				}
-				if (errorCode == 1076) {
-					return { error: "Timeout / Bad Request", code: errorCode };
-				}
-				if (errorCode == 1060) {
-					return { error: "Google asking to verify you're not a bot", code: errorCode };
-				}
-				if (["1096", "1100", "1152"].includes(String(errorCode))) {
-					return {
-						error: "Can't continue this conversation. Try again but without conversation id",
-						code: errorCode,
-					};
-				}
-				return { error: `Can't continue stream response`, code: errorCode || null };
+				// No data after retries: fall through and attach the error to responseBody.
+			} else {
+				await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
+				return await Gemini(que, convo, retry + 1);
 			}
-			await new Promise((r) => setTimeout(r, GEMINI_RETRY_COOLDOWN_MS));
-			return await Gemini(que, convo, retry + 1);
+		} else {
+			objectbody.cid = (innerData as any)[1][0];
+			objectbody.rid = (innerData as any)[1][1];
+			objectbody.rcid = (innerData as any)[4][0][0];
+			objectbody.contentUUID = lastUUID;
+
+			finalres = innerData as any;
+
+			response = (finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ?? finalres[4]?.[0]?.[1]?.[0]) || null;
 		}
-
-		objectbody.cid = (innerData as any)[1][0];
-		objectbody.rid = (innerData as any)[1][1];
-		objectbody.rcid = (innerData as any)[4][0][0];
-		const newCookies = filterSpecificCookies(cookiess, ["NID"]);
-		if (newCookies) objectbody.cookies = newCookies;
-
-		finalres = innerData as any;
-
-		response = (finalres[4]?.[0]?.[12]?.[1]?.[0]?.[0]?.[0]?.[0] ?? finalres[4]?.[0]?.[1]?.[0]) || null;
 	} catch (e) {
 		console.error(e);
 		response = null;
 	}
 
+	const errorInfo = getGeminiError(errorCode);
+
 	const responseBody = {
 		isFallback: retry !== 0,
-		response: response,
+		response: response ?? null,
+		...(errorInfo ? { error: errorInfo.message, code: errorInfo.code } : { error: null }),
 		data: {
 			responseInfo: {
-				id: finalres[4]?.[0]?.[0]?.split("_")?.[1] || null,
-				language: finalres[4]?.[0]?.[9] || null,
+				sessionId: wiz?.fSid || null,
+				id: finalres ? finalres[4]?.[0]?.[0]?.split("_")?.[1] || null : null,
+				language: finalres ? finalres[4]?.[0]?.[9] || null : null,
 			},
-			conversation: encryptConvo(JSON.stringify(objectbody)),
+			conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
+			expire: String(geminiWiz?.expire) || null,
 			model: "gemini-3.5-flash",
 		},
 	};
 
 	return responseBody;
 };
+
+function getGeminiError(code: number | null) {
+	switch (code) {
+		case 13:
+			return { message: "Can't process this due high-demand model, rate-limited or bad request", code };
+		case 1097:
+			return { message: "Can't continue this conversation. Gemini might block this request", code };
+		case 1076:
+			return { message: "Timeout / Bad Request", code };
+		case 1060:
+			return { message: "Google - Sign in to confirm you're not a bot", code };
+		case 1096:
+		case 1100:
+		case 1152:
+			return { message: "Can't continue this conversation. Try again but without conversation id", code };
+		default:
+			return code != null ? { message: "Can't continue stream response", code } : null;
+	}
+}
 
 const findLangCode = (input?: string): string | null => {
 	if (!input) return null;
@@ -2473,10 +2519,7 @@ export const Translate = async function Translate(que: string, from?: string, to
 
 	try {
 		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (response.status !== 200) {
@@ -2607,6 +2650,7 @@ async function getYoutubeLiveCaptions(info: any) {
 					kind: "live",
 					isTranslatable: false,
 					url: uri,
+					content: null,
 				};
 			})
 			.filter((track) => track.url);
@@ -2623,9 +2667,8 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 	try {
 		const youtubeiPromise = getYoutubei();
 		const infoPromise = youtubeiPromise.then((youtubei: any) => youtubei.getInfo(videoId)).catch((e: any) => ({ __youtubeError: e }));
-		const [infoResult, poToken, comments] = await Promise.all([
+		const [infoResult, comments] = await Promise.all([
 			infoPromise,
-			getYoutubeCaptionPoToken(videoId),
 			deepFetch
 				? Promise.all([youtubeiPromise, infoPromise])
 						.then(([youtubei, info]: any[]) => (info?.__youtubeError ? [] : getYoutubeComments(youtubei, info, videoId)))
@@ -2633,31 +2676,34 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 				: Promise.resolve([]),
 		]);
 
-		const challenge = getYoutubeChallengeObject(videoId, poToken);
-
-		if (infoResult?.__youtubeError) {
-			return {
-				_challenge: challenge,
-				error: getYoutubeErrorMessage(infoResult.__youtubeError),
-			};
-		}
-
 		const info = infoResult;
+		const poToken = await getYoutubeCaptionPoToken(videoId);
+		const challenge = getYoutubeChallengeObject(videoId, poToken);
 
 		if (info?.playability_status?.status && info.playability_status.status !== "OK") {
 			return {
-				_challenge: challenge,
 				error: info.playability_status.reason || info.playability_status.status,
 			};
 		}
 
-		let captions = (info?.captions?.caption_tracks || []).map((track: any) => ({
-			name: cleanTranscriptText(getYoutubeiText(track.name)),
-			languageCode: track.language_code || null,
-			kind: track.kind || null,
-			isTranslatable: !!track.is_translatable,
-			url: withYoutubePoToken(track.base_url, poToken),
-		}));
+		if (infoResult?.__youtubeError) {
+			return {
+				error: getYoutubeErrorMessage(infoResult.__youtubeError),
+			};
+		}
+
+		const tracks = info?.captions?.caption_tracks || [];
+		let captions: any[] = tracks.map((track: any) => {
+			const url = withYoutubePoToken(track.base_url, poToken);
+			return {
+				rawName: track.name,
+				name: cleanTranscriptText(getYoutubeiText(track.name)),
+				languageCode: track.language_code || null,
+				kind: track.kind || null,
+				isTranslatable: !!track.is_translatable,
+				url,
+			};
+		});
 
 		if (!captions.length && info?.basic_info?.is_live) {
 			captions = await getYoutubeLiveCaptions(info);
@@ -2682,7 +2728,7 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 					url: "https://www.youtube.com/watch?v=" + rId,
 					altUrl: "https://www.youtube.com/watch?v=" + rId,
 					title: item.metadata?.title?.text || null,
-					thumbnail: item.content_image?.image?.[0]?.url || "https://s.ytimg.com/vi/" + rId + "/hq720.jpg",
+					thumbnail: item.content_image?.image?.[0]?.url || "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
 					owner: {
 						name: feedOwner,
 						url: feedOwnerUrl,
@@ -2696,8 +2742,8 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 			_challenge: challenge,
 			data: {
 				videoId: videoId,
-				thumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
-				previewThumbnail: "https://s.ytimg.com/vi/" + videoId + "/maxres1.jpg",
+				thumbnail: "https://i.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
+				previewThumbnail: "https://i.ytimg.com/vi/" + videoId + "/maxres1.jpg",
 				title: basic.title || getYoutubeiText(primary.title) || null,
 				description: getYoutubeiText(secondary.description) || basic.short_description || null,
 				releaseDate: getYoutubeiText(primary.published) || null,
@@ -2722,7 +2768,7 @@ export const infoYoutube = async function infoYoutube(que: string, deepFetch: bo
 	}
 };
 
-export const infoYoutubeChannel = async function infoYoutubeChannel(url: string) {
+export const infoYoutubeChannel = async function infoYoutubeChannel(url: string, deepFetch: boolean = false) {
 	if (!url) return null;
 
 	const match = url.match(/^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(channel\/|c\/|user\/|@)([a-zA-Z0-9_\-.]+)/);
@@ -2738,7 +2784,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 		}
 
 		const response = await fetch(requestUrl, {
-			method: "GET",
 			headers: {
 				...commonHeaders,
 				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
@@ -3073,58 +3118,6 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 
 		const combinedTabs = [...tabs, ...extraEndpoints];
 
-		const results = await Promise.all(
-			combinedTabs.map(async (tab: any) => {
-				if (tab.content) return { title: tab.title, content: tab.content };
-				if (!tab.endpoint?.browseEndpoint) return null;
-
-				const { browseId, params } = tab.endpoint.browseEndpoint;
-
-				try {
-					const bodyload = JSON.stringify({
-						browseId: browseId,
-						params: params,
-						context: {
-							client: {
-								clientName: "WEB",
-								clientVersion: "2.20260204.01.00",
-								hl: "en",
-								gl: "US",
-								visitorData: visitorData,
-							},
-						},
-						...(poTokenCache?.po_token
-							? {
-									serviceIntegrityDimensions: {
-										poToken: poTokenCache.po_token,
-									},
-								}
-							: {}),
-					});
-
-					const req = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
-						method: "POST",
-						headers: {
-							...commonHeaders,
-							"Content-Type": "application/json",
-						},
-						body: bodyload,
-					});
-
-					const res: any = await req.json();
-					const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res?.contents?.sectionListRenderer || res?.contents || res;
-
-					return {
-						title: tab.title,
-						content: tabContent,
-					};
-				} catch {
-					return { title: tab.title, error: "Failed to fetch" };
-				}
-			}),
-		);
-
-		const finalResults = results.filter(Boolean);
 		const tabsObj: any = {
 			home: null,
 			videos: null,
@@ -3141,58 +3134,113 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 			playables: null,
 		};
 
-		const flatten = (obj: any): any => {
-			if (!obj || typeof obj !== "object") return obj;
+		if (deepFetch) {
+			const results = await Promise.all(
+				combinedTabs.map(async (tab: any) => {
+					if (tab.content) return { title: tab.title, content: tab.content };
+					if (!tab.endpoint?.browseEndpoint) return null;
 
-			if (Array.isArray(obj)) {
-				return obj.flatMap((item) => {
-					const res = flatten(item);
-					if (res === null || res === undefined) return [];
-					return Array.isArray(res) ? res : [res];
-				});
-			}
+					const { browseId, params } = tab.endpoint.browseEndpoint;
 
-			const keys = Object.keys(obj);
-			const metadata = ["trackingParams", "accessibility", "accessibilityData", "clickTrackingParams", "commandMetadata", "loggingContext", "loggingDirectives", "type", "style", "targetId", "identifier", "entityId", "onTap", "command", "navigationEndpoint", "params", "menu", "title"];
-			const dataKeys = keys.filter((k) => !metadata.includes(k));
+					try {
+						const bodyload = JSON.stringify({
+							browseId: browseId,
+							params: params,
+							context: {
+								client: {
+									clientName: "WEB",
+									clientVersion: "2.20260204.01.00",
+									hl: "en",
+									gl: "US",
+									visitorData: visitorData,
+								},
+							},
+							...(poTokenCache?.po_token
+								? {
+										serviceIntegrityDimensions: {
+											poToken: poTokenCache.po_token,
+										},
+									}
+								: {}),
+						});
 
-			if (dataKeys.length === 0) return null;
+						const req = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+							method: "POST",
+							headers: {
+								...commonHeaders,
+								"Content-Type": "application/json",
+							},
+							body: bodyload,
+						});
 
-			if (Array.isArray(obj.contents)) return flatten(obj.contents);
-			if (Array.isArray(obj.items)) return flatten(obj.items);
-			if (Array.isArray(obj.content)) return flatten(obj.content);
+						const res: any = await req.json();
+						const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res?.contents?.sectionListRenderer || res?.contents || res;
 
-			if (obj.post && typeof obj.post === "object" && dataKeys.includes("post")) {
-				return flatten(obj.post);
-			}
+						return {
+							title: tab.title,
+							content: tabContent,
+						};
+					} catch {
+						return { title: tab.title, error: "Failed to fetch" };
+					}
+				}),
+			);
 
-			if (dataKeys.length === 1) {
-				const key = dataKeys[0];
-				if (key.endsWith("Renderer") || key.endsWith("ViewModel") || ["content", "item", "contents", "items", "post", "posts"].includes(key)) {
-					return flatten(obj[key]);
+			const finalResults = results.filter(Boolean);
+
+			const flatten = (obj: any): any => {
+				if (!obj || typeof obj !== "object") return obj;
+
+				if (Array.isArray(obj)) {
+					return obj.flatMap((item) => {
+						const res = flatten(item);
+						if (res === null || res === undefined) return [];
+						return Array.isArray(res) ? res : [res];
+					});
 				}
-			}
 
-			const res: any = {};
-			for (const key of dataKeys) {
-				res[key] = flatten(obj[key]);
-			}
-			return res;
-		};
+				const keys = Object.keys(obj);
+				const metadata = ["trackingParams", "accessibility", "accessibilityData", "clickTrackingParams", "commandMetadata", "loggingContext", "loggingDirectives", "type", "style", "targetId", "identifier", "entityId", "onTap", "command", "navigationEndpoint", "params", "menu", "title"];
+				const dataKeys = keys.filter((k) => !metadata.includes(k));
 
-		finalResults.forEach((r: any) => {
-			const title = typeof r.title === "string" ? r.title.toLowerCase() : r.title?.runs?.[0]?.text?.toLowerCase() || "";
-			if (title && title !== "search") {
-				const flattened = flatten(r.content);
-				if (title === "posts") {
-					tabsObj["posts"] = flattened;
-				} else if (title === "community") {
-					tabsObj["community"] = flattened;
-				} else {
-					tabsObj[title] = flattened;
+				if (dataKeys.length === 0) return null;
+
+				if (Array.isArray(obj.contents)) return flatten(obj.contents);
+				if (Array.isArray(obj.items)) return flatten(obj.items);
+				if (Array.isArray(obj.content)) return flatten(obj.content);
+
+				if (obj.post && typeof obj.post === "object" && dataKeys.includes("post")) {
+					return flatten(obj.post);
 				}
-			}
-		});
+
+				if (dataKeys.length === 1) {
+					const key = dataKeys[0];
+					if (key.endsWith("Renderer") || key.endsWith("ViewModel") || ["content", "item", "contents", "items", "post", "posts"].includes(key)) {
+						return flatten(obj[key]);
+					}
+				}
+
+				const res: any = {};
+				for (const key of dataKeys) {
+					res[key] = flatten(obj[key]);
+				}
+				return res;
+			};
+
+			finalResults.forEach((r: any) => {
+				const title = typeof r.title === "string" ? r.title.toLowerCase() : r.title?.runs?.[0]?.text?.toLowerCase() || "";
+				if (title && title !== "search") {
+					const flattened = flatten(r.content);
+					if (title === "posts") {
+						tabsObj["posts"] = flattened;
+					} else if (title === "community") {
+						tabsObj["community"] = flattened;
+					} else {
+						tabsObj[title] = flattened;
+					}
+				}
+			});
+		}
 
 		const normalizedLinks = channelLinks.map((link) => ({
 			title: link.title,
@@ -3251,7 +3299,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string)
 					description: channelDescription || null,
 					...processedMetadata,
 				},
-				tabs: tabsObj,
+				...(deepFetch ? { tabs: tabsObj } : {}),
 			},
 		};
 	} catch (e) {
@@ -3271,14 +3319,10 @@ export const infoSoundcloud = async function infoSoundcloud(que: string, refresh
 
 		const [res, res2] = await Promise.all([
 			fetch(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=https://soundcloud.com${test.pathname}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 			fetch("https://mobi.soundcloud.com" + test.pathname, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 		]);
 
@@ -3315,7 +3359,7 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(url: s
 	}
 	try {
 		const res = await fetch(`https://api-v2.soundcloud.com/resolve?client_id=${keysc}&url=${encodeURIComponent(url)}`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 		if (res.status === 401) return await infoSoundcloudStreams(url, true);
 
@@ -3336,7 +3380,7 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(url: s
 				const streamUrl = new URL(transcoding.url);
 				streamUrl.searchParams.set("client_id", keysc || "");
 				const streamRes = await fetch(streamUrl.toString(), {
-					headers: { ...commonHeaders },
+					headers: commonHeaders,
 				});
 				const streamData: any = streamRes.status === 200 ? await streamRes.json() : null;
 				if (streamData?.url) {
@@ -3368,16 +3412,12 @@ export const infoSpotify = async function infoSpotify(que: string) {
 		if (test.host !== "open.spotify.com") return null;
 
 		const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(que)}`, {
-			method: "GET",
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const pull: any = await res.json();
 
 		const res2 = await fetch(pull.iframe_url, {
-			method: "GET",
 			headers: {
 				...commonHeaders,
 				"User-Agent": "Bot",
@@ -3399,7 +3439,6 @@ export const infoITunes = async function infoITunes(que: string) {
 		if (test.host !== "music.apple.com") return null;
 
 		const res = await fetch(que, {
-			method: "GET",
 			headers: {
 				...commonHeaders,
 				"User-Agent": "Bot",
@@ -3435,7 +3474,6 @@ export const pinterest = async function pinterest(que: string) {
 	try {
 		const feat = { options: { query: que, scope: "pins" }, context: {} };
 		const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
-			method: "GET",
 			headers: {
 				...commonHeaders,
 				"X-Pinterest-PWS-Handler": "www/search/[scope].js",
@@ -3460,9 +3498,7 @@ export const infoPinterest = async function infoPinterest(que: string) {
 		if (!test.host.includes("pinterest.") && !test.host.includes("pin.it")) return null;
 
 		const res = await fetch(que, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const html = await res.text();
@@ -3508,7 +3544,6 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
 
 	try {
 		const req = await fetch(url, {
-			method: "GET",
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
@@ -3735,7 +3770,7 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 		if (payload.avatar && payload.avatar.startsWith("http")) {
 			try {
 				const res = await fetch(payload.avatar, {
-					headers: { ...commonHeaders },
+					headers: commonHeaders,
 				});
 				if (res.ok) {
 					const contentType = res.headers.get("content-type");
@@ -3893,9 +3928,7 @@ export const Unsplash = async function Unsplash(que: string) {
 
 	try {
 		const pull = await fetch(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (pull.status === 403) {
@@ -3923,9 +3956,7 @@ export const Pixiv = async function Pixiv(que: string) {
 
 	try {
 		const per = await fetch(`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res: any = await per.json();
@@ -3952,9 +3983,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
 
 	try {
 		const per = await fetch(`https://discord.com/api/v10/index/servers/search?limit=10&query=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (per.status === 403) {
@@ -3976,9 +4005,7 @@ export const Bilibili = async function Bilibili(que: string) {
 
 	try {
 		const per = await fetch(`https://api.bilibili.tv/intl/gateway/web/v2/search_v2?s_locale=en_US&platform=web&keyword=${encodeURIComponent(que)}&highlight=1&pn=1&ps=10&qid=&sort=0`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (per.status === 403) {
@@ -4002,9 +4029,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
 
 	try {
 		const per = await fetch(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (per.status === 403) {
@@ -4026,9 +4051,7 @@ export const Jiosaavn = async function Jiosaavn(que: string) {
 
 	try {
 		const per = await fetch(`https://www.jiosaavn.com/api.php?_format=json&n=10&__call=search.getResults&q=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res: any = await per.json();
@@ -4187,7 +4210,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: testres?.aweme_list || null };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: testres?.aweme_list || null };
 	} catch {
 		return null;
 	}
@@ -4198,9 +4221,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
 
 	try {
 		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res = await pul.text();
@@ -4213,7 +4234,7 @@ export const TiktokMusic = async function TiktokMusic(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: [testres?.music || null, testres?.music_info_list || null] };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: [testres?.music || null, testres?.music_info_list || null] };
 	} catch {
 		return null;
 	}
@@ -4240,7 +4261,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
 		try {
 			testres = JSON.parse(res);
 		} catch {}
-		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: testres?.user_list?.map((a: any) => a.user_info) || null };
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: testres?.user_list?.map((a: any) => a.user_info) || null };
 	} catch {
 		return null;
 	}
@@ -4304,7 +4325,6 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 					const extractRedirect = async (url: string) => {
 						try {
 							const res = await fetch(url, {
-								method: "GET",
 								headers: headers,
 								redirect: "manual",
 							});
@@ -4375,7 +4395,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 				}),
 			);
 
-			return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working", data: data?.[0] || null };
+			return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: data?.[0] || null, altData: testres?.itemList?.[0] || null };
 		} catch (err) {
 			if (i === 2) return null;
 			await new Promise((r) => setTimeout(r, 1000));
@@ -4450,7 +4470,6 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 	for (const url of urlsToTry) {
 		try {
 			const vidReq = await fetch(url as string, {
-				method: "GET",
 				headers: {
 					...commonHeaders,
 					Referer: "https://www.tiktok.com/",
@@ -4568,7 +4587,6 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 
 	try {
 		const vidReq = await fetch(url, {
-			method: "GET",
 			headers: {
 				...commonHeaders,
 				Referer: new URL(url).origin,
@@ -4795,59 +4813,157 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 	}
 };
 
-export const infoTwitterUser = async function infoTwitterUser(que: string): Promise<any> {
+export const infoTwitterUser = async function infoTwitterUser(que: string, refresh_auth?: boolean): Promise<any> {
 	if (!que) return null;
+	if (refresh_auth || !twitterAuth || !twitterObj?.UserByScreenName || !twitterObj?.UserTweets) {
+		await twitterKey("UserByScreenName");
+		await twitterKey("UserTweets");
+	}
+
 	try {
-		const res = await fetch(`https://x.com/${que}`, {
+		const queryId = twitterObj?.UserByScreenName?.[0];
+		const features = JSON.stringify(twitterObj?.UserByScreenName?.[1]);
+		const variables = JSON.stringify({
+			screen_name: que,
+			withGrokTranslatedBio: true,
+		});
+		const fieldToggles = JSON.stringify({
+			withPayments: true,
+			withAuxiliaryUserLabels: true,
+		});
+
+		const pul = await fetch(`https://api.x.com/graphql/${queryId}/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}&fieldToggles=${encodeURIComponent(fieldToggles)}`, {
 			headers: {
 				...commonHeaders,
+				"content-type": "application/json",
+				authorization: "Bearer " + twitterAuth,
+				"x-client-transaction-id": twitterObj?.UserByScreenName?.[2],
 			},
 		});
-		if (!res.ok) return { data: null };
-		const html = await res.text();
-		const ssr = extractTwitterSSR(html);
-		const records = ssr?.dehydratedData?.relayRecords;
-		let user: any = null;
-		if (records) {
-			for (const key of Object.keys(records)) {
-				const rec = records[key];
-				if (rec && rec.__typename === "User") {
-					user = resolveRefs(rec, records);
-					break;
+
+		if (pul.status === 403) {
+			return {
+				error: "Bad auth",
+			};
+		}
+
+		if (pul.status === 401 || pul.status === 400) return await infoTwitterUser(que, true);
+
+		const responseText = await pul.text();
+		let res;
+		try {
+			res = JSON.parse(responseText);
+		} catch {
+			return null;
+		}
+		let res2: any = {};
+		let res3: any = {};
+		if (res?.data?.user?.result?.rest_id) {
+			const queryId2 = twitterObj?.UserTweets?.[0];
+			const features2 = JSON.stringify(twitterObj?.UserTweets?.[1]);
+			const variables2 = JSON.stringify({
+				userId: res?.data?.user?.result?.rest_id,
+				includePromotedContent: true,
+				withQuickPromoteEligibilityTweetFields: true,
+				withVoice: true,
+			});
+			const fieldToggles2 = JSON.stringify({ withArticlePlainText: true });
+			const [pul2, pul3] = await Promise.all([
+				fetch(`https://syndication.twitter.com/srv/timeline-profile/user-id/${res?.data?.user?.result?.rest_id}`, {
+					headers: commonHeaders,
+				}),
+				fetch(`https://api.x.com/graphql/${queryId2}/UserTweets?variables=${encodeURIComponent(variables2)}&features=${encodeURIComponent(features2)}&fieldToggles=${encodeURIComponent(fieldToggles2)}`, {
+					headers: {
+						...commonHeaders,
+						"content-type": "application/json",
+						authorization: "Bearer " + twitterAuth,
+						"x-client-transaction-id": twitterObj?.UserTweets?.[2],
+					},
+				}),
+			]);
+			try {
+				const body2 = await pul2.text();
+				if (body2 && body2.includes('type="application/json">')) {
+					res2 = JSON.parse(body2.split('type="application/json">')[1].split("</script>")[0]);
 				}
+			} catch (e) {
+				console.error("Twitter Syndication Parse Error:", e);
+			}
+
+			try {
+				if (pul3.status === 200) {
+					const res3_raw: any = await pul3.json();
+					res3 = res3_raw?.data?.user?.result?.timeline?.timeline?.instructions?.flatMap((f: any) => f?.entries || (f?.entry ? [f.entry] : []));
+				} else {
+					res3 = {
+						error: await pul3.text(),
+					};
+				}
+			} catch (e) {
+				console.error("Twitter API JSON Parse Error:", e);
 			}
 		}
-		// Merge flat profile fields from matches.l (snake_case/simple names) into resolved user
-		const profileMatch = ssr?.matches?.find((m: any) => typeof m.i === "string" && m.i.replace(/\0/g, "").includes("$username_profile"));
-		const flat = profileMatch?.l || null;
-		if (flat && typeof flat === "object") {
-			for (const key of Object.keys(flat)) {
-				if (key === "__id" || key === "__typename") continue;
-				if (user && user[key] === undefined) {
-					user[key] = flat[key];
-				}
-			}
-		}
-		return { data: user || flat };
+
+		const finalres = {
+			...(res?.data?.user?.result || null),
+			timeline: {
+				page: res3?.[0] ? res3 : { error: "Not available / Geo-restrict" },
+				embed: res2?.props?.pageProps?.timeline?.entries?.[0] ? res2?.props?.pageProps?.timeline?.entries?.map((k: any) => k.content.tweet) : res2?.props?.pageProps?.contextProvider?.hasResults ? { error: "Not available / Geo-restrict" } : null,
+			},
+		};
+
+		return { data: finalres?.rest_id ? finalres : null };
 	} catch (e) {
 		console.error(e);
 		return null;
 	}
 };
 
-export const infoTwitterTweet = async function infoTwitterTweet(que: string): Promise<any> {
+export const infoTwitterTweet = async function infoTwitterTweet(que: string, refresh_auth?: boolean): Promise<any> {
 	if (!que) return null;
+	if (refresh_auth || !twitterAuth || !twitterObj?.TweetResultByRestId) {
+		await twitterKey("TweetResultByRestId");
+	}
+
 	try {
-		const res = await fetch(`https://x.com/i/status/${que}`, {
-			headers: {
-				...commonHeaders,
-			},
+		const queryId = twitterObj?.TweetResultByRestId?.[0];
+		const features = JSON.stringify(twitterObj?.TweetResultByRestId?.[1]);
+		const variables = JSON.stringify({
+			tweetId: que,
+			includePromotedContent: true,
+			withBirdwatchNotes: true,
+			withVoice: true,
+			withCommunity: true,
 		});
-		if (!res.ok) return { data: null };
-		const html = await res.text();
-		const ssr = extractTwitterSSR(html);
-		const tweet = parseTweetFromSSR(ssr);
-		return { data: tweet || null };
+
+		const [pul, pul2] = await Promise.all([
+			fetch(`https://api.x.com/graphql/${queryId}/TweetResultByRestId?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`, {
+				headers: {
+					...commonHeaders,
+					"content-type": "application/json",
+					authorization: "Bearer " + twitterAuth,
+					"x-client-transaction-id": twitterObj?.TweetResultByRestId?.[2],
+				},
+			}),
+			fetch(`https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(que)}&lang=en&token=abc`, {
+				headers: commonHeaders,
+			}),
+		]);
+
+		if (pul.status === 401 || pul.status === 400) return await infoTwitterTweet(que, true);
+
+		const tryParseJson = async (p: any) => {
+			if (p.status !== 200) return null;
+			try {
+				return await p.json();
+			} catch {
+				return null;
+			}
+		};
+
+		const [res, res2] = await Promise.all([pul.status === 403 ? Promise.resolve({ error: "Bad auth" }) : tryParseJson(pul), tryParseJson(pul2)]);
+
+		return { data: [res?.data?.tweetResult?.result || null, res2 || null] };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -4859,9 +4975,7 @@ export const robloxGames = async function robloxGames(que: string) {
 
 	try {
 		const pul1 = await fetch(`https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(que)}&sessionId=abc`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res1: any = await pul1.json();
@@ -4874,9 +4988,7 @@ export const robloxGames = async function robloxGames(que: string) {
 		if (!restIds) return { data: gamesList };
 
 		const pul2 = await fetch(`https://games.roblox.com/v1/games?universeIds=${restIds}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res2: any = await pul2.json();
@@ -4905,7 +5017,7 @@ export const YTChannel = async function YTChannel(que: string) {
 			context: {
 				client: {
 					clientName: "MWEB",
-					clientVersion: "2.20251212",
+					clientVersion: "2.20261230",
 					hl: "en",
 					gl: "US",
 					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
@@ -4971,9 +5083,7 @@ export const robloxAudio = async function robloxAudio(que: string) {
 
 	try {
 		const pul1 = await fetch(`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const res1: any = await pul1.json();
@@ -4984,14 +5094,10 @@ export const robloxAudio = async function robloxAudio(que: string) {
 
 		const [pul2, pul3] = await Promise.all([
 			fetch(`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 			fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}),
 		]);
 
@@ -5114,28 +5220,21 @@ export const Capcut = async function Capcut(que: string) {
 
 let redditCookies: string = "";
 
-export const refreshRedditAuth = async (force: boolean = false): Promise<string> => {
+export const refreshRedditAuth = async (force: boolean = false): Promise<any> => {
 	if (!force && redditCookies) return redditCookies;
 
 	try {
 		const loginRes = await fetch("https://old.reddit.com/login/", {
-			method: "GET",
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 			redirect: "manual",
 		});
 
-		const cookieParts: string[] = [];
-		loginRes.headers.forEach((value, key) => {
-			if (key.toLowerCase() === "set-cookie") {
-				const cookie = value.split(";")[0];
-				if (cookie) cookieParts.push(cookie);
-			}
-		});
-		redditCookies = cookieParts.length > 0 ? cookieParts.join("; ") : "";
-		return redditCookies;
-	} catch {
-		return redditCookies;
-	}
+		if (loginRes.headers.getSetCookie) {
+			redditCookies = normalizeCookies(loginRes.headers.getSetCookie());
+		} else {
+			redditCookies = normalizeCookies(loginRes.headers.get("set-cookie"));
+		}
+	} catch {}
 };
 
 export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
@@ -5144,7 +5243,7 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 	try {
 		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
-		const headers: any = { ...commonHeaders };
+		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
 		const req = await fetch(`https://www.reddit.com/search/.json?q=subreddit%3A${encodeURIComponent(que.toLowerCase()?.split(" ")?.[0])}&sort=new&restrict_sr=&t=all&include_over_18=on`, { headers });
@@ -5184,7 +5283,7 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 
 		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
-		const headers: any = { ...commonHeaders };
+		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
 		const req = await fetch(jsonUrl, { headers });
@@ -5231,7 +5330,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 	try {
 		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
 
-		const headers: any = { ...commonHeaders };
+		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
 		const req = await fetch(`https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&restrict_sr=&sort=new&t=all&include_over_18=on`, { headers });
@@ -5422,7 +5521,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 				},
 			}),
 			fetch(`https://www.threads.com/@${encodeURIComponent(que)}`, {
-				headers: { ...commonHeaders },
+				headers: commonHeaders,
 			}),
 		]);
 
@@ -5578,9 +5677,7 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 	try {
 		const formatQuery = getFormatQuery(type);
 		const webRes = await fetch(`https://tenor.com/search/${encodeURIComponent(que.toLowerCase())}-gifs${formatQuery}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (webRes.status !== 200) {
@@ -5633,9 +5730,7 @@ export const infoTenor = async function infoTenor(url: string) {
 		}
 
 		const res = await fetch(`https://tenor.com/embed/${postId}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status !== 200) {
@@ -5667,9 +5762,7 @@ export const infoGiphy = async function infoGiphy(url: string) {
 		}
 
 		const res = await fetch(url, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status !== 200) {
@@ -5750,7 +5843,7 @@ export const Giphy = async function Giphy(que: string, type?: string) {
 
 	try {
 		const res = await fetch(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		if (res.status !== 200) {
@@ -5812,13 +5905,13 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 
 		const [res, res2, res3] = await Promise.all([
 			fetch(`https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
-				headers: { ...commonHeaders },
+				headers: commonHeaders,
 			}),
 			fetch(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
-				headers: { ...commonHeaders },
+				headers: commonHeaders,
 			}),
 			fetch(`https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
-				headers: { ...commonHeaders },
+				headers: commonHeaders,
 			}),
 		]);
 
@@ -5839,7 +5932,7 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 		try {
 			if (jl.data?.[0]?.id) {
 				const fetchRelated = await fetch(`https://api.giphy.com/v1/${getTypeQuery(type)}/related?gif_id=${jl.data[0].id}&limit=25&api_key=${keygiphy}`, {
-					headers: { ...commonHeaders },
+					headers: commonHeaders,
 				});
 				jl3 = await fetchRelated.json();
 			}
@@ -5866,7 +5959,7 @@ export async function googleWeather(query: string): Promise<any> {
 
 	try {
 		const l = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		let ls: any = await l.json();
@@ -6014,9 +6107,7 @@ export async function DriftProfile(query: string): Promise<any> {
 				const browserRes = await browserRequest({
 					url: filterurl.toString(),
 					fetcherType: "stealthy",
-					headers: {
-						...commonHeaders,
-					},
+					headers: commonHeaders,
 					extractHtml: true,
 				});
 
@@ -6254,7 +6345,7 @@ export async function PatreonProfile(query: string): Promise<any> {
 
 	try {
 		const res = await fetch(`https://www.patreon.com/cw/${username}`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		if (res.status === 404) {
@@ -6351,7 +6442,7 @@ export async function SaweriaProfile(query: string, refresh_auth: boolean = fals
 		}
 
 		const dataRes = await fetch(`https://saweria.co/_next/data/${saweriaBuildId}/en/${username}.json`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		if (dataRes.status === 403) {
@@ -6389,9 +6480,7 @@ export async function TrakteerProfile(query: string): Promise<any> {
 
 	try {
 		const res = await fetch(`https://trakteer.id/${username}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -6444,9 +6533,7 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
 	try {
 		const res = await fetch(`https://sociabuzz.com/${username}/tribe`, {
 			redirect: "manual" as const,
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -6484,7 +6571,6 @@ export async function GunsProfile(query: string): Promise<any> {
 	if (!username || !/^[a-zA-Z0-9._-]+$/.test(username) || ["robots.txt", "favicon.ico", "register", "pricing", "login", "reset", "cdn-cgi", "account", "terms", "privacy", "dashboard", "leaderboard", "api", "de", "fr", "es", "tr", "ru", "pt", "ar"].includes(username.toLowerCase())) return null;
 
 	let browserGuns: boolean = false;
-	let is429: boolean = false;
 	let dataResults: any[] = [];
 
 	try {
@@ -6506,7 +6592,7 @@ export async function GunsProfile(query: string): Promise<any> {
 					const status = responseStatus(res);
 
 					if (status === 429) {
-						is429 = true;
+						return { error: "Rate-limited" };
 					}
 
 					const html = await responseText(res);
@@ -6522,14 +6608,12 @@ export async function GunsProfile(query: string): Promise<any> {
 						const browserRes = await browserRequest({
 							url: `https://guns.lol/${username}`,
 							fetcherType: "stealthy",
-							headers: {
-								...commonHeaders,
-							},
+							headers: commonHeaders,
 							extractHtml: true,
 						});
 
 						if (browserRes.status === 429) {
-							return { error: is429 ? "rate-limited" : "IP Blocked" };
+							return { error: "Rate-limited" };
 						}
 
 						const browserChallenge = !browserRes.success || browserRes.status === 401 || browserRes.status === 403;
@@ -6670,9 +6754,7 @@ export async function RageProfile(query: string): Promise<any> {
 	for (let attempts = 0; attempts < 3; attempts++) {
 		try {
 			res = await fetch(`https://rage.wtf/${username}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			});
 
 			if (res.status !== 403) {
@@ -6769,9 +6851,7 @@ export async function HauntProfile(query: string): Promise<any> {
 	for (let attempts = 0; attempts < 3; attempts++) {
 		try {
 			res = await fetch(`https://haunt.gg/${username}`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			});
 
 			if (res.status !== 403) {
@@ -7427,7 +7507,7 @@ async function discordListCache(token: string, url: string, headers: any): Promi
 	if (activeFetch) return await activeFetch;
 
 	const fetchCache = (async (): Promise<DiscordListCacheValue> => {
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -7560,9 +7640,9 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 		const urlDMs = `https://discord.com/api/v10/users/@me/channels`;
 
 		const [req, rolesReq, guildReq, dmReq] = await Promise.all([
-			fetch(url, { method: "GET", headers }),
-			urlRoles ? fetch(urlRoles, { method: "GET", headers }) : Promise.resolve(null),
-			urlGuild ? fetch(urlGuild, { method: "GET", headers }) : Promise.resolve(null),
+			fetch(url, { headers }),
+			urlRoles ? fetch(urlRoles, { headers }) : Promise.resolve(null),
+			urlGuild ? fetch(urlGuild, { headers }) : Promise.resolve(null),
 			fetch(urlDMs, {
 				method: "POST",
 				headers,
@@ -7638,7 +7718,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 
 	try {
 		const url = `https://discord.com/api/v10/applications/${botId}/rpc?with_guild_counts=true`;
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -7654,7 +7734,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		const urlDirectory = `https://discord.com/api/v10/application-directory-static/applications/${botId}`;
 		const urlSimilar = `https://discord.com/api/v10/application-directory-static/applications/${botId}/similar`;
 		const urlStoreLayout = `https://discord.com/api/v10/applications/${botId}/store-layout`;
-		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([fetch(urlDirectory, { method: "GET", headers }), fetch(urlSimilar, { method: "GET", headers }), fetch(urlStoreLayout, { method: "GET", headers })]);
+		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([fetch(urlDirectory, { headers }), fetch(urlSimilar, { headers }), fetch(urlStoreLayout, { headers })]);
 
 		let directoryData: any = null;
 		let similarData: any = null;
@@ -7677,7 +7757,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 			const urlGuildPreview = `https://discord.com/api/v10/guilds/${guildId}/preview`;
 			const urlGuildDirectory = `https://discord.com/api/v10/discovery/${guildId}`;
 			const urlGuildRichContent = `https://discord.com/api/guilds/${guildId}/widget.json`;
-			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([fetch(urlGuildPreview, { method: "GET", headers }), fetch(urlGuildDirectory, { method: "GET", headers }), fetch(urlGuildRichContent, { method: "GET", headers })]);
+			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([fetch(urlGuildPreview, { headers }), fetch(urlGuildDirectory, { headers }), fetch(urlGuildRichContent, { headers })]);
 
 			let guildPreviewData: any = null;
 			let guildDirectoryData: any = null;
@@ -8173,7 +8253,7 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
 		const urlThreads = `https://discord.com/api/v10/guilds/${guildId}/threads/active`;
 
-		const [reqChannels, reqThreads] = await Promise.all([fetch(urlChannels, { method: "GET", headers }), fetch(urlThreads, { method: "GET", headers })]);
+		const [reqChannels, reqThreads] = await Promise.all([fetch(urlChannels, { headers }), fetch(urlThreads, { headers })]);
 
 		let channelsData: any = [];
 		let threadsData: any = { threads: [] };
@@ -8296,7 +8376,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
 		const urlClientMember = botId ? `https://discord.com/api/v10/guilds/${guildId}/members/${botId}` : null;
 
-		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([fetch(url, { method: "GET", headers }), fetch(urlWebhooks, { method: "GET", headers }), fetch(urlChannels, { method: "GET", headers }), urlClientMember ? fetch(urlClientMember, { method: "GET", headers }) : Promise.resolve(null)]);
+		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([fetch(url, { headers }), fetch(urlWebhooks, { headers }), fetch(urlChannels, { headers }), urlClientMember ? fetch(urlClientMember, { headers }) : Promise.resolve(null)]);
 
 		let data: any = null;
 		let webhooksData: any = [];
@@ -8477,7 +8557,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 
 	try {
 		const url = `https://discord.com/api/v10/stickers/${stickerId}`;
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -8505,7 +8585,6 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 					try {
 						const previewUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/preview`;
 						const previewReq = await fetch(previewUrl, {
-							method: "GET",
 							headers,
 						});
 						if (previewReq.status === 200) {
@@ -8531,7 +8610,6 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 					try {
 						const guildStickersUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/stickers`;
 						const gsReq = await fetch(guildStickersUrl, {
-							method: "GET",
 							headers,
 						});
 						if (gsReq.status === 200) {
@@ -8870,7 +8948,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 
 		if (params.length > 0) url += "?" + params.join("&");
 
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -8907,7 +8985,7 @@ export const DiscordInfoMessage = async (token: string, channelId: string, messa
 
 	try {
 		const url = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`;
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -8948,7 +9026,7 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
 	try {
 		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/invites` : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
 
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9015,7 +9093,7 @@ export const DiscordListInvite = async (token: string, guildId: string, limit: n
 
 	try {
 		const url = `https://discord.com/api/v10/guilds/${guildId}/invites`;
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -9108,7 +9186,7 @@ export const DiscordInfoChannel = async (token: string, channelId: string, guild
 	try {
 		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/channels` : `https://discord.com/api/v10/channels/${channelId}`;
 
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9174,7 +9252,7 @@ export const DiscordInfoRole = async (token: string, roleId: string, guildId: st
 		const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
 		const urlCounts = `https://discord.com/api/v10/guilds/${guildId}/roles/member-counts`;
 
-		const [rolesReq, countsReq] = await Promise.all([fetch(urlRoles, { method: "GET", headers }), fetch(urlCounts, { method: "GET", headers })]);
+		const [rolesReq, countsReq] = await Promise.all([fetch(urlRoles, { headers }), fetch(urlCounts, { headers })]);
 
 		let rolesData: any = [];
 		let countsData: any = [];
@@ -9239,7 +9317,7 @@ export const DiscordModifyRole = async (token: string, roleId: string, guildId: 
 	const url = `https://discord.com/api/v10/guilds/${guildId}/roles/${roleId}`;
 
 	try {
-		const getReq = await fetch(url, { method: "GET", headers });
+		const getReq = await fetch(url, { headers });
 
 		let currentInfo: any = null;
 		try {
@@ -9305,7 +9383,7 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 
 	try {
 		const url = `https://discord.com/api/v10/guilds/${guildId}/webhooks`;
-		const req = await fetch(url, { method: "GET", headers });
+		const req = await fetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9348,7 +9426,7 @@ export const ImgurPost = async (query: string, refresh_auth: boolean = false): P
 	}
 
 	try {
-		const req = await fetch(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: { ...commonHeaders }, signal: AbortSignal.timeout(90000) });
+		const req = await fetch(`https://api.imgur.com/post/v1/posts/t/${encodeURIComponent(query)}?client_id=${keyimgur}&include=cover&page=1&sort=-time`, { headers: commonHeaders, signal: AbortSignal.timeout(90000) });
 		if (req.status === 401 || req.status === 400) return await ImgurPost(query, true);
 		const res: any = await req.json();
 		return { data: res?.posts || null };
@@ -9434,9 +9512,7 @@ export const infoKlipy = async function infoKlipy(url: string) {
 		}
 
 		const req = await fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${klipyPath}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (req.status === 404) {
@@ -9607,9 +9683,7 @@ export const PatreonSearch = async (query: string): Promise<any> => {
 
 	try {
 		const res = await fetch(`https://www.patreon.com/api/search?q=${encodeURIComponent(query)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const response = await res.json();
@@ -9631,9 +9705,7 @@ export const Trakteer = async (query: string): Promise<any> => {
 
 	try {
 		const res = await fetch(`https://api.trakteer.id/v3/discover/search?limit=10&keywords=${encodeURIComponent(query)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const response = await res.json();
@@ -9752,7 +9824,7 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 
 	try {
 		const res = await fetch(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		const html: string = await res.text();
@@ -9825,9 +9897,7 @@ export const OtoDB = async (query: string): Promise<any> => {
 
 	try {
 		const res = await fetch(`https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const json = await res.json();
@@ -10117,7 +10187,7 @@ export const Audiomack = async function Audiomack(que: string, type: string = "s
 		const searchParams = new URLSearchParams(Object.entries({ ...params, oauth_signature: signature }).map(([k, v]): [string, string] => [k, String(v)]));
 
 		const pull = await fetch(`https://api.audiomack.com/v1/search?${searchParams}`, {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 
 		if (pull.status !== 200) {
@@ -10178,9 +10248,7 @@ export const SafeBooru = async function SafeBooru(que: string) {
 
 	try {
 		const per = await fetch(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (per.status === 403) {
@@ -10204,9 +10272,7 @@ export const SafeBooru = async function SafeBooru(que: string) {
 		const finalres = await Promise.allSettled(
 			parseres.map(async (e: any) => {
 				const req2 = await fetch(`https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(e.value)}&limit=100`, {
-					headers: {
-						...commonHeaders,
-					},
+					headers: commonHeaders,
 				});
 
 				const res2: any = await req2.json();
@@ -10237,9 +10303,7 @@ export const Konachan = async function Konachan(que: string) {
 	try {
 		if (!konaSummary || konaSummary.length === 0) {
 			const pullinfo = await fetch(`https://konachan.net/tag/summary.json`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			});
 
 			const lookinfo: any = await pullinfo.json();
@@ -10259,9 +10323,7 @@ export const Konachan = async function Konachan(que: string) {
 		const finalres = await Promise.allSettled(
 			specificTags.map(async (tag: string) => {
 				const req2 = await fetch(`https://konachan.net/post.json?limit=20&tags=${encodeURIComponent(tag)}`, {
-					headers: {
-						...commonHeaders,
-					},
+					headers: commonHeaders,
 				});
 
 				const res2: any = await req2.json();
@@ -10344,9 +10406,7 @@ export const googleImgSearch = async (query: string, sort: string = "relevance")
 		const response2: any = isOk2 ? await res2.json() : {};
 
 		const res = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const resText = await res.text();
@@ -10397,9 +10457,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
 		}
 
 		const res = await fetch(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&searchtype=image&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -10441,9 +10499,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
 		}
 
 		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const resText = await res2.text();
@@ -10485,9 +10541,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 		}
 
 		const res = await fetch(`https://cse.google.com/cse/element/v1?rsz=${googleImgSpAuth?.uiOptions?.resultSetSize}&hl=${googleImgSpAuth?.language}&source=gcsc&cselibv=${googleImgSpAuth?.cselibVersion}&cx=${googleImgSpAuth?.cx}&${googleImgSpAuth?.uiOptions?.queryParameterName}=${encodeURIComponent(query)}&safe=off&cse_tok=${encodeURIComponent(googleImgSpAuth?.cse_token)}&lr=&cr=&gl=&filter=0&sort=&as_oq=&as_sitesearch=&exp=${encodeURIComponent(googleImgSpAuth?.exp?.join(",") || "")}&fexp=${encodeURIComponent(googleImgSpAuth?.fexp?.join(",") || "")}&callback=google.search.cse.api&rurl=${encodeURI(googleImgSpAuth?.uiOptions?.resultsUrl || "")}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -10529,9 +10583,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 		}
 
 		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		const resText = await res2.text();
@@ -10573,9 +10625,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 
 	try {
 		const res = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -10689,9 +10739,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 		} catch {}
 
 		const res3 = await fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		let autotext: any = {};
@@ -10727,9 +10775,7 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 	try {
 		const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`;
 		const res = await fetch(landingUrl, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -10765,9 +10811,7 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 				headers: imageHeaders,
 			}),
 			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}).catch(() => null),
 		]);
 
@@ -10815,9 +10859,7 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 	try {
 		const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=videos&ia=videos`;
 		const res = await fetch(landingUrl, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (res.status === 403) {
@@ -10853,9 +10895,7 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 				headers: videoHeaders,
 			}),
 			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`, {
-				headers: {
-					...commonHeaders,
-				},
+				headers: commonHeaders,
 			}).catch(() => null),
 		]);
 
@@ -11128,9 +11168,7 @@ export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) 
 	const fetchEmoji = async (query: string) => {
 		const url = `https://tenor.googleapis.com/v2/featured?key=${process.env.GOOG_TENOR_EMOJI}&client_key=emoji_kitchen_funbox&q=${encodeURIComponent(query)}&collection=emoji_kitchen_v6`;
 		const res = await fetch(url, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 		if (res.status === 200) {
 			const data = (await res.json()) as any;
@@ -11431,7 +11469,7 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 }
 
 async function fetchDiscordAutomodRule(ruleUrl: string, headers: any) {
-	const req = await fetch(ruleUrl, { method: "GET", headers });
+	const req = await fetch(ruleUrl, { headers });
 	let data: any = null;
 	try {
 		data = await req.json();
@@ -11569,7 +11607,7 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 		const urlRules = ruleId ? `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}` : `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
 		const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
 
-		const [rulesReq, guildReq] = await Promise.all([fetch(urlRules, { method: "GET", headers }), fetch(urlGuild, { method: "GET", headers })]);
+		const [rulesReq, guildReq] = await Promise.all([fetch(urlRules, { headers }), fetch(urlGuild, { headers })]);
 
 		let rulesData: any = null;
 		let guildData: any = null;
@@ -11721,27 +11759,21 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
 	try {
 		const [res, res2, res3, res4, res5, res6] = await Promise.all([
 			fetch(`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 			fetch(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 			fetch(`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 			fetch(`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 			fetch(`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 			fetch(`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`, {
-				method: "GET",
 				headers: commonHeaders,
 			}),
 		]);
@@ -11779,7 +11811,7 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
 export const stockCake = async function stockCake(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`, { headers: { ...commonHeaders } });
+		const req = await fetch(`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`, { headers: commonHeaders });
 
 		if (req.status === 403) {
 			return {
@@ -11863,9 +11895,7 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
 	if (!query) return null;
 	try {
 		const req = await fetch(`https://www.snapchat.com/@${encodeURIComponent(query)}`, {
-			headers: {
-				...commonHeaders,
-			},
+			headers: commonHeaders,
 		});
 
 		if (req.status === 403) {
@@ -12511,7 +12541,7 @@ let googleTtsWiz: { fSid: string; bl: string; at: string | null; expire: number 
 
 const getGoogleTtsWiz = async () => {
 	if (googleTtsWiz && googleTtsWiz.expire > Date.now()) return googleTtsWiz;
-	const res = await fetch("https://translate.google.com", { headers: { ...commonHeaders } });
+	const res = await fetch("https://translate.google.com", { headers: commonHeaders });
 	const text = await res.text();
 	const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
 	const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];

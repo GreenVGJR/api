@@ -22,8 +22,9 @@ app.get("/youtube/channel", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
+	const feeds = c.req.query("feed") === "true";
 	c.header("X-Route", "m.youtube.com, www.youtube.com");
-	return await dispatch(c, () => infoYoutubeChannel(query));
+	return await dispatch(c, () => infoYoutubeChannel(query, feeds));
 });
 
 export default app;

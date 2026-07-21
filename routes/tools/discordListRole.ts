@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { DiscordListRole, PERMISSION_KEYS } from "../../functions/request.js";
+import { DiscordListRole } from "../../functions/request.js";
+import { PERMISSION_KEYS } from "../../functions/types/index.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/discord/listRoles", async (c) => {

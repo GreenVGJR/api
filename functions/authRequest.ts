@@ -407,14 +407,14 @@ export const deezerKeys = async function deezerKeys() {
 export const imgurKey = async function imgurKey() {
 	try {
 		const req = await fetch("https://imgur.com", {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 		const res = await req.text();
 
 		const mainAssetPath = res.split("desktop-assets/js/main")[1]?.split(">")[0];
 		if (!mainAssetPath) return undefined;
 
-		const req2 = await fetch("https://s.imgur.com/desktop-assets/js/main" + mainAssetPath, { headers: { ...commonHeaders } });
+		const req2 = await fetch("https://s.imgur.com/desktop-assets/js/main" + mainAssetPath, { headers: commonHeaders });
 		const res2 = await req2.text();
 		return res2.split('apiClientId:"')[1]?.split('"')[0];
 	} catch (e) {
@@ -446,7 +446,7 @@ export const crunchyKey = async function crunchyKey() {
 
 export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string | undefined> {
 	const mainRes = await fetch("https://saweria.co", {
-		headers: { ...commonHeaders },
+		headers: commonHeaders,
 	});
 
 	if (mainRes.status === 403) return undefined;
@@ -475,7 +475,7 @@ export const instagramKey = async function instagramKey(): Promise<string | null
 export const twitterKey = async function twitterKey(typeName: string) {
 	try {
 		const response = await fetch("https://x.com/i/jf/onboarding/web", {
-			headers: { ...commonHeaders },
+			headers: commonHeaders,
 		});
 		const html = await response.text();
 		const { document } = parseHTML(html);
@@ -484,7 +484,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
 		twitterTransaction = new ClientTransaction(twitterDocument);
 		await twitterTransaction.initialize();
 
-		const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split("client-web/main")[1].split('"')[0], { headers: { ...commonHeaders } });
+		const pul1 = await fetch("https://abs.twimg.com/responsive-web/client-web/main" + html.split("client-web/main")[1].split('"')[0], { headers: commonHeaders });
 
 		const res1 = await pul1.text();
 
@@ -506,5 +506,30 @@ export const twitterKey = async function twitterKey(typeName: string) {
 		twitterObj[typeName] = [queryId_user, features_user, await twitterTransaction.generateTransactionId("GET", "/graphql/" + queryId_user + "/" + typeName)];
 	} catch (e) {
 		console.error(e);
+	}
+};
+
+export const refreshRedditAuth = async (force: boolean = false): Promise<any> => {
+	try {
+		const fetchLogin = async (targetDomain: string) => {
+			return await fetch(`https://${targetDomain}/login/`, {
+				headers: commonHeaders,
+				redirect: "manual",
+			});
+		};
+
+		let loginRes = await fetchLogin("old.reddit.com");
+
+		if (loginRes.status === 403) {
+			loginRes = await fetchLogin("www.reddit.com");
+		}
+
+		if (loginRes.headers.getSetCookie) {
+			return normalizeCookies(loginRes.headers.getSetCookie());
+		} else {
+			return normalizeCookies(loginRes.headers.get("set-cookie"));
+		}
+	} catch {
+		return null;
 	}
 };

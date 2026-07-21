@@ -45,7 +45,6 @@ def main():
             network_idle = input_data.get("network_idle", False)
             timeout = input_data.get("timeout", 30000)
             solve_cloudflare = input_data.get("solve_cloudflare", True)
-            google_search = input_data.get("google_search", True)
             wait_selector = input_data.get("wait_selector")
             wait_selector_state = input_data.get("wait_selector_state")
             wait_ms = input_data.get("wait_ms")
@@ -83,7 +82,6 @@ def main():
                     kwargs = {
                         "timeout": timeout,
                         "solve_cloudflare": solve_cloudflare,
-                        "google_search": google_search,
                     }
                     if wait_ms is not None:
                         kwargs["wait"] = wait_ms

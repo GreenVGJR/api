@@ -214,7 +214,7 @@ export const processImage = async (c: Context, url?: string) => {
 	if (checkurl.host === c.req.header("host")) return "";
 
 	try {
-		const res = await fetch(url, { headers: { ...commonHeaders } });
+		const res = await fetch(url, { headers: commonHeaders });
 		if (!res.ok) return "";
 		const contentType = res.headers.get("content-type");
 		if (!contentType?.startsWith("image/") && !contentType?.startsWith("video/")) return "";

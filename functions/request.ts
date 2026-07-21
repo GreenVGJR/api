@@ -1,5 +1,6 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj, refreshRedditAuth } from "./authRequest.js";
+import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
@@ -291,6 +292,84 @@ export const commonHeaders = {
 	"User-Agent": userAgent,
 };
 
+// Discord fetch wrapper with per-bucket and global rate limiting
+const discordRateLimitBuckets = new Map<string, { limit: number; remaining: number; resetAfter: number; resetAt: number }>();
+let discordGlobalReqCount = 0;
+let discordGlobalReqReset = Date.now() + 1000;
+const discordGlobalQueue: (() => void)[] = [];
+
+export const discordFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+	const waitForGlobalSlot = async () => {
+		if (Date.now() >= discordGlobalReqReset) {
+			discordGlobalReqCount = 0;
+			discordGlobalReqReset = Date.now() + 1000;
+		}
+		if (discordGlobalReqCount >= 50) {
+			await new Promise<void>((resolve) => discordGlobalQueue.push(resolve));
+		}
+		discordGlobalReqCount++;
+	};
+
+	const getBucketKey = (res: Response): string => {
+		const bucket = res.headers.get("X-RateLimit-Bucket");
+		const scope = res.headers.get("X-RateLimit-Scope");
+		if (bucket) return scope === "global" ? `global:${bucket}` : bucket;
+		const isGlobal = res.headers.get("X-RateLimit-Global") === "true";
+		return isGlobal ? "global" : url;
+	};
+
+	const handleBucketHeaders = (res: Response) => {
+		const bucketKey = getBucketKey(res);
+		const remaining = res.headers.get("X-RateLimit-Remaining");
+		const resetAfter = res.headers.get("X-RateLimit-Reset-After");
+		const limit = res.headers.get("X-RateLimit-Limit");
+		if (remaining !== null && resetAfter !== null) {
+			discordRateLimitBuckets.set(bucketKey, {
+				limit: limit ? Number(limit) : Infinity,
+				remaining: Number(remaining),
+				resetAfter: Number(resetAfter),
+				resetAt: Date.now() + Number(resetAfter) * 1000,
+			});
+		}
+	};
+
+	const waitForBucket = async (): Promise<void> => {
+		const now = Date.now();
+		for (const [key, bucket] of discordRateLimitBuckets) {
+			if (bucket.remaining <= 0 && now < bucket.resetAt) {
+				const waitMs = bucket.resetAt - now;
+				await new Promise((resolve) => setTimeout(resolve, waitMs));
+			}
+			if (now >= bucket.resetAt) discordRateLimitBuckets.delete(key);
+		}
+	};
+
+	const execute = async (): Promise<Response> => {
+		await waitForGlobalSlot();
+		await waitForBucket();
+		const res = await fetch(url, options);
+		handleBucketHeaders(res);
+
+		if (res.status === 429) {
+			const retryAfter = res.headers.get("Retry-After");
+			const wait = retryAfter ? Number(retryAfter) * 1000 : 1000;
+			const bucketKey = getBucketKey(res);
+			discordRateLimitBuckets.set(bucketKey, {
+				limit: Number(res.headers.get("X-RateLimit-Limit")) || Infinity,
+				remaining: 0,
+				resetAfter: wait / 1000,
+				resetAt: Date.now() + wait,
+			});
+			await new Promise((resolve) => setTimeout(resolve, wait));
+			return await execute();
+		}
+
+		return res;
+	};
+
+	return await execute();
+};
+
 const responseStatus = (response: any): number => response?.status ?? response?.statusCode ?? 0;
 
 const responseText = async (response: any): Promise<string> => {
@@ -378,239 +457,6 @@ export const parseYtInitial = (html: any) => {
 		return null;
 	}
 };
-
-const listcodes: { name: string; code: string }[] = [
-	{ name: "Abkhaz", code: "ab" },
-	{ name: "Acehnese", code: "ace" },
-	{ name: "Acholi", code: "ach" },
-	{ name: "Afar", code: "aa" },
-	{ name: "Afrikaans", code: "af" },
-	{ name: "Albanian", code: "sq" },
-	{ name: "Alur", code: "alz" },
-	{ name: "Amharic", code: "am" },
-	{ name: "Arabic", code: "ar" },
-	{ name: "Armenian", code: "hy" },
-	{ name: "Assamese", code: "as" },
-	{ name: "Avar", code: "av" },
-	{ name: "Awadhi", code: "awa" },
-	{ name: "Aymara", code: "ay" },
-	{ name: "Azerbaijani", code: "az" },
-	{ name: "Balinese", code: "ban" },
-	{ name: "Bambara", code: "bm" },
-	{ name: "Bashkir", code: "ba" },
-	{ name: "Basque", code: "eu" },
-	{ name: "Batak Karo", code: "btx" },
-	{ name: "Batak Simalungun", code: "bts" },
-	{ name: "Batak Toba", code: "bbc" },
-	{ name: "Belarusian", code: "be" },
-	{ name: "Bengali", code: "bn" },
-	{ name: "Bhojpuri", code: "bho" },
-	{ name: "Bikol", code: "bik" },
-	{ name: "Bosnian", code: "bs" },
-	{ name: "Breton", code: "br" },
-	{ name: "Bulgarian", code: "bg" },
-	{ name: "Buryat", code: "bua" },
-	{ name: "Cantonese", code: "yue" },
-	{ name: "Catalan", code: "ca" },
-	{ name: "Cebuano", code: "ceb" },
-	{ name: "Chamorro", code: "ch" },
-	{ name: "Chechen", code: "ce" },
-	{ name: "Chichewa", code: "ny" },
-	{ name: "Chinese (Simplified)", code: "zh-CN" },
-	{ name: "Chinese (Traditional)", code: "zh-TW" },
-	{ name: "Chuvash", code: "cv" },
-	{ name: "Corsican", code: "co" },
-	{ name: "Crimean Tatar", code: "crh" },
-	{ name: "Croatian", code: "hr" },
-	{ name: "Czech", code: "cs" },
-	{ name: "Danish", code: "da" },
-	{ name: "Dhivehi", code: "dv" },
-	{ name: "Dininkka", code: "din" },
-	{ name: "Dogri", code: "doi" },
-	{ name: "Dombe", code: "dom" },
-	{ name: "Dutch", code: "nl" },
-	{ name: "Dyula", code: "dyu" },
-	{ name: "Dzongkha", code: "dz" },
-	{ name: "English", code: "en" },
-	{ name: "Esperanto", code: "eo" },
-	{ name: "Estonian", code: "et" },
-	{ name: "Ewe", code: "ee" },
-	{ name: "Faroese", code: "fo" },
-	{ name: "Fijian", code: "fj" },
-	{ name: "Filipino", code: "fil" },
-	{ name: "Finnish", code: "fi" },
-	{ name: "French", code: "fr" },
-	{ name: "French (Canada)", code: "fr-CA" },
-	{ name: "Frisian", code: "fy" },
-	{ name: "Friulian", code: "fur" },
-	{ name: "Fulani", code: "ff" },
-	{ name: "Ga", code: "gaa" },
-	{ name: "Galician", code: "gl" },
-	{ name: "Georgian", code: "ka" },
-	{ name: "German", code: "de" },
-	{ name: "Greek", code: "el" },
-	{ name: "Guarani", code: "gn" },
-	{ name: "Gujarati", code: "gu" },
-	{ name: "Haitian Creole", code: "ht" },
-	{ name: "Hakha Chin", code: "cnh" },
-	{ name: "Hausa", code: "ha" },
-	{ name: "Hawaiian", code: "haw" },
-	{ name: "Hebrew", code: "he" },
-	{ name: "Hindi", code: "hi" },
-	{ name: "Hmong", code: "hmn" },
-	{ name: "Hungarian", code: "hu" },
-	{ name: "Hunsrik", code: "hrx" },
-	{ name: "Iban", code: "iba" },
-	{ name: "Icelandic", code: "is" },
-	{ name: "Igbo", code: "ig" },
-	{ name: "Ilocano", code: "ilo" },
-	{ name: "Indonesian", code: "id" },
-	{ name: "Irish", code: "ga" },
-	{ name: "Italian", code: "it" },
-	{ name: "Japanese", code: "ja" },
-	{ name: "Javanese", code: "jv" },
-	{ name: "Jingpo", code: "kac" },
-	{ name: "Kalaallisut", code: "kl" },
-	{ name: "Kannada", code: "kn" },
-	{ name: "Kanuri", code: "kr" },
-	{ name: "Kapampangan", code: "pam" },
-	{ name: "Kazakh", code: "kk" },
-	{ name: "Khasi", code: "kha" },
-	{ name: "Khmer", code: "km" },
-	{ name: "Kiga", code: "cgg" },
-	{ name: "Kikongo", code: "kg" },
-	{ name: "Kinyarwanda", code: "rw" },
-	{ name: "Kituba", code: "ktu" },
-	{ name: "Kokborok", code: "trp" },
-	{ name: "Konkani", code: "gom" },
-	{ name: "Korean", code: "ko" },
-	{ name: "Krio", code: "kri" },
-	{ name: "Kurdish (Kurmanji)", code: "ku" },
-	{ name: "Kurdish (Sorani)", code: "ckb" },
-	{ name: "Kyrgyz", code: "ky" },
-	{ name: "Lao", code: "lo" },
-	{ name: "Latavian", code: "lv" },
-	{ name: "Ligurian", code: "lij" },
-	{ name: "Limburgish", code: "li" },
-	{ name: "Lingala", code: "ln" },
-	{ name: "Lithuanian", code: "lt" },
-	{ name: "Lombard", code: "lmo" },
-	{ name: "Luganda", code: "lg" },
-	{ name: "Luo", code: "luo" },
-	{ name: "Luxembourgish", code: "lb" },
-	{ name: "Macedonian", code: "mk" },
-	{ name: "Madurese", code: "mad" },
-	{ name: "Magahi", code: "mag" },
-	{ name: "Maithili", code: "mai" },
-	{ name: "Makassar", code: "mak" },
-	{ name: "Malagasy", code: "mg" },
-	{ name: "Malay", code: "ms" },
-	{ name: "Malayalam", code: "ml" },
-	{ name: "Maltese", code: "mt" },
-	{ name: "Mam", code: "mam" },
-	{ name: "Manx", code: "gv" },
-	{ name: "Maori", code: "mi" },
-	{ name: "Marathi", code: "mr" },
-	{ name: "Marshallese", code: "mh" },
-	{ name: "Marwadi", code: "mwr" },
-	{ name: "Mauritian Creole", code: "mfe" },
-	{ name: "Meiteilon (Manipuri)", code: "mni-Mtei" },
-	{ name: "Minangkabau", code: "min" },
-	{ name: "Mizo", code: "lus" },
-	{ name: "Mongolian", code: "mn" },
-	{ name: "Myanmar (Burmese)", code: "my" },
-	{ name: "Nahuatl", code: "nah" },
-	{ name: "Ndau", code: "ndc" },
-	{ name: "Ndebele (South)", code: "nr" },
-	{ name: "Nepalbhasha (Newari)", code: "new" },
-	{ name: "Nepali", code: "ne" },
-	{ name: "NKo", code: "nko" },
-	{ name: "Norwegian", code: "no" },
-	{ name: "Nuer", code: "nus" },
-	{ name: "Occitan", code: "oc" },
-	{ name: "Odia (Oriya)", code: "or" },
-	{ name: "Oromo", code: "om" },
-	{ name: "Ossetian", code: "os" },
-	{ name: "Pangasinan", code: "pag" },
-	{ name: "Papiamento", code: "pap" },
-	{ name: "Pashto", code: "ps" },
-	{ name: "Persian", code: "fa" },
-	{ name: "Polish", code: "pl" },
-	{ name: "Portuguese (Brazil)", code: "pt-BR" },
-	{ name: "Portuguese (Portugal)", code: "pt-PT" },
-	{ name: "Punjabi (Gurmukhi)", code: "pa" },
-	{ name: "Punjabi (Shahmukhi)", code: "pa-Arab" },
-	{ name: "Quechua", code: "qu" },
-	{ name: "Qʼeqchiʼ", code: "kek" },
-	{ name: "Romani", code: "rom" },
-	{ name: "Romanian", code: "ro" },
-	{ name: "Rundi", code: "rn" },
-	{ name: "Russian", code: "ru" },
-	{ name: "Samoan", code: "sm" },
-	{ name: "Sango", code: "sg" },
-	{ name: "Sanskrit", code: "sa" },
-	{ name: "Santali", code: "sat" },
-	{ name: "Scots Gaelic", code: "gd" },
-	{ name: "Sepedi", code: "nso" },
-	{ name: "Serbian", code: "sr" },
-	{ name: "Sesotho", code: "st" },
-	{ name: "Seychellois Creole", code: "crs" },
-	{ name: "Shan", code: "shn" },
-	{ name: "Shona", code: "sn" },
-	{ name: "Sicilian", code: "scn" },
-	{ name: "Silesian", code: "szl" },
-	{ name: "Sindhi", code: "sd" },
-	{ name: "Sinhala", code: "si" },
-	{ name: "Slovak", code: "sk" },
-	{ name: "Slovenian", code: "sl" },
-	{ name: "Somali", code: "so" },
-	{ name: "Spanish", code: "es" },
-	{ name: "Sundanese", code: "su" },
-	{ name: "Susu", code: "sus" },
-	{ name: "Swahili", code: "sw" },
-	{ name: "Swati", code: "ss" },
-	{ name: "Swedish", code: "sv" },
-	{ name: "Tahitian", code: "ty" },
-	{ name: "Tajik", code: "tg" },
-	{ name: "Tamazight", code: "tzm" },
-	{ name: "Tamazight (Tifinagh)", code: "ber-Tfng" },
-	{ name: "Tamil", code: "ta" },
-	{ name: "Tatar", code: "tt" },
-	{ name: "Telugu", code: "te" },
-	{ name: "Tetum", code: "tet" },
-	{ name: "Thai", code: "th" },
-	{ name: "Tibetan", code: "bo" },
-	{ name: "Tigrinya", code: "ti" },
-	{ name: "Tiv", code: "tiv" },
-	{ name: "Tok Pisin", code: "tpi" },
-	{ name: "Tongan", code: "to" },
-	{ name: "Tsonga", code: "ts" },
-	{ name: "Tswana", code: "tn" },
-	{ name: "Tulu", code: "tcy" },
-	{ name: "Tumbuka", code: "tum" },
-	{ name: "Turkish", code: "tr" },
-	{ name: "Turkmen", code: "tk" },
-	{ name: "Tuvan", code: "tyv" },
-	{ name: "Twi", code: "ak" },
-	{ name: "Udmurt", code: "udm" },
-	{ name: "Ukrainian", code: "uk" },
-	{ name: "Urdu", code: "ur" },
-	{ name: "Uyghur", code: "ug" },
-	{ name: "Uzbek", code: "uz" },
-	{ name: "Venda", code: "ve" },
-	{ name: "Venetian", code: "vec" },
-	{ name: "Vietnamese", code: "vi" },
-	{ name: "Waray", code: "war" },
-	{ name: "Welsh", code: "cy" },
-	{ name: "Wolof", code: "wo" },
-	{ name: "Xhosa", code: "xh" },
-	{ name: "Yakut", code: "sah" },
-	{ name: "Yiddish", code: "yi" },
-	{ name: "Yoruba", code: "yo" },
-	{ name: "Yucatec Maya", code: "yua" },
-	{ name: "Zapotec", code: "zap" },
-	{ name: "Zulu", code: "zu" },
-];
 
 let keysc: string | undefined;
 let keysp: string | undefined;
@@ -2282,7 +2128,7 @@ let geminiCookies: string | null = null;
 const getGeminiWiz = async () => {
 	if (geminiWiz && geminiWiz.expire > Date.now()) return geminiWiz;
 	try {
-		const res = await fetch("https://gemini.google.com", { headers: commonHeaders });
+		const res = await fetch("https://gemini.google.com/app", { headers: commonHeaders });
 		const text = await res.text();
 		const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
 		const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];
@@ -2467,7 +2313,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 				language: finalres ? finalres[4]?.[0]?.[9] || null : null,
 			},
 			conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
-			expire: String(geminiWiz?.expire) || null,
+			expire: finalres ? String(geminiWiz?.expire) : null,
 			model: "gemini-3.5-flash",
 		},
 	};
@@ -3543,7 +3389,7 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
 	const url = `https://discord.com/api/v10/guilds/${guildId}`;
 
 	try {
-		const req = await fetch(url, {
+		const req = await discordFetch(url, {
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
@@ -3580,7 +3426,7 @@ export const Discord = async (token: string, guildId: string, payload: any, payl
 			return { data: [false, null, 204] };
 		}
 
-		const response = await fetch(url, {
+		const response = await discordFetch(url, {
 			method: "PATCH",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -3622,7 +3468,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 	const url = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
 	try {
-		const req = await fetch(url, {
+		const req = await discordFetch(url, {
 			method: "PATCH",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -3678,7 +3524,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			return { data: [false, null, 204, changes()] };
 		}
 
-		const response = await fetch(url, {
+		const response = await discordFetch(url, {
 			method: "PATCH",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -3696,7 +3542,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			if (response.status === 403 && patchResponse?.code === 50013 && payload.nick !== undefined) {
 				const { nick, ...retryPayload } = payload;
 				if (Object.keys(retryPayload).length > 0) {
-					const retryResponse = await fetch(url, {
+					const retryResponse = await discordFetch(url, {
 						method: "PATCH",
 						headers: {
 							Authorization: `Bot ${token}`,
@@ -3832,7 +3678,7 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 			}
 		}
 
-		let response = await fetch(url, {
+		let response = await discordFetch(url, {
 			method: method,
 			headers: headers,
 			...(bodyPayload && { body: JSON.stringify(bodyPayload) }),
@@ -3850,7 +3696,7 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 			const fallbackHeaders = { ...headers };
 			delete fallbackHeaders["Authorization"];
 
-			response = await fetch(fallbackUrl, {
+			response = await discordFetch(fallbackUrl, {
 				method: method,
 				headers: fallbackHeaders,
 				...(bodyPayload && { body: JSON.stringify(bodyPayload) }),
@@ -3982,7 +3828,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(`https://discord.com/api/v10/index/servers/search?limit=10&query=${encodeURIComponent(que)}`, {
+		const per = await discordFetch(`https://discord.com/api/v10/index/servers/search?limit=10&query=${encodeURIComponent(que)}`, {
 			headers: commonHeaders,
 		});
 
@@ -4028,7 +3874,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
+		const per = await discordFetch(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
 			headers: commonHeaders,
 		});
 
@@ -4409,7 +4255,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 	if (!channelId) return { error: "Missing channelId" };
 
 	try {
-		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+		const channelCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}`, {
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
@@ -4424,7 +4270,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 		}
 
 		if (messageId) {
-			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+			const messageCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
@@ -4523,7 +4369,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 	try {
 		const url = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
 
-		const response = await fetch(url, {
+		const response = await discordFetch(url, {
 			method: messageId ? "PATCH" : "POST",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -4547,7 +4393,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 	let messageData: any = null;
 
 	try {
-		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+		const channelCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}`, {
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
@@ -4561,7 +4407,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 		}
 
 		if (messageId) {
-			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+			const messageCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
@@ -4695,7 +4541,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 	try {
 		const discordUrl = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
 
-		const response = await fetch(discordUrl, {
+		const response = await discordFetch(discordUrl, {
 			method: messageId ? "PATCH" : "POST",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -4719,7 +4565,7 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 	let messageData: any = null;
 
 	try {
-		const channelCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+		const channelCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}`, {
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
@@ -4733,7 +4579,7 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 		}
 
 		if (messageId) {
-			const messageCheck = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+			const messageCheck = await discordFetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
@@ -4790,7 +4636,7 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 	try {
 		const discordUrl = messageId ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}` : `https://discord.com/api/v10/channels/${channelId}/messages`;
 
-		const response = await fetch(discordUrl, {
+		const response = await discordFetch(discordUrl, {
 			method: messageId ? "PATCH" : "POST",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -5220,28 +5066,11 @@ export const Capcut = async function Capcut(que: string) {
 
 let redditCookies: string = "";
 
-export const refreshRedditAuth = async (force: boolean = false): Promise<any> => {
-	if (!force && redditCookies) return redditCookies;
-
-	try {
-		const loginRes = await fetch("https://old.reddit.com/login/", {
-			headers: commonHeaders,
-			redirect: "manual",
-		});
-
-		if (loginRes.headers.getSetCookie) {
-			redditCookies = normalizeCookies(loginRes.headers.getSetCookie());
-		} else {
-			redditCookies = normalizeCookies(loginRes.headers.get("set-cookie"));
-		}
-	} catch {}
-};
-
 export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth(refresh_auth);
 
 		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
@@ -5281,7 +5110,7 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 		const pathname = urlObj.pathname.replace(/\/+$/, "");
 		const jsonUrl = `https://www.reddit.com${pathname}.json`;
 
-		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth(refresh_auth);
 
 		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
@@ -5302,7 +5131,7 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 			res = await req.json();
 			res = Array.isArray(res) ? res.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : res;
 		} catch {
-			await refreshRedditAuth(true);
+			redditCookies = await refreshRedditAuth(true);
 			const retryReq2 = await fetch(jsonUrl, {
 				headers: { ...headers, Cookie: redditCookies },
 			});
@@ -5328,7 +5157,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "") await refreshRedditAuth(refresh_auth);
+		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth(refresh_auth);
 
 		const headers: any = commonHeaders;
 		if (redditCookies) headers["Cookie"] = redditCookies;
@@ -7072,78 +6901,6 @@ export async function HauntProfile(query: string): Promise<any> {
 	}
 }
 
-const DISCORD_FLAGS: Record<number, string> = {
-	0: "Discord Staff",
-	1: "Partnered Server Owner",
-	2: "HypeSquad Events",
-	3: "Bug Hunter Level 1",
-	6: "HypeSquad Bravery",
-	7: "HypeSquad Brilliance",
-	8: "HypeSquad Balance",
-	9: "Early Nitro Supporter",
-	10: "Team User",
-	12: "System",
-	14: "Bug Hunter Level 2",
-	16: "Verified Bot",
-	17: "Early Verified Bot Developer",
-	18: "Moderator Programs Alumni",
-	19: "Bot HTTP Interactions",
-	22: "Active Developer",
-};
-
-const DISCORD_APPLICATION_FLAGS: Record<number, string> = {
-	1: "EMBEDDED_RELEASED",
-	2: "MANAGED_EMOJI",
-	3: "EMBEDDED_IAP",
-	4: "GROUP_DM_CREATE",
-	6: "APPLICATION_AUTO_MODERATION_RULE_CREATE_BADGE",
-	11: "RPC_HAS_CONNECTED",
-	12: "GATEWAY_PRESENCE",
-	13: "GATEWAY_PRESENCE_LIMITED",
-	14: "GATEWAY_GUILD_MEMBERS",
-	15: "GATEWAY_GUILD_MEMBERS_LIMITED",
-	16: "VERIFICATION_PENDING_GUILD_LIMIT",
-	17: "EMBEDDED",
-	18: "GATEWAY_MESSAGE_CONTENT",
-	19: "GATEWAY_MESSAGE_CONTENT_LIMITED",
-	20: "EMBEDDED_FIRST_PARTY",
-	23: "APPLICATION_COMMAND_BADGE",
-};
-
-const DISCORD_APPLICATION_INTEGRATION_TYPES: Record<number, string> = {
-	0: "GUILD_INSTALL",
-	1: "USER_INSTALL",
-};
-
-function resolveFlags(flags: number | null | undefined): string[] {
-	if (!flags) return [];
-	const badges: string[] = [];
-	for (const [bit, name] of Object.entries(DISCORD_FLAGS)) {
-		if (flags & (1 << Number(bit))) {
-			badges.push(name);
-		}
-	}
-	return badges;
-}
-
-function resolveApplicationFlags(flags: string | number | null | undefined): string[] {
-	if (flags === undefined || flags === null || flags === "") return [];
-
-	let value: bigint;
-	try {
-		value = BigInt(String(flags));
-	} catch {
-		return [];
-	}
-
-	const resolved: string[] = [];
-	for (let bit = 0; bit < 64; bit++) {
-		if ((value & (1n << BigInt(bit))) !== 0n) resolved.push(DISCORD_APPLICATION_FLAGS[bit] || `UNKNOWN_${bit}`);
-	}
-
-	return resolved;
-}
-
 function formatDiscordApplicationInstallParams(params: any) {
 	if (!params || typeof params !== "object") return params;
 	const formatted = { ...params };
@@ -7286,6 +7043,11 @@ function formatDiscordApplication(app: any) {
 		server_members: (applicationFlags & ((1n << 14n) | (1n << 15n))) !== 0n,
 		message_content: (applicationFlags & ((1n << 18n) | (1n << 19n))) !== 0n,
 	};
+	formatted.verified_intents = {
+		presence: (applicationFlags & (1n << 12n)) !== 0n,
+		server_members: (applicationFlags & (1n << 14n)) !== 0n,
+		message_content: (applicationFlags & (1n << 18n)) !== 0n,
+	};
 
 	if (formatted.install_params) {
 		formatted.install_params = formatDiscordApplicationInstallParams(formatted.install_params);
@@ -7315,119 +7077,6 @@ function formatDiscordApplication(app: any) {
 
 	return formatted;
 }
-
-const DISCORD_PERMISSIONS: Record<string, bigint> = {
-	"Create Instant Invite": 1n << 0n,
-	"Kick Members": 1n << 1n,
-	"Ban Members": 1n << 2n,
-	Administrator: 1n << 3n,
-	"Manage Channels": 1n << 4n,
-	"Manage Guild": 1n << 5n,
-	"Add Reactions": 1n << 6n,
-	"View Audit Log": 1n << 7n,
-	"Priority Speaker": 1n << 8n,
-	Stream: 1n << 9n,
-	"View Channel": 1n << 10n,
-	"Send Messages": 1n << 11n,
-	"Send TTS Messages": 1n << 12n,
-	"Manage Messages": 1n << 13n,
-	"Embed Links": 1n << 14n,
-	"Attach Files": 1n << 15n,
-	"Read Message History": 1n << 16n,
-	"Mention Everyone": 1n << 17n,
-	"Use External Emojis": 1n << 18n,
-	"View Guild Insights": 1n << 19n,
-	Connect: 1n << 20n,
-	Speak: 1n << 21n,
-	"Mute Members": 1n << 22n,
-	"Deafen Members": 1n << 23n,
-	"Move Members": 1n << 24n,
-	"Use VAD": 1n << 25n,
-	"Change Nickname": 1n << 26n,
-	"Manage Nicknames": 1n << 27n,
-	"Manage Roles": 1n << 28n,
-	"Manage Webhooks": 1n << 29n,
-	"Manage Guild Expressions": 1n << 30n,
-	"Use Application Commands": 1n << 31n,
-	"Request to Speak": 1n << 32n,
-	"Manage Events": 1n << 33n,
-	"Manage Threads": 1n << 34n,
-	"Create Public Threads": 1n << 35n,
-	"Create Private Threads": 1n << 36n,
-	"Use External Stickers": 1n << 37n,
-	"Send Messages in Threads": 1n << 38n,
-	"Use Embedded Activities": 1n << 39n,
-	"Moderate Members": 1n << 40n,
-	"View Creator Monetization Analytics": 1n << 41n,
-	"Use Soundboard": 1n << 42n,
-	"Create Guild Expressions": 1n << 43n,
-	"Use External Sounds": 1n << 44n,
-	"Send Voice Messages": 1n << 45n,
-	"Use Clyde AI": 1n << 47n,
-	"Set Voice Channel Status": 1n << 48n,
-	"Send Polls": 1n << 49n,
-	"Use External Apps": 1n << 50n,
-};
-
-export const PERMISSION_KEYS: Record<string, bigint> = {
-	addreactions: 1n << 6n,
-	admin: 1n << 3n,
-	attachfiles: 1n << 15n,
-	ban: 1n << 2n,
-	changenicknames: 1n << 26n,
-	connect: 1n << 20n,
-	createinstantinvite: 1n << 0n,
-	createprivatethreads: 1n << 36n,
-	createpublicthreads: 1n << 35n,
-	embedlinks: 1n << 14n,
-	externalemojis: 1n << 18n,
-	externalstickers: 1n << 37n,
-	kick: 1n << 1n,
-	managechannels: 1n << 4n,
-	manageemojis: 1n << 30n,
-	manageevents: 1n << 33n,
-	managemessages: 1n << 13n,
-	managenicknames: 1n << 27n,
-	manageroles: 1n << 28n,
-	manageserver: 1n << 5n,
-	managethreads: 1n << 34n,
-	managewebhooks: 1n << 29n,
-	mentioneveryone: 1n << 17n,
-	moderatemembers: 1n << 40n,
-	movemembers: 1n << 24n,
-	priorityspeaker: 1n << 8n,
-	readmessagehistory: 1n << 16n,
-	readmessages: 1n << 10n,
-	requesttospeak: 1n << 32n,
-	sendmessages: 1n << 11n,
-	sendmessagesinthreads: 1n << 38n,
-	sendvoicemessages: 1n << 45n,
-	setvoicechannelstatus: 1n << 48n,
-	slashcommands: 1n << 31n,
-	speak: 1n << 21n,
-	stream: 1n << 9n,
-	tts: 1n << 12n,
-	usesoundboard: 1n << 42n,
-	usevad: 1n << 25n,
-	viewauditlog: 1n << 7n,
-	viewguildinsights: 1n << 19n,
-	voicedeafen: 1n << 23n,
-	voicemute: 1n << 22n,
-};
-
-export const DISCORD_CHANNEL_TYPES: Record<number, string> = {
-	0: "text",
-	2: "voice",
-	4: "category",
-	5: "announcement",
-	10: "announcement_thread",
-	11: "public_thread",
-	12: "private_thread",
-	13: "stage",
-	14: "directory",
-	15: "forum",
-	16: "media",
-};
 
 function resolvePermissions(permissions: string | bigint | null | undefined): string[] {
 	if (!permissions) return [];
@@ -7507,7 +7156,7 @@ async function discordListCache(token: string, url: string, headers: any): Promi
 	if (activeFetch) return await activeFetch;
 
 	const fetchCache = (async (): Promise<DiscordListCacheValue> => {
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -7640,10 +7289,10 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 		const urlDMs = `https://discord.com/api/v10/users/@me/channels`;
 
 		const [req, rolesReq, guildReq, dmReq] = await Promise.all([
-			fetch(url, { headers }),
-			urlRoles ? fetch(urlRoles, { headers }) : Promise.resolve(null),
-			urlGuild ? fetch(urlGuild, { headers }) : Promise.resolve(null),
-			fetch(urlDMs, {
+			discordFetch(url, { headers }),
+			urlRoles ? discordFetch(urlRoles, { headers }) : Promise.resolve(null),
+			urlGuild ? discordFetch(urlGuild, { headers }) : Promise.resolve(null),
+			discordFetch(urlDMs, {
 				method: "POST",
 				headers,
 				body: JSON.stringify({ recipient_id: userId }),
@@ -7688,7 +7337,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 		const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
 
 		const result: any = {
-			_warning: "Using this endpoint can put your bot rate-limits faster",
+			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
 			dmChannelId: dmData?.id || null,
 			...data,
 			...perms,
@@ -7718,7 +7367,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 
 	try {
 		const url = `https://discord.com/api/v10/applications/${botId}/rpc?with_guild_counts=true`;
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -7734,7 +7383,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		const urlDirectory = `https://discord.com/api/v10/application-directory-static/applications/${botId}`;
 		const urlSimilar = `https://discord.com/api/v10/application-directory-static/applications/${botId}/similar`;
 		const urlStoreLayout = `https://discord.com/api/v10/applications/${botId}/store-layout`;
-		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([fetch(urlDirectory, { headers }), fetch(urlSimilar, { headers }), fetch(urlStoreLayout, { headers })]);
+		const [directoryReq, similarReq, storeLayoutReq] = await Promise.all([discordFetch(urlDirectory, { headers }), discordFetch(urlSimilar, { headers }), discordFetch(urlStoreLayout, { headers })]);
 
 		let directoryData: any = null;
 		let similarData: any = null;
@@ -7757,7 +7406,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 			const urlGuildPreview = `https://discord.com/api/v10/guilds/${guildId}/preview`;
 			const urlGuildDirectory = `https://discord.com/api/v10/discovery/${guildId}`;
 			const urlGuildRichContent = `https://discord.com/api/guilds/${guildId}/widget.json`;
-			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([fetch(urlGuildPreview, { headers }), fetch(urlGuildDirectory, { headers }), fetch(urlGuildRichContent, { headers })]);
+			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([discordFetch(urlGuildPreview, { headers }), discordFetch(urlGuildDirectory, { headers }), discordFetch(urlGuildRichContent, { headers })]);
 
 			let guildPreviewData: any = null;
 			let guildDirectoryData: any = null;
@@ -7820,7 +7469,36 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		const firstCount = (key: string) => countSources.find((source) => source[key] !== undefined && source[key] !== null)?.[key];
 		data.serverCount = firstCount("approximate_guild_count") ?? directory?.directory_entry?.guild_count ?? 0;
 
-		return { _warning: "Using this endpoint with token can put your bot rate-limits faster", data };
+		return { _warning: "Using this endpoint with token can put your bot (discord) rate-limits faster", data };
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
+
+export const DiscordInfoClient = async (token: string | null) => {
+	if (!token) return { error: "Missing token" };
+
+	const headers: any = {
+		"Content-Type": "application/json",
+		"User-Agent": discordUserAgent,
+		Authorization: `Bot ${token}`,
+	};
+
+	try {
+		const validateReq = await discordFetch("https://discord.com/api/v10/users/@me/channels", { headers });
+		if (validateReq.status !== 200) {
+			const errData = await validateReq.json().catch(() => null);
+			return { data: null, error: errData || { status: validateReq.status, statusText: validateReq.statusText } };
+		}
+
+		const [req2, req3, req4] = await Promise.all([DiscordInfoApp(token, atob(token.split(".")[0])), discordFetch("https://discord.com/api/v10/oauth2/applications/@me", { headers }), discordFetch("https://discord.com/api/v10/users/@me/guilds", { headers })]);
+		const [dmChannels, data2, data3, guilds] = [await validateReq.json(), await req2, await req3.json(), await req4.json()];
+		const resolvedGuilds = (Array.isArray(guilds) ? guilds : []).map((g: any) => {
+			const formatted = formatDiscordGuild(g);
+			formatted.permissions_resolved = g.permissions ? resolvePermissions(g.permissions) : [];
+			return formatted;
+		});
+		return { _warning: "Using this endpoint can put your bot (discord) rate-limits faster", data: { dmChannels, oauth2: data3, public_client: data2.data, guilds: resolvedGuilds } };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -7994,7 +7672,7 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 			}
 
 			return {
-				_warning: "Using this endpoint can put your bot rate-limits faster",
+				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
 				botsCount,
 				usersCount,
 				cachedMembersCount,
@@ -8225,7 +7903,7 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 			rolesData = rolesData.slice(0, limit);
 
 			return {
-				_warning: "Using this endpoint can put your bot rate-limits faster",
+				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
 				rolesCount: totalRoles,
 				cachedRolesCount,
 				limit: limit,
@@ -8253,7 +7931,7 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
 		const urlThreads = `https://discord.com/api/v10/guilds/${guildId}/threads/active`;
 
-		const [reqChannels, reqThreads] = await Promise.all([fetch(urlChannels, { headers }), fetch(urlThreads, { headers })]);
+		const [reqChannels, reqThreads] = await Promise.all([discordFetch(urlChannels, { headers }), discordFetch(urlThreads, { headers })]);
 
 		let channelsData: any = [];
 		let threadsData: any = { threads: [] };
@@ -8345,7 +8023,7 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 			data = data.slice(0, sliceLimit);
 
 			return {
-				_warning: "Using this endpoint can put your bot rate-limits faster",
+				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
 				data,
 				totalChannel,
 			};
@@ -8376,7 +8054,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 		const urlChannels = `https://discord.com/api/v10/guilds/${guildId}/channels`;
 		const urlClientMember = botId ? `https://discord.com/api/v10/guilds/${guildId}/members/${botId}` : null;
 
-		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([fetch(url, { headers }), fetch(urlWebhooks, { headers }), fetch(urlChannels, { headers }), urlClientMember ? fetch(urlClientMember, { headers }) : Promise.resolve(null)]);
+		const [req, webhooksReq, channelsReq, clientMemberReq] = await Promise.all([discordFetch(url, { headers }), discordFetch(urlWebhooks, { headers }), discordFetch(urlChannels, { headers }), urlClientMember ? discordFetch(urlClientMember, { headers }) : Promise.resolve(null)]);
 
 		let data: any = null;
 		let webhooksData: any = [];
@@ -8532,7 +8210,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 
 		data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
 
-		return { _warning: "Using this endpoint can put your bot rate-limits faster", data };
+		return { _warning: "Using this endpoint can put your bot (discord) rate-limits faster", data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -8557,7 +8235,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 
 	try {
 		const url = `https://discord.com/api/v10/stickers/${stickerId}`;
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -8584,7 +8262,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 				} else {
 					try {
 						const previewUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/preview`;
-						const previewReq = await fetch(previewUrl, {
+						const previewReq = await discordFetch(previewUrl, {
 							headers,
 						});
 						if (previewReq.status === 200) {
@@ -8609,7 +8287,7 @@ export const DiscordInfoSticker = async (token: string, q: string) => {
 				if (!data.user) {
 					try {
 						const guildStickersUrl = `https://discord.com/api/v10/guilds/${data.guild_id}/stickers`;
-						const gsReq = await fetch(guildStickersUrl, {
+						const gsReq = await discordFetch(guildStickersUrl, {
 							headers,
 						});
 						if (gsReq.status === 200) {
@@ -8645,23 +8323,6 @@ type DiscordCreateStickerPayload = {
 	description?: string;
 	tags?: string;
 	reason?: string;
-};
-
-const DISCORD_STICKER_MAX_BYTES = 512 * 1024;
-const DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES = 8 * 1024 * 1024;
-const DISCORD_STICKER_MIME_TO_EXT: Record<string, string> = {
-	"image/png": "png",
-	"image/apng": "apng",
-	"image/gif": "gif",
-	"application/json": "json",
-};
-const DISCORD_STICKER_CONVERT_MIME_TO_PNG = new Set(["image/jpeg", "image/jpg", "image/pjpeg", "image/webp", "image/x-webp"]);
-const DISCORD_STICKER_CONVERT_EXT_TO_PNG = new Set(["jpg", "jpeg", "jpe", "jfif", "webp"]);
-const DISCORD_STICKER_EXT_TO_MIME: Record<string, string> = {
-	png: "image/png",
-	apng: "image/png",
-	gif: "image/gif",
-	json: "application/json",
 };
 
 export const DiscordCreateSticker = async (token: string, guildId: string, payload: DiscordCreateStickerPayload) => {
@@ -8764,7 +8425,7 @@ export const DiscordCreateSticker = async (token: string, guildId: string, paylo
 		};
 		if (payload.reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(payload.reason);
 
-		const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/stickers`, {
+		const response = await discordFetch(`https://discord.com/api/v10/guilds/${guildId}/stickers`, {
 			method: "POST",
 			headers,
 			body: form,
@@ -8805,7 +8466,7 @@ export const DiscordDeleteSticker = async (token: string, guildId: string, stick
 	if (!/^\d+$/.test(guildId) || !/^\d+$/.test(stickerId)) return { error: "Invalid guildId or stickerId" };
 
 	try {
-		const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/stickers/${stickerId}`, {
+		const response = await discordFetch(`https://discord.com/api/v10/guilds/${guildId}/stickers/${stickerId}`, {
 			method: "DELETE",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -8948,7 +8609,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 
 		if (params.length > 0) url += "?" + params.join("&");
 
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -8966,7 +8627,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 			data = await Promise.all(data.map((m) => processDiscordMessage(m, token)));
 		}
 
-		return { _warning: "Using this endpoint can put your bot rate-limits faster", limit, data };
+		return { _warning: "Using this endpoint can put your bot (discord) rate-limits faster", limit, data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -8985,7 +8646,7 @@ export const DiscordInfoMessage = async (token: string, channelId: string, messa
 
 	try {
 		const url = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`;
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -9026,7 +8687,7 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
 	try {
 		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/invites` : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
 
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9093,7 +8754,7 @@ export const DiscordListInvite = async (token: string, guildId: string, limit: n
 
 	try {
 		const url = `https://discord.com/api/v10/guilds/${guildId}/invites`;
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 
 		let data: any = null;
 		try {
@@ -9186,7 +8847,7 @@ export const DiscordInfoChannel = async (token: string, channelId: string, guild
 	try {
 		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/channels` : `https://discord.com/api/v10/channels/${channelId}`;
 
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9252,7 +8913,7 @@ export const DiscordInfoRole = async (token: string, roleId: string, guildId: st
 		const urlRoles = `https://discord.com/api/v10/guilds/${guildId}/roles`;
 		const urlCounts = `https://discord.com/api/v10/guilds/${guildId}/roles/member-counts`;
 
-		const [rolesReq, countsReq] = await Promise.all([fetch(urlRoles, { headers }), fetch(urlCounts, { headers })]);
+		const [rolesReq, countsReq] = await Promise.all([discordFetch(urlRoles, { headers }), discordFetch(urlCounts, { headers })]);
 
 		let rolesData: any = [];
 		let countsData: any = [];
@@ -9317,7 +8978,7 @@ export const DiscordModifyRole = async (token: string, roleId: string, guildId: 
 	const url = `https://discord.com/api/v10/guilds/${guildId}/roles/${roleId}`;
 
 	try {
-		const getReq = await fetch(url, { headers });
+		const getReq = await discordFetch(url, { headers });
 
 		let currentInfo: any = null;
 		try {
@@ -9345,7 +9006,7 @@ export const DiscordModifyRole = async (token: string, roleId: string, guildId: 
 			return { data: [false, null, 204] };
 		}
 
-		const response = await fetch(url, {
+		const response = await discordFetch(url, {
 			method: "PATCH",
 			headers,
 			body: JSON.stringify(payload),
@@ -9383,7 +9044,7 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 
 	try {
 		const url = `https://discord.com/api/v10/guilds/${guildId}/webhooks`;
-		const req = await fetch(url, { headers });
+		const req = await discordFetch(url, { headers });
 		let data: any = null;
 		try {
 			data = await req.json();
@@ -9412,7 +9073,7 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 			}
 		}
 
-		return { _warning: "Using this endpoint can put your bot rate-limits faster", data };
+		return { _warning: "Using this endpoint can put your bot (discord) rate-limits faster", data };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -9937,7 +9598,7 @@ export const OtoDB = async (query: string): Promise<any> => {
 export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
 	if (action === "setstatus") {
 		const { channelId, content } = payload;
-		const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+		const res = await discordFetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
 			method: "PUT",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -9969,7 +9630,7 @@ export const DiscordVoice = async (token: string, guildId: string, action: strin
 	if (!token || !guildId || !action) return { error: "Missing required parameters" };
 
 	const modifyMember = async (userId: string, data: any) => {
-		const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+		const res = await discordFetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
 			method: "PATCH",
 			headers: {
 				Authorization: `Bot ${token}`,
@@ -11196,32 +10857,6 @@ export const EmojiKitchen = async function EmojiKitchen(q1: string, q2: string) 
 	}
 };
 
-const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<string, number> = {
-	KEYWORD: 1,
-	SPAM: 3,
-	KEYWORD_PRESET: 4,
-	MENTION_SPAM: 5,
-	MEMBER_PROFILE: 6,
-};
-
-const DISCORD_AUTOMOD_EVENT_TYPES: Record<string, number> = {
-	MESSAGE_SEND: 1,
-	GUILD_MEMBER_JOIN_OR_UPDATE: 2,
-};
-
-const DISCORD_AUTOMOD_ACTION_TYPES: Record<string, number> = {
-	BLOCK_MESSAGE: 1,
-	SEND_ALERT_MESSAGE: 2,
-	TIMEOUT: 3,
-	BLOCK_MEMBER_INTERACTION: 4,
-};
-
-const DISCORD_AUTOMOD_PRESET_TYPES: Record<string, number> = {
-	PROFANITY: 1,
-	SEXUAL_CONTENT: 2,
-	SLURS: 3,
-};
-
 function discordAutomodName(map: Record<string, number>, value: number) {
 	return Object.entries(map).find(([, v]) => v === value)?.[0] || "UNKNOWN";
 }
@@ -11469,7 +11104,7 @@ function buildDiscordAutomodPayload(params: any, mode: "set" | "modify") {
 }
 
 async function fetchDiscordAutomodRule(ruleUrl: string, headers: any) {
-	const req = await fetch(ruleUrl, { headers });
+	const req = await discordFetch(ruleUrl, { headers });
 	let data: any = null;
 	try {
 		data = await req.json();
@@ -11564,7 +11199,7 @@ export const DiscordSetAutomod = async (token: string, guildId: string, ruleId: 
 			return { data: [formatDiscordAutomodRule(existingRule), null, 204] };
 		}
 
-		const response = await fetch(operationMode === "modify" ? `${baseUrl}/${resolvedRuleId}` : baseUrl, {
+		const response = await discordFetch(operationMode === "modify" ? `${baseUrl}/${resolvedRuleId}` : baseUrl, {
 			method: operationMode === "modify" ? "PATCH" : "POST",
 			headers,
 			body: JSON.stringify(payload),
@@ -11607,7 +11242,7 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 		const urlRules = ruleId ? `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}` : `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules`;
 		const urlGuild = `https://discord.com/api/v10/guilds/${guildId}`;
 
-		const [rulesReq, guildReq] = await Promise.all([fetch(urlRules, { headers }), fetch(urlGuild, { headers })]);
+		const [rulesReq, guildReq] = await Promise.all([discordFetch(urlRules, { headers }), discordFetch(urlGuild, { headers })]);
 
 		let rulesData: any = null;
 		let guildData: any = null;
@@ -11634,35 +11269,11 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 			formattedRules = [rulesData];
 		}
 		if (Array.isArray(formattedRules)) {
-			const DISCORD_AUTOMOD_TRIGGER_TYPES: Record<number, string> = {
-				1: "KEYWORD",
-				3: "SPAM",
-				4: "KEYWORD_PRESET",
-				5: "MENTION_SPAM",
-			};
-
-			const DISCORD_AUTOMOD_EVENT_TYPES: Record<number, string> = {
-				1: "MESSAGE_SEND",
-				2: "GUILD_MEMBER_JOIN_OR_UPDATE",
-			};
-
-			const DISCORD_AUTOMOD_ACTION_TYPES: Record<number, string> = {
-				1: "BLOCK_MESSAGE",
-				2: "SEND_ALERT_MESSAGE",
-				3: "TIMEOUT",
-			};
-
-			const DISCORD_AUTOMOD_PRESET_TYPES: Record<number, string> = {
-				1: "PROFANITY",
-				2: "SEXUAL_CONTENT",
-				3: "SLURS",
-			};
-
 			formattedRules = formattedRules.map((rule: any) => {
-				const triggerTypeName = DISCORD_AUTOMOD_TRIGGER_TYPES[rule.trigger_type] || "UNKNOWN";
-				const eventTypeName = DISCORD_AUTOMOD_EVENT_TYPES[rule.event_type] || "UNKNOWN";
+				const triggerTypeName = discordAutomodName(DISCORD_AUTOMOD_TRIGGER_TYPES, rule.trigger_type);
+				const eventTypeName = discordAutomodName(DISCORD_AUTOMOD_EVENT_TYPES, rule.event_type);
 				const resolvedActions = (rule.actions || []).map((action: any) => {
-					const actionTypeName = DISCORD_AUTOMOD_ACTION_TYPES[action.type] || "UNKNOWN";
+					const actionTypeName = discordAutomodName(DISCORD_AUTOMOD_ACTION_TYPES, action.type);
 					return {
 						...action,
 						type_name: actionTypeName,
@@ -11671,7 +11282,7 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 
 				const triggerMetadata = rule.trigger_metadata || {};
 				if (triggerMetadata.presets) {
-					triggerMetadata.presets_resolved = triggerMetadata.presets.map((p: number) => DISCORD_AUTOMOD_PRESET_TYPES[p] || "UNKNOWN");
+					triggerMetadata.presets_resolved = triggerMetadata.presets.map((p: number) => discordAutomodName(DISCORD_AUTOMOD_PRESET_TYPES, p));
 				}
 
 				return {
@@ -11986,7 +11597,7 @@ export const DiscordDeleteAutomod = async (token: string, guildId: string, ruleI
 
 	try {
 		const ruleUrl = `https://discord.com/api/v10/guilds/${guildId}/auto-moderation/rules/${ruleId}`;
-		const req = await fetch(ruleUrl, { method: "DELETE", headers });
+		const req = await discordFetch(ruleUrl, { method: "DELETE", headers });
 
 		if (req.status === 204 || req.status === 200) {
 			return { data: [null, req.status] };
@@ -12098,7 +11709,7 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 		let lastMemberId: string | null = null;
 		let guildInfo: any = null;
 
-		const [memberStartRes, guildRes] = await Promise.all([fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, { headers }), fetch(`https://discord.com/api/v10/guilds/${guildId}`, { headers })]);
+		const [memberStartRes, guildRes] = await Promise.all([discordFetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, { headers }), discordFetch(`https://discord.com/api/v10/guilds/${guildId}`, { headers })]);
 
 		if (guildRes.status === 200) {
 			try {
@@ -12122,7 +11733,7 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 			const currentFetchLimit = 1000;
 			const urlMembers = `https://discord.com/api/v10/guilds/${guildId}/members?limit=${currentFetchLimit}&after=${lastMemberId}`;
 
-			const memberRes = await fetch(urlMembers, { headers });
+			const memberRes = await discordFetch(urlMembers, { headers });
 			if (memberRes.status !== 200) break;
 
 			const batch: any = await memberRes.json();
@@ -12217,7 +11828,7 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 		const cachedMembersCount = data.length;
 
 		return {
-			_warning: "Using this endpoint can put your bot rate-limits faster",
+			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
 			tagsCount,
 			usersCount,
 			cachedMembersCount,
@@ -12538,6 +12149,7 @@ export const holidaysTime = async (query: string, year: string) => {
 };
 
 let googleTtsWiz: { fSid: string; bl: string; at: string | null; expire: number } | null = null;
+let googleTtsCookies: string | null = null;
 
 const getGoogleTtsWiz = async () => {
 	if (googleTtsWiz && googleTtsWiz.expire > Date.now()) return googleTtsWiz;
@@ -12548,6 +12160,11 @@ const getGoogleTtsWiz = async () => {
 	const at = text.match(/"SNlM0e":"(.*?)"/)?.[1] || null;
 	if (!fSid || !bl) throw new Error("Failed to fetch Google Translate wiz data");
 	googleTtsWiz = { fSid, bl, at, expire: Date.now() + 3600 * 1000 };
+	if (res.headers.getSetCookie) {
+		googleTtsCookies = normalizeCookies(res.headers.getSetCookie());
+	} else {
+		googleTtsCookies = normalizeCookies(res.headers.get("set-cookie"));
+	}
 	return googleTtsWiz!;
 };
 
@@ -12594,6 +12211,7 @@ const synthTtsChunk = async (text: string, langCode: string): Promise<Buffer | n
 			headers: {
 				"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
 				...commonHeaders,
+				...(googleTtsCookies ? { Cookie: googleTtsCookies } : {}),
 				// Actually need 'X-Goog-BatchExecute-Bgr' header but not yet
 			},
 			body: body.toString(),
@@ -12627,58 +12245,6 @@ export const googleTTS = async (text: string, lang: string): Promise<Buffer | nu
 		buffers.push(buf);
 	}
 	return buffers.length ? Buffer.concat(buffers) : null;
-};
-
-const GOOGLE_TTS_REGION: Record<string, string> = {
-	en: "US",
-	zh: "CN",
-	ja: "JP",
-	ko: "KR",
-	ar: "XA",
-	hi: "IN",
-	vi: "VN",
-	pt: "BR",
-	th: "TH",
-	no: "NO",
-	nb: "NO",
-	nn: "NO",
-	uk: "UA",
-	cs: "CZ",
-	da: "DK",
-	fi: "FI",
-	hu: "HU",
-	el: "GR",
-	he: "IL",
-	ro: "RO",
-	sk: "SK",
-	sr: "RS",
-	hr: "HR",
-	bg: "BG",
-	ca: "ES",
-	eu: "ES",
-	gl: "ES",
-	sv: "SE",
-	pl: "PL",
-	ru: "RU",
-	tr: "TR",
-	id: "ID",
-	ms: "MY",
-	fa: "IR",
-	ur: "PK",
-	bn: "IN",
-	ta: "IN",
-	te: "IN",
-	mr: "IN",
-	gu: "IN",
-	kn: "IN",
-	ml: "IN",
-	pa: "IN",
-	fil: "PH",
-	nl: "NL",
-	it: "IT",
-	es: "ES",
-	fr: "FR",
-	de: "DE",
 };
 
 export const googleCloudTTS = async (text: string, lang: string): Promise<Buffer | null> => {

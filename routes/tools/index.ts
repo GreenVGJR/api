@@ -40,5 +40,6 @@ import discordTts from "./discordTts.js";
 import cloudTts from "./cloudTts.js";
 import tts from "./tts.js";
 import discordModifyRole from "./discordModifyRole.js";
+import discordInfoClient from "./discordInfoClient.js";
 
-export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, discordModifyRole] as any[];
+export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, discordModifyRole, discordInfoClient] as any[];

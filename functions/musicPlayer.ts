@@ -7,8 +7,7 @@ import config from "../config.json" with { type: "json" };
 import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from "./musicChallenges.ts";
 import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
-
-// import { Number_random } from './request.ts';
+import { discordFetch } from "./request.js";
 
 /**
  * Patch a Lavalink node's connect() method to temporarily disable TLS
@@ -64,7 +63,7 @@ function isTransientFetchError(err: any): boolean {
 export async function setVoiceStatus(channelId: string, token: string, content: string, retries = 3) {
 	for (let i = 0; i < retries; i++) {
 		try {
-			const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
+			const res = await discordFetch(`https://discord.com/api/v10/channels/${channelId}/voice-status`, {
 				method: "PUT",
 				headers: {
 					Authorization: `Bot ${token}`,

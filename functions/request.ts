@@ -229,7 +229,7 @@ function withYoutubePoToken(baseUrl: any, poToken: string) {
 		url.searchParams.set("xobt", "3");
 		url.searchParams.set("xovt", "3");
 		url.searchParams.set("cbr", "Firefox");
-		url.searchParams.set("cbrver", "152.0");
+		url.searchParams.set("cbrver", "153.0");
 		url.searchParams.set("c", "WEB");
 		url.searchParams.set("cver", clientVersion);
 		url.searchParams.set("cplayer", "UNIPLAYER");
@@ -238,7 +238,7 @@ function withYoutubePoToken(baseUrl: any, poToken: string) {
 		return url.toString();
 	} catch {
 		const separator = String(baseUrl).includes("?") ? "&" : "?";
-		return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=152.0&c=WEB&cver=${clientVersion}&cplayer=UNIPLAYER&cos=${platformType}&cplatform=DESKTOP`;
+		return `${baseUrl}${separator}fmt=json3&potc=1&pot=${encodeURIComponent(poToken)}&xorb=2&xobt=3&xovt=3&cbr=Firefox&cbrver=153.0&c=WEB&cver=${clientVersion}&cplayer=UNIPLAYER&cos=${platformType}&cplatform=DESKTOP`;
 	}
 }
 
@@ -277,7 +277,7 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux i686; rv:153.0) Gecko/20100101 Firefox/153.0";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -1335,19 +1335,6 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	}
 };
 
-export const Shazam = async function Shazam(que: string) {
-	if (!que) return null;
-	try {
-		const pull = await fetch(`https://www.shazam.com/services/amapi/v1/catalog/US/search?types=songs&limit=10&term=${encodeURIComponent(que)}`, {
-			headers: commonHeaders,
-		});
-		const res: any = await pull.json();
-		return { data: res?.results?.songs?.data || null };
-	} catch {
-		return null;
-	}
-};
-
 export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<any> {
 	if (!que) return null;
 	try {
@@ -2208,7 +2195,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			"Content-Type": "application/x-www-form-urlencoded",
 			Referer: "https://gemini.google.com",
 			Origin: "https://gemini.google.com",
-			"x-goog-ext-525001261-jspb": `[1,null,null,null,"56fdd199312815e2",null,null,0,[4,6],null,null,1,null,null,1,null,"${lastUUID}"]`,
+			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${lastUUID}"]`,
 			"x-goog-ext-73010989-jspb": "[0]",
 			"x-goog-ext-73010990-jspb": "[0,0,0]",
 			"Sec-Fetch-Dest": "empty",
@@ -2314,7 +2301,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			},
 			conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
 			expire: finalres ? String(geminiWiz?.expire) : null,
-			model: "gemini-3.5-flash",
+			model: "gemini-3.6-flash",
 		},
 	};
 

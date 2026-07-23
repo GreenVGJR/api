@@ -127,10 +127,8 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	let useGzip = acceptEncoding.includes("gzip");
 	if (c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild) {
-		c.header("Content-Encoding", "0, 1, 2, 3");
-		c.header("Content-Type", "video/webm");
-		c.header("Content-Range", "bytes 0-0/0");
-		c.status(200);
+		c.header("Content-Encoding", "n");
+		c.header("Content-Type", "image/x-icon");
 		useGzip = true;
 	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];

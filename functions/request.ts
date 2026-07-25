@@ -9540,48 +9540,6 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 	}
 };
 
-export const OtoDB = async (query: string): Promise<any> => {
-	if (!query) return null;
-
-	try {
-		const res = await fetch(`https://otodb.net/work/__data.json?query=${encodeURIComponent(query)}`, {
-			headers: commonHeaders,
-		});
-
-		const json = await res.json();
-
-		const pageNode = json.nodes?.[1];
-		if (!pageNode?.data) return { data: null };
-
-		const data: any[] = pageNode.data;
-
-		function resolve(index: number): any {
-			const val = data[index];
-
-			if (Array.isArray(val)) return val.map((i: number) => resolve(i));
-
-			if (val !== null && typeof val === "object") {
-				const resolved: Record<string, any> = {};
-				for (const [key, idx] of Object.entries(val)) {
-					resolved[key] = resolve(idx as number);
-				}
-				return resolved;
-			}
-
-			return val;
-		}
-
-		const root = data[0];
-		const results = resolve(root.results);
-
-		if (!results?.items?.[0]) return { data: null };
-
-		return { data: results.items };
-	} catch {
-		return null;
-	}
-};
-
 export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
 	if (action === "setstatus") {
 		const { channelId, content } = payload;
@@ -11352,26 +11310,26 @@ export const DiscordInfoAutomod = async (token: string, guildId: string, ruleId:
 	}
 };
 
-export const AppleMusicSearch = async function AppleMusicSearch(query: string) {
+export const AppleMusicSearch = async function AppleMusicSearch(query: string, limit: number = 1) {
 	if (!query) return null;
 	try {
 		const [res, res2, res3, res4, res5, res6] = await Promise.all([
-			fetch(`https://itunes.apple.com/search?media=music&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+			fetch(`https://itunes.apple.com/search?media=music&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
 			fetch(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://itunes.apple.com/search?media=audiobook&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+			fetch(`https://itunes.apple.com/search?media=audiobook&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://itunes.apple.com/search?media=podcast&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+			fetch(`https://itunes.apple.com/search?media=podcast&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://itunes.apple.com/search?media=musicVideo&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+			fetch(`https://itunes.apple.com/search?media=musicVideo&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://itunes.apple.com/search?media=tvShow&limit=20&country=US&term=${encodeURIComponent(query)}`, {
+			fetch(`https://itunes.apple.com/search?media=tvShow&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
 		]);

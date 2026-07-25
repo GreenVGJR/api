@@ -11,9 +11,11 @@ app.get("/applemusic", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 1 : Math.min(30, Math.max(1, parseInt(limitStr, 10)));
 	c.header("X-Route", "itunes.apple.com, music.apple.com");
 
-	return await dispatch(c, () => AppleMusicSearch(query));
+	return await dispatch(c, () => AppleMusicSearch(query, limit));
 });
 
 export default app;

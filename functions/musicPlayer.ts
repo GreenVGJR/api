@@ -50,6 +50,12 @@ function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Tracks the first Lavalink node that successfully connected during startup fallback. */
+let bootstrapNodeId: string | null = null;
+export function getBootstrapNodeId(): string | null {
+	return bootstrapNodeId;
+}
+
 function getFetchErrorCode(err: any): string {
 	return String(err?.code || err?.cause?.code || "");
 }
@@ -276,7 +282,7 @@ function parseLavalinkHostEntry(entry: string): any | null {
 	const authorization = parts.length >= 4 ? parts.slice(3, parts[parts.length - 1] === "true" || parts[parts.length - 1] === "false" ? -1 : undefined).join(":") : "";
 	const secure = parts[parts.length - 1] === "true";
 
-	return { id, host, port, authorization, secure, retryAmount: 1, retryDelay: 300000 };
+	return { id, host, port, authorization, secure, retryAmount: 1, retryDelay: 300000, requestSignalTimeoutMS: 30000 };
 }
 
 function parseLavalinkNodesFromEnv(): any[] {
@@ -455,6 +461,7 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 		const node = manager.nodeManager.nodes.get(nodeConfig.id);
 		if (node?.connected) {
 			if (log) await log(`Already connected to Lavalink node "${nodeConfig.id}"`);
+			if (!bootstrapNodeId) bootstrapNodeId = nodeConfig.id;
 			return true;
 		}
 
@@ -466,6 +473,7 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 			const stableNode = manager.nodeManager.nodes.get(nodeConfig.id);
 			if (stableNode?.connected) {
 				if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);
+				if (!bootstrapNodeId) bootstrapNodeId = nodeConfig.id;
 				return true;
 			}
 			if (log) await log(`Lavalink node "${nodeConfig.id}" dropped immediately — trying next`);
@@ -539,6 +547,86 @@ export function setVoiceStatusSetting(token: string, guildId: string, type: stri
 	voiceStatusStore.set(key, current);
 }
 
+// Persistent message status settings: "token:guildId" → { trackStart: { status, channelId, content }, ... }
+export const messageStatusStore: Map<string, any> = new Map();
+
+export function getMessageStatusSettings(token: string, guildId: string) {
+	const key = `${token}:${guildId}`;
+	return (
+		messageStatusStore.get(key) || {
+			trackStart: { status: false, channelId: "", content: "" },
+			queueEnd: { status: false, channelId: "", content: "" },
+		}
+	);
+}
+
+export function setMessageStatusSetting(token: string, guildId: string, type: string, status: boolean, channelId: string, content: string) {
+	const key = `${token}:${guildId}`;
+	const current = getMessageStatusSettings(token, guildId);
+	if (type === "trackStart") current.trackStart = { status, channelId, content };
+	else if (type === "queueEnd") current.queueEnd = { status, channelId, content };
+	messageStatusStore.set(key, current);
+}
+
+async function sendMessageStatus(client: any, token: string, guildId: string, type: string, track?: any) {
+	try {
+		const settings = getMessageStatusSettings(token, guildId);
+		const setting = type === "trackStart" ? settings.trackStart : settings.queueEnd;
+		if (!setting.status || !setting.channelId || !setting.content) return;
+
+		let resolved = setting.content;
+		if (track && setting.content.includes("{")) {
+			resolved = applyTemplate(setting.content, track);
+		}
+
+		let payload: any;
+		try {
+			payload = JSON.parse(resolved);
+			if (typeof payload !== "object" || payload === null) throw new Error("not an object");
+
+			if (payload.embeds && Array.isArray(payload.embeds)) {
+				payload.embeds = payload.embeds.map((e: any) => {
+					if (e.footer && (!e.footer.icon_url || e.footer.icon_url === "null" || e.footer.icon_url === "undefined")) {
+						delete e.footer.icon_url;
+					}
+					if (e.footer && !e.footer.text) delete e.footer;
+					if (e.author && (!e.author.icon_url || e.author.icon_url === "null" || e.author.icon_url === "undefined")) {
+						delete e.author.icon_url;
+					}
+					if (e.author && !e.author.name) delete e.author;
+					if (e.thumbnail && (!e.thumbnail.url || e.thumbnail.url === "null" || e.thumbnail.url === "undefined")) {
+						delete e.thumbnail;
+					}
+					if (e.image && (!e.image.url || e.image.url === "null" || e.image.url === "undefined")) {
+						delete e.image;
+					}
+					return e;
+				});
+			}
+		} catch {
+			payload = { content: resolved };
+		}
+
+		payload.content = (payload.content || "").slice(0, 2000);
+
+		const channel = await client.channels.fetch(setting.channelId);
+		if (channel && typeof channel.send === "function") {
+			await channel.send(payload);
+		}
+	} catch (err: any) {
+		const errMsg = err?.message || "";
+		if (["invalid form body", "unknown channel"].includes(errMsg.toLowerCase())) {
+			const current = getMessageStatusSettings(token, guildId);
+			if (type === "trackStart") current.trackStart = { status: false, channelId: "", content: "" };
+			else if (type === "queueEnd") current.queueEnd = { status: false, channelId: "", content: "" };
+			messageStatusStore.set(`${token}:${guildId}`, current);
+			console.error(`[MessageStatus] Invalid body — disabled ${type} config for guild ${guildId}`);
+		} else {
+			console.error(`[MessageStatus] Failed to send ${type} message for guild ${guildId}:`, err);
+		}
+	}
+}
+
 export function get247Key(token: string, guildId: string) {
 	return `${token}:${guildId}`;
 }
@@ -562,7 +650,7 @@ function musicErrorMessage(err: any): string {
 
 function isKnownTransientMusicError(err: any): boolean {
 	const msg = musicErrorMessage(err);
-	return err?.name === "TimeoutError" || err?.code === 23 || err?.code === "ConnectionRefused" || msg.includes("The operation timed out") || msg.includes("Failed to parse JSON") || msg.includes("Unable to connect") || msg.includes("ConnectionRefused") || msg.includes("The node is not connected") || msg.includes("Node is not connected") || msg.includes("fetch failed") || msg.includes("ECONNREFUSED");
+	return err?.name === "TimeoutError" || err?.code === 23 || err?.code === "ConnectionRefused" || msg.includes("The operation timed out") || msg.includes("Unable to connect") || msg.includes("ConnectionRefused") || msg.includes("The node is not connected") || msg.includes("Node is not connected") || msg.includes("fetch failed") || msg.includes("ECONNREFUSED");
 }
 
 function warnMusicThrottled(key: string, message: string, cooldownMs = 60_000) {
@@ -928,6 +1016,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			// ─ Manager Events ───────────────────
 			manager.on("trackStart", (p, track) => {
 				updateVoiceStatus(p, token, track).catch(() => {});
+				sendMessageStatus(client, token, p.guildId, "trackStart", track).catch(() => {});
 				cancelAutoDestroy(token);
 				if (p.get("autoplay") && track) fillAutoplay(p, track);
 			});
@@ -943,6 +1032,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				} else {
 					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
 				}
+				sendMessageStatus(client, token, p.guildId, "queueEnd").catch(() => {});
 				if (get247(token, p.guildId)) {
 					console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
 					reconnect247(p.guildId, p.voiceChannelId!, "queueEnd");
@@ -1267,6 +1357,9 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 	for (const [key] of voiceStatusStore) {
 		if (key.startsWith(token + ":")) voiceStatusStore.delete(key);
 	}
+	for (const [key] of messageStatusStore) {
+		if (key.startsWith(token + ":")) messageStatusStore.delete(key);
+	}
 
 	if (managed.destroyTimer) {
 		clearTimeout(managed.destroyTimer);
@@ -1384,8 +1477,12 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 		requesterData.username = cachedRequester.username;
 		requesterData.globalName = cachedRequester.globalName;
 		requesterData.tag = cachedRequester.tag;
-		requesterData.avatar = cachedRequester.avatar;
+		requesterData.avatar = cachedRequester.displayAvatarURL({ extension: "png", size: 1024 });
 		requesterData.bot = cachedRequester.bot;
+	} else if (requestedId && requesterData.avatar && typeof requesterData.avatar === "string" && !requesterData.avatar.startsWith("http")) {
+		const hash = requesterData.avatar;
+		const ext = hash.startsWith("a_") ? "gif" : "png";
+		requesterData.avatar = `https://cdn.discordapp.com/avatars/${requestedId}/${hash}.${ext}?size=1024`;
 	} else if (requestedId && requesterData.username == null) {
 		requesterData.username = "Discord User";
 	}
@@ -1477,12 +1574,15 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 	return result;
 }
 
-function applyTemplate(template: string, track: any): string {
+export function applyTemplate(template: string, track: any): string {
 	const data = formatTrack(track).data;
 	return template.replace(/{([\w.]+)}/g, (match, path) => {
+		if (path === "currentTimestamp") return new Date().toISOString();
 		const parts = path.split(".");
 		const value = parts.reduce((obj: any, key: string) => obj?.[key], data);
-		return value !== undefined ? String(value) : match;
+		if (value === undefined) return "";
+		if (typeof value === "boolean") return value ? "✅" : "❌";
+		return String(value);
 	});
 }
 

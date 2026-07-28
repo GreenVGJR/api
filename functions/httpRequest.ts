@@ -5,6 +5,7 @@ import zlib from "zlib";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara } from "../app.js";
+import { maxLimitRequestsPerSec } from "../config.json";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);
@@ -82,7 +83,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 };
 
 // Rate limiting config and state
-const MAX_REQUESTS_PER_SECOND = 5;
+const MAX_REQUESTS_PER_SECOND = maxLimitRequestsPerSec;
 let requestCount = 0;
 const queue: (() => void)[] = [];
 

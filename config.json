@@ -1,9 +1,10 @@
 {
+	"maxLimitRequestsPerSec": 30,
 	"targetDomain": "api.vgjr.top",
 	"buildId": false,
 	"restrictLocal": false,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
-	"endpointChallenge": false,
+	"endpointChallenge": true,
 	"nodeConnectTimeout": 3000
 }

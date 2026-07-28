@@ -4,6 +4,37 @@ const app = new Hono();
 import { DiscordMember } from "../../functions/request.js";
 import { dispatch, processImage } from "../../functions/httpRequest.js";
 
+// Credits: @zombie.clanx
+// For name style codes
+
+function hexToDiscordColor(hex: string): number {
+	const val = parseInt(hex.replace("#", ""), 16);
+	return isNaN(val) ? 0 : Math.min(val, 0xffffff);
+}
+
+const EFFECT_MAP: Record<string, number> = {
+	none: 0,
+	glow: 1,
+	gradient: 2,
+	neon: 3,
+	chromatic: 4,
+	shimmer: 5,
+};
+
+const FONT_MAP: Record<string, number> = {
+	bangers: 1,
+	bio_rhyme: 2,
+	cherry_bomb: 3,
+	compagnon: 5,
+	museo_moderno: 6,
+	neo_castel: 7,
+	pixelify: 8,
+	ribes: 9,
+	sinistre: 10,
+	default: 11,
+	zilla_slab: 12,
+};
+
 app.get("/discord/modifyMemberServer", async (c) => {
 	let token: string | null = null;
 	try {
@@ -35,6 +66,10 @@ app.get("/discord/modifyMemberServer", async (c) => {
 	const bio = getQuery("bio");
 	const reset = getQuery("reset");
 
+	const effectStyle = getQuery("effectStyle");
+	const fontStyle = getQuery("fontStyle");
+	const colorsStyle = getQuery("colorsStyle");
+
 	const avatar = getQuery("avatar");
 	const banner = getQuery("banner");
 
@@ -43,6 +78,9 @@ app.get("/discord/modifyMemberServer", async (c) => {
 		payload.bio = null;
 		payload.avatar = null;
 		payload.banner = null;
+		payload.display_name_font_id = 11;
+		payload.display_name_effect_id = 0;
+		payload.display_name_colors = null;
 	} else {
 		if (nickname !== undefined) payload.nick = nickname;
 		if (bio !== undefined) payload.bio = bio;
@@ -61,6 +99,29 @@ app.get("/discord/modifyMemberServer", async (c) => {
 			const pBanner = await processImage(c, banner);
 			if (pBanner == "") payloadError.push("[banner] Failed to download image");
 			if (pBanner) payload.banner = pBanner;
+		}
+
+		if (effectStyle !== undefined) {
+			payload.display_name_effect_id = effectStyle === null ? 0 : (EFFECT_MAP[effectStyle] ?? 0);
+		}
+		if (fontStyle !== undefined) {
+			payload.display_name_font_id = fontStyle === null ? 11 : (FONT_MAP[fontStyle] ?? 11);
+		}
+		if (colorsStyle !== undefined) {
+			if (colorsStyle === null) {
+				payload.display_name_colors = null;
+			} else {
+				try {
+					const colors = JSON.parse(colorsStyle);
+					if (Array.isArray(colors) && colors.length >= 2) {
+						payload.display_name_colors = colors.map((c: string) => hexToDiscordColor(c));
+					} else {
+						payloadError.push("[colorsStyle] Expected a JSON array with at least 2 hex colors");
+					}
+				} catch {
+					payloadError.push("[colorsStyle] Invalid JSON");
+				}
+			}
 		}
 	}
 

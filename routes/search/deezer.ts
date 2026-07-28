@@ -11,8 +11,10 @@ app.get("/deezer", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 1 : Math.min(20, Math.max(1, parseInt(limitStr, 10)));
 	c.header("X-Route", "api.deezer.com");
-	return await dispatch(c, () => Deezer(query));
+	return await dispatch(c, () => Deezer(query, limit));
 });
 
 export default app;

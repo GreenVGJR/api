@@ -24,7 +24,7 @@ const initSPA = () => {
                     <a href="/playground" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="playground">Playground</a>
                     <a href="/terms" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="terms">Terms</a>
                     <a href="/privacy" data-page-link class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-page="privacy">Privacy</a>
-                    <a href="/logs" target="_blank" rel="noopener noreferrer" class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors">Logs</a>
+                    <a href="/logs" target="_blank" rel="noopener" class="page-link block px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors">Logs</a>
                 </nav>
             </aside>
 
@@ -308,6 +308,8 @@ const paramsChevron = document.getElementById("paramsChevron");
 
 document.addEventListener("click", () => closeEnumDropdowns());
 window.addEventListener("resize", () => closeEnumDropdowns());
+const paramsObserver = new ResizeObserver(() => updateParamsBodyHeight());
+paramsObserver.observe(paramsContainer);
 
 const legalPages = {
   terms: {
@@ -475,6 +477,10 @@ function renderPlaygroundPage() {
     statusText.textContent = "Idle";
     statusText.className = "text-gray-500";
     slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    if (currentEndpoint) {
+      urlInput.value = buildEndpointUrl(currentEndpoint);
+      adjustHeight();
+    }
   }
 
   renderEndpoints();
@@ -1014,7 +1020,7 @@ async function performRequest(targetUrl, retryCount = 0) {
         if (formatted.length > 5000) {
           preElement.textContent = formatted;
 
-          const CHUNK_SIZE = 500;
+          const CHUNK_SIZE = 200;
           let chunkIndex = 0;
           let colorfulHTML = "";
 
@@ -1040,7 +1046,7 @@ async function performRequest(targetUrl, retryCount = 0) {
 
           requestAnimationFrame(buildColorfulChunk);
         } else {
-          const CHUNK_SIZE = 500;
+          const CHUNK_SIZE = 200;
           let chunkIndex = 0;
 
           const processChunk = () => {
@@ -1142,7 +1148,9 @@ function buildQueryString(params) {
     "?" +
     nonEmpty
       .map((p) => {
-        const encodedValue = encodeURIComponent(decodeURIComponent(p.value));
+        let raw = p.value;
+        try { raw = decodeURIComponent(raw); } catch {}
+        const encodedValue = encodeURIComponent(raw);
         return `${encodeURIComponent(p.key)}=${encodedValue}`;
       })
       .join("&")
@@ -1280,16 +1288,15 @@ function renderParamControl(p, i) {
   }
 
   return `
-        <input
-            type="text"
-            class="param-input"
+        <textarea
+            class="param-input no-scrollbar"
             data-param-index="${i}"
-            value="${escapeAttribute(value)}"
             placeholder="${escapeAttribute(type)}"
             ${titleAttr}
             spellcheck="false"
             autocomplete="off"
-        />
+            rows="1"
+        >${escapeHTML(value)}</textarea>
     `;
 }
 
@@ -1310,7 +1317,8 @@ function closeEnumDropdowns(exceptControl = null) {
 
 function updateParamsBodyHeight() {
   if (!paramsOpen || currentParams.length === 0) return;
-  paramsBody.style.height = Math.min(paramsContainer.offsetHeight, 250) + "px";
+  const maxH = window.innerHeight * 0.5;
+  paramsBody.style.height = Math.min(paramsContainer.offsetHeight, maxH) + "px";
 }
 
 function setEnumControlValue(control, value, notify = true) {

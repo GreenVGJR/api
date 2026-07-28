@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getOrCreatePlayer, setVoiceStatus, updateVoiceStatus, createMusicStream, getVoiceStatusSettings, setVoiceStatusSetting } from "../../functions/musicPlayer.js";
+import { ALLOWED_TAGS } from "../../functions/types/index.js";
 
 const app = new Hono();
 
@@ -87,7 +88,7 @@ app.get("/voiceStatus", async (c) => {
 					message: isActivePlayer ? undefined : "No active player for this channel",
 					data: {
 						...getVoiceStatusSettings(token, guildId),
-						tags: ["{id}", "{title}", "{author}", "{url}", "{source}", "{actualSource}", "{thumbnail}", "{duration}", "{durationMS}", "{isSeekable}", "{isStream}", "{requestedBy}", "{requester.id}", "{requester.username}", "{requester.globalName}", "{requester.tag}"],
+						tags: ALLOWED_TAGS,
 					},
 					type: { primary: "final", alt: "success" },
 				})}}`,

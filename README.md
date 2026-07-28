@@ -9,7 +9,7 @@
 - [Chocomilk API](https://choco.amira.us.kg)
 - [Popcat API](https://popcat.xyz/api)
 
-### Credits
+### Thanks to
 
 - Tev, for assisting with api / giving ideas
 

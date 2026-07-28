@@ -12,7 +12,9 @@ app.get("/tidal", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 	c.header("X-Route", "api.tidal.com");
-	return await dispatch(c, () => Tidal(query));
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 1 : Math.min(20, Math.max(1, parseInt(limitStr, 10)));
+	return await dispatch(c, () => Tidal(query, false, limit));
 });
 
 export default app;

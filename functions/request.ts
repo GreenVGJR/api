@@ -5,9 +5,7 @@ import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
 // @ts-expect-error no types
-import signBogus from "./tiktok_signature/xbogus.mjs";
-// @ts-expect-error no types
-import signGnarly from "./tiktok_signature/xgnarly.mjs";
+import signTikTok from "./tiktok_signature/index.mjs";
 
 import { Innertube, Log, ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
@@ -29,6 +27,14 @@ const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (m
 
 Log.setLevel(Log.Level.ERROR);
 
+export let keyYoutubeVisitor: { visitor_data: string; cookie: string; client_version: string; platform_type: string } | null = null;
+
+export const getYoutubeVisitorKey = async () => {
+	if (!keyYoutubeVisitor) {
+		keyYoutubeVisitor = await youtubeVisitorKey();
+	}
+	return keyYoutubeVisitor;
+};
 let youtubeiPromise: Promise<any> | null = null;
 let poTokenCache: { po_token: string; visitor_data: string } | null = null;
 
@@ -180,9 +186,7 @@ async function generateCbPotFall(videoId: string) {
 
 export async function getBotGuardChallenge() {
 	await initBotGuard();
-	if (!keyYoutubeVisitor) {
-		keyYoutubeVisitor = await youtubeVisitorKey();
-	}
+	await getYoutubeVisitorKey();
 	const visitorData = keyYoutubeVisitor?.visitor_data;
 	if (!visitorData) throw new Error("Could not get YouTube visitor data");
 	return { visitorData };
@@ -263,9 +267,7 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 export async function getYoutubei() {
 	if (!youtubeiPromise) {
 		const { po_token, visitor_data } = await getPoToken();
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 		youtubeiPromise = Innertube.create({
 			po_token,
 			visitor_data,
@@ -378,8 +380,6 @@ const responseText = async (response: any): Promise<string> => {
 	if (typeof response.text === "string") return response.text;
 	return "";
 };
-
-let keyYoutubeVisitor: { visitor_data: string; cookie: string; client_version: string; platform_type: string } | null = null;
 
 export const getQuery = (c: Context, key: string) => {
 	const val = c.req.query(key);
@@ -606,9 +606,7 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
 export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 		const bodyload = JSON.stringify({
 			query: que,
 			context: {
@@ -815,9 +813,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 export const YTMusic = async function YTMusic(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 		const videoIdFromPlaylist = (playlistId: string | undefined | null) => {
 			if (!playlistId) return null;
 			return playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1] || playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1] || null;
@@ -1014,9 +1010,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 export const YTPlaylist = async function YTPlaylist(que: string) {
 	if (!que) return null;
 	try {
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 		const bodyload = JSON.stringify({
 			query: que,
 			params: "EgIQAw==",
@@ -1541,7 +1535,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 	}
 };
 
-export const Deezer = async function Deezer(que: string, limits: number = 10) {
+export const Deezer = async function Deezer(que: string, limits: number = 1) {
 	if (!que) return null;
 	try {
 		const pull = await fetch(`https://api.deezer.com/search?limit=${limits}&q=${encodeURIComponent(que)}`, {
@@ -1726,8 +1720,8 @@ export async function SavetikVideo(url: string) {
 		const response = await fetch("https://savetik.io/api/ajaxSearch", {
 			method: "POST",
 			headers: {
-				"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 				...commonHeaders,
+				"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 			},
 			body: new URLSearchParams({
 				q: url,
@@ -1988,7 +1982,7 @@ export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boole
 	}
 };
 
-export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
+export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 1): Promise<any> {
 	if (!que) return null;
 	if (refresh) {
 		setKeyTidal(await tidalKeys());
@@ -2013,7 +2007,7 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean, limits
 	}
 };
 
-export const TidalOpen = async function TidalOpen(que: string, refresh?: boolean, limits: number = 20): Promise<any> {
+export const TidalOpen = async function TidalOpen(que: string, refresh?: boolean, limits: number = 1): Promise<any> {
 	if (!que) return null;
 
 	if (!keybearer || refresh) {
@@ -2612,9 +2606,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 	const requestUrl = `https://www.youtube.com/${prefix}${identifier}`;
 
 	try {
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 
 		const response = await fetch(requestUrl, {
 			headers: {
@@ -2885,7 +2877,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 			try {
 				const continuationReq = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
 					method: "POST",
-					headers: { ...commonHeaders, "Content-Type": "application/json" },
+					headers: commonHeaders,
 					body: JSON.stringify({
 						continuation: continuationToken,
 						context: {
@@ -3816,7 +3808,7 @@ export const DiscordServers = async function DiscordServers(que: string) {
 
 	try {
 		const per = await discordFetch(`https://discord.com/api/v10/index/servers/search?limit=10&query=${encodeURIComponent(que)}`, {
-			headers: commonHeaders,
+			headers: { ...commonHeaders, "User-Agent": discordUserAgent },
 		});
 
 		if (per.status === 403) {
@@ -3862,7 +3854,7 @@ export const DiscordApps = async function DiscordApps(que: string) {
 
 	try {
 		const per = await discordFetch(`https://discord.com/api/v10/application-directory/search?query=${encodeURIComponent(que)}&page=1&page_size=10&category_id=1&locale=en-US&source=0`, {
-			headers: commonHeaders,
+			headers: { ...commonHeaders, "User-Agent": discordUserAgent },
 		});
 
 		if (per.status === 403) {
@@ -4102,7 +4094,7 @@ export const TiktokUser = async function TiktokUser(que: string) {
 
 // Have TLS Fingerprint, require http2 or above
 export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
-	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
+	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1284&app_id=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
 	const headers = {
 		...commonHeaders,
 		Referer: "https://www.tiktok.com/explore",
@@ -4111,10 +4103,16 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 		"Sec-Fetch-Site": "same-origin",
 	};
 
-	const queryString = url.split("?")[1] || "";
-	const xBogus = signBogus(queryString, "", userAgent, Math.floor(Date.now() / 1000));
-	const xGnarly = signGnarly(queryString, "", userAgent);
-	const signedUrl = `${url}&X-Bogus=${xBogus}&X-Gnarly=${xGnarly}`;
+	const signedUrl = signTikTok({
+		url,
+		userAgent,
+		msToken: "",
+		body: "",
+		perf: { txr: 105, tfr: 13, ixr: 15, ifr: 6 },
+		envcode: 65,
+		ubcode: 8,
+	});
+	// console.log(signedUrl);
 
 	for (let i = 0; i < 3; i++) {
 		try {
@@ -4228,7 +4226,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
 				}),
 			);
 
-			return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: data?.[0] || null, altData: testres?.itemList?.[0] || null };
+			return { data: data?.[0] || null, altData: testres?.itemList?.[0] || null };
 		} catch (err) {
 			if (i === 2) return null;
 			await new Promise((r) => setTimeout(r, 1000));
@@ -4384,6 +4382,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
+				"User-Agent": discordUserAgent,
 			},
 		});
 
@@ -4398,6 +4397,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
+					"User-Agent": discordUserAgent,
 				},
 			});
 
@@ -4556,6 +4556,7 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 			headers: {
 				Authorization: `Bot ${token}`,
 				"Content-Type": "application/json",
+				"User-Agent": discordUserAgent,
 			},
 		});
 
@@ -4570,6 +4571,7 @@ export const DiscordTTS = async function DiscordTTS(token: string, channelId: st
 				headers: {
 					Authorization: `Bot ${token}`,
 					"Content-Type": "application/json",
+					"User-Agent": discordUserAgent,
 				},
 			});
 
@@ -4841,9 +4843,7 @@ export const robloxGames = async function robloxGames(que: string) {
 export const YTChannel = async function YTChannel(que: string) {
 	if (!que) return null;
 	try {
-		if (!keyYoutubeVisitor) {
-			keyYoutubeVisitor = await youtubeVisitorKey();
-		}
+		await getYoutubeVisitorKey();
 		const bodyload = JSON.stringify({
 			query: que,
 			params: "EgIQAg%3D%3D",
@@ -8672,7 +8672,7 @@ export const DiscordInfoInvite = async (token: string | null, q: string, guildId
 	if (token) headers["Authorization"] = `Bot ${token}`;
 
 	try {
-		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/invites` : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true`;
+		const url = guildId ? `https://discord.com/api/v10/guilds/${guildId}/invites` : `https://discord.com/api/v10/invites/${code}?with_counts=true&with_expiration=true&with_permissions=true&with_games=true`;
 
 		const req = await discordFetch(url, { headers });
 		let data: any = null;

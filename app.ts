@@ -16,13 +16,14 @@ import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const autoGenBuild: any = crypto.randomBytes(6).toString("base64url");
-export const autoGenBuildPara: any = crypto.randomBytes(6).toString("base64url");
+const _g = globalThis as any;
+export const autoGenBuild: any = _g.__vgjr_autoGenBuild || (_g.__vgjr_autoGenBuild = crypto.randomBytes(6).toString("base64url"));
+export const autoGenBuildPara: any = _g.__vgjr_autoGenBuildPara || (_g.__vgjr_autoGenBuildPara = crypto.randomBytes(6).toString("base64url"));
 
 const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
 const API_ROUTES = {
-	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/deezer?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/tidal?q=", "string"], ["/search/tidal/v2?q=", "string"], ["/search/genius?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=", "string"], ["/search/google?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/vectorstock?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=", "string"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=", "string"], ["/search/tiktok/music?q=", "string"], ["/search/tiktok/users?q=", "string"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=", "string"], ["/search/google?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/vectorstock?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=", "string"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=", "string"], ["/search/tiktok/music?q=", "string"], ["/search/tiktok/users?q=", "string"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -90,7 +91,7 @@ const API_ROUTES = {
 		],
 		client: [["/tools/discord/infoClient?token=", "string"]],
 		member: [
-			["/tools/discord/modifyMemberServer?token=&guildId=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "string", "url", "url", "string", "string"],
+			["/tools/discord/modifyMemberServer?token=&guildId=&effectStyle=&fontStyle=&colorsStyle=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "enum:none,glow,gradient,neon,chromatic,shimmer", "enum:default,bangers,bio_rhyme,cherry_bomb,compagnon,museo_moderno,neo_castel,pixelify,ribes,sinistre,zilla_slab", "json", "string", "url", "url", "string", "string"],
 			["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
 			["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
 			["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],
@@ -201,6 +202,7 @@ const API_ROUTES = {
 		["/music/stats?token=", "string"],
 		["/music/filter?token=&guildId=&filter=", "string", "number", "enum:nightcore,vaporwave,speed,slow,chipmunk,deep,bassboost,bassboostlow,bassboosthigh,soft,trebleboost,rock,pop,electronic,classical,vocal,vocalonly,fullsound,gaming,8d,karaoke,tremolo,pulse,vibrato,wobble,lowpass,muffled,rotation,spin,distortion,channelmix,mono,wide,surround,left,right,reset"],
 		["/music/voiceStatus?token=&guildId=&type=&status=&content=", "string", "number", "enum:trackStart,queueEnd", "boolean", "string"],
+		["/music/messageStatus?token=&guildId=&channelId=&type=&status=&content=&send=", "string", "number", "number", "enum:trackStart,queueEnd", "boolean", "json", "boolean"],
 	],
 };
 
@@ -300,7 +302,8 @@ function getBackChallengeJwtKey(): string {
 	return key;
 }
 
-const BACK_CHALLENGE_PREFIXES = ["/search", "/profile", "/lyrics", "/tools", "/info", "/download", "/music"];
+const BACK_CHALLENGE_PREFIXES = ["/logs"];
+// const BACK_CHALLENGE_PREFIXES = ["/search", "/profile", "/lyrics", "/tools", "/info", "/download", "/music"];
 
 function generateCanvasParams(): string {
 	const text = crypto.randomBytes(4).toString("hex");
@@ -334,34 +337,52 @@ function encodeBackChallengePayload(payload: Buffer, userAgent: string, jwtToken
 	return result.toString("base64");
 }
 
+function stringToNumeric(str: string): string {
+	const bytes = Buffer.from(str, "utf8");
+	let big = 0n;
+	for (const byte of bytes) {
+		big = (big << 8n) + BigInt(byte);
+	}
+	return big.toString();
+}
+
 async function getBackChallengeHtml(challengeValue: string, url: URL, userAgent: string): Promise<Buffer> {
 	const randomMaxAge = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
 	const randomDifficulty = Math.floor(Math.random() * (12 - 10 + 1)) + 10;
 
 	const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) => btoa("\u0000" + chunk));
-	const gzipBuffer = zlib.gzipSync(Buffer.from(JSON.stringify(valueArray)));
+	const numericStr = stringToNumeric(JSON.stringify(valueArray));
+	const gzipBuffer = zlib.gzipSync(Buffer.from(numericStr));
 	const jwtToken = await createBackChallengeJwt(randomMaxAge);
 	const encodedPayload = encodeBackChallengePayload(gzipBuffer, userAgent, jwtToken);
 	const canvasParams = generateCanvasParams();
-	const destructVars = [
-		{ key: "c", val: JSON.stringify(BACK_CHALLENGE_COOKIE) },
-		{ key: "m", val: String(randomMaxAge) },
-		{ key: "s", val: url.protocol === "https:" ? "true" : "false" },
-		{ key: "d", val: String(randomDifficulty) },
-		{ key: "p", val: JSON.stringify(encodedPayload) },
-		{ key: "j", val: JSON.stringify(jwtToken) },
-		{ key: "x", val: JSON.stringify(canvasParams) },
-	];
 
-	for (let i = destructVars.length - 1; i > 0; i--) {
+	const usedFn = new Set<string>();
+	const reservedFn = new Set(["do", "if", "in", "as"]);
+	const randFn = () => {
+		const cs = "abcdefghijklmnopqrstuvwxyz";
+		let n: string;
+		do {
+			n = cs[crypto.randomInt(26)] + cs[crypto.randomInt(26)];
+		} while (usedFn.has(n) || reservedFn.has(n));
+		usedFn.add(n);
+		return n;
+	};
+	const pairs = [
+		{ k: "m", f: randFn(), v: String(randomMaxAge) },
+		{ k: "c", f: randFn(), v: JSON.stringify(BACK_CHALLENGE_COOKIE) },
+		{ k: "x", f: randFn(), v: JSON.stringify(stringToNumeric(canvasParams)) },
+		{ k: "d", f: randFn(), v: String(randomDifficulty) },
+		{ k: "j", f: randFn(), v: JSON.stringify(jwtToken) },
+		{ k: "p", f: randFn(), v: JSON.stringify(encodedPayload) },
+		{ k: "s", f: randFn(), v: url.protocol === "https:" ? "true" : "false" },
+	];
+	for (let i = pairs.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
-		[destructVars[i], destructVars[j]] = [destructVars[j], destructVars[i]];
+		[pairs[i], pairs[j]] = [pairs[j], pairs[i]];
 	}
 
-	const keys = destructVars.map((v) => v.key).join(",");
-	const vals = destructVars.map((v) => v.val).join(",");
-	const destructuringString = `[${keys}]=[${vals}]`;
-
+	const destructuringString = pairs.map(({ f, v }) => `function ${f}(){return ${v}}`).join("") + `const[${pairs.map(({ k }) => k).join(",")}]=[${pairs.map(({ f }) => `${f}()`).join(",")}]`;
 	const template = backChallengeHtml.replace("{{BACK_CHALLENGE_DESTRUCTURING}}", destructuringString);
 	return Buffer.from(template);
 }
@@ -372,7 +393,7 @@ function isBackChallengePath(pathname: string): boolean {
 		pathToCheck = pathToCheck.slice(BUILD_ID.length + 1);
 	}
 
-	return BACK_CHALLENGE_PREFIXES.some((prefix) => pathToCheck === prefix || pathToCheck.startsWith(`${prefix}/`));
+	return BACK_CHALLENGE_PREFIXES.some((prefix) => pathToCheck === prefix || pathToCheck === prefix + "/");
 }
 
 function isBrowserBackChallengeRequest(c: Context): boolean {
@@ -444,11 +465,6 @@ if (BUILD_ID) {
 }
 
 app.use("*", async (c: Context, next: Next) => {
-	if (c.req.header("x-sz-token") && c.req.header("x-sz-token") !== autoGenBuild) {
-		c.header("Cache-Control", "private, no-store, max-age=0, must-revalidate");
-		return c.json({ error: "Refresh the playground page for verify signature" }, 403);
-	}
-
 	const url = new URL(c.req.url);
 
 	if (!isBackChallengePath(url.pathname) || !endpointChallenge) {
@@ -465,23 +481,12 @@ app.use("*", async (c: Context, next: Next) => {
 	}
 
 	const htmlBuffer = await getBackChallengeHtml(challengeValue, url, c.req.header("user-agent") || "");
-	const gzipData = zlib.gzipSync(htmlBuffer, {
-		level: zlib.constants.Z_BEST_SPEED,
-	});
-	const deflateData = zlib.deflateSync(gzipData, {
-		level: zlib.constants.Z_BEST_SPEED,
-	});
-	const brData = zlib.brotliCompressSync(deflateData, {
-		params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 0 },
-	});
-	const zstdData = Bun.zstdCompressSync(brData, { level: 1 });
 
-	c.header("Content-Encoding", "gzip, deflate, br, zstd");
 	c.header("Content-Type", "text/html");
 	c.header("Cache-Control", "public, no-store, max-age=0, no-transform");
 	c.header("X-Message", "Verifying your browser first before processing");
 	c.status(307);
-	return c.body(Buffer.from(zstdData));
+	return c.body(new Uint8Array(htmlBuffer));
 });
 
 app.get("/favicon.ico", (c: Context) => {
@@ -496,7 +501,11 @@ app.get("/robots.txt", (c: Context) => {
 });
 
 app.get("/logs", async (c: Context) => {
-	c.header("Refresh", "3");
+	if (c.req.header("cache-control") !== "max-age=0" && c.req.header("sec-fetch-site") !== "same-origin" && c.req.header("referer") !== c.req.url) {
+		c.header("Cache-Control", "public, max-age=0");
+		return c.body(null, 412);
+	}
+	c.header("Refresh", "2");
 	c.header("Cache-Control", "public, max-age=2, must-revalidate");
 	c.header("Content-Type", "text/plain");
 
@@ -519,7 +528,7 @@ app.get("/logs", async (c: Context) => {
 		await s.write(
 			JSON.stringify(
 				{
-					_message: "Refreshing every 3 seconds.",
+					_message: "Refreshing every 2 seconds.",
 					limit: 30,
 					timezone: resolvedTimezone,
 					requested,

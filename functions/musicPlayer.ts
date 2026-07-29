@@ -1025,14 +1025,14 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				const settings = getVoiceStatusSettings(token, p.guildId);
 				const isActive = settings.queueEnd.status;
 				const template = settings.queueEnd.content;
+				const lastTrack = p.queue.previous[p.queue.previous.length - 1];
 				if (isActive !== false && template && template.trim() !== "") {
-					const lastTrack = p.queue.previous[p.queue.previous.length - 1];
 					const content = lastTrack ? applyTemplate(template, lastTrack) : template;
 					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, content).catch(() => {});
 				} else {
 					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
 				}
-				sendMessageStatus(client, token, p.guildId, "queueEnd").catch(() => {});
+				sendMessageStatus(client, token, p.guildId, "queueEnd", lastTrack).catch(() => {});
 				if (get247(token, p.guildId)) {
 					console.log(`Queue empty for guild ${p.guildId}, 24/7 mode — staying in VC`);
 					reconnect247(p.guildId, p.voiceChannelId!, "queueEnd");

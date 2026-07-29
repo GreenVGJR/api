@@ -14,17 +14,19 @@ function hexToDiscordColor(hex: string): number {
 
 const EFFECT_MAP: Record<string, number> = {
 	none: 0,
-	glow: 1,
+	solid: 1,
 	gradient: 2,
 	neon: 3,
-	chromatic: 4,
-	shimmer: 5,
+	toon: 4,
+	pop: 5,
+	glow: 6,
 };
 
 const FONT_MAP: Record<string, number> = {
 	bangers: 1,
 	bio_rhyme: 2,
 	cherry_bomb: 3,
+	chicle: 4,
 	compagnon: 5,
 	museo_moderno: 6,
 	neo_castel: 7,

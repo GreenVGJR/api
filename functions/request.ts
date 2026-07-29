@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj, refreshRedditAuth } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -279,7 +279,7 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux i686; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -471,6 +471,8 @@ let keytumblr: string | undefined = process.env.TUMBLR;
 let keyInstagram: string | null = null;
 let saweriaBuildId: string | undefined;
 let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+let redditCookies: string = "";
+let tiktokSessionKeys: any = {};
 
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
 type DiscordListCacheEntry = {
@@ -2286,7 +2288,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	const responseBody = {
 		isFallback: retry !== 0,
 		response: response ?? null,
-		...(errorInfo ? { error: errorInfo.message, code: errorInfo.code } : { error: null }),
+		error: errorInfo?.message || null,
+		code: errorInfo?.code || null,
 		data: {
 			responseInfo: {
 				sessionId: wiz?.fSid || null,
@@ -4014,14 +4017,17 @@ export const Pexels = async function Pexels(que: string) {
 	}
 };
 
-export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
+export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, limit: number = 1, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=10&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&device_id=7386407102867523334&aid=1233&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
 			headers: {
 				...commonHeaders,
 				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
+				Cookie: tiktokSessionKeys?.cookie,
 			},
 		});
 
@@ -4034,6 +4040,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
 		let testres;
 		try {
 			testres = JSON.parse(res);
+			if (!testres?.aweme_list && !refresh_auth) return await TiktokSearchVideo(que, limit, true);
 		} catch {}
 		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: testres?.aweme_list || null };
 	} catch {
@@ -4041,38 +4048,17 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string) {
 	}
 };
 
-export const TiktokMusic = async function TiktokMusic(que: string) {
+export const TiktokMusic = async function TiktokMusic(que: string, limit: number = 1, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=10&cursor=0&aid=1233&device_id=7386407102867523334&region=&referer=&keyword=${encodeURIComponent(que)}`, {
-			headers: commonHeaders,
-		});
+		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-		const res = await pul.text();
-		if (res === "") {
-			return {
-				error: "Akamai Captcha asking to verify you're not a bot",
-			};
-		}
-		let testres;
-		try {
-			testres = JSON.parse(res);
-		} catch {}
-		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: [testres?.music || null, testres?.music_info_list || null] };
-	} catch {
-		return null;
-	}
-};
-
-export const TiktokUser = async function TiktokUser(que: string) {
-	if (!que) return null;
-
-	try {
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=10&hot_search=0&search_source=discover&aid=1233&app=musically&region=&referer=&device_id=7386407102867523334&type=1`, {
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=${limit}&cursor=0&aid=1988&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&region=&referer=&keyword=${encodeURIComponent(que)}`, {
 			headers: {
 				...commonHeaders,
-				"X-Khronos": String(Math.floor(Date.now() / 1000)),
+				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
+				Cookie: tiktokSessionKeys?.cookie,
 			},
 		});
 
@@ -4085,6 +4071,38 @@ export const TiktokUser = async function TiktokUser(que: string) {
 		let testres;
 		try {
 			testres = JSON.parse(res);
+			if (!testres?.music && !refresh_auth) return await TiktokMusic(que, limit, true);
+		} catch {}
+		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: [testres?.music || null, testres?.music_info_list || null] };
+	} catch {
+		return null;
+	}
+};
+
+export const TiktokUser = async function TiktokUser(que: string, limit: number = 1, refresh_auth: boolean = false) {
+	if (!que) return null;
+
+	try {
+		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=${limit}&hot_search=0&search_source=discover&aid=1988&app=musically&region=&referer=&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&type=1`, {
+			headers: {
+				...commonHeaders,
+				"X-Khronos": String(Math.floor(Date.now() / 1000)),
+				Cookie: tiktokSessionKeys?.cookie,
+			},
+		});
+
+		const res = await pul.text();
+		if (res === "") {
+			return {
+				error: "Akamai Captcha asking to verify you're not a bot",
+			};
+		}
+		let testres;
+		try {
+			testres = JSON.parse(res);
+			if (!testres?.user_list?.[0] && !refresh_auth) return await TiktokUser(que, limit, true);
 		} catch {}
 		return { _warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future", data: testres?.user_list?.map((a: any) => a.user_info) || null };
 	} catch {
@@ -4094,9 +4112,12 @@ export const TiktokUser = async function TiktokUser(que: string) {
 
 // Have TLS Fingerprint, require http2 or above
 export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
-	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1284&app_id=1180&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=7604255764756956689&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&odinId=7604255384195531792&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
+	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+
+	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1284&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
 	const headers = {
 		...commonHeaders,
+		Cookie: tiktokSessionKeys?.cookie,
 		Referer: "https://www.tiktok.com/explore",
 		"Sec-Fetch-Dest": "empty",
 		"Sec-Fetch-Mode": "cors",
@@ -4422,7 +4443,7 @@ export const DiscordStream = async function DiscordStream(token: string, channel
 		const vidReq = await fetch(url, {
 			headers: {
 				...commonHeaders,
-				Referer: new URL(url).origin,
+				referer: new URL(url).origin,
 			},
 		});
 
@@ -4992,7 +5013,7 @@ export const Bandcamp = async function Bandcamp(que: string) {
 	}
 };
 
-export const Capcut = async function Capcut(que: string) {
+export const Capcut = async function Capcut(que: string, limit_number: number = 1) {
 	if (!que) return null;
 
 	try {
@@ -5006,7 +5027,7 @@ export const Capcut = async function Capcut(que: string) {
 
 		const body = {
 			sdk_version: "100.0.0",
-			count: 25,
+			count: limit_number,
 			cursor: "0",
 			query: que,
 			scene: 1,
@@ -5029,7 +5050,7 @@ export const Capcut = async function Capcut(que: string) {
 				Loc: "sg",
 				Origin: "https://www.capcut.com",
 				Referer: "https://www.capcut.com",
-				"sec-fetch-site": "same-site",
+				"Sec-Fetch-Site": "same-site",
 			},
 		});
 
@@ -5038,10 +5059,10 @@ export const Capcut = async function Capcut(que: string) {
 
 		return {
 			data: templates.map((tp: any) => ({
+				url: `https://www.capcut.com/template-detail/${tp.web_id}`,
 				title: tp.short_title || tp.title,
 				duration: tp.duration,
 				thumbnail: tp.optimized_cover_url?.cover_url_large || tp.cover_url,
-				url: `https://capcut.com/templates/${tp.web_id}`,
 				...tp,
 			})),
 		};
@@ -5050,8 +5071,6 @@ export const Capcut = async function Capcut(que: string) {
 		return null;
 	}
 };
-
-let redditCookies: string = "";
 
 export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
@@ -5183,7 +5202,7 @@ export const instagramUser = async function instagramUser(que: string) {
 			},
 		});
 
-		if (!testreq.url.includes(`https://www.instagram.com/${encodeURIComponent(que)}`)) {
+		if (!testreq.url.includes(`https://www.instagram.com/accounts/login`)) {
 			return {
 				error: "Please sign in",
 			};
@@ -9013,6 +9032,46 @@ export const DiscordModifyRole = async (token: string, roleId: string, guildId: 
 
 		return {
 			data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
+		};
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
+
+export const DiscordCreateRole = async (token: string, guildId: string, payload: any, reasonAudit?: string) => {
+	if (!token || token === "null") return { error: "Missing token" };
+	if (!guildId) return { error: "Missing guildId" };
+
+	const headers: any = {
+		Authorization: `Bot ${token}`,
+		"Content-Type": "application/json",
+		"User-Agent": discordUserAgent,
+		...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
+	};
+
+	const url = `https://discord.com/api/v10/guilds/${guildId}/roles`;
+
+	try {
+		const response = await discordFetch(url, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(payload),
+		});
+
+		let data: any = null;
+		try {
+			data = await response.json();
+		} catch {}
+
+		if (response.status < 200 || response.status >= 300) {
+			return {
+				data: [null, null],
+				error: data || { status: response.status, statusText: response.statusText },
+			};
+		}
+
+		return {
+			data: [data, response.status, ...(reasonAudit ? [reasonAudit] : [])],
 		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };

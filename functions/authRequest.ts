@@ -533,3 +533,26 @@ export const refreshRedditAuth = async (force: boolean = false): Promise<any> =>
 		return null;
 	}
 };
+
+export async function tiktokSessions(): Promise<{
+	cookie: string;
+	device_id: string;
+	odin_id: string;
+	app_id: string;
+} | null> {
+	try {
+		const fet = await fetch("https://www.tiktok.com/node-webapp/api/common-app-context", {
+			headers: commonHeaders,
+		});
+		const res = await fet.json();
+		return {
+			cookie: [`ttwid=${res.encryptedWebid}`, `tt_csrf_token=${res.csrfToken}`].join("; "),
+			device_id: res.wid,
+			odin_id: res.odinId,
+			app_id: res.appId,
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+}

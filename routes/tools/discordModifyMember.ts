@@ -80,8 +80,8 @@ app.get("/discord/modifyMemberServer", async (c) => {
 		payload.bio = null;
 		payload.avatar = null;
 		payload.banner = null;
-		payload.display_name_font_id = 11;
-		payload.display_name_effect_id = 0;
+		payload.display_name_font_id = null;
+		payload.display_name_effect_id = null;
 		payload.display_name_colors = null;
 	} else {
 		if (nickname !== undefined) payload.nick = nickname;

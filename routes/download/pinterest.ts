@@ -31,7 +31,7 @@ app.get("/pinterest", async (c) => {
 		return c.json({ error: "Media not found" }, 404);
 	}
 	c.header("X-Route", "www.pinterest.com");
-	if (c.req.query("json") === "1") {
+	if (c.req.query("json") === "1" || !c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
 		recordRequestLog(c, 200);
 		return c.json({ url: target, type: mediaType });
 	}

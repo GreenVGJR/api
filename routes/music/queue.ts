@@ -89,8 +89,8 @@ app.get("/nowplaying/lyrics", async (c) => {
 
 		const track = queue.queue.current;
 		const searchQuery = `${track.info.title} ${track.info.author}`;
-		const totalQueueDuration = queue.queue.tracks.reduce((acc, t) => acc + (t.info.duration ?? 0), 0);
 		const activeFilters = getActiveFilters(queue);
+		const stallTrackSrc: any = formatTrack(track, client, queue, activeFilters, get247(token!, guildId!)).data;
 		await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
 		try {
@@ -117,6 +117,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 					const ytData = await YTLyrics(trackUrl);
 					if (ytData?.lyrics) {
 						lyrics = ytData.lyrics;
+						syncLyrics = ytData?.syncLyrics || null;
 						footer = ytData.footer || null;
 						source = "youtubemusic";
 						await log("YouTube Music lyrics found");
@@ -160,7 +161,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 
 			if (!lyrics) {
 				await log("No lyrics found from any provider");
-				await s.write(`],"data":${JSON.stringify({ status: false, message: "No lyrics found", type: { primary: "error", alt: "invalid_query" } })}}`);
+				await s.write(`],"data":${JSON.stringify({ status: false, message: "No lyrics found", data: stallTrackSrc, type: { primary: "error", alt: "invalid_query" } })}}`);
 				return;
 			}
 
@@ -173,32 +174,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 						syncLyrics,
 						source,
 						footer,
-						client: queue?.options || null,
-						track: formatTrack(track, client, queue, activeFilters, get247(token!, guildId!)).data,
-						is247: get247(token!, guildId!),
-						playing: queue.playing,
-						paused: queue.paused,
-						volume: queue.volume,
-						loop: queue.get("autoplay") ? "autoplay" : queue.repeatMode,
-						filters: {
-							array: activeFilters.length > 0 ? activeFilters : [],
-							string: activeFilters.length > 0 ? activeFilters.join(", ") : "",
-						},
-						queueSize: queue.queue.tracks.length,
-						queueElapsedTime: {
-							label: formatDuration(totalQueueDuration),
-							value: String(totalQueueDuration),
-						},
-						progress: {
-							current: {
-								label: formatDuration(queue.position),
-								value: String(queue.position),
-							},
-							total: {
-								label: formatDuration(track.info.duration),
-								value: String(track.info.duration),
-							},
-						},
+						...formatTrack(track, client, queue, activeFilters, get247(token!, guildId!)).data,
 					},
 					type: { primary: "final", alt: "success" },
 				})}}`,

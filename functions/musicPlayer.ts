@@ -1441,7 +1441,7 @@ export function checkVoicePermissions(channel: any, botUser: any) {
 export async function resolveVoiceChannel(client: Client, voiceId: string) {
 	let channel: any = client.channels.cache.get(voiceId);
 	if (!channel) {
-		channel = await client.channels.fetch(voiceId).catch(() => null);
+		channel = await client.channels.fetch(voiceId, { force: true }).catch(() => null);
 	}
 	if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
 		throw new Error("Invalid voice channel ID or not a voice channel");

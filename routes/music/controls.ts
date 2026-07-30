@@ -982,7 +982,7 @@ app.get("/where", async (c) => {
 			if (guildPlayer?.voiceChannelId) {
 				let ch = client.channels.cache.get(guildPlayer.voiceChannelId) as any;
 				if (!ch) {
-					ch = (await client.channels.fetch(guildPlayer.voiceChannelId).catch(() => null)) as any;
+					ch = (await client.channels.fetch(guildPlayer.voiceChannelId, { force: true }).catch(() => null)) as any;
 				}
 				const usersInChannel = ch?.members
 					? [...ch.members.values()].map((m: any) => ({

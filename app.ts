@@ -507,7 +507,7 @@ app.get("/logs", async (c: Context) => {
 		return c.body(null, 412);
 	}
 	c.header("Refresh", "2");
-	c.header("Cache-Control", "public, max-age=2, must-revalidate");
+	c.header("Cache-Control", "public, max-age=0, must-revalidate");
 	c.header("Content-Type", "text/plain");
 
 	return stream(c, async (s) => {

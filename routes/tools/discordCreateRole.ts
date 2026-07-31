@@ -52,6 +52,8 @@ app.get("/discord/createRole", async (c) => {
 				cVal = parseInt(color.slice(1), 16);
 			} else if (color.startsWith("0x") || color.startsWith("0X")) {
 				cVal = parseInt(color.slice(2), 16);
+			} else if (/^[0-9a-fA-F]{6}$/.test(color) || /^[0-9a-fA-F]{3}$/.test(color)) {
+				cVal = parseInt(color, 16);
 			} else {
 				cVal = parseInt(color, 10);
 			}

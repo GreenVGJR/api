@@ -136,7 +136,7 @@ app.get("/messageStatus", async (c) => {
 						sendResult = { error: "No track currently playing" };
 					} else {
 						try {
-							const resolved = currentTrack && content.includes("{") ? applyTemplate(content, currentTrack) : content;
+							const resolved = currentTrack && content.includes("{") ? applyTemplate(content, currentTrack, client) : content;
 							const payload = JSON.parse(resolved);
 							if (payload.embeds) {
 								payload.embeds = payload.embeds.map((e: any) => {

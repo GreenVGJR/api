@@ -137,7 +137,7 @@ export async function updateVoiceStatus(player: LavalinkPlayer, token: string, t
 	}
 
 	try {
-		const content = applyTemplate(template, currentTrack);
+		const content = applyTemplate(template, currentTrack, clientForPlayer(player));
 		await setVoiceStatus(channelId, token, content);
 	} catch (err) {
 		console.error(`[VoiceStatus] Failed to update for guild ${player.guildId}:`, err);
@@ -576,7 +576,7 @@ async function sendMessageStatus(client: any, token: string, guildId: string, ty
 
 		let resolved = setting.content;
 		if (track && setting.content.includes("{")) {
-			resolved = applyTemplate(setting.content, track);
+			resolved = applyTemplate(setting.content, track, client);
 		}
 
 		let payload: any;
@@ -950,7 +950,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 					const trackToUse = currentTrack || p.queue.previous[p.queue.previous.length - 1];
 
 					if (setting.status && setting.content && setting.content.trim() !== "") {
-						const content = trackToUse ? applyTemplate(setting.content, trackToUse) : setting.content;
+						const content = trackToUse ? applyTemplate(setting.content, trackToUse, clientForPlayer(p)) : setting.content;
 						setVoiceStatus(voiceChannelId, token, content).catch(() => {});
 					}
 				} catch (err: any) {
@@ -1027,7 +1027,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				const template = settings.queueEnd.content;
 				const lastTrack = p.queue.previous[p.queue.previous.length - 1];
 				if (isActive !== false && template && template.trim() !== "") {
-					const content = lastTrack ? applyTemplate(template, lastTrack) : template;
+					const content = lastTrack ? applyTemplate(template, lastTrack, clientForPlayer(p)) : template;
 					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, content).catch(() => {});
 				} else {
 					if (p.voiceChannelId) setVoiceStatus(p.voiceChannelId, token, "").catch(() => {});
@@ -1477,7 +1477,7 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 		requesterData.username = cachedRequester.username;
 		requesterData.globalName = cachedRequester.globalName;
 		requesterData.tag = cachedRequester.tag;
-		requesterData.avatar = cachedRequester.displayAvatarURL({ extension: "png", size: 1024 });
+		requesterData.avatar = cachedRequester.displayAvatarURL({ size: 1024 });
 		requesterData.bot = cachedRequester.bot;
 	} else if (requestedId && requesterData.avatar && typeof requesterData.avatar === "string" && !requesterData.avatar.startsWith("http")) {
 		const hash = requesterData.avatar;
@@ -1512,10 +1512,27 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 	const filters = activeFilters ?? [];
 	const totalQueueDuration = guildPlayer?.queue?.tracks?.reduce((acc: number, t: any) => acc + (t?.info?.duration ?? 0), 0) ?? 0;
 
+	const clientUser = (client as any)?.user;
+	const clientData = clientUser
+		? {
+				id: clientUser.id,
+				username: clientUser.username,
+				globalName: clientUser.globalName,
+				tag: clientUser.tag,
+				displayName: clientUser.displayName,
+				avatar: clientUser.displayAvatarURL?.({ size: 1024 }) ?? null,
+				discriminator: clientUser.discriminator,
+				banner: clientUser.bannerURL?.({ size: 1024 }) ?? null,
+				accentColor: clientUser.accentColor ?? null,
+				avatarDecoration: clientUser.avatarDecorationURL?.({ size: 1024 }) ?? null,
+				node: guildPlayer?.node?.id ?? null,
+			}
+		: null;
+
 	const result: { data: any } = {
 		data: {
 			nodeId: guildPlayer?.node?.id ?? null,
-			client: guildPlayer?.options ? { ...guildPlayer.options, node: guildPlayer.node?.id || guildPlayer.options.node } : null,
+			client: clientData ?? (guildPlayer?.options ? { ...guildPlayer.options, node: guildPlayer.node?.id || guildPlayer.options.node } : null),
 			id: track.info.identifier,
 			title: track.info.title,
 			author: track.info.author,
@@ -1574,14 +1591,21 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 	return result;
 }
 
-export function applyTemplate(template: string, track: any): string {
-	const data = formatTrack(track).data;
+export function applyTemplate(template: string, track: any, client?: any): string {
+	const data = formatTrack(track, client).data;
 	return template.replace(/{([\w.]+)}/g, (match, path) => {
 		if (path === "currentTimestamp") return new Date().toISOString();
 		const parts = path.split(".");
 		const value = parts.reduce((obj: any, key: string) => obj?.[key], data);
-		if (value === undefined) return "";
+		if (value === undefined || value === null) return "";
 		if (typeof value === "boolean") return value ? "✅" : "❌";
+		if (Array.isArray(value)) return value.join(", ");
+		if (typeof value === "object") {
+			if (typeof value.string === "string") return value.string;
+			if (typeof value.tag === "string") return value.tag;
+			if (typeof value.label === "string") return value.label;
+			return JSON.stringify(value);
+		}
 		return String(value);
 	});
 }
@@ -1634,13 +1658,18 @@ function requesterFromUser(user: any) {
 	};
 }
 
+function clientForPlayer(player: LavalinkPlayer) {
+	const manager = (player as any)?.LavalinkManager;
+	if (!manager) return null;
+	return [...players.values()].find((entry) => entry.player === manager)?.client ?? null;
+}
+
 function clientRequesterForPlayer(player: LavalinkPlayer) {
-	const manager = (player as any).LavalinkManager;
-	const managed = [...players.values()].find((entry) => entry.player === manager);
-	const requester = requesterFromUser(managed?.client.user);
+	const client = clientForPlayer(player);
+	const requester = requesterFromUser(client?.user);
 	if (requester) return requester;
 
-	const clientInfo = manager?.options?.client;
+	const clientInfo = (player as any)?.LavalinkManager?.options?.client;
 	if (!clientInfo?.id) return null;
 	return {
 		id: clientInfo.id,

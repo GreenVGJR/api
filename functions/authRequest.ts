@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { Buffer } from "buffer";
-import { commonHeaders, userAgent } from "./request.js";
+import { commonHeaders, userAgent, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from "linkedom";
 
@@ -454,22 +454,41 @@ export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string 
 	return mainText.split('"buildId":"')[1]?.split('"')[0];
 };
 
-export const instagramKey = async function instagramKey(): Promise<string | null> {
+export let instagramLsd: string | null = null;
+export let instagramCsrf: string | null = null;
+export let instagramAppId: string | null = null;
+
+export const instagramSession = async function instagramSession(): Promise<{
+	cookie: string;
+	lsd: string | null;
+	csrf: string | null;
+	app_id: string | null;
+} | null> {
 	try {
 		const res = await fetch("https://www.instagram.com/", {
-			headers: commonHeaders,
+			headers: {
+				...commonHeaders,
+				"User-Agent": userAgent_mobile,
+			},
 		});
-		let cookie = "";
-		if (res.headers.getSetCookie) {
-			cookie = normalizeCookies(res.headers.getSetCookie());
-		} else {
-			cookie = normalizeCookies(res.headers.get("set-cookie"));
-		}
-		return cookie;
+		const text = await res.text();
+		const cookie = res.headers.getSetCookie ? normalizeCookies(res.headers.getSetCookie()) : normalizeCookies(res.headers.get("set-cookie"));
+		const csrf = cookie.split("csrftoken=")?.[1]?.split(";")?.[0] || text.split('"csrf_token":"')?.[1]?.split('"')?.[0] || null;
+		const lsd = text.split('["LSD",[],{"token":"')?.[1]?.split('"')?.[0] || text.split('"LSD"')?.[1]?.split('"token":"')?.[1]?.split('"')?.[0] || null;
+		const app_id = text.split('"APP_ID":"')?.[1]?.split('"')?.[0] || null;
+		instagramLsd = lsd;
+		instagramCsrf = csrf;
+		instagramAppId = app_id;
+		return { cookie, lsd, csrf, app_id };
 	} catch (e) {
 		console.error(e);
 		return null;
 	}
+};
+
+export const instagramKey = async function instagramKey(): Promise<string | null> {
+	const session = await instagramSession();
+	return session?.cookie ?? null;
 };
 
 export const twitterKey = async function twitterKey(typeName: string) {
@@ -539,6 +558,8 @@ export async function tiktokSessions(): Promise<{
 	device_id: string;
 	odin_id: string;
 	app_id: string;
+	abVersion: string;
+	deviceIdCreate: string;
 } | null> {
 	try {
 		const fet = await fetch("https://www.tiktok.com/node-webapp/api/common-app-context", {
@@ -550,6 +571,8 @@ export async function tiktokSessions(): Promise<{
 			device_id: res.wid,
 			odin_id: res.odinId,
 			app_id: res.appId,
+			abVersion: res.abTestVersion.versionName,
+			deviceIdCreate: res.webIdCreatedTime,
 		};
 	} catch (e) {
 		console.error(e);

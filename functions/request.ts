@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramKey, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -280,6 +280,7 @@ export async function getYoutubei() {
 }
 
 export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
+export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/151.0.0.0 Mobile/15E148 Safari/604.1";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -468,7 +469,7 @@ let keyimgur: string | undefined;
 let keygiphy: string | undefined;
 let keycrunchy: string | undefined;
 let keytumblr: string | undefined = process.env.TUMBLR;
-let keyInstagram: string | null = null;
+let keyInstagram: { cookie: string; lsd: string | null; csrf: string | null; app_id: string | null } | null = null;
 let saweriaBuildId: string | undefined;
 let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 let redditCookies: string = "";
@@ -4023,7 +4024,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 	try {
 		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
 			headers: {
 				...commonHeaders,
 				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
@@ -4054,7 +4055,7 @@ export const TiktokMusic = async function TiktokMusic(que: string, limit: number
 	try {
 		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?count=${limit}&cursor=0&aid=1988&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&region=&referer=&keyword=${encodeURIComponent(que)}`, {
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/music/search/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&count=${limit}&cursor=0&aid=1988&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&region=&referer=&keyword=${encodeURIComponent(que)}`, {
 			headers: {
 				...commonHeaders,
 				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
@@ -4085,7 +4086,7 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 	try {
 		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?keyword=${encodeURIComponent(que)}&cursor=0&count=${limit}&hot_search=0&search_source=discover&aid=1988&app=musically&region=&referer=&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&type=1`, {
+		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/discover/search/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&keyword=${encodeURIComponent(que)}&cursor=0&count=${limit}&hot_search=0&search_source=discover&aid=1988&app=musically&region=&referer=&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&type=1`, {
 			headers: {
 				...commonHeaders,
 				"X-Khronos": String(Math.floor(Date.now() / 1000)),
@@ -4114,7 +4115,10 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1284&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
+	const url = `https://www.tiktok.com/api/explore/item_list/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&aid=1284&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web${tiktokSessionKeys.abVersion
+		.split(",")
+		.map((f: any) => `&clientABVersions=${f}`)
+		.join("")}&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
 	const headers = {
 		...commonHeaders,
 		Cookie: tiktokSessionKeys?.cookie,
@@ -4133,7 +4137,6 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 		envcode: 65,
 		ubcode: 8,
 	});
-	// console.log(signedUrl);
 
 	for (let i = 0; i < 3; i++) {
 		try {
@@ -5190,85 +5193,113 @@ export const instagramUser = async function instagramUser(que: string) {
 	if (!que) return null;
 
 	if (!keyInstagram) {
-		keyInstagram = await instagramKey();
+		keyInstagram = await instagramSession();
 	}
 
+	const instagramHeaders = {
+		...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+		...(keyInstagram?.csrf ? { "X-CSRFToken": keyInstagram.csrf } : {}),
+		...(keyInstagram?.app_id ? { "X-IG-App-ID": keyInstagram.app_id } : { "X-IG-App-ID": "936619743392459" }),
+	};
+
 	try {
-		const testreq = await fetch(`https://www.instagram.com/${encodeURIComponent(que)}/embed`, {
+		const testreq = await fetch(`https://www.instagram.com/${encodeURIComponent(que)}`, {
 			headers: {
 				...commonHeaders,
-				...(keyInstagram ? { Cookie: keyInstagram } : {}),
-				"Sec-Fetch-Dest": "iframe",
+				...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
 			},
 		});
 
-		if (!testreq.url.includes(`https://www.instagram.com/accounts/login`)) {
+		// Critical error
+		if (testreq.url.includes(`https://www.instagram.com/accounts/login`)) {
 			return {
 				error: "Please sign in",
 			};
 		}
 
 		const resreq = await testreq.text();
-		const profile_id = resreq.split('owner-id="')[1]?.split('"')?.[0];
+		const scripts = [...resreq.matchAll(/<script type="application\/json"[^>]*data-sjs[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 
-		if (!profile_id) {
+		let a: any = null;
+		let b: any = null;
+		let isFallback = false;
+		let isRestricted = false;
+		let hasUserKey = false;
+
+		for (const script of scripts) {
+			try {
+				const parsed = JSON.parse(script);
+				const data = parsed?.require?.[0]?.[3]?.[0]?.__bbox?.require?.[0]?.[3]?.[1]?.__bbox?.result?.data;
+				if (!data) continue;
+				if ("xig_user_by_username" in data) {
+					hasUserKey = true;
+					const user = data.xig_user_by_username;
+					if (user?.pk) {
+						a = user;
+						break;
+					}
+					if (user === null) isRestricted = true;
+				}
+			} catch {}
+		}
+
+		if (!a && isRestricted) {
+			return {
+				error: "Account restricted",
+			};
+		}
+
+		if (!a && !hasUserKey) {
 			return {
 				data: null,
 			};
 		}
 
-		const bodyhttp = {
-			enable_integrity_filters: true,
-			id: profile_id,
-			render_surface: "PROFILE",
-			__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider: true,
-			__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider: false,
-			__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider: false,
-		};
+		if (!a) {
+			isFallback = true;
 
-		let a: any = null;
-		let b: any = null;
-
-		for (let attempt = 0; attempt < 2; attempt++) {
-			const req = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
-				headers: {
-					...commonHeaders,
-					...(keyInstagram ? { Cookie: keyInstagram } : {}),
-					"X-IG-App-ID": "936619743392459",
-					"X-ASBD-ID": "198387",
-					"X-IG-WWW-Claim": "0",
-					Origin: "https://www.instagram.com",
-				},
-			});
-
-			try {
-				const text = await req.text();
-				if (text && text.trim() !== "") {
-					const res = JSON.parse(text);
-					a = res?.data?.user;
-				}
-			} catch {}
-
-			if (!a) {
-				const req2 = await fetch(`https://www.instagram.com/graphql/query/?doc_id=25980296051578533&variables=${JSON.stringify(bodyhttp)}`, {
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const req = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(que)}`, {
 					headers: {
 						...commonHeaders,
-						...(keyInstagram ? { Cookie: keyInstagram } : {}),
-						Origin: "https://www.instagram.com",
-						"X-Ig-App-Id": "936619743392459",
-						"X-Asbd-Id": "198387",
-						"X-Ig-Www-Claim": "0",
+						...instagramHeaders,
+						"X-ASBD-ID": "198387",
+						"X-IG-WWW-Claim": "0",
 					},
 				});
-				try {
-					const res2 = await req2.json();
-					b = res2?.data?.user || res2?.data || res2;
-					a = b?.user ? b.user : b;
-				} catch {}
-			}
 
-			if (a) break;
-			if (keyInstagram) keyInstagram = await instagramKey();
+				try {
+					const text = await req.text();
+					if (text && text.trim() !== "") {
+						const res = JSON.parse(text);
+						a = res?.data?.user;
+					}
+				} catch {}
+
+				if (!a) {
+					const req2 = await fetch(`https://www.instagram.com/api/graphql`, {
+						method: "POST",
+						body: `lsd=${keyInstagram?.lsd || ""}&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=PolarisLoggedOutDesktopWWWProfileRootContentQuery&server_timestamps=true&variables=${encodeURIComponent(JSON.stringify({ username: que }))}&doc_id=28213089111615909`,
+						headers: {
+							...commonHeaders,
+							...instagramHeaders,
+							Accept: "*/*",
+							"Content-Type": "application/x-www-form-urlencoded",
+							"Sec-Fetch-Site": "same-origin",
+							...(keyInstagram?.lsd ? { "X-FB-LSD": keyInstagram.lsd } : {}),
+							"X-ASBD-ID": "359341",
+						},
+					});
+					try {
+						const res2 = await req2.json();
+						b = res2?.data?.xig_user_by_username || res2?.data?.user || res2?.data || res2;
+						a = b?.user ? b.user : b;
+					} catch {}
+				}
+
+				if (a) break;
+				if (keyInstagram) keyInstagram = await instagramSession();
+			}
 		}
 
 		const source = a;
@@ -5292,7 +5323,7 @@ export const instagramUser = async function instagramUser(que: string) {
 					}
 				: null;
 
-		return { isFallback: !!b, data: [formatted || null, a || b || null] };
+		return { _warning: "This endpoint might not work due to anti-bot protection", isFallback, data: [formatted || null, a || b || null] };
 	} catch (e) {
 		console.error(e);
 		return null;

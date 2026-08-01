@@ -54,8 +54,9 @@ app.get("/ai-image/flux_schnell", async (c) => {
 					console.warn("Cloudflare AI rate limited (429), falling back to Vercel");
 				} else {
 					let loggedAsWarning = false;
+					const errorText = await cfResponse.text();
 					try {
-						const errorJson = await cfResponse.json();
+						const errorJson = JSON.parse(errorText);
 						if (errorJson && typeof errorJson === "object" && Array.isArray(errorJson.errors)) {
 							const messages = errorJson.errors.map((e: any) => e.message).join("; ");
 							if (/Length of '\/prompt' must be <= 2048/.test(messages) || /Input prompt contains NSFW content/.test(messages)) {
@@ -65,7 +66,6 @@ app.get("/ai-image/flux_schnell", async (c) => {
 						}
 					} catch (_) {}
 					if (!loggedAsWarning) {
-						const errorText = await cfResponse.text();
 						console.error(`Cloudflare AI error (${cfResponse.status}):`, errorText);
 					}
 				}

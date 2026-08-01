@@ -4111,7 +4111,7 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 };
 
 // Have TLS Fingerprint, require http2 or above
-export const TiktokFeed = async function TiktokFeed(region_code: any = "") {
+export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
 	const url = `https://www.tiktok.com/api/explore/item_list/?aid=1284&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
@@ -4294,7 +4294,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 		return { error: e.message || "Failed to verify Discord resources" };
 	}
 
-	const feed = await TiktokFeed(region_code);
+	const feed = await TiktokFeed();
 	if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
 
 	const item = feed.data;

@@ -454,10 +454,6 @@ export const saweriaBuildKey = async function saweriaBuildKey(): Promise<string 
 	return mainText.split('"buildId":"')[1]?.split('"')[0];
 };
 
-export let instagramLsd: string | null = null;
-export let instagramCsrf: string | null = null;
-export let instagramAppId: string | null = null;
-
 export const instagramSession = async function instagramSession(): Promise<{
 	cookie: string;
 	lsd: string | null;
@@ -476,9 +472,6 @@ export const instagramSession = async function instagramSession(): Promise<{
 		const csrf = cookie.split("csrftoken=")?.[1]?.split(";")?.[0] || text.split('"csrf_token":"')?.[1]?.split('"')?.[0] || null;
 		const lsd = text.split('["LSD",[],{"token":"')?.[1]?.split('"')?.[0] || text.split('"LSD"')?.[1]?.split('"token":"')?.[1]?.split('"')?.[0] || null;
 		const app_id = text.split('"APP_ID":"')?.[1]?.split('"')?.[0] || null;
-		instagramLsd = lsd;
-		instagramCsrf = csrf;
-		instagramAppId = app_id;
 		return { cookie, lsd, csrf, app_id };
 	} catch (e) {
 		console.error(e);

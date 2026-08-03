@@ -191,7 +191,7 @@ let endpoints = {
 let prt = "";
 let lfprt = "";
 let currentCategory = "search";
-let currentEndpoint = { path: "/loading...", query: "", types: [] };
+let currentEndpoint = null;
 let isLoading = false;
 let lastRawResponse = "";
 let hasMediaResponse = false;
@@ -495,9 +495,13 @@ function renderPlaygroundPage() {
   if (scrollTrack) scrollTrack.style.display = "";
 }
 
+let lastRenderedPage = null;
+
 function renderCurrentPage() {
   const page = pageFromPath(window.location.pathname);
   const isLegalPage = page === "terms" || page === "privacy";
+  const prevPage = lastRenderedPage;
+  lastRenderedPage = page;
 
   document.title = isLegalPage
     ? `${legalPages[page].title} | VGJR`
@@ -509,6 +513,7 @@ function renderCurrentPage() {
     responseArea.scrollTop = 0;
   } else {
     renderPlaygroundPage();
+    if (prevPage && prevPage !== "playground") refreshEndpointsFromJson();
   }
   updateConnectionUI();
 }
@@ -1694,8 +1699,10 @@ function restoreResponseArea() {
 function showTurnstileChallenge() {
   if (turnstileRendered) return;
   turnstileRendered = true;
-  isLoading = false;
+  isLoading = true;
   setSendButtonLabel("Send");
+  sendBtn.classList.add("opacity-50", "cursor-not-allowed");
+  sendBtn.classList.remove("opacity-70");
 
   setStatusDotColor("yellow-400", false);
   statusText.textContent = "Verifying";
@@ -1819,7 +1826,7 @@ async function refreshEndpointsFromJson() {
     try {
       statsRes = await fetch("/?json", { mode: "same-origin", referrerPolicy: "same-origin", headers: { Accept: "application/json" } });
       if (statsRes.status === 403) {
-        showTurnstileChallenge();
+        if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;
       }
       if (statsRes.ok) {

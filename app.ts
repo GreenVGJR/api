@@ -778,19 +778,6 @@ app.get("/", (c: Context) =>
 
 		c.status(renderJson ? 200 : 302);
 
-		if (getCookie(c, TURNSTILE_COOKIE)) {
-			const expiry = "Thu, 01 Jan 1970 00:00:00 GMT";
-			const isLocal = isLocalRequest(c.req.header("host"));
-			const isSecure = new URL(c.req.url).protocol === "https:";
-			const secureAttr = isSecure ? "Secure; " : "";
-			if (isLocal) {
-				c.header("Set-Cookie", `${TURNSTILE_COOKIE}=; Max-Age=0; Expires=${expiry}; Path=/; ${secureAttr}HttpOnly; SameSite=Lax`, { append: true });
-			} else {
-				c.header("Set-Cookie", `${TURNSTILE_COOKIE}=; Max-Age=0; Expires=${expiry}; Domain=.vgjr.top; Path=/; ${secureAttr}HttpOnly; SameSite=Lax`, { append: true });
-				c.header("Set-Cookie", `${TURNSTILE_COOKIE}=; Max-Age=0; Expires=${expiry}; Path=/; ${secureAttr}HttpOnly; SameSite=Lax`, { append: true });
-			}
-		}
-
 		await l.write("");
 
 		const seconds = Math.floor((Date.now() - starttime) / 1000);

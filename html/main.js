@@ -518,10 +518,19 @@ function renderCurrentPage() {
   updateConnectionUI();
 }
 
+function isVerifying() {
+  return statusText && statusText.textContent === "Verifying";
+}
+
 document.addEventListener("click", (event) => {
   const clickTarget = event.target instanceof Element ? event.target : null;
   const link = clickTarget?.closest("[data-page-link]");
   if (!link) return;
+
+  if (isVerifying()) {
+    event.preventDefault();
+    return;
+  }
 
   const href = link.getAttribute("href");
   if (!href) return;
@@ -542,7 +551,13 @@ document.addEventListener("click", (event) => {
   renderCurrentPage();
 });
 
-window.addEventListener("popstate", renderCurrentPage);
+window.addEventListener("popstate", () => {
+  if (isVerifying()) {
+    history.pushState(null, "", window.location.pathname);
+    return;
+  }
+  renderCurrentPage();
+});
 
 let paramsOpen = window.innerWidth >= 768;
 let currentParams = [];
@@ -1942,6 +1957,7 @@ function renderEndpoints(animate = false) {
 function attachEndpointListeners() {
   endpointsList.querySelectorAll(".endpoint-item").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (isVerifying()) return;
       const index = parseInt(btn.dataset.index);
       if (currentEndpoint && endpoints[currentCategory][index] === currentEndpoint) return;
       if (!confirmDiscardParams()) return;
@@ -1958,6 +1974,7 @@ function attachEndpointListeners() {
 
 tabBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
+    if (isVerifying()) return;
     const nextCategory = btn.dataset.category;
     const wasLegalPage =
       pageFromPath(window.location.pathname) !== "playground";

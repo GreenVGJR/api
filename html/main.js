@@ -3,6 +3,19 @@ if (window.location.pathname === "/") {
   window.location.replace("/playground");
 }
 
+const DEFAULT_PHRASES = ["Wanna test something?", "Sweet", "Howdy.", "..."];
+function getDefaultResponseHTML() {
+  const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
+  return `<div class="flex flex-col items-center justify-center">
+    <div class="text-white-500 text-xs">${randomPhrase}</div>
+    <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#9EF3A7] via-[#1BA1E3] to-[#1B6EE3] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
+    <div class="flex items-center gap-2 mt-2 text-gray-400 text-xs flex-wrap justify-center">
+      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
+    </div>
+  </div>`;
+}
+const DEFAULT_RESPONSE_HTML = getDefaultResponseHTML();
+
 // Initialize layout and Tailwind config dynamically
 const initSPA = () => {
   // Inject Fonts
@@ -43,6 +56,7 @@ const initSPA = () => {
                 <aside id="categoryTabsMobile" class="block xl:hidden category-tabs overflow-x-auto flex-shrink-0 min-h-0 border-b border-dark-700 pb-1.5 mb-1.5 no-scrollbar">
                     <nav class="flex gap-1.5" aria-label="Endpoint categories">
                         <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
+                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="suggestion">Suggestion</button>
                         <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
                         <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
                         <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
@@ -86,7 +100,7 @@ const initSPA = () => {
                             </div>
                             <div id="responseAreaWrap" class="relative flex-1 min-h-0">
                                 <div id="responseArea" class="response-area rounded-b-lg sm:rounded-b-xl font-mono text-sm text-gray-300 p-3 sm:p-4 absolute inset-0 overflow-auto empty-state">
-                                    ${getDefaultResponseHTML()}
+                                    ${DEFAULT_RESPONSE_HTML}
                                 </div>
                                 <div id="customScrollTrack" class="custom-scrollbar-track" aria-hidden="true">
                                     <div id="customScrollThumb" class="custom-scrollbar-thumb"></div>
@@ -125,6 +139,7 @@ const initSPA = () => {
                 <div class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-1 mb-2 flex items-center" style="height: var(--url-bar-h, 44px); align-items: flex-end; padding-bottom: 6px;">Category</div>
                 <nav class="flex flex-col gap-1.5" aria-label="Endpoint categories">
                     <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="search">Search</button>
+                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="suggestion">Suggestion</button>
                     <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="profile">Profile</button>
                     <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="lyrics">Lyrics</button>
                     <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="tools">Tools</button>
@@ -138,19 +153,6 @@ const initSPA = () => {
         </section>
     </div>`;
 };
-
-const DEFAULT_PHRASES = ["Wanna test something?", "Six and Seven.", "Howdy.", "Hai this is playground ok."];
-function getDefaultResponseHTML() {
-  const randomPhrase = DEFAULT_PHRASES[Math.floor(Math.random() * DEFAULT_PHRASES.length)];
-  return `<div class="flex flex-col items-center justify-center">
-    <div class="text-white-500 text-xs">${randomPhrase}</div>
-    <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#9EF3A7] via-[#1BA1E3] to-[#1B6EE3] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
-    <div class="flex items-center gap-2 mt-2 text-gray-400 text-xs flex-wrap justify-center">
-      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
-    </div>
-  </div>`;
-}
-const DEFAULT_RESPONSE_HTML = getDefaultResponseHTML();
 
 // Start SPA immediately
 initSPA();
@@ -176,6 +178,7 @@ requestAnimationFrame(() => {
 
 let endpoints = {
   search: [],
+  suggestion: [],
   profile: [],
   lyrics: [],
   tools: [],
@@ -191,6 +194,7 @@ let currentCategory = "search";
 let currentEndpoint = { path: "/loading...", query: "", types: [] };
 let isLoading = false;
 let lastRawResponse = "";
+let hasMediaResponse = false;
 let isCoolingDown = false;
 let isConnecting = true;
 
@@ -472,7 +476,7 @@ function renderPlaygroundPage() {
   if (activePage && activePage !== "playground") {
     lastRawResponse = "";
     responseArea.classList.add("empty-state");
-    responseArea.innerHTML = getDefaultResponseHTML();
+    responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
     setStatusDotColor("gray-500");
     statusText.textContent = "Idle";
     statusText.className = "text-gray-500";
@@ -778,6 +782,7 @@ async function performRequest(targetUrl, retryCount = 0) {
   }
 
   let resultData = null;
+  let response = null;
 
   try {
     const startTime = performance.now();
@@ -804,7 +809,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = url.toString();
     }
     const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
-    const response = await fetch(fetchUrl, fetchOptions);
+    response = await fetch(fetchUrl, fetchOptions);
     setStatusDotColor("blue-400", false);
     statusText.textContent = "Rendering";
     statusText.className = "text-gray-400";
@@ -833,6 +838,7 @@ async function performRequest(targetUrl, retryCount = 0) {
             statusText.textContent = response.status.toString();
             statusText.className = "text-mint-400";
             lastRawResponse = "";
+            hasMediaResponse = true;
 
             responseArea.classList.add("empty-state");
             if (isVideo) {
@@ -876,6 +882,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       const imageUrl = URL.createObjectURL(blob);
 
       lastRawResponse = "";
+      hasMediaResponse = true;
 
       responseArea.classList.add("empty-state");
       responseArea.innerHTML = `
@@ -895,6 +902,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       const videoUrl = URL.createObjectURL(blob);
 
       lastRawResponse = "";
+      hasMediaResponse = true;
 
       responseArea.classList.add("empty-state");
       responseArea.innerHTML = `
@@ -909,6 +917,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       const audioUrl = URL.createObjectURL(blob);
 
       lastRawResponse = "";
+      hasMediaResponse = true;
 
       responseArea.classList.add("empty-state");
       responseArea.innerHTML = `
@@ -1015,6 +1024,8 @@ async function performRequest(targetUrl, retryCount = 0) {
         preElement.innerHTML = linkifyText(formatted);
         updateStatusUI(response.ok, response.status, duration);
       } else {
+        const resOk = response.ok;
+        const resStatus = response.status;
         const lines = formatted.split("\n");
 
         if (formatted.length > 5000) {
@@ -1040,7 +1051,7 @@ async function performRequest(targetUrl, retryCount = 0) {
               const scrollTop = preElement.scrollTop;
               preElement.innerHTML = colorfulHTML;
               preElement.scrollTop = scrollTop;
-              updateStatusUI(response.ok, response.status, duration);
+              updateStatusUI(resOk, resStatus, duration);
             }
           };
 
@@ -1093,6 +1104,7 @@ async function performRequest(targetUrl, retryCount = 0) {
   } finally {
     if (retryCount === 0) {
       isLoading = false;
+      response = null;
       if (!hasConnection()) {
         isCoolingDown = false;
         updateConnectionUI();
@@ -1514,6 +1526,8 @@ function renderParams() {
     );
   }
 
+  hideResponseArea();
+
   paramsCount.textContent = currentParams.length;
 
   if (currentParams.length > 0) {
@@ -1567,22 +1581,24 @@ function renderParams() {
   }
 
   setTimeout(() => {
-    if (currentParams.length > 0) {
-      if (window.innerWidth >= 768) {
-        paramsChevron.classList.add("rotated");
-        paramsOpen = true;
-        updateParamsBodyHeight();
-      } else {
-        paramsChevron.classList.remove("rotated");
-        paramsOpen = false;
-        paramsBody.style.height = null;
-      }
+    requestAnimationFrame(restoreResponseArea);
+  }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+
+  if (currentParams.length > 0) {
+    if (window.innerWidth >= 768) {
+      paramsChevron.classList.add("rotated");
+      paramsOpen = true;
+      updateParamsBodyHeight();
     } else {
       paramsChevron.classList.remove("rotated");
       paramsOpen = false;
       paramsBody.style.height = null;
     }
-  }, 0);
+  } else {
+    paramsChevron.classList.remove("rotated");
+    paramsOpen = false;
+    paramsBody.style.height = null;
+  }
 }
 
 function syncParamsToUrl() {
@@ -1626,12 +1642,18 @@ paramsToggle.addEventListener("click", () => {
   paramsOpen = !paramsOpen;
   paramsChevron.classList.toggle("rotated", paramsOpen);
 
+  hideResponseArea();
+
   if (paramsOpen) {
     updateParamsBodyHeight();
   } else {
     closeEnumDropdowns();
     paramsBody.style.height = null;
   }
+  
+  setTimeout(() => {
+    requestAnimationFrame(restoreResponseArea);
+  }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
 });
 
 function selectInitialEndpointFromCurrentCategory() {
@@ -1659,10 +1681,111 @@ function setActiveCategoryTab() {
   ).forEach((btn) => btn.classList.add("active"));
 }
 
+let turnstileRendered = false;
+
+function hideResponseArea() {
+  if (lastRawResponse) responseArea.style.display = "none";
+}
+
+function restoreResponseArea() {
+  if (lastRawResponse) responseArea.style.display = null;
+}
+
+function showTurnstileChallenge() {
+  if (turnstileRendered) return;
+  turnstileRendered = true;
+  isLoading = false;
+  setSendButtonLabel("Send");
+
+  setStatusDotColor("yellow-400", false);
+  statusText.textContent = "Verifying";
+  statusText.className = "text-yellow-400";
+  slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+
+  responseArea.innerHTML = `
+    <div class="w-full flex flex-col items-center justify-center">
+      ${DEFAULT_RESPONSE_HTML}
+      <div class="w-full flex flex-col items-center gap-2 pt-2 pb-3 px-4">
+        <div id="turnstileWidget" class="min-h-[65px] flex items-center justify-center"></div>
+        <div id="turnstileError" class="text-xs text-red-400 font-sans hidden"></div>
+      </div>
+    </div>`;
+
+  const loadScript = () =>
+    new Promise((resolve) => {
+      if (window.turnstile) return resolve(true);
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true;
+      s.defer = true;
+      s.onload = () => resolve(true);
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+
+  const renderWidget = () => {
+    const el = document.getElementById("turnstileWidget");
+    if (!el || !window.turnstile) return;
+    window.turnstile.render(el, {
+      sitekey: window.TURNSTILE_SITE_KEY,
+      theme: "dark",
+      callback: async (token) => {
+        try {
+          const res = await fetch("/playground/turnstile/verify", {
+            method: "POST",
+            mode: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          });
+          if (res.ok) {
+            window.location.reload();
+          } else {
+            const errEl = document.getElementById("turnstileError");
+            if (errEl) {
+              errEl.textContent = "Verification failed. Please try again.";
+              errEl.classList.remove("hidden");
+            }
+            if (window.turnstile && el) window.turnstile.reset(el);
+          }
+        } catch {
+          const errEl = document.getElementById("turnstileError");
+          if (errEl) {
+            errEl.textContent = "Network error. Please try again.";
+            errEl.classList.remove("hidden");
+          }
+          if (window.turnstile && el) window.turnstile.reset(el);
+        }
+      },
+      "expired-callback": () => {
+        const el = document.getElementById("turnstileWidget");
+        if (window.turnstile && el) window.turnstile.reset(el);
+      },
+      "error-callback": () => {
+        const errEl = document.getElementById("turnstileError");
+        if (errEl) {
+          errEl.textContent = "Challenge failed to load. Refresh to retry.";
+          errEl.classList.remove("hidden");
+        }
+      },
+    });
+  };
+
+  loadScript().then((ok) => {
+    if (!ok) {
+      const errEl = document.getElementById("turnstileError");
+      if (errEl) {
+        errEl.textContent = "Could not load Turnstile. Refresh to retry.";
+        errEl.classList.remove("hidden");
+      }
+      return;
+    }
+    renderWidget();
+  });
+}
+
 async function refreshEndpointsFromJson() {
   try {
-    const richPayload = window.API_ROUTES ? { routes: window.API_ROUTES } : null;
-    if (richPayload) {
+    const richPayload = window.API_ROUTES ? { routes: window.API_ROUTES } : null;    if (richPayload) {
       const freshEndpoints = normalizeEndpointPayload(richPayload);
       if (freshEndpoints) {
         const previousPath = currentEndpoint?.path;
@@ -1694,7 +1817,11 @@ async function refreshEndpointsFromJson() {
 
     let statsRes = null;
     try {
-      statsRes = await fetch("/?json", { headers: { Accept: "application/json" } });
+      statsRes = await fetch("/?json", { mode: "same-origin", referrerPolicy: "same-origin", headers: { Accept: "application/json" } });
+      if (statsRes.status === 403) {
+        showTurnstileChallenge();
+        return false;
+      }
       if (statsRes.ok) {
         const statsPayload = await statsRes.json();
         isLoading = false;
@@ -1779,7 +1906,8 @@ function renderEndpoints(animate = false) {
             <div class="swipe-layer new space-y-1">${newHTML}</div>
         `;
 
-    animationTimeout = setTimeout(() => {
+    const finishSwipe = () => {
+      if (!endpointsList.classList.contains("is-animating")) return;
       const newLayer = endpointsList.querySelector(".swipe-layer.new");
       if (newLayer) {
         endpointsList.innerHTML = newLayer.innerHTML;
@@ -1787,7 +1915,16 @@ function renderEndpoints(animate = false) {
         attachEndpointListeners();
       }
       animationTimeout = null;
-    }, 350);
+      endpointsList.querySelectorAll(".swipe-layer").forEach((layer) =>
+        layer.removeEventListener("animationend", finishSwipe)
+      );
+    };
+
+    endpointsList.querySelectorAll(".swipe-layer").forEach((layer) =>
+      layer.addEventListener("animationend", finishSwipe)
+    );
+
+    animationTimeout = setTimeout(finishSwipe, 700);
   } else {
     endpointsList.classList.remove("is-animating");
     endpointsList.innerHTML = `<div class="space-y-1">${newHTML}</div>`;
@@ -1825,6 +1962,7 @@ tabBtns.forEach((btn) => {
 
     const wasOpen = !wasLegalPage && paramsOpen;
 
+    if(window.innerWidth >= 768) hideResponseArea();
     if (wasOpen) {
       paramsBody.style.height = null;
       paramsChevron.classList.remove("rotated");
@@ -1832,6 +1970,7 @@ tabBtns.forEach((btn) => {
 
     setTimeout(
       () => {
+
         if (wasLegalPage) history.pushState({}, "", "/playground");
 
         currentCategory = nextCategory;
@@ -1854,6 +1993,12 @@ tabBtns.forEach((btn) => {
           top: 0,
           behavior: window.innerWidth >= 768 ? "smooth" : "auto",
         });
+
+        if(window.innerWidth >= 768) {
+          setTimeout(() => {
+            requestAnimationFrame(restoreResponseArea);
+          }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+        }
       },
       wasOpen ? 50 : 0,
     );
@@ -2089,10 +2234,11 @@ copyResponseBtn.addEventListener("click", async () => {
 });
 
 clearResponseBtn.addEventListener("click", () => {
-  if (statusText.textContent === "Connecting" || lastRawResponse === "" || lastRawResponse === null) return;
+  if (statusText.textContent === "Connecting" || (lastRawResponse === "" && !hasMediaResponse)) return;
   lastRawResponse = "";
+  hasMediaResponse = false;
   responseArea.classList.add("empty-state");
-  responseArea.innerHTML = getDefaultResponseHTML();
+  responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
   setStatusDotColor("gray-500");
   statusText.textContent = "Idle";
   statusText.className = "text-gray-500";
@@ -2298,16 +2444,19 @@ fetchInitialEndpoints().then(() => {
   // Final height adjustment after everything is loaded and rendered
   adjustHeight();
 
-  // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
-  if (document.fonts) {
-    document.fonts.ready.then(async () => {
-      adjustHeight();
-      syncStatusWidth();
+  const afterFontsReady = (fn) => {
+    if (document.fonts) document.fonts.ready.then(fn);
+    else fn();
+  };
 
-      const updated = await refreshEndpointsFromJson();
-      if (!updated) selectInitialEndpointFromCurrentCategory();
-    });
-  }
+  // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
+  afterFontsReady(async () => {
+    adjustHeight();
+    syncStatusWidth();
+
+    const updated = await refreshEndpointsFromJson();
+    if (!updated) selectInitialEndpointFromCurrentCategory();
+  });
 });
 
 // Mobile custom scrollbar — draggable, rAF-batched.
@@ -2321,8 +2470,10 @@ fetchInitialEndpoints().then(() => {
   let dragStartScrollTop = 0;
   let lastClientY = 0;
   let dragRafId = null;
+  let updateRafId = null;
 
   const update = () => {
+    updateRafId = null;
     const { scrollHeight, clientHeight, scrollTop } = responseArea;
     const scrollable = scrollHeight - clientHeight;
     if (scrollable <= 1) {
@@ -2334,7 +2485,12 @@ fetchInitialEndpoints().then(() => {
     const thumbHeight = Math.max(24, (clientHeight / scrollHeight) * trackHeight);
     const maxTop = trackHeight - thumbHeight;
     thumb.style.height = thumbHeight + "px";
-    thumb.style.top = (scrollTop / scrollable) * maxTop + "px";
+    thumb.style.transform = `translateY(${(scrollTop / scrollable) * maxTop}px)`;
+  };
+
+  const scheduleUpdate = () => {
+    if (updateRafId !== null) return;
+    updateRafId = requestAnimationFrame(update);
   };
 
   const applyDrag = () => {
@@ -2387,7 +2543,7 @@ fetchInitialEndpoints().then(() => {
     responseArea.scrollTop = clickRatio * (scrollHeight - clientHeight);
   });
 
-  responseArea.addEventListener("scroll", update, { passive: true });
-  new ResizeObserver(update).observe(responseArea);
+  responseArea.addEventListener("scroll", scheduleUpdate, { passive: true });
+  new ResizeObserver(scheduleUpdate).observe(responseArea);
   update();
 })();

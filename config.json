@@ -6,5 +6,11 @@
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
 	"endpointChallenge": true,
+	"turnstile": {
+		"enabled": true,
+		"siteKey": "0x4AAAAAAEE1E-kNdZdp_W7x",
+		"localSecKeyForTest": "1x0000000000000000000000000000000AA",
+		"localSiteKeyForTest": "1x00000000000000000000AA"
+	},
 	"nodeConnectTimeout": 3000
 }

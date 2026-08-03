@@ -624,30 +624,20 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
 		});
 
-		const [response, rescomplete] = await Promise.all([
-			fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
-				headers: {
-					...commonHeaders,
-					"content-type": "application/json",
-					...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
-				},
-				body: bodyload,
-				method: "POST",
-			}),
-			fetch(`https://suggestqueries-clients6.youtube.com/complete/search?ds=yt&hl=en&client=youtube&gs_ri=youtube&ytvs=1&q=${que}`, { headers: commonHeaders }),
-		]);
+		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
+			headers: {
+				...commonHeaders,
+				"content-type": "application/json",
+				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+			},
+			body: bodyload,
+			method: "POST",
+		});
 
 		const res: any = await response.json();
-		const autoresText = (await rescomplete.text()).slice(19, -1);
-		let alk: any[] = [];
-		let alj: any[] = [];
-		try {
-			const autores = JSON.parse(autoresText);
-			(autores?.[1] || []).forEach((o: any) => {
-				if (o?.[0]) alj.push(o[0]);
-			});
-		} catch {}
-		const inrtubeContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+
+		const sectionContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+		const inrtubeContents = sectionContents.flatMap((sec: any) => sec?.itemSectionRenderer?.contents || []);
 		const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
 		const videoItems = inrtubeContents.flatMap((item: any) => {
@@ -778,7 +768,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 			}
 		});
 
-		alk = (await Promise.all(mappedTasks)).filter(Boolean);
+		const alk = (await Promise.all(mappedTasks)).filter(Boolean);
 
 		const mappedTasks2 = inrtubeContents.map((item: any) => {
 			const a = item.gridShelfViewModel;
@@ -806,7 +796,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 		});
 		const finalTask2 = mappedTasks2.filter(Boolean).flat();
 
-		return { searchParams: queryId, autocomplete: alj, data: alk?.concat(finalTask2) };
+		return { searchParams: queryId, data: alk?.concat(finalTask2) };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -1005,7 +995,48 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 
 		return { data: alk };
 	} catch (e) {
-		console.error("YTMusic Global Error:", e);
+		console.error(e);
+		return null;
+	}
+};
+
+export const GoogleSuggest = async function GoogleSuggest(que: string) {
+	if (!que) return null;
+	try {
+		const res = await fetch(`https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				Referer: "https://www.google.com/",
+				Origin: "https://www.google.com",
+			},
+		});
+		const data: any = await res.json();
+		return { autocomplete: data?.[1] || [] };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const DuckDuckGoSuggest = async function DuckDuckGoSuggest(que: string) {
+	if (!que) return null;
+	try {
+		const res = await fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				Referer: "https://duckduckgo.com/",
+			},
+		});
+		const data: any = await res.json();
+		if (Array.isArray(data)) {
+			const arr = Array.isArray(data?.[1]) ? data[1] : data;
+			return { autocomplete: arr.map((o: any) => (typeof o === "string" ? o : o?.phrase)).filter(Boolean) };
+		}
+		return { autocomplete: (data || []).map((o: any) => o?.phrase).filter(Boolean) };
+	} catch (e) {
+		console.error(e);
 		return null;
 	}
 };
@@ -5499,41 +5530,19 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 	};
 
 	try {
-		const [apiRes, apiRes2, apiRes3] = await Promise.all([
-			fetch(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://tenor.com",
-					Origin: "https://tenor.com",
-					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-				},
-			}),
-			fetch(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://tenor.com",
-					Origin: "https://tenor.com",
-					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-				},
-			}),
-			fetch(`https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://tenor.com",
-					Origin: "https://tenor.com",
-					"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
-				},
-			}),
-		]);
+		const apiRes = await fetch(`https://tenor.googleapis.com/v2/search?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&fields=results&limit=50&client_key=tenor_web&locale=en${getSearchFilter(type)}`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://tenor.com",
+				Origin: "https://tenor.com",
+				"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
+			},
+		});
 
 		if (apiRes.status === 200) {
 			const apiData: any = await apiRes.json();
-			const apiData2: any = await apiRes2.json();
-			const apiData3: any = await apiRes3.json();
 			return {
 				data: {
-					suggestion: apiData3?.results || [],
-					autocomplete: apiData2?.results || [],
 					data: apiData?.results || [],
 				},
 			};
@@ -5563,12 +5572,9 @@ export const Tenor = async function Tenor(que: string, type?: string) {
 
 		const storeData = JSON.parse(storeMatch[1]);
 		const searchKeys = Object.keys(storeData?.universal?.search || {});
-		const suggestionKeys = Object.keys(storeData?.searchSuggestions || {});
 
 		return {
 			data: {
-				suggestion: suggestionKeys.length > 0 ? storeData.searchSuggestions[suggestionKeys[0]]?.results : null,
-				autocomplete: null,
 				data: searchKeys.length > 0 ? storeData.universal.search[searchKeys[0]]?.results : [],
 			},
 		};
@@ -5769,11 +5775,8 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 			keygiphy = await giphyKey();
 		}
 
-		const [res, res2, res3] = await Promise.all([
+		const [res, res3] = await Promise.all([
 			fetch(`https://api.giphy.com/v1/${getTypeQuery(type)}/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
-				headers: commonHeaders,
-			}),
-			fetch(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
 				headers: commonHeaders,
 			}),
 			fetch(`https://api.giphy.com/v1/channels/search?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
@@ -5786,14 +5789,10 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 		}
 
 		let jl: any = {};
-		let jl2: any = {};
 		let jl3: any = {};
 		let jl4: any = {};
 		try {
 			jl = await res.json();
-		} catch {}
-		try {
-			jl2 = await res2.json();
 		} catch {}
 		try {
 			if (jl.data?.[0]?.id) {
@@ -5808,7 +5807,6 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 		} catch {}
 
 		return {
-			suggestion: jl2?.data?.map((b: any) => b.name) || null,
 			data: jl?.data || null,
 			related: jl3?.data || null,
 			channel: jl4?.data || null,
@@ -9186,44 +9184,17 @@ export const Klipy = async function Klipy(que: string, type?: string) {
 
 	try {
 		const queryType = getQueryType(type);
-		const [req, req2, req3] = await Promise.all([
-			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://klipy.com",
-					Origin: "https://klipy.com",
-				},
-			}),
-			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://klipy.com",
-					Origin: "https://klipy.com",
-				},
-			}),
-			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`, {
-				headers: {
-					...commonHeaders,
-					Referer: "https://klipy.com",
-					Origin: "https://klipy.com",
-				},
-			}),
-		]);
-
-		let res2: any;
-		let res3: any;
-		try {
-			res2 = await req2.json();
-		} catch {}
-		try {
-			res3 = await req3.json();
-		} catch {}
+		const req = await fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/${queryType}/search?q=${encodeURIComponent(que)}&locale=en-US&per_page=100`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://klipy.com",
+				Origin: "https://klipy.com",
+			},
+		});
 
 		if (req.status === 200) {
 			const res: any = await req.json();
 			return {
-				suggestion: res2?.data || null,
-				autocomplete: res3?.data || null,
 				data: res?.data?.data || null,
 			};
 		}
@@ -10101,26 +10072,6 @@ export const googleImgSearch = async (query: string, sort: string = "relevance")
 		const response1: any = isOk1 ? await res1.json() : {};
 		const response2: any = isOk2 ? await res2.json() : {};
 
-		const res = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: commonHeaders,
-		});
-
-		const resText = await res.text();
-		let suggestions: string[] = [];
-		try {
-			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
-			const parsed = JSON.parse(jsonString);
-			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-				suggestions = parsed[0]
-					.map((item: any) => {
-						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
-					})
-					.filter(Boolean);
-			}
-		} catch (e) {
-			// Ignore parse errors
-		}
-
 		const combinedItems = [...(response1.items || []), ...(response2.items || [])];
 		const validResponse = response1.queries ? response1 : response2;
 
@@ -10132,7 +10083,6 @@ export const googleImgSearch = async (query: string, sort: string = "relevance")
 
 		return {
 			data: {
-				autocomplete: suggestions,
 				...filterResponse,
 				sort: sort,
 				items: combinedItems,
@@ -10194,29 +10144,8 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
 			return await googleImgSearchV2(query);
 		}
 
-		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: commonHeaders,
-		});
-
-		const resText = await res2.text();
-		let suggestions: string[] = [];
-		try {
-			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
-			const parsed = JSON.parse(jsonString);
-			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-				suggestions = parsed[0]
-					.map((item: any) => {
-						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
-					})
-					.filter(Boolean);
-			}
-		} catch (e) {
-			// Ignore parse errors
-		}
-
 		return {
 			data: {
-				autocomplete: suggestions,
 				estimatedResultCount: response.cursor?.estimatedResultCount || "0",
 				searchResultTime: response.cursor?.searchResultTime || "0",
 				items: response.results || [],
@@ -10278,29 +10207,8 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 			return await googleSearch(query);
 		}
 
-		const res2 = await fetch(`https://www.google.com/complete/s?q=${encodeURIComponent(query)}&pq=${encodeURIComponent(query)}&client=gws-wiz-img&ds=i`, {
-			headers: commonHeaders,
-		});
-
-		const resText = await res2.text();
-		let suggestions: string[] = [];
-		try {
-			const jsonString = resText.replace(/^window\.google\.ac\.h\(/, "").replace(/\)$/, "");
-			const parsed = JSON.parse(jsonString);
-			if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-				suggestions = parsed[0]
-					.map((item: any) => {
-						return typeof item[0] === "string" ? item[0].replace(/<\/?b>/g, "") : "";
-					})
-					.filter(Boolean);
-			}
-		} catch (e) {
-			// Ignore parse errors
-		}
-
 		return {
 			data: {
-				autocomplete: suggestions,
 				estimatedResultCount: response.cursor?.estimatedResultCount || "0",
 				searchResultTime: response.cursor?.searchResultTime || "0",
 				items:
@@ -10434,19 +10342,8 @@ export const duckSearch = async (query: string): Promise<any> => {
 			}
 		} catch {}
 
-		const res3 = await fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=web`, {
-			headers: commonHeaders,
-		});
-
-		let autotext: any = {};
-
-		try {
-			autotext = JSON.parse(await res3.text());
-		} catch {}
-
 		return {
 			data: {
-				autocomplete: autotext?.map((a: any) => a.phrase) || [],
 				instantAnswer: instantAnswers
 					? {
 							answer: instantAnswers.answer || null,
@@ -10469,7 +10366,7 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 	if (!query) return null;
 
 	try {
-		const landingUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`;
+		const landingUrl = `https://duckduckgo.com/?q=${query}&iax=images&ia=images`;
 		const res = await fetch(landingUrl, {
 			headers: commonHeaders,
 		});
@@ -10496,20 +10393,16 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 
 		const imageHeaders = {
 			...commonHeaders,
-			Referer: landingUrl,
+			Accept: "*/*",
+			Referer: "https://duckduckgo.com/",
 			"Sec-Fetch-Dest": "empty",
 			"Sec-Fetch-Mode": "cors",
 			"Sec-Fetch-Site": "same-origin",
 		};
 
-		const [res2, res3] = await Promise.all([
-			fetch(`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1`, {
-				headers: imageHeaders,
-			}),
-			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=images`, {
-				headers: commonHeaders,
-			}).catch(() => null),
-		]);
+		const res2 = await fetch(`https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-1&ct=US`, {
+			headers: imageHeaders,
+		});
 
 		if (res2.status === 403) {
 			return {
@@ -10530,15 +10423,9 @@ export const duckImageSearch = async (query: string): Promise<any> => {
 		}
 
 		const response = JSON.parse(await res2.text());
-		let autotext: any = [];
-
-		try {
-			autotext = res3 ? JSON.parse(await res3.text()) : [];
-		} catch {}
 
 		return {
 			data: {
-				autocomplete: autotext?.map((a: any) => a.phrase) || [],
 				items: response.results || [],
 			},
 			altData: response.query_expansions || [],
@@ -10586,14 +10473,9 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 			"Sec-Fetch-Site": "same-origin",
 		};
 
-		const [res2, res3] = await Promise.all([
-			fetch(`https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2`, {
-				headers: videoHeaders,
-			}),
-			fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&kl=wt-wt&vertical=videos`, {
-				headers: commonHeaders,
-			}).catch(() => null),
-		]);
+		const res2 = await fetch(`https://duckduckgo.com/v.js?o=json&q=${encodeURIComponent(query)}&l=us-en&vqd=${encodeURIComponent(vqd)}&p=-2&ct=US`, {
+			headers: videoHeaders,
+		});
 
 		if (res2.status === 403) {
 			return {
@@ -10614,15 +10496,9 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 		}
 
 		const response = JSON.parse(await res2.text());
-		let autotext: any = [];
-
-		try {
-			autotext = res3 ? JSON.parse(await res3.text()) : [];
-		} catch {}
 
 		return {
 			data: {
-				autocomplete: autotext?.map((a: any) => a.phrase) || [],
 				items: response.results || [],
 			},
 		};
@@ -12309,6 +12185,107 @@ export const googleCloudTTS = async (text: string, lang: string): Promise<Buffer
 		return Buffer.from(audioB64, "base64");
 	} catch (e: any) {
 		console.error("googleCloudTTS error:", e);
+		return null;
+	}
+};
+
+export const YTSuggest = async function YTSuggest(que: string) {
+	if (!que) return null;
+	try {
+		const rescomplete = await fetch(`https://suggestqueries-clients6.youtube.com/complete/search?ds=yt&hl=en&client=youtube&gs_ri=youtube&ytvs=1&q=${encodeURIComponent(que)}`, { headers: commonHeaders });
+		const autoresText = (await rescomplete.text()).slice(19, -1);
+		let alj: any[] = [];
+		try {
+			const autores = JSON.parse(autoresText);
+			(autores?.[1] || []).forEach((o: any) => {
+				if (o?.[0]) alj.push(o[0]);
+			});
+		} catch {}
+		return { autocomplete: alj };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const TenorSuggest = async function TenorSuggest(que: string) {
+	if (!que) return null;
+	try {
+		const tenorHeaders = {
+			...commonHeaders,
+			Referer: "https://tenor.com",
+			Origin: "https://tenor.com",
+			"X-Goog-Api-Key": process.env.GOOG_TENOR || "",
+		};
+		const [apiRes2, apiRes3] = await Promise.all([fetch(`https://tenor.googleapis.com/v2/autocomplete?prettyPrint=false&q=${encodeURIComponent(que.toLowerCase())}&type=trending&profile_limit=0&limit=50&client_key=tenor_web&locale=en`, { headers: tenorHeaders }), fetch(`https://tenor.googleapis.com/v2/search_suggestions?prettyPrint=false&client_key=tenor_web&locale=en&q=${encodeURIComponent(que.toLowerCase())}&limit=50`, { headers: tenorHeaders })]);
+		const apiData2: any = await apiRes2.json();
+		const apiData3: any = await apiRes3.json();
+		return {
+			suggestion: apiData3?.results || [],
+			autocomplete: apiData2?.results || [],
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const GiphySuggest = async function GiphySuggest(que: string) {
+	if (!que) return null;
+	try {
+		if (!keygiphy) {
+			keygiphy = await giphyKey();
+		}
+		const res2 = await fetch(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
+			headers: commonHeaders,
+		});
+		if (res2.status === 401) {
+			keygiphy = await giphyKey();
+			return await GiphySuggest(que);
+		}
+		const jl2: any = await res2.json();
+		return {
+			suggestion: jl2?.data?.map((b: any) => b.name) || [],
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const KlipySuggest = async function KlipySuggest(que: string) {
+	if (!que) return null;
+	try {
+		const [req2, req3] = await Promise.all([
+			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/search-suggestions/${encodeURIComponent(que)}?limit=50`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://klipy.com",
+					Origin: "https://klipy.com",
+				},
+			}),
+			fetch(`https://api.klipy.com/api/v1/${process.env.KLIPY}/autocomplete/${encodeURIComponent(que)}?limit=50`, {
+				headers: {
+					...commonHeaders,
+					Referer: "https://klipy.com",
+					Origin: "https://klipy.com",
+				},
+			}),
+		]);
+		let res2: any;
+		let res3: any;
+		try {
+			res2 = await req2.json();
+		} catch {}
+		try {
+			res3 = await req3.json();
+		} catch {}
+		return {
+			suggestion: res2?.data || [],
+			autocomplete: res3?.data || [],
+		};
+	} catch (e) {
+		console.error(e);
 		return null;
 	}
 };

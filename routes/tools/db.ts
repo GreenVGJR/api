@@ -49,7 +49,7 @@ app.get("/db/set", async (c) => {
 
 	return await dispatch(c, async () => {
 		if (!hash) {
-			const ip = c.req.header("cf-connecting-ip")?.split(",")[0] || "127.0.0.1";
+			const ip = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "127.0.0.1";
 			const limitKey = `${ip}`;
 			const now = Date.now();
 			let limitInfo = setRateLimit.get(limitKey);

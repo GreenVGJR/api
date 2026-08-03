@@ -164,7 +164,7 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 				checkReferer = refUrl.host === reqUrl.host && referer.endsWith("/playground");
 			}
 		} catch {}
-		const ipLL = ipToNumber(c.req.header("cf-connecting-ip") || "127.0.0.1");
+		const ipLL = ipToNumber(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "127.0.0.1");
 		const rrmc = c.req.header("x-challenge-codes") || "";
 		const challengeHash = c.req.header("x-challenge") || "";
 		const checkValidChallenges = !verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL));

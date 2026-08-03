@@ -31,7 +31,7 @@ export function decryptChallengeValue(encrypted: string): string | null {
 export function getBackChallengeValue(c: Context): string {
 	const ipHash = crypto
 		.createHash("md5")
-		.update(c.req.header("cf-connecting-ip") || "")
+		.update(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "")
 		.digest("hex");
 	return encryptChallengeValue(`${ipHash}:${Date.now()}`);
 }
@@ -89,7 +89,7 @@ export function cookieChallengeIsValid(c: Context, cookieValue: any) {
 	if (!cookieTs || Number.isNaN(cookieTs)) return false;
 	const ipHash = crypto
 		.createHash("md5")
-		.update(c.req.header("cf-connecting-ip") || "")
+		.update(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "")
 		.digest("hex");
 	return cookieHash === ipHash && Date.now() - cookieTs < BACK_CHALLENGE_MAX_AGE_MS;
 }

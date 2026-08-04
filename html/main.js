@@ -1757,7 +1757,7 @@ function showTurnstileChallenge() {
             method: "POST",
             mode: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ token, 'x_ua': navigator.userAgent }),
           });
           if (res.ok) {
             window.location.reload();
@@ -1807,31 +1807,6 @@ function showTurnstileChallenge() {
 
 async function refreshEndpointsFromJson() {
   try {
-    const richPayload = window.API_ROUTES ? { routes: window.API_ROUTES } : null;    if (richPayload) {
-      const freshEndpoints = normalizeEndpointPayload(richPayload);
-      if (freshEndpoints) {
-        const previousPath = currentEndpoint?.path;
-        endpoints = freshEndpoints;
-        const categoryList = endpoints[currentCategory] || [];
-        currentEndpoint =
-          (previousPath && categoryList.find((ep) => ep.path === previousPath)) ||
-          categoryList[0] ||
-          null;
-
-        if (currentEndpoint) {
-          urlInput.value = buildEndpointUrl(currentEndpoint);
-          adjustHeight();
-        }
-
-        renderEndpoints();
-        renderParams();
-        if (currentEndpoint) {
-          syncUrlToParams();
-          syncParamsToUrl();
-        }
-      }
-    }
-
     setStatusDotColor("blue-400", false);
     statusText.textContent = "Connecting";
     statusText.className = "text-gray-400";
@@ -1839,7 +1814,7 @@ async function refreshEndpointsFromJson() {
 
     let statsRes = null;
     try {
-      statsRes = await fetch("/?json", { mode: "same-origin", referrerPolicy: "same-origin", headers: { Accept: "application/json" } });
+      statsRes = await fetch("/?json", { cache: "no-cache", mode: "same-origin", referrerPolicy: "same-origin", headers: { Accept: "application/json" } });
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;
@@ -1850,6 +1825,29 @@ async function refreshEndpointsFromJson() {
         prt = statsPayload[1]._build[1];
         lfprt = statsPayload[1]._build[0];
         setUptimeFromJsonPayload(statsPayload);
+
+        const freshEndpoints = normalizeEndpointPayload(statsPayload);
+        if (freshEndpoints) {
+          const previousPath = currentEndpoint?.path;
+          endpoints = freshEndpoints;
+          const categoryList = endpoints[currentCategory] || [];
+          currentEndpoint =
+            (previousPath && categoryList.find((ep) => ep.path === previousPath)) ||
+            categoryList[0] ||
+            null;
+
+          if (currentEndpoint) {
+            urlInput.value = buildEndpointUrl(currentEndpoint);
+            adjustHeight();
+          }
+
+          renderEndpoints();
+          renderParams();
+          if (currentEndpoint) {
+            syncUrlToParams();
+            syncParamsToUrl();
+          }
+        }
       }
     } catch {}
 

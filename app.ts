@@ -317,12 +317,14 @@ app.use("*", async (c: Context, next: Next) => {
 		}
 	}
 
+	/*
 	if (getCookie(c, "cf_clearance")) {
 		const expiry = "Thu, 01 Jan 1970 00:00:00 GMT";
 		const domain = isLocalRequest(c.req.header("host")) ? "" : "Domain=.vgjr.top; ";
 		c.header("Set-Cookie", `cf_clearance=; Max-Age=0; Expires=${expiry}; ${domain}Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
 		c.header("Set-Cookie", `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
 	}
+	*/
 
 	const currentUrl = new URL(c.req.url);
 	const currentHost = currentUrl.host;
@@ -594,8 +596,7 @@ app.use("*", async (c: Context, next: Next) => {
 	const url = new URL(c.req.url);
 	const pathname = url.pathname;
 	const isJsonHome = pathname === "/" && (url.searchParams.has("json") || (c.req.header("accept") || "").includes("application/json"));
-	const isLoadRich = pathname === "/playground/loadRich.js";
-	if (!isJsonHome && !isLoadRich) {
+	if (!isJsonHome) {
 		await next();
 		return;
 	}
@@ -623,9 +624,11 @@ app.post("/playground/turnstile/verify", async (c: Context) => {
 	const token = typeof body?.token === "string" ? body.token : "";
 	if (!token) return c.json({ error: "Missing token" }, 400);
 
+	const reqUserAgent = typeof body?.x_ua === "string" ? body.x_ua : "";
 	const remoteIp = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "";
 	const success = await verifyTurnstileToken(token, remoteIp || undefined, keys);
-	if (!success) return c.json({ error: "Verification failed" }, 403);
+	const matchUserAgent = c.req.header("User-Agent") === reqUserAgent;
+	if (!success || !matchUserAgent) return c.json({ error: "Verification failed" }, 403);
 
 	setTurnstileCookie(c);
 	return c.json({ success: true });
@@ -696,7 +699,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	c.header("Content-Type", "text/html");
 	c.header("Content-Encoding", "gzip");
 	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
-		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/loadRich.js>; as=script; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
+		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
 
 		return stream(c, async (s) => {
 			await s.write("");
@@ -827,21 +830,16 @@ app.get("/", (c: Context) =>
 					last_restart: String((globalThis as any).__vgjr_last_reload || 0),
 				},
 			},
-			{
-				_visitor: clientHeaders,
-				_build: [autoGenBuildPara, autoGenBuild],
-			},
-		];
+		{
+			_visitor: clientHeaders,
+			_build: [autoGenBuildPara, autoGenBuild],
+		},
+		{ routes: API_ROUTES },
+	];
 
 		await l.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
 	}),
 );
-
-app.get("/playground/loadRich.js", (c: Context) => {
-	c.header("Content-Type", "application/javascript");
-	c.header("Cache-Control", "public, no-store, max-age=1, must-revalidate");
-	return c.body(`window.API_ROUTES = ${JSON.stringify(API_ROUTES)};`);
-});
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : "";
 const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "/music", "/suggest"];

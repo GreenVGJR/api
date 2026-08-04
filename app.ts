@@ -830,12 +830,12 @@ app.get("/", (c: Context) =>
 					last_restart: String((globalThis as any).__vgjr_last_reload || 0),
 				},
 			},
-		{
-			_visitor: clientHeaders,
-			_build: [autoGenBuildPara, autoGenBuild],
-		},
-		{ routes: API_ROUTES },
-	];
+			{
+				_visitor: clientHeaders,
+				_build: [autoGenBuildPara, autoGenBuild],
+			},
+			{ routes: API_ROUTES },
+		];
 
 		await l.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
 	}),

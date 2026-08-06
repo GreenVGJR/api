@@ -5,7 +5,7 @@
 	"restrictLocal": false,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
-	"endpointChallenge": true,
+	"endpointChallenge": false,
 	"turnstile": {
 		"enabled": true,
 		"siteKey": "0x4AAAAAAEE1E-kNdZdp_W7x",

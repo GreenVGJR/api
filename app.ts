@@ -31,7 +31,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/vectorstock?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=", "string", "enum:all,image,video,gif"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -217,7 +217,6 @@ const API_ROUTES = {
 
 const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain, turnstile: turnstileConfig } = config;
 
-const turnstileEnabled = !!turnstileConfig?.enabled;
 const turnstileLocalKeys = {
 	siteKey: turnstileConfig.localSiteKeyForTest,
 	secretKey: turnstileConfig.localSecKeyForTest,
@@ -230,70 +229,6 @@ function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKe
 		siteKey: turnstileConfig?.siteKey || "",
 		secretKey: process.env.TURNSTILE_SECRET_KEY || "",
 	};
-}
-
-const TURNSTILE_COOKIE = "_fnmtlrl";
-const TURNSTILE_MAX_AGE_MS = 10 * 60 * 1000;
-const TURNSTILE_SIGNING_KEY = process.env.MD_KEY ? crypto.createHash("sha256").update(process.env.MD_KEY).digest() : crypto.createHash("sha256").update("vgjr-turnstile-static-fallback-key").digest();
-const TURNSTILE_SESSION_PAYLOAD = crypto.createHmac("sha256", TURNSTILE_SIGNING_KEY).update("session-valid").digest("base64url").slice(0, 16);
-
-function signTurnstileValue(value: string): string {
-	return crypto.createHmac("sha256", TURNSTILE_SIGNING_KEY).update(value).digest("base64url");
-}
-
-function getClientFingerprint(c: Context): string {
-	const ua = c.req.header("user-agent") || "";
-	const ip = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
-	return crypto
-		.createHash("sha256")
-		.update(ua + "|" + ip)
-		.digest("base64url")
-		.slice(0, 16);
-}
-
-function turnstileCookieIsValid(c: Context): boolean {
-	const cookieValue = getCookie(c, TURNSTILE_COOKIE);
-	if (!cookieValue || typeof cookieValue !== "string") return false;
-	const parts = cookieValue.split(".");
-	if (parts.length !== 4) return false;
-	const [payload, fingerprint, expStr, sig] = parts;
-	if (!payload || !fingerprint || !expStr || !sig) return false;
-	if (payload !== TURNSTILE_SESSION_PAYLOAD) return false;
-	if (fingerprint !== getClientFingerprint(c)) return false;
-	if (signTurnstileValue(`${payload}.${fingerprint}.${expStr}`) !== sig) return false;
-	const exp = Number(expStr);
-	if (!exp || Number.isNaN(exp) || Date.now() > exp) return false;
-	return true;
-}
-
-function setTurnstileCookie(c: Context) {
-	const fingerprint = getClientFingerprint(c);
-	const exp = Date.now() + TURNSTILE_MAX_AGE_MS;
-	const signedPayload = `${TURNSTILE_SESSION_PAYLOAD}.${fingerprint}.${exp}`;
-	const signed = signTurnstileValue(signedPayload);
-	const isSecure = new URL(c.req.url).protocol === "https:";
-	c.header("Set-Cookie", `${TURNSTILE_COOKIE}=${signedPayload}.${signed}; Max-Age=${Math.floor(TURNSTILE_MAX_AGE_MS / 1000)}; Path=/; ${isSecure ? "Secure; " : ""}HttpOnly; SameSite=Lax`, { append: true });
-}
-
-const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-
-async function verifyTurnstileToken(token: string, remoteIp: string | undefined, keys: { siteKey: string; secretKey: string }): Promise<boolean> {
-	try {
-		const res = await fetch(TURNSTILE_VERIFY_URL, {
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body: new URLSearchParams({
-				secret: keys.secretKey,
-				response: token,
-				...(remoteIp ? { remoteip: remoteIp } : {}),
-			}),
-		});
-		if (!res.ok) return false;
-		const data = (await res.json()) as { success?: boolean };
-		return data.success === true;
-	} catch {
-		return false;
-	}
 }
 
 const app = new Hono({ strict: false });
@@ -581,59 +516,6 @@ app.use("*", async (c: Context, next: Next) => {
 	return c.body(new Uint8Array(htmlBuffer));
 });
 
-app.use("*", async (c: Context, next: Next) => {
-	if (!turnstileEnabled) {
-		await next();
-		return;
-	}
-
-	const keys = getTurnstileKeys(c.req.header("host"));
-	if (!keys.siteKey || !keys.secretKey) {
-		await next();
-		return;
-	}
-
-	const url = new URL(c.req.url);
-	const pathname = url.pathname;
-	const isJsonHome = pathname === "/" && (url.searchParams.has("json") || (c.req.header("accept") || "").includes("application/json"));
-	if (!isJsonHome) {
-		await next();
-		return;
-	}
-
-	if (turnstileCookieIsValid(c)) {
-		await next();
-		return;
-	}
-
-	c.header("Cache-Control", "public, no-store, max-age=0");
-	return c.body(null, 403);
-});
-
-app.post("/playground/turnstile/verify", async (c: Context) => {
-	if (!turnstileEnabled) return c.json({ error: "Turnstile not enabled" }, 400);
-
-	const keys = getTurnstileKeys(c.req.header("host"));
-	if (!keys.siteKey || !keys.secretKey) return c.json({ error: "Turnstile not configured" }, 400);
-
-	let body: any = {};
-	try {
-		body = await c.req.json();
-	} catch {}
-
-	const token = typeof body?.token === "string" ? body.token : "";
-	if (!token) return c.json({ error: "Missing token" }, 400);
-
-	const reqUserAgent = typeof body?.x_ua === "string" ? body.x_ua : "";
-	const remoteIp = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "";
-	const success = await verifyTurnstileToken(token, remoteIp || undefined, keys);
-	const matchUserAgent = c.req.header("User-Agent") === reqUserAgent;
-	if (!success || !matchUserAgent) return c.json({ error: "Verification failed" }, 403);
-
-	setTurnstileCookie(c);
-	return c.json({ success: true });
-});
-
 app.get("/favicon.ico", (c: Context) => {
 	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 	c.header("Content-Type", "image/x-icon");
@@ -646,13 +528,12 @@ app.get("/robots.txt", (c: Context) => {
 });
 
 app.get("/logs", async (c: Context) => {
-	if (c.req.header("cache-control") !== "max-age=0" && c.req.header("sec-fetch-site") !== "same-origin" && c.req.header("referer") !== c.req.url) {
-		c.header("Cache-Control", "public, max-age=0");
-		return c.body(null, 412);
-	}
-	c.header("Refresh", "2");
 	c.header("Cache-Control", "public, max-age=0, must-revalidate");
 	c.header("Content-Type", "text/plain");
+	if (c.req.header("cache-control") !== "max-age=0" && c.req.header("sec-fetch-site") !== "same-origin" && c.req.header("referer") !== c.req.url) {
+		return c.body("Precondition failed. Navigate this from playground page.", 412);
+	}
+	c.header("Refresh", "5");
 
 	return stream(c, async (s) => {
 		await s.write(""); // Initial flush
@@ -673,7 +554,7 @@ app.get("/logs", async (c: Context) => {
 		await s.write(
 			JSON.stringify(
 				{
-					_message: "Refreshing every 2 seconds.",
+					_message: "Refreshing every 5 seconds.",
 					limit: 30,
 					timezone: resolvedTimezone,
 					requested,

@@ -1752,31 +1752,11 @@ function showTurnstileChallenge() {
       sitekey: window.TURNSTILE_SITE_KEY,
       theme: "dark",
       callback: async (token) => {
-        try {
-          const res = await fetch("/playground/turnstile/verify", {
-            method: "POST",
-            mode: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token, 'x_ua': navigator.userAgent }),
-          });
-          if (res.ok) {
-            window.location.reload();
-          } else {
-            const errEl = document.getElementById("turnstileError");
-            if (errEl) {
-              errEl.textContent = "Verification failed. Please try again.";
-              errEl.classList.remove("hidden");
-            }
-            if (window.turnstile && el) window.turnstile.reset(el);
-          }
-        } catch {
-          const errEl = document.getElementById("turnstileError");
-          if (errEl) {
-            errEl.textContent = "Network error. Please try again.";
-            errEl.classList.remove("hidden");
-          }
-          if (window.turnstile && el) window.turnstile.reset(el);
-        }
+        turnstileRendered = false;
+        responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
+        sendBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        sendBtn.classList.add("opacity-70");
+        await refreshEndpointsFromJson();
       },
       "expired-callback": () => {
         const el = document.getElementById("turnstileWidget");

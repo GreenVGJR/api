@@ -4,6 +4,8 @@ const app = new Hono();
 import { pinterest } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
+const ALLOWED_TYPES = ["image", "video", "gif", "all"];
+
 app.get("/pinterest", async (c) => {
 	const query = c.req.query("q");
 	if (query === undefined) {
@@ -11,8 +13,14 @@ app.get("/pinterest", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
+
+	const rawType = c.req.query("type");
+	if (rawType !== undefined && (typeof rawType !== "string" || !ALLOWED_TYPES.includes(rawType))) {
+		return c.json({ error: `Invalid type. Available: ${ALLOWED_TYPES.join(", ")}` }, 202);
+	}
+	const type = rawType || "all";
 	c.header("X-Route", "www.pinterest.com");
-	return await dispatch(c, () => pinterest(query));
+	return await dispatch(c, () => pinterest(query, type));
 });
 
 export default app;

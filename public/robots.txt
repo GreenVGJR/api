@@ -1,10 +1,9 @@
-# Places for crawler and external link.
-# Misusing it as bypass alternative will result temporary blacklist.
-
 User-agent: *
 Allow: /playground
 Allow: /terms
 Allow: /privacy
+Allow: /amc/terms
+Allow: /amc/privacy
 Disallow: /
 
 User-agent: Discordbot

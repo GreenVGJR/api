@@ -469,7 +469,7 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 		const connected = await waitForSpecificNodeConnection(manager, nodeConfig.id, timeoutMs, connectNodes);
 		if (connected) {
 			// Stability check: wait briefly to see if the node stays connected
-			await new Promise((r) => setTimeout(r, 500));
+			await new Promise((r) => setTimeout(r, 50));
 			const stableNode = manager.nodeManager.nodes.get(nodeConfig.id);
 			if (stableNode?.connected) {
 				if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);

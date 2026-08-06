@@ -127,14 +127,14 @@ function isSoundCloudTrack(track: any): boolean {
 async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
 	try {
 		if (url.includes("youtube.com") || url.includes("youtu.be")) {
-			const info: any = await infoYoutube(url, false);
+			const info: any = await infoYoutube(url);
 			if (info?.data?.title) {
 				return {
 					url,
 					title: info.data.title,
 					author: info.data.owners?.name,
 					thumbnail: info.data.thumbnail,
-					sourceName: "youtubemusic",
+					sourceName: "youtube",
 				};
 			}
 		}
@@ -506,7 +506,7 @@ app.get("/play", async (c) => {
 					for (const id of preferredNodeIds) {
 						const node = await ensureNodeConnected(manager, id, log);
 						if (node) {
-							await new Promise((r) => setTimeout(r, 500)); // Stability check
+							await new Promise((r) => setTimeout(r, 50)); // Stability check
 							if (node.connected) {
 								chosenNodeId = id;
 								break;

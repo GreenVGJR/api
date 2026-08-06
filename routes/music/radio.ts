@@ -174,7 +174,7 @@ app.get("/radio", async (c) => {
 			for (const id of preferredNodeIds) {
 				const node = await ensureNodeConnected(manager, id, log);
 				if (node) {
-					await new Promise((r) => setTimeout(r, 500)); // Stability check
+					await new Promise((r) => setTimeout(r, 50)); // Stability check
 					if (node.connected) {
 						chosenNodeId = id;
 						break;

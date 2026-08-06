@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { Buffer } from "buffer";
-import { commonHeaders, userAgent, userAgent_mobile } from "./request.js";
+import { commonHeaders, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from "linkedom";
 
@@ -125,145 +125,65 @@ export const soundcloudKey = async function soundcloudKey() {
 	}
 };
 
-function decodeSpotifySecret(encoded: string): Buffer {
-	const t = 33;
-	const n = 9;
+export const spotifyKey = async function spotifyKey(): Promise<string | undefined> {
+	const decodeSecret = (bytes: number[], offset = 33, addend = 9): Buffer => Buffer.from(Array.from(bytes, (value, i) => value ^ ((i % offset) + addend)).join(""), "utf8");
 
-	const byteValues = encoded.split("").map((char, index) => {
-		return char.charCodeAt(0) ^ ((index % t) + n);
+	const getSpotifySecret = (): { key: Buffer; version: string } => ({
+		key: decodeSecret(Array.from(',7/*F("rLJ2oxaKL^f+E1xvP@N', (c) => c.charCodeAt(0))),
+		version: "61",
 	});
 
-	const joined = byteValues.join("");
-	const asciiBuffer = Buffer.from(joined, "utf8");
-	const hexString = asciiBuffer.toString("hex");
+	const getTotp = (key: Buffer): string => {
+		const st = Math.floor(Date.now() / 1000);
+		const counter = Math.floor(st / 30);
+		const cb = Buffer.alloc(8);
+		cb.writeBigUInt64BE(BigInt(counter));
+		const h = crypto.createHmac("sha1", key).update(cb).digest();
+		const bin = h.readUInt32BE((h[h.length - 1] ?? 0) & 0xf) & 0x7fffffff;
+		return String(bin % 1000000).padStart(6, "0");
+	};
 
-	return Buffer.from(hexString, "hex");
-}
+	const requestToken = async (key: Buffer, version: string): Promise<string | undefined> => {
+		const totp = getTotp(key);
+		const url = new URL("https://open.spotify.com/api/token");
+		url.searchParams.append("reason", "init");
+		url.searchParams.append("productType", "mobile-web-player");
+		url.searchParams.append("totp", totp);
+		url.searchParams.append("totpServer", totp);
+		url.searchParams.append("totpVer", version);
 
-function generateSpotifyTOTP(secretHex: string, timestampMs: number, step = 30): string {
-	const counter = Math.floor(timestampMs / 1000 / step);
-	const buf = Buffer.alloc(8);
-	buf.writeBigInt64BE(BigInt(counter));
-
-	const hmac = crypto.createHmac("sha1", Buffer.from(secretHex, "hex"));
-	hmac.update(buf);
-	const digest = hmac.digest();
-
-	const offset = (digest[digest.length - 1] ?? 0) & 0xf;
-	const code = ((((digest[offset] ?? 0) & 0x7f) << 24) | (((digest[offset + 1] ?? 0) & 0xff) << 16) | (((digest[offset + 2] ?? 0) & 0xff) << 8) | ((digest[offset + 3] ?? 0) & 0xff)) % 1000000;
-
-	return code.toString().padStart(6, "0");
-}
-
-let currentTotpSecret: string | null = null;
-let currentTotpVersion: string | null = null;
-let lastSecretFetchTime = 0;
-const SECRET_FETCH_INTERVAL = 60 * 60 * 1000;
-
-async function ensureTotpSecrets(): Promise<void> {
-	const now = Date.now();
-	if (currentTotpSecret && now - lastSecretFetchTime < SECRET_FETCH_INTERVAL) return;
+		const res = await fetch(url.toString(), {
+			method: "GET",
+			headers: {
+				...commonHeaders,
+				...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
+				Origin: "https://open.spotify.com/",
+				Referer: "https://open.spotify.com/",
+				Accept: "application/json",
+			},
+		});
+		if (res.status !== 200) return undefined;
+		const data: any = await res.json();
+		return data.accessToken as string;
+	};
 
 	try {
-		const res = await fetch("https://raw.githubusercontent.com/xyloflake/spot-secrets-go/refs/heads/main/secrets/secretDict.json", {
-			headers: { Accept: "application/json" },
-		});
-
-		if (res.status !== 200) throw new Error("Failed to fetch secrets");
-
-		const secrets: any = await res.json();
-		const versions = Object.keys(secrets).map(Number);
-		const newestVersion = Math.max(...versions).toString();
-		const secretData = secrets[newestVersion];
-
-		if (!secretData) throw new Error("Missing newest secret entry");
-
-		const mappedData = secretData.map((value: number, index: number) => value ^ ((index % 33) + 9));
-
-		currentTotpSecret = Buffer.from(mappedData.join(""), "utf8").toString("hex");
-		currentTotpVersion = newestVersion;
-		lastSecretFetchTime = now;
-	} catch {
-		if (!currentTotpSecret) {
-			const fallbackData = [99, 111, 47, 88, 49, 56, 118, 65, 52, 67, 50, 104, 117, 101, 55, 94, 95, 75, 94, 49, 69, 36, 85, 64, 74, 60];
-			const mapped = fallbackData.map((value, index) => value ^ ((index % 33) + 9));
-			currentTotpSecret = Buffer.from(mapped.join(""), "utf8").toString("hex");
-			currentTotpVersion = "19";
-		}
-	}
-}
-
-async function performSpotifyTokenRequest(secretHex: string, version: string) {
-	let serverTimeMs = Date.now();
-	try {
-		const timeRes = await fetch("https://open.spotify.com/api/server-time", {
-			headers: { "User-Agent": userAgent },
-		});
-		if (timeRes.status === 200) {
-			const timeData: any = await timeRes.json();
-			serverTimeMs = timeData.serverTime || Date.now();
-		}
+		const { key, version } = getSpotifySecret();
+		const token = await requestToken(key, version);
+		if (token) return token;
 	} catch {}
 
-	const localTimeMs = Date.now();
-	const totpLocal = generateSpotifyTOTP(secretHex, localTimeMs, 30);
-	const totpServer = generateSpotifyTOTP(secretHex, serverTimeMs, 900);
-
-	const url = new URL("https://open.spotify.com/api/token");
-	url.searchParams.append("reason", "init");
-	url.searchParams.append("productType", "mobile-web-player");
-	url.searchParams.append("totp", totpLocal);
-	url.searchParams.append("totpServer", totpServer);
-	url.searchParams.append("totpVer", version);
-
-	const res = await fetch(url.toString(), {
-		method: "GET",
-		headers: {
-			...commonHeaders,
-			...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
-			"User-Agent": userAgent,
-			Origin: "https://open.spotify.com/",
-			Referer: "https://open.spotify.com/",
-			Accept: "application/json",
-		},
-	});
-
-	if (res.status !== 200) throw new Error(`Spotify Auth Error: ${res.status}`);
-
-	const data: any = await res.json();
-	const token = data.accessToken;
-	if (!token) throw new Error("Missing token");
-
-	return data.accessToken;
-}
-
-export const spotifyKey = async function spotifyKey() {
 	try {
-		const primarySecret = { secret: ',7/*F("rLJ2oxaKL^f+E1xvP@N', version: 61 };
-		const secretHex = decodeSpotifySecret(primarySecret.secret).toString("hex");
-		const version = String(primarySecret.version);
-
-		return await performSpotifyTokenRequest(secretHex, version);
+		const res = await fetch(`https://embed.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT`, {
+			headers: {
+				...commonHeaders,
+				...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
+			},
+		});
+		const text = await res.text();
+		return text.match(/"accessToken":"([^"]+)"/)?.[1];
 	} catch {
-		try {
-			await ensureTotpSecrets();
-			if (currentTotpSecret && currentTotpVersion) {
-				return await performSpotifyTokenRequest(currentTotpSecret, currentTotpVersion);
-			}
-		} catch {}
-
-		try {
-			const res = await fetch(`https://open.spotify.com/embed/track/${["4PTG3Z6ehGkBFwjybzWkR8", "2yR2sziCF4WEs3klW1F38d", "0IuVhCflrQPMGRrOyoY5RW", "2yWlGEgEfPot0lv3OAjuG3", "4Xfp9BcKrKYmxJPxn68Yb8", "7uuJqaRjSXzja6VGgDpWem", " BP1klbHxsOf6IxscNIX0r", "6BYzwbWg1Z2EB6VUXTYnhm"][Math.floor(Math.random() * 8)]}`, {
-				headers: {
-					...commonHeaders,
-					...(process.env.SPOTIFY_COOKIES ? { cookie: process.env.SPOTIFY_COOKIES } : {}),
-				},
-			});
-			const text = await res.text();
-			return text.split('"accessToken":"')[1].split('"')[0];
-		} catch {
-			return undefined;
-		}
+		return undefined;
 	}
 };
 
@@ -469,9 +389,9 @@ export const instagramSession = async function instagramSession(): Promise<{
 		});
 		const text = await res.text();
 		const cookie = res.headers.getSetCookie ? normalizeCookies(res.headers.getSetCookie()) : normalizeCookies(res.headers.get("set-cookie"));
-		const csrf = cookie.split("csrftoken=")?.[1]?.split(";")?.[0] || text.split('"csrf_token":"')?.[1]?.split('"')?.[0] || null;
-		const lsd = text.split('["LSD",[],{"token":"')?.[1]?.split('"')?.[0] || text.split('"LSD"')?.[1]?.split('"token":"')?.[1]?.split('"')?.[0] || null;
-		const app_id = text.split('"APP_ID":"')?.[1]?.split('"')?.[0] || null;
+		const csrf = /csrftoken=([^;\s]+)/.exec(cookie)?.[1] || /"csrf_token":"([^"]+)"/.exec(text)?.[1] || null;
+		const lsd = /\["LSD",\[\],\{"token":"([^"]+)"/.exec(text)?.[1] || /"LSD"[\s\S]*?"token":"([^"]+)"/.exec(text)?.[1] || null;
+		const app_id = /"APP_ID":"([^"]+)"/.exec(text)?.[1] || null;
 		return { cookie, lsd, csrf, app_id };
 	} catch (e) {
 		console.error(e);
@@ -500,17 +420,10 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
 		const res1 = await pul1.text();
 
-		const queryId_user = res1
-			.split("e.exports={queryId:")
-			.find((e: any) => e.includes(`operationName:"${typeName}"`))
-			?.split('"')[1];
-		const features_user = JSON.parse(
-			res1
-				.split("e.exports={queryId:")
-				.find((e: any) => e.includes(`operationName:"${typeName}"`))
-				?.split("featureSwitches:")[1]
-				.split(",field")[0] || "{}",
-		).reduce((acc: any, key: any) => {
+		const opIndex = res1.indexOf(`operationName:"${typeName}"`);
+		const queryId_user = opIndex >= 0 ? /queryId:"([^"]+)"/.exec(res1.slice(Math.max(0, opIndex - 300), opIndex))?.[1] : undefined;
+		const featuresSegment = opIndex >= 0 ? res1.match(new RegExp(`operationName:"${typeName}"[\\s\\S]*?featureSwitches:(\\[[^\\]]*\\])`))?.[1] : undefined;
+		const features_user = JSON.parse(featuresSegment || "[]").reduce((acc: any, key: any) => {
 			acc[key] = true;
 			return acc;
 		}, {});
@@ -521,7 +434,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
 	}
 };
 
-export const refreshRedditAuth = async (force: boolean = false): Promise<any> => {
+export const refreshRedditAuth = async (): Promise<any> => {
 	try {
 		const fetchLogin = async (targetDomain: string) => {
 			return await fetch(`https://${targetDomain}/login/`, {
@@ -572,3 +485,80 @@ export async function tiktokSessions(): Promise<{
 		return null;
 	}
 }
+
+export const devianKey = async function devianKey(): Promise<{
+	cookie: string;
+	csrfToken: string;
+} | null> {
+	try {
+		const res = await fetch("https://www.deviantart.com/join", { headers: commonHeaders });
+		let cookie: string;
+
+		if (res.headers.getSetCookie) {
+			cookie = normalizeCookies(res.headers.getSetCookie());
+		} else {
+			cookie = normalizeCookies(res.headers.get("set-cookie"));
+		}
+
+		const secres = await res.text();
+
+		const initialMatch = secres.match(/window\.__INITIAL_STATE__\s*=\s*JSON\.parse\(\s*"((?:\\.|[^"\\])*)"\s*\)/);
+		if (!initialMatch?.[1]) return null;
+
+		// The captured group is the JS string literal content. Decode it the way the
+		// browser's JS engine would (tolerant of non-JSON escapes), then JSON.parse.
+		const unescapeJsString = (lit: string): string => {
+			let out = "";
+			for (let i = 0; i < lit.length; i++) {
+				const c = lit[i];
+				if (c !== "\\") {
+					out += c;
+					continue;
+				}
+				const n = lit[i + 1];
+				i++;
+				switch (n) {
+					case '"':
+						out += '"';
+						break;
+					case "\\":
+						out += "\\";
+						break;
+					case "/":
+						out += "/";
+						break;
+					case "b":
+						out += "\b";
+						break;
+					case "f":
+						out += "\f";
+						break;
+					case "n":
+						out += "\n";
+						break;
+					case "r":
+						out += "\r";
+						break;
+					case "t":
+						out += "\t";
+						break;
+					case "u":
+						out += String.fromCharCode(parseInt(lit.slice(i + 1, i + 5), 16));
+						i += 4;
+						break;
+					default:
+						out += n;
+						break; // JS tolerates unknown escapes
+				}
+			}
+			return out;
+		};
+
+		const parsed: any = JSON.parse(unescapeJsString(initialMatch[1]));
+		const csrfToken = parsed["@@publicSession"].csrfToken;
+		return { cookie, csrfToken };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};

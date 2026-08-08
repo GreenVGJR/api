@@ -3202,7 +3202,17 @@ export const infoSoundcloudStreams = async function infoSoundcloudStreams(url: s
 		if (!data) return [];
 
 		const transcodings: any[] = Array.isArray(data.media?.transcodings) ? data.media.transcodings : [];
-		const orderedTranscodings = [...transcodings.filter((t: any) => t?.format?.protocol === "hls"), ...transcodings.filter((t: any) => t?.format?.protocol === "progressive")];
+		const orderedTranscodings = [
+			...transcodings.filter((t: any) => {
+				const p = String(t?.format?.protocol || "").toLowerCase();
+				return p.includes("dash");
+			}),
+			...transcodings.filter((t: any) => String(t?.format?.protocol || "").toLowerCase() === "hls"),
+			...transcodings.filter((t: any) => {
+				const p = String(t?.format?.protocol || "").toLowerCase();
+				return !p.includes("dash") && p !== "hls";
+			}),
+		];
 
 		const candidates: SoundcloudStreamCandidate[] = [];
 		const seen = new Set<string>();
@@ -9101,6 +9111,187 @@ export const DiscordModifyRole = async (token: string, roleId: string, guildId: 
 	}
 };
 
+export const DiscordModifyChannel = async (token: string, channelId: string, payload: any, reasonAudit?: string) => {
+	if (!token || token === "null") return { error: "Missing token" };
+	if (!channelId) return { error: "Missing channelId" };
+
+	const headers: any = {
+		Authorization: `Bot ${token}`,
+		"Content-Type": "application/json",
+		"User-Agent": discordUserAgent,
+		...(reasonAudit && { "X-Audit-Log-Reason": reasonAudit }),
+	};
+
+	const url = `https://discord.com/api/v10/channels/${channelId}`;
+
+	try {
+		const getReq = await discordFetch(url, { headers });
+
+		let currentInfo: any = null;
+		try {
+			currentInfo = await getReq.json();
+		} catch {}
+
+		if (getReq.status !== 200) {
+			return {
+				data: [null, null],
+				error: currentInfo || {
+					status: getReq.status,
+					statusText: getReq.statusText,
+				},
+			};
+		}
+
+		if (Object.keys(payload).length === 0) {
+			return { data: [currentInfo, null] };
+		}
+
+		const allSame = Object.keys(payload).every((key) => {
+			const currentVal = currentInfo[key] ?? null;
+			const payloadVal = payload[key] ?? null;
+			return currentVal === payloadVal;
+		});
+
+		if (allSame) {
+			return { data: [false, null, 204] };
+		}
+
+		const response = await discordFetch(url, {
+			method: "PATCH",
+			headers,
+			body: JSON.stringify(payload),
+		});
+
+		let patchResponse: any = null;
+		try {
+			patchResponse = await response.json();
+		} catch {}
+
+		if (response.status < 200 || response.status >= 300) {
+			return {
+				data: [currentInfo, null],
+				error: patchResponse || { status: response.status },
+			};
+		}
+
+		return {
+			data: [currentInfo, patchResponse, response.status, ...(reasonAudit ? [reasonAudit] : [])],
+		};
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
+
+// Channel type buckets for lockAll/unlockAll
+const LOCK_TEXT_TYPES = new Set([0, 5, 15, 16]);
+const LOCK_VOICE_TYPES = new Set([2, 13]);
+export const DiscordLockAllChannels = async (token: string, guildId: string, lock: boolean, type: string = "all") => {
+	if (!token || token === "null") return { error: "Missing token" };
+	if (!guildId) return { error: "Missing guildId" };
+
+	const headers: any = {
+		Authorization: `Bot ${token}`,
+		"Content-Type": "application/json",
+		"User-Agent": discordUserAgent,
+	};
+
+	const isText = (t: number) => (type === "all" || type === "text") && LOCK_TEXT_TYPES.has(t);
+	const isVoice = (t: number) => (type === "all" || type === "voice") && LOCK_VOICE_TYPES.has(t);
+
+	try {
+		const listRes = await discordFetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, { headers });
+
+		let channels: any[] = [];
+		try {
+			channels = await listRes.json();
+		} catch {}
+
+		if (!Array.isArray(channels) || channels.length === 0) {
+			return {
+				data: null,
+				error: listRes.ok ? undefined : { status: listRes.status },
+			};
+		}
+
+		// Filter channels according to requested type
+		const filtered = channels.filter((c: any) => isText(c.type) || isVoice(c.type));
+
+		const results = await Promise.all(
+			filtered.map(async (channel: any) => {
+				const kind = isText(channel.type) ? "text" : isVoice(channel.type) ? "voice" : null;
+				if (!kind) {
+					return { id: channel.id, name: channel.name, type: channel.type, status: 204, noOp: true };
+				}
+
+				const denyBit = kind === "voice" ? DISCORD_PERMISSIONS["Connect"]! : DISCORD_PERMISSIONS["Send Messages"]!;
+
+				const overwrites = Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites : [];
+				const everyoneIdx = overwrites.findIndex((o: any) => o.id === guildId && o.type === 0);
+				const existing = everyoneIdx !== -1 ? overwrites[everyoneIdx] : null;
+
+				let nextOverwrites = overwrites.filter((o: any) => !(o.id === guildId && o.type === 0));
+
+				if (lock) {
+					const allow = existing && typeof existing.allow === "string" ? BigInt(existing.allow) : 0n;
+					const deny = (existing && typeof existing.deny === "string" ? BigInt(existing.deny) : 0n) | denyBit;
+					nextOverwrites.push({
+						id: guildId,
+						type: 0,
+						allow: allow.toString(),
+						deny: deny.toString(),
+					});
+				}
+
+				const isNoOp = (lock && existing && (BigInt(existing.deny ?? "0") & denyBit) !== 0n) || (!lock && everyoneIdx === -1);
+
+				if (isNoOp) {
+					return { id: channel.id, name: channel.name, type: channel.type, status: 204, noOp: true };
+				}
+
+				const response = await discordFetch(`https://discord.com/api/v10/channels/${channel.id}`, {
+					method: "PATCH",
+					headers,
+					body: JSON.stringify({ permission_overwrites: nextOverwrites }),
+				});
+
+				let patchResponse: any = null;
+				try {
+					patchResponse = await response.json();
+				} catch {}
+
+				if (response.status < 200 || response.status >= 300) {
+					return {
+						id: channel.id,
+						name: channel.name,
+						type: channel.type,
+						status: response.status,
+						error: patchResponse || { status: response.status, statusText: response.statusText },
+					};
+				}
+
+				return { id: channel.id, name: channel.name, type: channel.type, status: response.status };
+			}),
+		);
+
+		// Build summary arrays
+		const allIds = results.map((r) => r.id);
+		const successIds = results.filter((r) => r.status >= 200 && r.status < 300).map((r) => r.id);
+		const failedIds = results.filter((r) => !(r.status >= 200 && r.status < 300)).map((r) => r.id);
+
+		return {
+			total: allIds.length,
+			success: successIds.length,
+			failed: failedIds.length,
+			data: {
+				all: allIds,
+				success: successIds,
+				failed: failedIds,
+			},
+		};
+	} catch (e: any) {
+		return { error: e.message || "Something just happened" };
+	}
+};
 export const DiscordCreateRole = async (token: string, guildId: string, payload: any, reasonAudit?: string) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
@@ -10557,15 +10748,12 @@ type EmojiDatabase = {
 };
 
 const EMOJI_SOURCE_URL = "https://emojikitchen.dev/metadata.json";
-const EMOJI_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 let emojiDataCache: EmojiDatabase | null = null;
 let emojiLoadPromise: Promise<EmojiDatabase | null> | null = null;
-let emojiLastFetchTime = 0;
 
 async function loadEmojiData() {
-	const now = Date.now();
-	if (emojiDataCache && now - emojiLastFetchTime < EMOJI_CACHE_TTL) return emojiDataCache;
+	if (emojiDataCache) return emojiDataCache;
 	if (emojiLoadPromise) return emojiLoadPromise;
 
 	emojiLoadPromise = (async () => {
@@ -10573,7 +10761,6 @@ async function loadEmojiData() {
 			const res = await fetch(EMOJI_SOURCE_URL);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			emojiDataCache = (await res.json()) as EmojiDatabase;
-			emojiLastFetchTime = Date.now();
 			return emojiDataCache;
 		} catch (e) {
 			console.error("Failed to fetch emoji data:", e);
@@ -10586,6 +10773,8 @@ async function loadEmojiData() {
 	emojiLoadPromise = null;
 	return result;
 }
+
+export const warmupEmojiData = loadEmojiData;
 
 export const EmojiLookup = async function EmojiLookup(query: string, limit: number = 25) {
 	if (!query || query.trim().length === 0) return { error: "Missing parameter 'q'" };
@@ -11781,6 +11970,8 @@ async function ensureCountriesCache() {
 	return countriesCachePromise;
 }
 
+export const warmupCountriesCache = ensureCountriesCache;
+
 export const CountrySearch = async (query: string) => {
 	if (!query) return { error: "Missing query" };
 	await ensureCountriesCache();
@@ -12488,6 +12679,24 @@ export const DeviantArt = async (query: string, refresh_auth: boolean = false): 
 		}
 
 		return { estTotal: parsed.estTotal, data: parsed.deviations };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const TiktokInfoUser = async function TiktokInfoUser(query: string) {
+	if (!query) return null;
+	try {
+		const response = await fetch(`https://www.tiktok.com/@${query.toLowerCase()}`, { headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile } });
+		const html = await response.text();
+		const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
+		if (!scriptContent) return { error: "Akamai Captcha asking to verify you're not a bot" };
+		const json = JSON.parse(scriptContent);
+		const userDetail = json?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo?.user;
+		if (!userDetail) return { error: "User not found" };
+		const userStats = json?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo?.statsV2;
+		return { data: { ...userDetail, statistics: userStats } };
 	} catch (e) {
 		console.error(e);
 		return null;

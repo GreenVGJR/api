@@ -562,17 +562,9 @@ app.get("/play", async (c) => {
 					const targetNode = await ensureNodeConnected(manager, nodeId as string);
 					if (!targetNode || !targetNode.connected) continue;
 
-					if (gp.node?.id !== nodeId) {
-						try {
-							await gp.moveNode(nodeId as string);
-						} catch {
-							continue;
-						}
-					}
-
 					try {
 						await log(`Searching for "${q}" on Lavalink node "${nodeId}"...`);
-						const res = await gp.search(
+						const res = await targetNode.search(
 							{
 								query: normalizedQ,
 								source: (src === "url" ? undefined : src) as any,

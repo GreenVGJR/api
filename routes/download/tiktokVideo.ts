@@ -19,7 +19,7 @@ app.get("/tiktok/video", async (c) => {
 	}
 	const target = result.video_url;
 	c.header("X-Route", "savetik.io");
-	if (c.req.query("json") === "1" || !c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
+	if (c.req.query("json") === "true" || !c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
 		recordRequestLog(c, 200);
 		return c.json({ url: target, type: "video" });
 	}

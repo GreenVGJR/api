@@ -39,6 +39,7 @@ const API_ROUTES = {
 		["/profile/rage?q=", "string"],
 		["/profile/snapchat?q=", "string"],
 		["/profile/twitter?q=", "string"],
+		["/profile/tiktok?q=", "string"],
 		["/profile/instagram?q=", "string"],
 		["/profile/threads?q=", "string"],
 		["/profile/saweria?q=", "string"],
@@ -108,6 +109,9 @@ const API_ROUTES = {
 		channel: [
 			["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum_multi:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],
 			["/tools/discord/infoChannel?token=&channelId=&guildId=", "string", "number", "number"],
+			["/tools/discord/modifyChannel?token=&channelId=&reason=&name=&type=&position=&topic=&nsfw=&rateLimitPerUser=&bitrate=&userLimit=&parentId=&rtcRegion=&videoQualityMode=&defaultAutoArchiveDuration=&defaultThreadRateLimitPerUser=&defaultSortOrder=&defaultForumLayout=&description=&flags=&spoiler=&icon=&permissionOverwrites=&defaultReactionEmoji=&availableTags=", "string", "number", "string", "string", "enum:text,announcement", "number", "string", "boolean", "number", "number", "number", "string", "string", "number", "number", "number", "number", "number", "string", "number", "boolean", "url", "json", "json", "json"],
+			["/tools/discord/channel/lockAll?token=&guildId=&type=", "string", "number", "enum:all,text,voice"],
+			["/tools/discord/channel/unlockAll?token=&guildId=&type=", "string", "number", "enum:all,text,voice"],
 		],
 		role: [
 			["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:all,oldest,newest", "string"],
@@ -181,10 +185,7 @@ const API_ROUTES = {
 		["/info/klipy?url=", "url"],
 		["/info/pinterest?url=", "url"],
 	],
-	download: [
-		["/download/tiktok/video?url=", "url"],
-		["/download/pinterest?url=", "url"],
-	],
+	download: [["/download/tiktok/video?url=&json=", "url", "boolean"]],
 	music: [
 		["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
 		["/music/disconnect?token=&guildId=", "string", "number"],
@@ -313,7 +314,7 @@ const amcTemplate = amcTemplateSource
 	.replace(/>\s+</g, "><")
 	.trim();
 
-const playgroundTemplate = playgroundTemplateSource
+const playgroundTemplateBase = playgroundTemplateSource
 	.replace(/<!--[\s\S]*?-->/g, "")
 	.replace(/\s+/g, " ")
 	.replace(/>\s+</g, "><")
@@ -528,7 +529,7 @@ app.get("/robots.txt", (c: Context) => {
 });
 
 app.get("/logs", async (c: Context) => {
-	c.header("Cache-Control", "public, max-age=0, must-revalidate");
+	c.header("Cache-Control", "public, max-age=0, no-transform, must-revalidate");
 	c.header("Content-Type", "text/plain");
 	if (c.req.header("cache-control") !== "max-age=0" && c.req.header("sec-fetch-site") !== "same-origin" && c.req.header("referer") !== c.req.url) {
 		return c.body("Precondition failed. Navigate this from playground page.", 412);
@@ -580,11 +581,18 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	c.header("Content-Type", "text/html");
 	c.header("Content-Encoding", "gzip");
 	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
-		c.header("Link", "</playground/main.css>; as=style; rel=preload, </playground/main.js>; as=script; rel=preload, </playground/cf.js>; as=script; rel=preload");
+		const host = (c.req.header("host") || "").toLowerCase();
+		const isLocal = isLocalRequest(host);
+		const apiBaseUrl = isLocal ? `http://${host}` : `https://${targetDomain}`;
+		const tsKeys = getTurnstileKeys(host);
+		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)};`;
+		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
+
+		const rendered = playgroundTemplateBase.replace("{{INLINE_CSS}}", mainCss).replace("{{INLINE_CF}}", cfJs).replace("{{INLINE_JS}}", finalJs);
 
 		return stream(c, async (s) => {
 			await s.write("");
-			await s.write(zlib.gzipSync(playgroundTemplate));
+			await s.write(zlib.gzipSync(rendered));
 		});
 	}
 
@@ -612,57 +620,11 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	});
 });
 
-const servePlaygroundMainJs = (c: Context) =>
-	stream(c, async (s) => {
-		setPlaygroundAssetCache(c);
-		c.header("Content-Type", "application/javascript");
+app.get("/", (c: Context) => {
+	if (c.req.query("json") !== undefined) {
+		c.header("Content-Type", "application/json");
+		c.header("Cache-Control", "public, max-age=10, no-transform");
 		c.header("Content-Encoding", "gzip");
-
-		const host = (c.req.header("host") || "").toLowerCase();
-		const isLocal = isLocalRequest(host);
-		const apiBaseUrl = isLocal ? `http://${host}` : `https://${targetDomain}`;
-		const tsKeys = getTurnstileKeys(host);
-		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)};`;
-		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
-
-		await s.write(zlib.gzipSync(finalJs));
-	});
-
-app.get("/playground/main.js", servePlaygroundMainJs);
-
-const servePlaygroundCfJs = (c: Context) =>
-	stream(c, async (s) => {
-		setPlaygroundAssetCache(c);
-		c.header("Content-Type", "application/javascript");
-		c.header("Content-Encoding", "gzip");
-		await s.write(zlib.gzipSync(cfJs));
-	});
-
-app.get("/playground/cf.js", servePlaygroundCfJs);
-
-const servePlaygroundMainCss = (c: Context) =>
-	stream(c, async (s) => {
-		setPlaygroundAssetCache(c);
-		c.header("Content-Type", "text/css");
-		c.header("Content-Encoding", "gzip");
-		await s.write(zlib.gzipSync(mainCss));
-	});
-
-app.get("/playground/main.css", servePlaygroundMainCss);
-
-app.get("/", (c: Context) =>
-	stream(c, async (l) => {
-		const isMozilla = c.req.header("user-agent")?.startsWith("Mozilla/5.0");
-		c.header("X-Net", isMozilla ? "true" : "false");
-		const renderJson = c.req.query("json") !== undefined || c.req.header("accept")?.includes("application/json");
-		const typeRender = renderJson ? "application/json" : "text/plain";
-		c.header("Content-Type", typeRender);
-		c.header("Cache-Control", "public, no-store, max-age=1, must-revalidate");
-		if (!renderJson) c.header("Location", "/playground");
-
-		c.status(renderJson ? 200 : 302);
-
-		await l.write("");
 
 		const seconds = Math.floor((Date.now() - starttime) / 1000);
 		const h = Math.floor(seconds / 3600);
@@ -699,17 +661,16 @@ app.get("/", (c: Context) =>
 						url: `https://${targetDomain}/playground`,
 					},
 				],
-				domRendering: typeRender,
-				uptime: uptime,
-				os_uptime: os_uptime,
-				service: `Hono v${honoVersion}`,
-				runtime: "Bun v" + (Bun as any).version,
 				stats: {
 					cpu: cpu,
 					ram: ram,
 					restart_count: String((globalThis as any).__vgjr_refresh_count || 0),
 					last_restart: String((globalThis as any).__vgjr_last_reload || 0),
 				},
+				uptime: uptime,
+				os_uptime: os_uptime,
+				service: `Hono v${honoVersion}`,
+				runtime: "Bun v" + (Bun as any).version,
 			},
 			{
 				_visitor: clientHeaders,
@@ -718,9 +679,13 @@ app.get("/", (c: Context) =>
 			{ routes: API_ROUTES },
 		];
 
-		await l.write(renderJson ? JSON.stringify(listapi) : JSON.stringify(listapi, null, 2));
-	}),
-);
+		return c.body(zlib.gzipSync(JSON.stringify(listapi)));
+	}
+
+	c.status(302);
+	c.header("Location", "/playground");
+	return c.body(null);
+});
 
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : "";
 const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "/music", "/suggest"];

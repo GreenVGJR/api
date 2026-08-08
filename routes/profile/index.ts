@@ -11,5 +11,6 @@ import snapchat from "./snapchat.js";
 import instagram from "./instagram.js";
 import twitter from "./twitter.js";
 import threads from "./threads.js";
+import tiktok from "./tiktok.js";
 
-export default [drift, guns, haunt, rage, saweria, trakteer, sociabuzz, patreon, snapchat, instagram, twitter, threads] as any[];
+export default [drift, guns, haunt, rage, saweria, trakteer, sociabuzz, patreon, snapchat, instagram, twitter, threads, tiktok] as any[];

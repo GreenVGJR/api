@@ -329,16 +329,11 @@ function lavalinkNodeList(): any[] {
 }
 
 /**
- * Returns node configs ordered by preference.
- * preferLocal=true  → local (vgjr) node first, then remote nodes.
- * preferLocal=false → remote nodes first, then local (vgjr) node last.
+ * Returns node configs in the literal order of the LAVALINK_HOST array —
+ * no local-first/remote-first reordering. Fallback walks the chain top to bottom.
  */
-function orderedNodeList(preferLocal: boolean): any[] {
-	const nodes = lavalinkNodeList();
-	if (!localNode.id) return nodes;
-	const local = nodes.filter((n) => n.id === localNode.id);
-	const remote = nodes.filter((n) => n.id !== localNode.id);
-	return preferLocal ? [...local, ...remote] : [...remote, ...local];
+function orderedNodeList(_preferLocal: boolean): any[] {
+	return lavalinkNodeList();
 }
 
 export function getLavalinkNodeIds(preferLocal = false): string[] {
@@ -673,6 +668,100 @@ function safeResumePosition(player: LavalinkPlayer): number | undefined {
 	if (maxPosition <= 0 || position >= maxPosition) return undefined;
 
 	return Math.max(1, Math.floor(position));
+}
+
+/** Map of source names to the source-manager string a Lavalink node exposes in info.sourceManagers. */
+const SOURCE_MANAGER_NAMES: Record<string, string> = {
+	soundcloud: "soundcloud",
+	youtube: "youtube",
+	youtubemusic: "youtube",
+	bandcamp: "bandcamp",
+	twitch: "twitch",
+	vimeo: "vimeo",
+	tiktok: "tiktok",
+	mixcloud: "mixcloud",
+	spotify: "spotify",
+	applemusic: "applemusic",
+	deezer: "deezer",
+};
+
+/** Pick a connected node that can actually play `track`; fall back to any connected node. */
+function findPlayerCapableNode(manager: any, excludedNodeId: string, track: any): any {
+	const connectedNodes = [...manager.nodeManager.nodes.values()].filter((n: any) => n.connected && n.id !== excludedNodeId);
+	if (connectedNodes.length === 0) return null;
+
+	if (!track) return connectedNodes[0];
+	if (typeof (track as any).track === "string" && (track as any).track.length > 0) return connectedNodes[0];
+
+	const sourceName = ((track.info as any)?.sourceName || (track.info as any)?.actualSourceName || "").toLowerCase().replace(/\s+/g, "");
+	const managerName = SOURCE_MANAGER_NAMES[sourceName];
+	if (!managerName) return connectedNodes[0];
+
+	// First priority: nodes where info.sourceManagers explicitly includes managerName
+	const confirmed = connectedNodes.filter((n: any) => {
+		const managers: string[] | undefined = n?.info?.sourceManagers;
+		return Array.isArray(managers) && managers.some((m) => m.toLowerCase() === managerName || m.toLowerCase().includes(managerName));
+	});
+	if (confirmed.length > 0) return confirmed[0];
+
+	// Second priority: nodes where info is not loaded yet (managers is empty/undefined)
+	const unknownInfo = connectedNodes.filter((n: any) => !n?.info?.sourceManagers || !Array.isArray(n.info.sourceManagers) || n.info.sourceManagers.length === 0);
+	if (unknownInfo.length > 0) return unknownInfo[0];
+
+	// Last resort: first connected node
+	return connectedNodes[0];
+}
+
+/** Re-connect voice and resume the current track on a player, used after node switches. */
+function autoResumePlayer(player: LavalinkPlayer, reason: string, log: (msg: string) => void) {
+	// If the player was in a voice channel, we must re-connect to send the voice state
+	// to the new Lavalink session. Otherwise, Lavalink will have the track but no
+	// voice server details to stream to.
+	if (!player.voiceChannelId) return;
+	player
+		.connect()
+		.then(async () => {
+			// Wait for voice state updates to reach the node before playing
+			await new Promise((r) => setTimeout(r, 2500));
+
+			if (player.queue.current) {
+				if (!player.node?.connected) {
+					warnMusicThrottled(`resume-node:${player.guildId}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: Lavalink node is not connected`, 30_000);
+					return;
+				}
+
+				const position = safeResumePosition(player);
+				console.log(`Auto-resuming playback for guild ${player.guildId} (${reason})${position ? ` at ${position}ms` : ""}`);
+				let playPromise: Promise<any>;
+				try {
+					playPromise = position === undefined ? player.play() : player.play({ position });
+				} catch (err: any) {
+					const msg = musicErrorMessage(err);
+					if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
+						warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+						return;
+					}
+					console.error(`Failed to auto-resume (${reason}) for guild ${player.guildId}:`, msg);
+					return;
+				}
+				playPromise.catch((err: any) => {
+					const msg = musicErrorMessage(err);
+					if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
+						warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+						return;
+					}
+					console.error(`Failed to auto-resume (${reason}) for guild ${player.guildId}:`, msg);
+				});
+			}
+		})
+		.catch((err) => {
+			const msg = musicErrorMessage(err);
+			if (isKnownTransientMusicError(err)) {
+				warnMusicThrottled(`voice-reconnect:${player.guildId}:${msg}`, `Voice reconnect (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+				return;
+			}
+			console.error(`Failed to re-connect voice (${reason}) for guild ${player.guildId}:`, msg);
+		});
 }
 
 export function hasActivePlayer(token: string): boolean {
@@ -1126,72 +1215,30 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				// Auto-resume: Find any players that were on this node and should be playing
 				for (const player of manager.players.values()) {
 					if (player.node && player.node.id === node.id) {
-						// If the player was in a voice channel, we must re-connect to send the voice state
-						// to the new Lavalink session. Otherwise, Lavalink will have the track but no
-						// voice server details to stream to.
-						if (player.voiceChannelId) {
-							player
-								.connect()
-								.then(async () => {
-									// Wait for voice state updates to reach the node before playing
-									await new Promise((r) => setTimeout(r, 2500));
-
-									if (player.queue.current) {
-										if (!player.node?.connected) {
-											warnMusicThrottled(`resume-node:${player.guildId}`, `Auto-resume skipped for guild ${player.guildId}: Lavalink node is not connected`, 30_000);
-											return;
-										}
-
-										const position = safeResumePosition(player);
-										console.log(`Auto-resuming playback for guild ${player.guildId}${position ? ` at ${position}ms` : ""}`);
-										let playPromise: Promise<any>;
-										try {
-											playPromise = position === undefined ? player.play() : player.play({ position });
-										} catch (err: any) {
-											const msg = musicErrorMessage(err);
-											if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
-												warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
-												return;
-											}
-											console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
-											return;
-										}
-										playPromise.catch((err: any) => {
-											const msg = musicErrorMessage(err);
-											if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
-												warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume skipped for guild ${player.guildId}: ${msg}`, 30_000);
-												return;
-											}
-											console.error(`Failed to auto-resume for guild ${player.guildId}:`, msg);
-										});
-									}
-								})
-								.catch((err) => {
-									const msg = musicErrorMessage(err);
-									if (isKnownTransientMusicError(err)) {
-										warnMusicThrottled(`voice-reconnect:${player.guildId}:${msg}`, `Voice reconnect skipped for guild ${player.guildId}: ${msg}`, 30_000);
-										return;
-									}
-									console.error(`Failed to re-connect voice for guild ${player.guildId}:`, msg);
-								});
-						}
+						autoResumePlayer(player, "node reconnect", () => {});
 					}
 				}
 			});
 
 			manager.nodeManager.on("disconnect", (node) => {
+				if (!players.has(token)) return;
 				droppedNodeIds.add(node.id);
 
 				// Auto-switch: move any players stranded on this disconnected node to another connected node
 				const connectedNodes = [...manager.nodeManager.nodes.values()].filter((n) => n.connected && n.id !== node.id);
 				if (connectedNodes.length > 0) {
-					const fallbackNode = connectedNodes[0];
 					for (const player of manager.players.values()) {
 						if (player.node && player.node.id === node.id) {
-							try {
-								player.node = fallbackNode;
-								warnMusicThrottled(`node-switch:${player.guildId}`, `Switched guild ${player.guildId} from "${node.id}" to "${fallbackNode.id}"`, 10_000);
-							} catch {}
+							(async () => {
+								try {
+									const fallbackNode = findPlayerCapableNode(manager, node.id, player.queue.current);
+									if (!fallbackNode) return;
+									warnMusicThrottled(`node-switch:${player.guildId}`, `Switched guild ${player.guildId} from "${node.id}" to "${fallbackNode.id}"`, 10_000);
+									await player.changeNode(fallbackNode, false);
+								} catch (err) {
+									console.error(`Failed to change node for guild ${player.guildId}:`, err);
+								}
+							})();
 						}
 					}
 				}

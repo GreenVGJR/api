@@ -109,6 +109,7 @@ export async function rateLimit(): Promise<void> {
 
 export const dispatch = async (c: Context, promiseFactory: any) => {
 	const ua = c.req.header("user-agent") || "";
+	const fetchmode = c.req.header("sec-fetch-mode") || "";
 	if (ua.toLowerCase().includes("bot")) {
 		return logResponse(c, c.text("", 403));
 	}
@@ -119,18 +120,19 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		return logResponse(c, c.text("", 200));
 	}
 
-	await rateLimit();
-
 	const requrl = new URL(c.req.url);
 
-	c.header("X-Enc-Route", "v5");
-	c.header("Content-Type", "application/json");
 	const acceptEncoding = c.req.header("accept-encoding") || "";
 	let useGzip = acceptEncoding.includes("gzip");
-	if (c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild) {
-		c.header("Content-Encoding", "n");
-		c.header("Content-Type", "image/x-icon");
-		useGzip = true;
+	c.header("Content-Type", "application/json");
+	if (c.req.query(autoGenBuildPara) !== undefined || c.req.header("x-sz-token") !== undefined) {
+		if ((c.req.query(autoGenBuildPara) === autoGenBuild || c.req.header("x-sz-token") === autoGenBuild) && fetchmode === "same-origin") {
+			c.header("Content-Encoding", "n");
+			c.header("Content-Type", "image/x-icon");
+			useGzip = true;
+		} else if (fetchmode !== "same-origin") {
+			return logResponse(c, c.text("", 403));
+		}
 	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];
 	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
@@ -141,6 +143,9 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	cacheDirectives.push("must-revalidate");
 	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
+	c.header("X-Enc-Route", "v5");
+
+	await rateLimit();
 
 	return logResponse(
 		c,

@@ -825,10 +825,10 @@ async function performRequest(targetUrl, retryCount = 0) {
     const isDownload = parseUrl.pathname.startsWith("/download/");
     if (isDownload) {
       const url = new URL(targetUrl);
-      url.searchParams.set('json', '1');
+      url.searchParams.set('json', 'true');
       fetchUrl = url.toString();
     }
-    const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
+    const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "no-referrer", redirect: isDownload ? "manual" : undefined };
     response = await fetch(fetchUrl, fetchOptions);
     setStatusDotColor("blue-400", false);
     statusText.textContent = "Rendering";
@@ -1794,7 +1794,7 @@ async function refreshEndpointsFromJson() {
 
     let statsRes = null;
     try {
-      statsRes = await fetch("/?json", { cache: "no-cache", mode: "same-origin", referrerPolicy: "same-origin", headers: { Accept: "application/json" } });
+      statsRes = await fetch("/?json", { priority: "low", cache: "no-store", mode: "same-origin", referrerPolicy: "no-referrer", headers: { Accept: "application/json" } });
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;

@@ -634,8 +634,6 @@ app.get("/", (c: Context) => {
 		const usedRam = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));
 		const totalRam = Math.round(os.totalmem() / (1024 * 1024));
 		const ram = `${usedRam.toLocaleString()}MB / ${totalRam.toLocaleString()}MB`;
-		let clientHeaders = c.req.header();
-		delete clientHeaders?.["x-client-secret"];
 
 		const listapi = [
 			{
@@ -665,7 +663,6 @@ app.get("/", (c: Context) => {
 				runtime: "Bun v" + (Bun as any).version,
 			},
 			{
-				_visitor: clientHeaders,
 				_build: [autoGenBuildPara, autoGenBuild],
 			},
 			{ routes: API_ROUTES },

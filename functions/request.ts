@@ -5,7 +5,7 @@ import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_
 import { browserRequest } from "./browserRequest.js";
 import { get as httpcloakGet } from "httpcloak";
 // @ts-expect-error no types
-import signTikTok from "./tiktok_signature/index.mjs";
+import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
 
 import { Innertube, Log, ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
@@ -488,6 +488,15 @@ let saweriaBuildId: string | undefined;
 let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 let redditCookies: string = "";
 let tiktokSessionKeys: any = {};
+let tiktokWafCookie: string = "";
+
+const setTiktokWafCookie = (solved: string) => {
+	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
+		tiktokSessionKeys.cookie = tiktokSessionKeys.cookie.replace(tiktokWafCookie, "");
+	}
+	tiktokWafCookie = solved;
+	tiktokSessionKeys.cookie = (tiktokSessionKeys.cookie || "") + solved;
+};
 
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
 type DiscordListCacheEntry = {
@@ -1415,11 +1424,14 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 
 		if (shazamUrl) {
 			try {
-				const shazamRes = await fetch(shazamUrl, {
+				// Have TLS Fingerprint (Akamai anti-bot protection)
+				const shazamRes = await (httpcloakGet as any)(shazamUrl, {
+					httpVersion: "h2",
+					tlsOnly: true,
 					headers: commonHeaders,
 				});
 
-				const html = await shazamRes.text();
+				const html = await responseText(shazamRes);
 
 				try {
 					const ldJsonMatch = html.split('script type="application/ld+json">');
@@ -1605,11 +1617,9 @@ async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<str
 
 	for (let i = 0; i < maxRedirects; i++) {
 		const res = await fetch(currentUrl, {
+			method: "HEAD",
 			redirect: "manual" as const,
-			headers: {
-				...commonHeaders,
-				Range: "bytes=0-1",
-			},
+			headers: commonHeaders,
 		});
 
 		if (![301, 302, 303, 307, 308].includes(res.status)) break;
@@ -1626,7 +1636,7 @@ async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<str
 	return currentUrl;
 }
 
-export const TiktokVideo = async function TiktokVideo(url: string) {
+export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: boolean = false) {
 	if (!url) return null;
 
 	let videoId: string | null = null;
@@ -1637,7 +1647,7 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 			finalUrl = await resolveTikTokRedirect(url);
 		} catch (e) {
 			console.error("TikTok redirect error:", e);
-			return null;
+			return { error: "Can't resolve this link" };
 		}
 	}
 
@@ -1651,22 +1661,39 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		}
 	}
 
-	if (!videoId) return null;
+	if (!videoId) return { error: "Invalid or expired link" };
 
 	try {
 		const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
 		let scriptContent: string | undefined;
 		for (let i = 0; i < 15; i++) {
 			try {
-				const response = await fetch(targetUrl, { headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie } });
-				const html = await response.text();
+				const response = await (httpcloakGet as any)(targetUrl, {
+					httpVersion: "h2",
+					tlsOnly: true,
+					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie },
+				});
+				const html = await responseText(response);
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
 				if (scriptContent) break;
+				if (!wafRetried) {
+					const testIfNeedSolve = await solveTiktokWAF(html);
+					if (testIfNeedSolve) {
+						setTiktokWafCookie(testIfNeedSolve);
+						return await TiktokVideo(url, true);
+					}
+				}
 			} catch (e) {
 				// ignore and retry
 			}
 		}
-		if (!scriptContent) return { error: "WAF Challenge" };
+		if (!scriptContent) return { error: "Can't process this due to WAF Challenge" };
+
+		const json = JSON.parse(scriptContent);
+		const checkVideo = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"];
+		const videoDetail = checkVideo?.itemInfo?.itemStruct;
+
+		if (!videoDetail?.video) return { ...(checkVideo ? { error: checkVideo } : { data: null }) };
 
 		let savetikData: any = null;
 		try {
@@ -1674,11 +1701,6 @@ export const TiktokVideo = async function TiktokVideo(url: string) {
 		} catch (e) {
 			// savetik is optional fallback, keep page data
 		}
-
-		const json = JSON.parse(scriptContent);
-		const videoDetail = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
-
-		if (!videoDetail?.video) return { data: null };
 
 		const responseData: any = {
 			aweme_id: videoDetail.id?.toString(),
@@ -3314,23 +3336,42 @@ export const infoITunes = async function infoITunes(que: string) {
 	}
 };
 
-export const pinterest = async function pinterest(que: string, type: string = "all") {
+export const pinterest = async function pinterest(que: string, type: string = "all", limit_number: number = 20) {
 	if (!que) return null;
 	try {
 		const isVideo = type === "video";
-		const feat = { options: { query: que, scope: isVideo ? "videos" : "pins", rs: "typed", page_size: 25 }, context: {} };
+		const feat = { options: { query: que + (type === "gif" ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: limit_number }, context: {} };
 		const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
 			headers: {
 				...commonHeaders,
-				"X-Pinterest-PWS-Handler": "www/search/[scope].js",
+				Referer: "https://www.pinterest.com/",
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Site": "same-origin",
+				"X-Pinterest-PWS-Handler": "www/index.js",
+				"X-Pinterest-Source-Url": "/",
+				"X-Requested-With": "XMLHttpRequest",
 			},
 		});
 
 		const res: any = await req.json();
+
+		if (res?.resource_response?.http_status != 200) {
+			return {
+				error: `Can't process this: ${res?.resource_response?.message}`,
+			};
+		}
+
+		if (res?.resource_response?.data?.sensitivity?.type) {
+			return {
+				error: `Pins not found. Your query may violate our terms and service`,
+			};
+		}
+
 		const results = res.resource_response?.data?.results;
 		if (!results?.[0]) {
 			return {
-				error: "Looks like your search violate our terms of service",
+				error: "Pins not found",
 			};
 		}
 
@@ -4150,10 +4191,10 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-	const url = `https://www.tiktok.com/api/explore/item_list/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&aid=1284&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web${tiktokSessionKeys.abVersion
-		.split(",")
-		.map((f: any) => `&clientABVersions=${f}`)
-		.join("")}&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&clientABVersions=&cookie_enabled=false&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
+	const clientABVersions: string = tiktokSessionKeys.abVersion || "";
+	// const customUA: string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+
+	const url = `https://www.tiktok.com/api/explore/item_list/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&aid=1988&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web${clientABVersions ? `&clientABVersions=${clientABVersions}` : ""}&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
 	const headers = {
 		...commonHeaders,
 		Cookie: tiktokSessionKeys?.cookie,
@@ -4179,7 +4220,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 			const res = await pul.text();
 
 			if (res === "" || pul.status !== 200) {
-				if (i === 2) return { error: "Akamai Captcha asking to verify you're not a bot" };
+				if (i === 2 || res === "") return { error: "Akamai Captcha asking to verify you're not a bot" };
 				await new Promise((r) => setTimeout(r, 1000));
 				continue;
 			}
@@ -4760,7 +4801,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
 			const features2 = JSON.stringify(twitterObj?.UserTweets?.[1]);
 			const variables2 = JSON.stringify({
 				userId: res?.data?.user?.result?.rest_id,
-				includePromotedContent: true,
+				includePromotedContent: false,
 				withQuickPromoteEligibilityTweetFields: true,
 				withVoice: true,
 			});
@@ -4827,7 +4868,7 @@ export const infoTwitterTweet = async function infoTwitterTweet(que: string, ref
 		const features = JSON.stringify(twitterObj?.TweetResultByRestId?.[1]);
 		const variables = JSON.stringify({
 			tweetId: que,
-			includePromotedContent: true,
+			includePromotedContent: false,
 			withBirdwatchNotes: true,
 			withVoice: true,
 			withCommunity: true,
@@ -5173,31 +5214,31 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 			return { error: "IP Blocked" };
 		}
 
-		let res;
-		try {
-			res = await req.json();
-			res = Array.isArray(res) ? res.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : res;
-		} catch {
-			redditCookies = await refreshRedditAuth();
-			const retryReq2 = await fetch(jsonUrl, {
-				headers: { ...headers, Cookie: redditCookies },
-			});
-			let retryRes2;
-			try {
-				retryRes2 = await retryReq2.json();
-				retryRes2 = Array.isArray(retryRes2) ? retryRes2.flatMap((l: any) => l?.data?.children?.map((c: any) => c.data) || []) : retryRes2;
-			} catch {
-				return {
-					error: "Invalid response. Probably anti-bot challenge return.",
-				};
-			}
-			return { _wafChallenge: redditCookies !== "", data: retryRes2 };
-		}
-
-		return { _wafChallenge: redditCookies !== "", data: JSON.parse(decodeHTML(JSON.stringify(res))) };
+		const res: any = await req.json();
+		const finalres: any = collectListingData(res);
+		return {
+			_wafChallenge: redditCookies !== "",
+			data: JSON.parse(decodeHTML(JSON.stringify(finalres.length ? finalres : null))),
+		};
 	} catch (e: any) {
 		return null;
 	}
+};
+
+const collectListingData = (listing: any): any[] => {
+	if (Array.isArray(listing)) {
+		const out: any[] = [];
+		for (const item of listing) out.push(...collectListingData(item));
+		return out;
+	}
+	const out: any[] = [];
+	const children = listing?.data?.children;
+	if (!children) return out;
+	for (const child of children) {
+		out.push(child?.data);
+		out.push(...collectListingData(child?.data?.replies));
+	}
+	return out;
 };
 
 export const redditMedia = async function redditMedia(que: string, refresh_auth: boolean = false) {
@@ -6456,8 +6497,8 @@ export async function GunsProfile(query: string): Promise<any> {
 			for (let attempts = 0; attempts < 3; attempts++) {
 				try {
 					res = await (httpcloakGet as any)(`https://guns.lol/${username}`, {
-						echConfigDomain: "cloudflare-ech.com",
-						tlsOnly: true,
+						httpVersion: "h2",
+						tlsOnly: false,
 						headers: {
 							...commonHeaders,
 							...(gunsCookies ? { cookie: gunsCookies } : {}),
@@ -11402,7 +11443,9 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string, l
 			fetch(`https://itunes.apple.com/search?media=music&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
+			(httpcloakGet as any)(`https://music.apple.com/us/search?term=${encodeURIComponent(query)}`, {
+				httpVersion: "h2",
+				tlsOnly: false,
 				headers: commonHeaders,
 			}),
 			fetch(`https://itunes.apple.com/search?media=audiobook&limit=${limit}&country=US&term=${encodeURIComponent(query)}`, {
@@ -11419,7 +11462,7 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string, l
 			}),
 		]);
 
-		const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([res.json(), res2.text(), res3.json(), res4.json(), res5.json(), res6.json()]);
+		const [lks, lks2, lks3, lks4, lks5, lks6]: any = await Promise.all([res.json(), responseText(res2), res3.json(), res4.json(), res5.json(), res6.json()]);
 
 		let parselks2: any = [];
 		try {
@@ -12575,13 +12618,27 @@ export const DeviantArt = async (query: string, refresh_auth: boolean = false): 
 	}
 };
 
-export const TiktokInfoUser = async function TiktokInfoUser(query: string) {
+export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRetried: boolean = false) {
 	if (!query) return null;
 	try {
-		const response = await fetch(`https://www.tiktok.com/@${query.toLowerCase()}`, { headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile } });
-		const html = await response.text();
-		const scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
+		const response = await (httpcloakGet as any)(`https://www.tiktok.com/@${query.toLowerCase()}`, {
+			httpVersion: "h2",
+			tlsOnly: false,
+			headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+		});
+		const html = await responseText(response);
+		let scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
+
+		if (!scriptContent && !wafRetried) {
+			const testIfNeedSolve = await solveTiktokWAF(html);
+			if (testIfNeedSolve) {
+				setTiktokWafCookie(testIfNeedSolve);
+				return await TiktokInfoUser(query, true);
+			}
+		}
+
 		if (!scriptContent) return { error: "Akamai Captcha asking to verify you're not a bot" };
+
 		const json = JSON.parse(scriptContent);
 		const userDetail = json?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo?.user;
 		if (!userDetail) return { error: "User not found" };

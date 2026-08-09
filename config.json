@@ -12,5 +12,6 @@
 		"localSecKeyForTest": "1x0000000000000000000000000000000AA",
 		"localSiteKeyForTest": "1x00000000000000000000AA"
 	},
-	"nodeConnectTimeout": 3000
+	"nodeConnectTimeout": 3000,
+	"removeSessionJobTime": 86400000
 }

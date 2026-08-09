@@ -9,10 +9,7 @@ g.__vgjr_refresh_count = (g.__vgjr_refresh_count || 0) + 1;
 g.__vgjr_last_reload = Date.now();
 
 if (!g.__vgjr_initialized) {
-	warmupEmojiData();
-	warmupCountriesCache();
-	getBotGuardChallenge();
-	getYoutubei();
+	Promise.allSettled([warmupEmojiData(), warmupCountriesCache(), getBotGuardChallenge(), getYoutubei()]);
 	console.log(`\n🚀 Bun Server is running!`);
 	console.log(`🏠 Local:    http://localhost:${port}/playground`);
 	g.__vgjr_initialized = true;

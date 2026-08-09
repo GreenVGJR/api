@@ -782,7 +782,7 @@ function removeOfflinePlayground() {
 removeOfflinePlayground();
 
 async function performRequest(targetUrl, retryCount = 0) {
-  if (retryCount === 0 && (isLoading || isCoolingDown)) return null;
+  if (retryCount === 0 && (isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying")) return null;
   if (retryCount === 0 && !hasConnection()) {
     updateConnectionUI();
     return null;
@@ -1736,13 +1736,16 @@ function showTurnstileChallenge() {
   const loadScript = () =>
     new Promise((resolve) => {
       if (window.turnstile) return resolve(true);
-      const s = document.createElement("script");
-      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-      s.async = true;
-      s.defer = true;
-      s.onload = () => resolve(true);
-      s.onerror = () => resolve(false);
-      document.head.appendChild(s);
+      let attempts = 0;
+      const interval = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (attempts++ > 50) {
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, 100);
     });
 
   const renderWidget = () => {
@@ -2008,12 +2011,12 @@ tabBtns.forEach((btn) => {
 });
 
 urlInput.addEventListener("keydown", (e) => {
-  if (statusText.textContent === "Connecting" || isLoading) {
+  if (statusText.textContent === "Connecting" || statusText.textContent === "Verifying" || isLoading || turnstileRendered || document.getElementById("turnstileWidget")) {
     e.preventDefault();
     urlInput.blur();
     return;
   }
-  if (e.key === "Enter" && !isLoading) {
+  if (e.key === "Enter" && !isLoading && !turnstileRendered && !document.getElementById("turnstileWidget") && statusText.textContent !== "Verifying") {
     e.preventDefault();
     urlInput.blur();
     sendBtn.click();
@@ -2249,7 +2252,7 @@ clearResponseBtn.addEventListener("click", () => {
 });
 
 sendBtn.addEventListener("click", () => {
-  if(isLoading || isCoolingDown) return;
+  if(isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying") return;
   if (pageFromPath(window.location.pathname) !== "playground") return;
   if (!hasConnection()) {
     updateConnectionUI();
@@ -2389,6 +2392,7 @@ function syntaxHighlight(json) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying") return;
     sendBtn.click();
   }
 });
@@ -2396,10 +2400,21 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("online", updateConnectionUI);
 window.addEventListener("offline", updateConnectionUI);
 
-let serverUptimeBaseSeconds = null;
-let serverUptimeSyncedAt = 0;
+let serverUptimeTimestamp = null;
 
 function parseUptimeSeconds(value) {
+  if (typeof value === "number") {
+    if (value > 1000000000) {
+      return Math.floor(Date.now() / 1000) - value;
+    }
+    return value;
+  }
+  if (typeof value === "string") {
+    const num = Number(value);
+    if (!Number.isNaN(num) && num > 1000000000) {
+      return Math.floor(Date.now() / 1000) - num;
+    }
+  }
   if (typeof value !== "string") return null;
   const parts = value.split(":").map((part) => Number(part));
   if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
@@ -2412,22 +2427,28 @@ function setUptimeFromJsonPayload(payload) {
   const info = Array.isArray(payload)
     ? payload.find((item) => item && typeof item === "object" && item.uptime)
     : payload;
-  const seconds = parseUptimeSeconds(info?.uptime);
-  if (seconds === null) return false;
+  const uptimeVal = info?.uptime;
+  if (uptimeVal === undefined || uptimeVal === null) return false;
 
-  serverUptimeBaseSeconds = seconds;
-  serverUptimeSyncedAt = Date.now();
+  if (typeof uptimeVal === "string" && /^\d{10,}$/.test(uptimeVal)) {
+    serverUptimeTimestamp = Number(uptimeVal);
+  } else if (typeof uptimeVal === "number" && uptimeVal > 1000000000) {
+    serverUptimeTimestamp = uptimeVal;
+  } else {
+    const seconds = parseUptimeSeconds(uptimeVal);
+    if (seconds === null) return false;
+    serverUptimeTimestamp = Math.floor(Date.now() / 1000) - seconds;
+  }
+
   updateUptime();
   return true;
 }
 
 function updateUptime() {
   const uptimeDisplay = document.getElementById("uptimeDisplay");
-  if (!uptimeDisplay || serverUptimeBaseSeconds === null) return;
+  if (!uptimeDisplay || serverUptimeTimestamp === null) return;
 
-  const diff =
-    serverUptimeBaseSeconds +
-    Math.floor((Date.now() - serverUptimeSyncedAt) / 1000);
+  const diff = Math.floor(Date.now() / 1000) - serverUptimeTimestamp;
   const h = Math.floor(diff / 3600);
   const m = Math.floor((diff % 3600) / 60);
   const s = diff % 60;

@@ -167,7 +167,6 @@ export const PERMISSION_KEYS: Record<string, bigint> = {
 	bypassslowmode: 1n << 52n,
 	createevents: 1n << 44n,
 	pinmessages: 1n << 51n,
-	useclydeai: 1n << 47n,
 	useexternalapps: 1n << 50n,
 	userexternalsounds: 1n << 45n,
 	usesoundboard: 1n << 42n,

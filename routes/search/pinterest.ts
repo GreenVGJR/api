@@ -19,8 +19,10 @@ app.get("/pinterest", async (c) => {
 		return c.json({ error: `Invalid type. Available: ${ALLOWED_TYPES.join(", ")}` }, 202);
 	}
 	const type = rawType || "all";
+	const limitStr: any = c.req.query("limit");
+	const limit = isNaN(limitStr) ? 20 : Math.min(40, Math.max(1, parseInt(limitStr, 10)));
 	c.header("X-Route", "www.pinterest.com");
-	return await dispatch(c, () => pinterest(query, type));
+	return await dispatch(c, () => pinterest(query, type, limit));
 });
 
 export default app;

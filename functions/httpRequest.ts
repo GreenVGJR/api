@@ -131,7 +131,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 			c.header("Content-Type", "image/x-icon");
 			useGzip = true;
 		} else if (fetchmode !== "same-origin") {
-			return logResponse(c, c.text("", 403));
+			return logResponse(c, c.text("", 412));
 		}
 	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];

@@ -31,7 +31,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=", "string", "enum:all,image,video,gif"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&limit=", "string", "enum:all,image,video,gif", "number"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -110,12 +110,14 @@ const API_ROUTES = {
 			["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum_multi:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],
 			["/tools/discord/infoChannel?token=&channelId=&guildId=", "string", "number", "number"],
 			["/tools/discord/modifyChannel?token=&channelId=&reason=&name=&type=&position=&topic=&nsfw=&rateLimitPerUser=&bitrate=&userLimit=&parentId=&rtcRegion=&videoQualityMode=&defaultAutoArchiveDuration=&defaultThreadRateLimitPerUser=&defaultSortOrder=&defaultForumLayout=&description=&flags=&spoiler=&icon=&permissionOverwrites=&defaultReactionEmoji=&availableTags=", "string", "number", "string", "string", "enum:text,announcement", "number", "string", "boolean", "number", "number", "number", "string", "string", "number", "number", "number", "number", "number", "string", "number", "boolean", "url", "json", "json", "json"],
+			["/tools/discord/modifyAllChannels?token=&guildId=&permission=&mode=&type=&processId=", "string", "number", "string", "enum:deny,allow,reset", "enum:all,text,voice", "string"],
 		],
 		role: [
 			["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:all,oldest,newest", "string"],
 			["/tools/discord/infoRole?token=&roleId=&guildId=", "string", "number", "number"],
 			["/tools/discord/modifyRole?token=&guildId=&roleId=&reason=&name=&color=&permissions=&position=&hoist=&mentionable=&unicodeEmoji=&roleIcon=", "string", "number", "number", "string", "string", "string", "number", "number", "boolean", "boolean", "url", "url"],
 			["/tools/discord/createRole?token=&guildId=&reason=&name=&color=&permissions=&hoist=&mentionable=&unicodeEmoji=&roleIcon=", "string", "number", "string", "string", "string", "number", "boolean", "boolean", "url", "url"],
+			["/tools/discord/modifyAllRoles?token=&guildId=&roleId=&mode=&type=&processId=", "string", "number", "string", "enum:add,remove", "enum:all,user,bot", "string"],
 		],
 		invite: [
 			["/tools/discord/infoInvite?q=&token=&guildId=", "string", "string", "number"],
@@ -621,19 +623,11 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 app.get("/", (c: Context) => {
 	if (c.req.query("json") !== undefined) {
 		c.header("Content-Type", "application/json");
-		c.header("Cache-Control", "public, max-age=10, no-transform");
+		c.header("Cache-Control", "public, max-age=60, no-transform");
 		c.header("Content-Encoding", "gzip");
 
-		const seconds = Math.floor((Date.now() - starttime) / 1000);
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = seconds % 60;
-		const uptime = [h, m, s].map((v) => v.toString().padStart(2, "0")).join(":");
-		const os_seconds = Math.floor(os.uptime());
-		const os_h = Math.floor(os_seconds / 3600);
-		const os_m = Math.floor((os_seconds % 3600) / 60);
-		const os_s = os_seconds % 60;
-		const os_uptime = [os_h, os_m, os_s].map((v) => v.toString().padStart(2, "0")).join(":");
+		const uptime = String(Math.floor(starttime / 1000));
+		const os_uptime = String(Math.floor(Date.now() / 1000) - Math.floor(os.uptime()));
 
 		const cpuUsage = os.loadavg()[0] / os.cpus().length;
 		const cpu = `${(cpuUsage * 100).toFixed(1)}%`;

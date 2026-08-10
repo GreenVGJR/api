@@ -111,14 +111,14 @@ const API_ROUTES = {
 			["/tools/discord/listChannel?token=&guildId=&limit=&type=", "string", "number", "number", "enum_multi:text,voice,category,announcement,announcement_thread,public_thread,private_thread,stage,directory,forum,media,threads,all"],
 			["/tools/discord/infoChannel?token=&channelId=&guildId=", "string", "number", "number"],
 			["/tools/discord/modifyChannel?token=&channelId=&reason=&name=&type=&position=&topic=&nsfw=&rateLimitPerUser=&bitrate=&userLimit=&parentId=&rtcRegion=&videoQualityMode=&defaultAutoArchiveDuration=&defaultThreadRateLimitPerUser=&defaultSortOrder=&defaultForumLayout=&description=&flags=&spoiler=&icon=&permissionOverwrites=&defaultReactionEmoji=&availableTags=", "string", "number", "string", "string", "enum:text,announcement", "number", "string", "boolean", "number", "number", "number", "string", "string", "number", "number", "number", "number", "number", "string", "number", "boolean", "url", "json", "json", "json"],
-			["/tools/discord/modifyAllChannels?token=&guildId=&permission=&mode=&type=&processId=", "string", "number", "string", "enum:deny,allow,reset", "enum:all,text,voice", "string"],
+			["/tools/discord/modifyAllChannels?token=&guildId=&permission=&mode=&type=&processId=&async=", "string", "number", "string", "enum:deny,allow,reset", "enum:all,text,voice", "string", "boolean"],
 		],
 		role: [
 			["/tools/discord/listRoles?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum:all,oldest,newest", "string"],
 			["/tools/discord/infoRole?token=&roleId=&guildId=", "string", "number", "number"],
 			["/tools/discord/modifyRole?token=&guildId=&roleId=&reason=&name=&color=&permissions=&position=&hoist=&mentionable=&unicodeEmoji=&roleIcon=", "string", "number", "number", "string", "string", "string", "number", "number", "boolean", "boolean", "url", "url"],
 			["/tools/discord/createRole?token=&guildId=&reason=&name=&color=&permissions=&hoist=&mentionable=&unicodeEmoji=&roleIcon=", "string", "number", "string", "string", "string", "number", "boolean", "boolean", "url", "url"],
-			["/tools/discord/modifyAllRoles?token=&guildId=&roleId=&mode=&type=&processId=", "string", "number", "string", "enum:add,remove", "enum:all,user,bot", "string"],
+			["/tools/discord/modifyAllRoles?token=&guildId=&roleId=&mode=&type=&processId=&async=", "string", "number", "string", "enum:add,remove", "enum:all,user,bot", "string", "boolean"],
 		],
 		invite: [
 			["/tools/discord/infoInvite?q=&token=&guildId=", "string", "string", "number"],

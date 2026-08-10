@@ -133,6 +133,8 @@ app.get("/discord/modifyAllChannels", async (c) => {
 	const permissionParam = c.req.query("permission")?.trim();
 	const modeParam = c.req.query("mode")?.trim().toLowerCase();
 	const typeParam = c.req.query("type")?.trim().toLowerCase() || "all";
+	const asyncParam = c.req.query("async")?.trim().toLowerCase();
+	const isAsync = asyncParam === "true";
 
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
 	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
@@ -265,8 +267,8 @@ app.get("/discord/modifyAllChannels", async (c) => {
 
 			const everyoneRole = guild.roles.everyone;
 
-			// Background execution worker
-			(async () => {
+			// Execution worker
+			const runWorker = async () => {
 				const successIds: string[] = [];
 				const failIds: string[] = [];
 				const noneIds: string[] = [];
@@ -326,21 +328,43 @@ app.get("/discord/modifyAllChannels", async (c) => {
 
 				activeGuildJobs.delete(guildId);
 				scheduleJobCleanup(processId);
-			})().catch(() => {
-				session.status = "done";
-				activeGuildJobs.delete(guildId);
-			});
-
-			return {
-				total: session.total,
-				success: session.success,
-				failed: session.failed,
-				none: session.none,
-				data: {
-					status: "awaiting",
-					process_id: processId,
-				},
 			};
+
+			if (isAsync) {
+				runWorker().catch(() => {
+					session.status = "done";
+					activeGuildJobs.delete(guildId);
+				});
+
+				return {
+					total: session.total,
+					success: session.success,
+					failed: session.failed,
+					none: session.none,
+					data: {
+						status: "awaiting",
+						process_id: processId,
+					},
+				};
+			} else {
+				await runWorker().catch(() => {
+					session.status = "done";
+					activeGuildJobs.delete(guildId);
+				});
+
+				return {
+					total: session.total,
+					success: session.success,
+					failed: session.failed,
+					none: session.none,
+					data: {
+						status: "done",
+						success: session.data.success || [],
+						fail: session.data.fail || [],
+						none: session.data.none || [],
+					},
+				};
+			}
 		} catch (err: any) {
 			return { error: err?.message || "Internal server error" };
 		}

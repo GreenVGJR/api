@@ -196,32 +196,9 @@ let isLoading = false;
 let lastRawResponse = "";
 let hasMediaResponse = false;
 let isCoolingDown = false;
-let isConnecting = true;
 
 const apiBaseUrl = window.API_BASE_URL;
 const endpointCategories = Object.keys(endpoints);
-
-function flattenRoutes(obj) {
-  let flatResults = [];
-  if (Array.isArray(obj)) {
-    return obj
-      .map((item) => {
-        if (Array.isArray(item) && typeof item[0] === "string") {
-          const [fullPath, ...types] = item;
-          const [path, query = ""] = fullPath.split("?");
-          return { path, query, types: types.filter((type) => typeof type === "string") };
-        }
-        if (typeof item === "object" && item !== null) return flattenRoutes(item);
-        return null;
-      })
-      .flat()
-      .filter(Boolean);
-  }
-  if (typeof obj === "object" && obj !== null) {
-    for (const key in obj) flatResults = flatResults.concat(flattenRoutes(obj[key]));
-  }
-  return flatResults;
-}
 
 function normalizeEndpointPayload(payload) {
   const root = Array.isArray(payload)
@@ -300,6 +277,14 @@ function slideStatusText(text, className) {
     responseTitleNext.style.display = "none";
     responseTitleNext.classList.remove("status-slide-in");
   }, 200);
+}
+
+// Shared helper for the common "set dot color + status text + animate" sequence.
+function setStatus(dotColor, text, textClass) {
+  setStatusDotColor(dotColor);
+  statusText.textContent = text;
+  statusText.className = textClass;
+  slideStatusText(text, "font-semibold " + textClass);
 }
 
 const sendRow = document.getElementById("sendRow");
@@ -412,6 +397,23 @@ function setPageLinkState(page) {
   });
 }
 
+// Shows/hides the playground-only chrome (url bar, category tabs, endpoint
+// list, response header/actions, send row) shared by both page renderers.
+function setPlaygroundChromeVisible(visible) {
+  urlBar.classList.toggle("hidden", !visible);
+  categoryTabs.forEach((el) => el.classList.toggle("tabs-hidden", !visible));
+  endpointPane.classList.toggle("hidden", !visible);
+  workspaceGrid.style.gridTemplateColumns = visible ? "" : "minmax(0, 1fr)";
+  responseHeader.classList.toggle("hidden", !visible);
+  responseActions.classList.toggle("hidden", !visible);
+  sendRow.classList.toggle("hidden", !visible);
+}
+
+function setScrollTrackVisible(visible) {
+  const scrollTrack = document.getElementById("customScrollTrack");
+  if (scrollTrack) scrollTrack.style.display = visible ? "" : "none";
+}
+
 function renderLegalPage(page) {
   const legal = legalPages[page];
   if (!legal) return;
@@ -442,13 +444,7 @@ function renderLegalPage(page) {
         </section>
     `;
 
-  urlBar.classList.add("hidden");
-  categoryTabs.forEach(el => el.classList.add("tabs-hidden"));
-  endpointPane.classList.add("hidden");
-  workspaceGrid.style.gridTemplateColumns = "minmax(0, 1fr)";
-  responseHeader.classList.add("hidden");
-  responseActions.classList.add("hidden");
-  sendRow.classList.add("hidden");
+  setPlaygroundChromeVisible(false);
   paramsPanel.classList.add("hidden");
   paramsBody.style.height = null;
   paramsChevron.classList.remove("rotated");
@@ -457,19 +453,12 @@ function renderLegalPage(page) {
   lastRawResponse = legal.sections
     .map(([title, text]) => `${title}\n${text}`)
     .join("\n\n");
-  const scrollTrack = document.getElementById("customScrollTrack");
-  if (scrollTrack) scrollTrack.style.display = "none";
+  setScrollTrackVisible(false);
   activePage = page;
 }
 
 function renderPlaygroundPage() {
-  urlBar.classList.remove("hidden");
-  categoryTabs.forEach(el => el.classList.remove("tabs-hidden"));
-  endpointPane.classList.remove("hidden");
-  workspaceGrid.style.gridTemplateColumns = "";
-  responseHeader.classList.remove("hidden");
-  responseActions.classList.remove("hidden");
-  sendRow.classList.remove("hidden");
+  setPlaygroundChromeVisible(true);
   responseArea.classList.add("font-mono");
   responseArea.classList.remove("font-sans", "no-scrollbar");
 
@@ -477,10 +466,7 @@ function renderPlaygroundPage() {
     lastRawResponse = "";
     responseArea.classList.add("empty-state");
     responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
-    setStatusDotColor("gray-500");
-    statusText.textContent = "Idle";
-    statusText.className = "text-gray-500";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("gray-500", "Idle", "text-gray-500");
     if (currentEndpoint) {
       urlInput.value = buildEndpointUrl(currentEndpoint);
       adjustHeight();
@@ -491,8 +477,7 @@ function renderPlaygroundPage() {
   renderParams();
   setActiveCategoryTab();
   activePage = "playground";
-  const scrollTrack = document.getElementById("customScrollTrack");
-  if (scrollTrack) scrollTrack.style.display = "";
+  setScrollTrackVisible(true);
 }
 
 let lastRenderedPage = null;
@@ -520,6 +505,11 @@ function renderCurrentPage() {
 
 function isVerifying() {
   return statusText && statusText.textContent === "Verifying";
+}
+
+// Shared guard used before sending a request or handling send-related shortcuts.
+function isBusy() {
+  return isLoading || isCoolingDown || turnstileRendered || !!document.getElementById("turnstileWidget") || isVerifying();
 }
 
 document.addEventListener("click", (event) => {
@@ -579,17 +569,10 @@ urlInput.addEventListener("focus", adjustHeight);
 window.addEventListener("resize", adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
-  const statusDot = statusDotEl;
   slideStatusText(`${status} • ${duration}ms`, "font-semibold text-gray-400");
-  if (ok) {
-    setStatusDotColor("mint-400");
-    statusText.textContent = "OK";
-    statusText.className = "text-mint-400";
-  } else {
-    setStatusDotColor("red-500");
-    statusText.textContent = "Error";
-    statusText.className = "text-red-400";
-  }
+  setStatusDotColor(ok ? "mint-400" : "red-500");
+  statusText.textContent = ok ? "OK" : "Error";
+  statusText.className = ok ? "text-mint-400" : "text-red-400";
 }
 
 function routeToEndpoint(route, types = []) {
@@ -739,19 +722,12 @@ function hasConnection() {
 }
 
 function updateConnectionUI() {
-  const statusDot = statusDotEl;
-
   if (!hasConnection()) {
     setSendButtonLabel("No Connection");
     sendBtn.classList.add("opacity-50", "cursor-not-allowed");
     sendBtn.classList.remove("opacity-70");
 
-    if (!isLoading) {
-      setStatusDotColor("red-500");
-      statusText.textContent = "Offline";
-      statusText.className = "text-red-400";
-      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
-    }
+    if (!isLoading) setStatus("red-500", "Offline", "text-red-400");
     return false;
   }
 
@@ -759,12 +735,7 @@ function updateConnectionUI() {
     setSendButtonLabel("Send");
     sendBtn.classList.remove("opacity-50", "cursor-not-allowed", "opacity-70");
 
-    if (statusText.textContent === "Offline") {
-      setStatusDotColor("gray-500");
-      statusText.textContent = "Idle";
-      statusText.className = "text-gray-500";
-      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
-    }
+    if (statusText.textContent === "Offline") setStatus("gray-500", "Idle", "text-gray-500");
   }
   return true;
 }
@@ -781,8 +752,23 @@ function removeOfflinePlayground() {
 
 removeOfflinePlayground();
 
+// Renders a fetched blob (image/video/audio) into the response area.
+// `buildTag(url)` returns the markup for the specific media element.
+async function renderBlobMedia(response, startTime, buildTag) {
+  const blob = await response.blob();
+  const duration = Math.round(performance.now() - startTime);
+  updateStatusUI(response.ok, response.status, duration);
+  const url = URL.createObjectURL(blob);
+
+  lastRawResponse = "";
+  hasMediaResponse = true;
+
+  responseArea.classList.add("empty-state");
+  responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${buildTag(url)}</div>`;
+}
+
 async function performRequest(targetUrl, retryCount = 0) {
-  if (retryCount === 0 && (isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying")) return null;
+  if (retryCount === 0 && isBusy()) return null;
   if (retryCount === 0 && !hasConnection()) {
     updateConnectionUI();
     return null;
@@ -795,10 +781,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     responseArea.classList.add("empty-state");
     responseArea.innerHTML = "";
 
-    setStatusDotColor("yellow-400", false);
-    statusText.textContent = "Fetching";
-    statusText.className = "text-yellow-400";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("yellow-400", "Fetching", "text-yellow-400");
   }
 
   let resultData = null;
@@ -830,10 +813,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     }
     const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "no-referrer", redirect: isDownload ? "manual" : undefined };
     response = await fetch(fetchUrl, fetchOptions);
-    setStatusDotColor("blue-400", false);
-    statusText.textContent = "Rendering";
-    statusText.className = "text-gray-400";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("blue-400", "Rendering", "text-gray-400");
 
     let duration;
 
@@ -861,17 +841,10 @@ async function performRequest(targetUrl, retryCount = 0) {
             hasMediaResponse = true;
 
             responseArea.classList.add("empty-state");
-            if (isVideo) {
-              responseArea.innerHTML = `
-                <div class="w-full h-full flex items-center justify-center p-4">
-                  <video src="${encodeURI(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
-                </div>`;
-            } else {
-              responseArea.innerHTML = `
-                <div class="w-full h-full flex items-center justify-center p-4">
-                  <img src="${encodeURI(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
-                </div>`;
-            }
+            const mediaTag = isVideo
+              ? `<video src="${encodeURI(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`
+              : `<img src="${encodeURI(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
+            responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${mediaTag}</div>`;
             return null;
           }
         } catch (e) {}
@@ -896,55 +869,19 @@ async function performRequest(targetUrl, retryCount = 0) {
     }
 
     if ((contentType.startsWith("image/") && !payloadLooksTextual) && !nonStandardCoding) {
-      const blob = await response.blob();
-      duration = Math.round(performance.now() - startTime);
-      updateStatusUI(response.ok, response.status, duration);
-      const imageUrl = URL.createObjectURL(blob);
-
-      lastRawResponse = "";
-      hasMediaResponse = true;
-
-      responseArea.classList.add("empty-state");
-      responseArea.innerHTML = `
-                <div class="w-full h-full flex items-center justify-center p-4">
-                    <img src="${imageUrl}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />
-                </div>
-            `;
+      await renderBlobMedia(response, startTime, (url) =>
+        `<img src="${url}" alt="API Response" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`);
     } else if (
       (contentType.startsWith("video/") ||
         contentType === "application/octet-stream") &&
       response.headers.get("x-player") !== "lavalink" &&
       !nonStandardCoding
     ) {
-      const blob = await response.blob();
-      duration = Math.round(performance.now() - startTime);
-      updateStatusUI(response.ok, response.status, duration);
-      const videoUrl = URL.createObjectURL(blob);
-
-      lastRawResponse = "";
-      hasMediaResponse = true;
-
-      responseArea.classList.add("empty-state");
-      responseArea.innerHTML = `
-                <div class="w-full h-full flex items-center justify-center p-4">
-                    <video src="${videoUrl}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>
-                </div>
-            `;
+      await renderBlobMedia(response, startTime, (url) =>
+        `<video src="${url}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`);
     } else if (contentType.startsWith("audio/") && !nonStandardCoding) {
-      const blob = await response.blob();
-      duration = Math.round(performance.now() - startTime);
-      updateStatusUI(response.ok, response.status, duration);
-      const audioUrl = URL.createObjectURL(blob);
-
-      lastRawResponse = "";
-      hasMediaResponse = true;
-
-      responseArea.classList.add("empty-state");
-      responseArea.innerHTML = `
-                <div class="w-full h-full flex items-center justify-center p-4">
-                    <audio src="${audioUrl}" controls class="w-full max-w-full rounded-lg shadow-lg"></audio>
-                </div>
-            `;
+      await renderBlobMedia(response, startTime, (url) =>
+        `<audio src="${url}" controls class="w-full max-w-full rounded-lg shadow-lg"></audio>`);
     } else {
       responseArea.classList.remove("empty-state");
 
@@ -1117,10 +1054,7 @@ async function performRequest(targetUrl, retryCount = 0) {
   } catch (err) {
     responseArea.classList.remove("empty-state");
     responseArea.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
-    setStatusDotColor("red-500");
-    statusText.textContent = "Failed";
-    statusText.className = "text-red-400";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("red-500", "Failed", "text-red-400");
   } finally {
     if (retryCount === 0) {
       isLoading = false;
@@ -1215,6 +1149,11 @@ const PARAM_TYPES = new Set([
   "json",
 ]);
 
+// Splits a comma-separated string into trimmed, non-empty parts.
+function parseCSVList(value) {
+  return value ? value.split(",").map((v) => v.trim()).filter(Boolean) : [];
+}
+
 function parseParamTypeSpec(typeSpec) {
   const spec = String(typeSpec || "");
   const separatorIndex = spec.indexOf(":");
@@ -1222,11 +1161,7 @@ function parseParamTypeSpec(typeSpec) {
   const type = PARAM_TYPES.has(rawType) ? rawType : "string";
   const options =
     (type === "enum" || type === "enum_multi") && separatorIndex !== -1
-      ? spec
-          .slice(separatorIndex + 1)
-          .split(",")
-          .map((option) => option.trim())
-          .filter(Boolean)
+      ? parseCSVList(spec.slice(separatorIndex + 1))
       : [];
 
   return { type, options };
@@ -1287,9 +1222,7 @@ function renderParamControl(p, i) {
   }
 
   if (type === "enum_multi" && enumOptions.length) {
-    const selectedValues = value
-      ? value.split(",").map((v) => v.trim()).filter(Boolean)
-      : [];
+    const selectedValues = parseCSVList(value);
     return `
             <div class="param-enum param-enum-multi" data-param-index="${i}">
                 <input
@@ -1376,9 +1309,7 @@ function setEnumMultiControlValue(control, toggleValue, notify = true) {
   const selected = control.querySelector(".param-enum-selected");
   if (!hiddenInput || !selected) return;
 
-  const current = hiddenInput.value
-    ? hiddenInput.value.split(",").map((v) => v.trim()).filter(Boolean)
-    : [];
+  const current = parseCSVList(hiddenInput.value);
   const idx = current.indexOf(toggleValue);
   if (idx === -1) current.push(toggleValue);
   else current.splice(idx, 1);
@@ -1416,7 +1347,7 @@ function setEnumMultiControlValueSync(control, value) {
   const selected = control.querySelector(".param-enum-selected");
   if (!hiddenInput || !selected) return;
   hiddenInput.value = value;
-  const values = value ? value.split(",").map((v) => v.trim()).filter(Boolean) : [];
+  const values = parseCSVList(value);
   selected.textContent = values.join(", ") || "enum (multi)";
   selected.classList.toggle("is-placeholder", values.length === 0);
   control.querySelectorAll(".param-enum-multi-option").forEach((option) => {
@@ -1600,20 +1531,12 @@ function renderParams() {
       '<div class="text-xs text-gray-500 text-center py-2">No parameters needed.</div>';
   }
 
-  setTimeout(() => {
-    requestAnimationFrame(restoreResponseArea);
-  }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+  scheduleRestoreResponseArea();
 
-  if (currentParams.length > 0) {
-    if (window.innerWidth >= 768) {
-      paramsChevron.classList.add("rotated");
-      paramsOpen = true;
-      updateParamsBodyHeight();
-    } else {
-      paramsChevron.classList.remove("rotated");
-      paramsOpen = false;
-      paramsBody.style.height = null;
-    }
+  if (currentParams.length > 0 && window.innerWidth >= 768) {
+    paramsChevron.classList.add("rotated");
+    paramsOpen = true;
+    updateParamsBodyHeight();
   } else {
     paramsChevron.classList.remove("rotated");
     paramsOpen = false;
@@ -1671,9 +1594,7 @@ paramsToggle.addEventListener("click", () => {
     paramsBody.style.height = null;
   }
   
-  setTimeout(() => {
-    requestAnimationFrame(restoreResponseArea);
-  }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+  scheduleRestoreResponseArea();
 });
 
 function selectInitialEndpointFromCurrentCategory() {
@@ -1711,6 +1632,13 @@ function restoreResponseArea() {
   if (lastRawResponse) responseArea.style.display = null;
 }
 
+// Restores the response area after params panel animations settle
+// (skips the delay entirely if the user prefers reduced motion).
+function scheduleRestoreResponseArea() {
+  const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150;
+  setTimeout(() => requestAnimationFrame(restoreResponseArea), delay);
+}
+
 function showTurnstileChallenge() {
   if (turnstileRendered) return;
   turnstileRendered = true;
@@ -1719,10 +1647,7 @@ function showTurnstileChallenge() {
   sendBtn.classList.add("opacity-50", "cursor-not-allowed");
   sendBtn.classList.remove("opacity-70");
 
-  setStatusDotColor("yellow-400", false);
-  statusText.textContent = "Verifying";
-  statusText.className = "text-yellow-400";
-  slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+  setStatus("yellow-400", "Verifying", "text-yellow-400");
 
   responseArea.innerHTML = `
     <div class="w-full flex flex-col items-center justify-center">
@@ -1790,10 +1715,7 @@ function showTurnstileChallenge() {
 
 async function refreshEndpointsFromJson() {
   try {
-    setStatusDotColor("blue-400", false);
-    statusText.textContent = "Connecting";
-    statusText.className = "text-gray-400";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("blue-400", "Connecting", "text-gray-400");
 
     let statsRes = null;
     try {
@@ -1835,26 +1757,17 @@ async function refreshEndpointsFromJson() {
     } catch {}
 
     if (statusText.textContent === "Connecting") {
-      setStatusDotColor("gray-500");
-      statusText.textContent = statsRes && !statsRes.ok ? `${statsRes.status} - Failed` : "Idle";
-      statusText.className = "text-gray-500";
-      slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+      setStatus("gray-500", statsRes && !statsRes.ok ? `${statsRes.status} - Failed` : "Idle", "text-gray-500");
     }
     return true;
   } catch {
-    setStatusDotColor("red-500");
-    statusText.textContent = "Failed";
-    statusText.className = "text-red-400";
-    slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+    setStatus("red-500", "Failed", "text-red-400");
     sendBtn.classList.remove("opacity-50", "cursor-not-allowed");
     return false;
   }
 }
 
 async function fetchInitialEndpoints() {
-  const hasInitialEndpoints =
-    endpoints[currentCategory] && endpoints[currentCategory].length > 0;
-
   selectInitialEndpointFromCurrentCategory();
   setActiveCategoryTab();
 }
@@ -1999,11 +1912,7 @@ tabBtns.forEach((btn) => {
           behavior: window.innerWidth >= 768 ? "smooth" : "auto",
         });
 
-        if(window.innerWidth >= 768) {
-          setTimeout(() => {
-            requestAnimationFrame(restoreResponseArea);
-          }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
-        }
+        if (window.innerWidth >= 768) scheduleRestoreResponseArea();
       },
       wasOpen ? 50 : 0,
     );
@@ -2244,15 +2153,12 @@ clearResponseBtn.addEventListener("click", () => {
   hasMediaResponse = false;
   responseArea.classList.add("empty-state");
   responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
-  setStatusDotColor("gray-500");
-  statusText.textContent = "Idle";
-  statusText.className = "text-gray-500";
-  slideStatusText(statusText.textContent, "font-semibold " + statusText.className);
+  setStatus("gray-500", "Idle", "text-gray-500");
   updateConnectionUI();
 });
 
 sendBtn.addEventListener("click", () => {
-  if(isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying") return;
+  if (isBusy()) return;
   if (pageFromPath(window.location.pathname) !== "playground") return;
   if (!hasConnection()) {
     updateConnectionUI();
@@ -2392,7 +2298,7 @@ function syntaxHighlight(json) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-    if (isLoading || isCoolingDown || turnstileRendered || document.getElementById("turnstileWidget") || statusText.textContent === "Verifying") return;
+    if (isBusy()) return;
     sendBtn.click();
   }
 });

@@ -12,7 +12,6 @@ import discordWebhook from "./discordWebhook.js";
 import magicstudio from "./magicstudio.js";
 import flux from "./flux.js";
 import discordListMember from "./discordListMember.js";
-import discordVoice from "./discordVoice.js";
 import gpt from "./gpt.js";
 import discordListChannel from "./discordListChannel.js";
 import discordInfoServer from "./discordInfoServer.js";
@@ -45,5 +44,6 @@ import discordCreateRole from "./discordCreateRole.js";
 import discordModifyChannel from "./discordModifyChannel.js";
 import discordModifyAllChannels from "./discordModifyAllChannels.js";
 import discordModifyAllRoles from "./discordModifyAllRoles.js";
+import discordVoice from "./discordVoice.js";
 
-export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, discordVoice, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, discordModifyRole, discordInfoClient, discordCreateRole, discordModifyChannel, discordModifyAllChannels, discordModifyAllRoles] as any[];
+export default [geminiAmp, translateAmp, discordInfoMember, discordInfoMessages, timezone, discordModifyMember, discordModifyServer, discordStream, discordTiktokFeed, discordWebhook, magicstudio, flux, discordListMember, gpt, discordListChannel, discordInfoServer, discordListRole, discordInfoInvite, discordInfoChannel, discordInfoRole, discordListWebhooks, emoji, discordInfoMessage, db, discordListInvite, emojiKitchen, discordInfoAutomod, md5, discordListMemberRole, discordInfoApp, gemma, discordInfoSticker, discordListMemberTags, country, mealRecipe, timeEvents, discordTts, cloudTts, tts, discordModifyRole, discordInfoClient, discordCreateRole, discordModifyChannel, discordModifyAllChannels, discordModifyAllRoles, discordVoice] as any[];

@@ -22,6 +22,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				total: job.total,
 				success: job.success,
 				failed: job.failed,
+				none: job.none || 0,
 				data: {
 					status: "awaiting",
 					process_id: job.processId,
@@ -32,10 +33,12 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				total: job.total,
 				success: job.success,
 				failed: job.failed,
+				none: job.none || 0,
 				data: {
 					status: "done",
 					success: job.data.success || [],
 					fail: job.data.fail || [],
+					none: job.data.none || [],
 				},
 			});
 		}
@@ -166,6 +169,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				total: totalCount,
 				success: 0,
 				failed: 0,
+				none: 0,
 				data: {
 					status: "awaiting",
 					process_id: processId,
@@ -179,15 +183,27 @@ app.get("/discord/modifyAllRoles", async (c) => {
 			(async () => {
 				const successIds: string[] = [];
 				const failIds: string[] = [];
+				const noneIds: string[] = [];
 
 				for (const [memId, member] of targetMembers) {
 					try {
+						let alreadyMatches = false;
 						if (modeParam === "add") {
-							await member.roles.add(rolesToApply);
+							alreadyMatches = rolesToApply.every((r) => member.roles.cache.has(r.id));
 						} else {
-							await member.roles.remove(rolesToApply);
+							alreadyMatches = rolesToApply.every((r) => !member.roles.cache.has(r.id));
 						}
-						successIds.push(memId);
+
+						if (alreadyMatches) {
+							noneIds.push(memId);
+						} else {
+							if (modeParam === "add") {
+								await member.roles.add(rolesToApply);
+							} else {
+								await member.roles.remove(rolesToApply);
+							}
+							successIds.push(memId);
+						}
 					} catch {
 						failIds.push(memId);
 					}
@@ -196,10 +212,12 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				session.status = "done";
 				session.success = successIds.length;
 				session.failed = failIds.length;
+				session.none = noneIds.length;
 				session.data = {
 					status: "done",
 					success: successIds,
 					fail: failIds,
+					none: noneIds,
 				};
 
 				activeGuildJobs.delete(guildId);
@@ -213,6 +231,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				total: session.total,
 				success: session.success,
 				failed: session.failed,
+				none: session.none,
 				data: {
 					status: "awaiting",
 					process_id: processId,

@@ -2061,6 +2061,195 @@ export const SPLyrics = async function SPLyrics(que: string, refresh_auth: boole
 	}
 };
 
+export const LavalinkLyrics = async function LavalinkLyrics(que: string, trackEncoded?: string | null): Promise<any> {
+	if (!que && !trackEncoded) return null;
+	try {
+		const raw = process.env.LAVALINK_HOST || "";
+		if (!raw) return null;
+
+		let hosts: string[];
+		try {
+			hosts = JSON.parse(raw);
+			if (!Array.isArray(hosts)) hosts = [];
+		} catch {
+			hosts = [raw];
+		}
+
+		for (const entry of hosts) {
+			if (typeof entry !== "string" || !entry) continue;
+			const parts = entry.split(":");
+			if (parts.length < 5) continue;
+			const host = parts[1] || "";
+			const port = parseInt(parts[2]);
+			const authorization = parts.length >= 4 ? parts.slice(3, parts[parts.length - 1] === "true" || parts[parts.length - 1] === "false" ? -1 : undefined).join(":") : "";
+			const secure = parts[parts.length - 1] === "true";
+			if (!host || isNaN(port)) continue;
+
+			const params = new URLSearchParams();
+			if (trackEncoded) params.set("track", trackEncoded);
+			else params.set("query", que);
+
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 8000);
+			try {
+				const pull = await fetch(`${secure ? "https" : "http"}://${host}:${port}/lyrics?${params.toString()}`, {
+					headers: { Authorization: authorization, ...commonHeaders },
+					signal: controller.signal,
+				});
+				if (!pull.ok) continue;
+
+				const res: any = await pull.json();
+				const lines: any[] = res?.lines;
+				if (!Array.isArray(lines) || lines.length === 0) continue;
+
+				const lrcLines: string[] = [];
+				const plainLines: string[] = [];
+				for (const l of lines) {
+					const text = String(l?.line ?? "").trim();
+					if (!text) continue;
+					plainLines.push(text);
+					const time = Number(l?.time);
+					if (!isNaN(time) && time >= 0) {
+						const mins = Math.floor(time / 60000)
+							.toString()
+							.padStart(2, "0");
+						const secs = ((time % 60000) / 1000).toFixed(2).padStart(5, "0");
+						lrcLines.push(`[${mins}:${secs}] ${text}`);
+					} else {
+						lrcLines.push(text);
+					}
+				}
+				if (plainLines.length === 0) continue;
+
+				return {
+					data: res?.sourceName || res?.provider || null,
+					lyrics: plainLines.join("\n"),
+					syncLyrics: lrcLines.join("\n") || null,
+					footer: res?.provider ? `Source: ${res.provider}` : null,
+				};
+			} finally {
+				clearTimeout(timer);
+			}
+		}
+		return null;
+	} catch {
+		return null;
+	}
+};
+
+export const LRCLib = async function LRCLib(que: string): Promise<any> {
+	if (!que) return null;
+	try {
+		const pull = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+			},
+		});
+		if (!pull.ok) return null;
+
+		const res: any = await pull.json();
+		if (!Array.isArray(res) || res.length === 0) return null;
+
+		const match = res.find((r: any) => r && !r.instrumental && !!(r.syncedLyrics || r.plainLyrics)) || null;
+		if (!match) return null;
+
+		const synced: string | null = match?.syncedLyrics || null;
+		const plain: string | null =
+			match?.plainLyrics ||
+			(synced
+				? synced
+						.split("\n")
+						.map((l: string) => l.replace(/\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]/g, ""))
+						.filter((l: string) => l.trim())
+						.join("\n")
+						.trim() || null
+				: null);
+		if (!plain) return null;
+
+		return {
+			lyrics: plain,
+			syncLyrics: synced || null,
+			footer: match?.albumName ? `${match.artistName || "Unknown"} - ${match.albumName}` : match?.artistName || null,
+		};
+	} catch {
+		return null;
+	}
+};
+
+export const KugouLyrics = async function KugouLyrics(que: string): Promise<any> {
+	if (!que) return null;
+	try {
+		const findPull = await fetch(`https://searchrecommend.kugou.com/get/complex?word=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://www.kugou.com/",
+			},
+		});
+		if (!findPull.ok) return { data: null };
+
+		const findRes: any = await findPull.json();
+		const firstSong = findRes?.data?.song?.[0];
+		if (!firstSong) return { data: null };
+
+		const keyword = `${firstSong.singername} - ${firstSong.songname}`;
+
+		const searchPull = await fetch(`https://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=${encodeURIComponent(keyword)}`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://www.kugou.com/",
+			},
+		});
+		if (!searchPull.ok) return { data: null };
+
+		const searchRes: any = await searchPull.json();
+		const candidates: any[] = searchRes?.candidates;
+		if (!Array.isArray(candidates) || candidates.length === 0) return { data: null };
+
+		const candidate = candidates.find((c) => c?.id && c?.accesskey) || null;
+		if (!candidate) return { data: null };
+
+		const downloadPull = await fetch(`https://lyrics.kugou.com/download?ver=1&client=pc&id=${candidate.id}&accesskey=${candidate.accesskey}&fmt=lrc`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://www.kugou.com/",
+			},
+		});
+		if (!downloadPull.ok) return { data: null };
+
+		const downloadRes: any = await downloadPull.json();
+		const content: string | null = downloadRes?.content || null;
+		if (!content) return { data: null };
+
+		let lrc: string = content;
+		try {
+			lrc = Buffer.from(content, "base64").toString("utf-8");
+		} catch {}
+
+		const cleaned = lrc
+			.split("\n")
+			.filter((l) => !/^\[[a-zA-Z]+:[^\]]*\]$/.test(l.trim()))
+			.join("\n");
+
+		const plain = cleaned
+			.split("\n")
+			.map((l) => l.replace(/\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]/g, ""))
+			.filter((l) => l.trim())
+			.join("\n")
+			.trim();
+		if (!plain) return { data: null };
+
+		return {
+			data: candidate,
+			lyrics: plain,
+			syncLyrics: cleaned || null,
+			footer: keyword,
+		};
+	} catch {
+		return null;
+	}
+};
+
 export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 1): Promise<any> {
 	if (!que) return null;
 	if (refresh) {
@@ -3364,7 +3553,7 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 
 		if (res?.resource_response?.data?.sensitivity?.type) {
 			return {
-				error: `Pins not found. Your query may violate our terms and service`,
+				error: `Pins not found. Your query may violate our terms of service`,
 			};
 		}
 

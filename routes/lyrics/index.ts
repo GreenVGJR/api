@@ -4,5 +4,6 @@ import youtube from "./youtube.js";
 import tidal from "./tidal.js";
 import spotify from "./spotify.js";
 import shazam from "./shazam.js";
+import kugou from "./kugou.js";
 
-export default [deezer, youtube, tidal, spotify, shazam] as any[];
+export default [deezer, youtube, tidal, spotify, shazam, kugou] as any[];

@@ -1524,12 +1524,12 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 		requesterData.username = cachedRequester.username;
 		requesterData.globalName = cachedRequester.globalName;
 		requesterData.tag = cachedRequester.tag;
-		requesterData.avatar = cachedRequester.displayAvatarURL({ size: 1024 });
+		requesterData.avatar = cachedRequester.displayAvatarURL({ size: 4096 });
 		requesterData.bot = cachedRequester.bot;
 	} else if (requestedId && requesterData.avatar && typeof requesterData.avatar === "string" && !requesterData.avatar.startsWith("http")) {
 		const hash = requesterData.avatar;
 		const ext = hash.startsWith("a_") ? "gif" : "png";
-		requesterData.avatar = `https://cdn.discordapp.com/avatars/${requestedId}/${hash}.${ext}?size=1024`;
+		requesterData.avatar = `https://cdn.discordapp.com/avatars/${requestedId}/${hash}.${ext}?size=4096`;
 	} else if (requestedId && requesterData.username == null) {
 		requesterData.username = "Discord User";
 	}
@@ -1567,19 +1567,18 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 				globalName: clientUser.globalName,
 				tag: clientUser.tag,
 				displayName: clientUser.displayName,
-				avatar: clientUser.displayAvatarURL?.({ size: 1024 }) ?? null,
+				avatar: clientUser.displayAvatarURL?.({ size: 4096 }) ?? null,
 				discriminator: clientUser.discriminator,
-				banner: clientUser.bannerURL?.({ size: 1024 }) ?? null,
+				banner: clientUser.bannerURL?.({ size: 4096 }) ?? null,
 				accentColor: clientUser.accentColor ?? null,
-				avatarDecoration: clientUser.avatarDecorationURL?.({ size: 1024 }) ?? null,
+				avatarDecoration: clientUser.avatarDecorationURL?.({ size: 4096 }) ?? null,
 				node: guildPlayer?.node?.id ?? null,
 			}
 		: null;
 
 	const result: { data: any } = {
 		data: {
-			nodeId: guildPlayer?.node?.id ?? null,
-			client: clientData ?? (guildPlayer?.options ? { ...guildPlayer.options, node: guildPlayer.node?.id || guildPlayer.options.node } : null),
+			client: clientData ?? (guildPlayer?.options ? guildPlayer.options : null),
 			id: track.info.identifier,
 			title: track.info.title,
 			author: track.info.author,

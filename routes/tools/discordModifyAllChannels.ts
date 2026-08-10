@@ -97,6 +97,7 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				total: job.total,
 				success: job.success,
 				failed: job.failed,
+				none: job.none || 0,
 				data: {
 					status: "awaiting",
 					process_id: job.processId,
@@ -107,10 +108,12 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				total: job.total,
 				success: job.success,
 				failed: job.failed,
+				none: job.none || 0,
 				data: {
 					status: "done",
 					success: job.data.success || [],
 					fail: job.data.fail || [],
+					none: job.data.none || [],
 				},
 			});
 		}
@@ -245,6 +248,7 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				total: totalCount,
 				success: 0,
 				failed: 0,
+				none: 0,
 				data: {
 					status: "awaiting",
 					process_id: processId,
@@ -265,12 +269,42 @@ app.get("/discord/modifyAllChannels", async (c) => {
 			(async () => {
 				const successIds: string[] = [];
 				const failIds: string[] = [];
+				const noneIds: string[] = [];
 
 				for (const [chId, channel] of targetChannels) {
 					try {
 						if ("permissionOverwrites" in channel && typeof channel.permissionOverwrites?.edit === "function") {
-							await channel.permissionOverwrites.edit(everyoneRole, permObject);
-							successIds.push(chId);
+							const existingOverwrite = channel.permissionOverwrites?.cache?.get(guild.id);
+							let alreadyMatches = true;
+							for (const flag of targetPermissions) {
+								const desired = modeParam === "reset" ? null : modeParam === "allow";
+								const hasAllow = existingOverwrite?.allow?.has(PermissionsBitField.Flags[flag]) || false;
+								const hasDeny = existingOverwrite?.deny?.has(PermissionsBitField.Flags[flag]) || false;
+
+								if (desired === true) {
+									if (!hasAllow || hasDeny) {
+										alreadyMatches = false;
+										break;
+									}
+								} else if (desired === false) {
+									if (hasAllow || !hasDeny) {
+										alreadyMatches = false;
+										break;
+									}
+								} else {
+									if (hasAllow || hasDeny) {
+										alreadyMatches = false;
+										break;
+									}
+								}
+							}
+
+							if (alreadyMatches) {
+								noneIds.push(chId);
+							} else {
+								await channel.permissionOverwrites.edit(everyoneRole, permObject);
+								successIds.push(chId);
+							}
 						} else {
 							failIds.push(chId);
 						}
@@ -282,10 +316,12 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				session.status = "done";
 				session.success = successIds.length;
 				session.failed = failIds.length;
+				session.none = noneIds.length;
 				session.data = {
 					status: "done",
 					success: successIds,
 					fail: failIds,
+					none: noneIds,
 				};
 
 				activeGuildJobs.delete(guildId);
@@ -299,6 +335,7 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				total: session.total,
 				success: session.success,
 				failed: session.failed,
+				none: session.none,
 				data: {
 					status: "awaiting",
 					process_id: processId,

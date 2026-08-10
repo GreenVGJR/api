@@ -2,7 +2,7 @@ import { Hono } from "hono";
 const app = new Hono();
 
 import { getOrCreatePlayer, getQueue, formatTrack, hasActivePlayer, createMusicStream, get247, formatDuration, isRadioActive } from "../../functions/musicPlayer.js";
-import { YTMusic, YTLyrics, tidalLyrics, SPLyrics } from "../../functions/request.js";
+import { YTMusic, YTLyrics, tidalLyrics, SPLyrics, LavalinkLyrics, LRCLib, KugouLyrics } from "../../functions/request.js";
 import { getActiveFilters } from "./filters.js";
 
 app.get("/nowplaying", async (c) => {
@@ -94,7 +94,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 		await log(`Current track: "${track.info.title}" by ${track.info.author}`);
 
 		try {
-			await log("[1/3] Trying YouTube Music lyrics...");
+			await log("[1/6] Trying YouTube Music lyrics...");
 			let lyrics: string | null = null;
 			let syncLyrics: any = null;
 			let source: string = "";
@@ -128,7 +128,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 			}
 
 			if (!lyrics) {
-				await log("[2/3] Trying Tidal lyrics...");
+				await log("[2/6] Trying Tidal lyrics...");
 				try {
 					const tidalData = await tidalLyrics(searchQuery);
 					if (tidalData?.lyrics) {
@@ -144,7 +144,7 @@ app.get("/nowplaying/lyrics", async (c) => {
 			}
 
 			if (!lyrics) {
-				await log("[3/3] Trying Spotify lyrics...");
+				await log("[3/6] Trying Spotify lyrics...");
 				try {
 					const spData = await SPLyrics(searchQuery);
 					if (spData?.lyrics) {
@@ -156,6 +156,54 @@ app.get("/nowplaying/lyrics", async (c) => {
 					}
 				} catch (e: any) {
 					await log(`Spotify lyrics failed: ${e?.message || "unknown"}`);
+				}
+			}
+
+			if (!lyrics) {
+				await log("[4/6] Trying Lavalink lyrics...");
+				try {
+					const lavalinkData = await LavalinkLyrics(searchQuery, track?.encoded || null);
+					if (lavalinkData?.lyrics) {
+						lyrics = lavalinkData.lyrics;
+						syncLyrics = lavalinkData.syncLyrics || null;
+						source = "lavalink";
+						footer = lavalinkData.footer || null;
+						await log("Lavalink lyrics found");
+					}
+				} catch (e: any) {
+					await log(`Lavalink lyrics failed: ${e?.message || "unknown"}`);
+				}
+			}
+
+			if (!lyrics) {
+				await log("[5/6] Trying LRCLib lyrics...");
+				try {
+					const lrclibData = await LRCLib(searchQuery);
+					if (lrclibData?.lyrics) {
+						lyrics = lrclibData.lyrics;
+						syncLyrics = lrclibData.syncLyrics || null;
+						source = "lrclib";
+						footer = lrclibData.footer || null;
+						await log("LRCLib lyrics found");
+					}
+				} catch (e: any) {
+					await log(`LRCLib lyrics failed: ${e?.message || "unknown"}`);
+				}
+			}
+
+			if (!lyrics) {
+				await log("[6/6] Trying Kugou lyrics...");
+				try {
+					const kugouData = await KugouLyrics(searchQuery);
+					if (kugouData?.lyrics) {
+						lyrics = kugouData.lyrics;
+						syncLyrics = kugouData.syncLyrics || null;
+						source = "kugou";
+						footer = kugouData.footer || null;
+						await log("Kugou lyrics found");
+					}
+				} catch (e: any) {
+					await log(`Kugou lyrics failed: ${e?.message || "unknown"}`);
 				}
 			}
 

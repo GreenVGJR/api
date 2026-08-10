@@ -50,6 +50,7 @@ const API_ROUTES = {
 	lyrics: [
 		["/lyrics/youtube?q=", "string"],
 		["/lyrics/spotify?q=", "string"],
+		["/lyrics/kugou?q=", "string"],
 		["/lyrics/shazam?q=", "string"],
 		["/lyrics/tidal?q=", "string"],
 		["/lyrics/deezer?q=", "string"],

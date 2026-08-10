@@ -8,11 +8,13 @@ export interface AsyncJobSession {
 	total: number;
 	success: number;
 	failed: number;
+	none?: number;
 	data: {
 		status: "awaiting" | "done";
 		process_id?: string;
 		success?: string[];
 		fail?: string[];
+		none?: string[];
 	};
 }
 

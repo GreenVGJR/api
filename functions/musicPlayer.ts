@@ -947,7 +947,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			if (log) await log("Creating Lavalink player...");
 
 			const client: Client = new Client({
-				intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+				intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers],
 				presence: { status: "invisible" },
 			});
 

@@ -107,7 +107,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				return { error: "Guild not found or bot is not in the guild" };
 			}
 
-			const botMember = await guild.members.fetchMe().catch(() => null);
+			const botMember = guild.members.me || (await guild.members.fetchMe().catch(() => null));
 			if (!botMember) {
 				return { error: "Could not fetch bot member in guild" };
 			}
@@ -122,7 +122,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 			}
 
 			// Validate that the target roles exist in the guild and bot hierarchy is sufficient
-			const guildRoles = await guild.roles.fetch().catch(() => null);
+			const guildRoles = guild.roles.cache.size > 0 ? guild.roles.cache : await guild.roles.fetch().catch(() => null);
 			if (!guildRoles) {
 				return { error: "Failed to fetch guild roles" };
 			}
@@ -155,7 +155,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				}
 			}
 
-			const members = await guild.members.fetch().catch(() => null);
+			const members = guild.memberCount && guild.members.cache.size >= guild.memberCount ? guild.members.cache : await guild.members.fetch().catch(() => null);
 			if (!members) {
 				return { error: "Failed to fetch guild members" };
 			}

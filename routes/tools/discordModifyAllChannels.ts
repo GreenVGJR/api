@@ -196,7 +196,7 @@ app.get("/discord/modifyAllChannels", async (c) => {
 				return { error: "Guild not found or bot is not in the guild" };
 			}
 
-			const botMember = await guild.members.fetchMe().catch(() => null);
+			const botMember = guild.members.me || (await guild.members.fetchMe().catch(() => null));
 			if (!botMember) {
 				return { error: "Could not fetch bot member in guild" };
 			}

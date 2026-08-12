@@ -144,15 +144,24 @@ app.get("/discord/modifyAllRoles", async (c) => {
 			}
 
 			// Also verify bot role hierarchy (bot highest role must be higher than target roles)
+			// Skip roles that are too high and count them as failed instead of blocking the operation
 			const botHighestRole = botMember.roles.highest;
+			const skippedRoles: string[] = [];
+			const validRolesToApply: any[] = [];
 			for (const role of rolesToApply) {
 				if (role.position >= botHighestRole.position && guild.ownerId !== botMember.id) {
-					return {
-						error: "Missing bot permissions",
-						targets: role.id,
-						missing: `Role hierarchy: Cannot manage role '${role.name}' (${role.id}) because it is higher than or equal to bot's highest role`,
-					};
+					skippedRoles.push(role.id);
+				} else {
+					validRolesToApply.push(role);
 				}
+			}
+
+			if (validRolesToApply.length === 0) {
+				return {
+					error: "Missing bot permissions",
+					targets: skippedRoles.join(", "),
+					missing: `Role hierarchy: Cannot manage any of the requested roles because they are all higher than or equal to bot's highest role`,
+				};
 			}
 
 			const members = guild.memberCount && guild.members.cache.size >= guild.memberCount ? guild.members.cache : await guild.members.fetch().catch(() => null);
@@ -199,18 +208,18 @@ app.get("/discord/modifyAllRoles", async (c) => {
 					try {
 						let alreadyMatches = false;
 						if (modeParam === "add") {
-							alreadyMatches = rolesToApply.every((r) => member.roles.cache.has(r.id));
+							alreadyMatches = validRolesToApply.every((r) => member.roles.cache.has(r.id));
 						} else {
-							alreadyMatches = rolesToApply.every((r) => !member.roles.cache.has(r.id));
+							alreadyMatches = validRolesToApply.every((r) => !member.roles.cache.has(r.id));
 						}
 
 						if (alreadyMatches) {
 							noneIds.push(memId);
 						} else {
 							if (modeParam === "add") {
-								await member.roles.add(rolesToApply);
+								await member.roles.add(validRolesToApply);
 							} else {
-								await member.roles.remove(rolesToApply);
+								await member.roles.remove(validRolesToApply);
 							}
 							successIds.push(memId);
 						}
@@ -221,12 +230,12 @@ app.get("/discord/modifyAllRoles", async (c) => {
 
 				session.status = "done";
 				session.success = successIds.length;
-				session.failed = failIds.length;
+				session.failed = failIds.length + skippedRoles.length;
 				session.none = noneIds.length;
 				session.data = {
 					status: "done",
 					success: successIds,
-					fail: failIds,
+					fail: [...failIds, ...skippedRoles],
 					none: noneIds,
 				};
 

@@ -1612,42 +1612,37 @@ export const Deezer = async function Deezer(que: string, limits: number = 1) {
 	}
 };
 
-async function resolveTikTokRedirect(url: string, maxRedirects = 6): Promise<string> {
-	let currentUrl = url;
-
-	for (let i = 0; i < maxRedirects; i++) {
-		const res = await fetch(currentUrl, {
-			method: "HEAD",
-			redirect: "manual" as const,
-			headers: commonHeaders,
-		});
-
-		if (![301, 302, 303, 307, 308].includes(res.status)) break;
-
-		const location = res.headers.get("location");
-		if (typeof location !== "string" || !location) break;
-
-		const nextUrl = new URL(location, currentUrl).toString();
-		if (nextUrl === currentUrl) break;
-
-		currentUrl = nextUrl;
-	}
-
-	return currentUrl;
-}
-
 export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: boolean = false) {
 	if (!url) return null;
 
 	let videoId: string | null = null;
 	let finalUrl = url;
 
+	const responseData: any = {
+		shareInfo: {},
+	};
+
+	let htmlaweme: any;
+
 	if (url.includes("vm.tiktok.com") || url.includes("vt.tiktok.com")) {
 		try {
-			finalUrl = await resolveTikTokRedirect(url);
-		} catch (e) {
-			console.error("TikTok redirect error:", e);
-			return { error: "Can't resolve this link" };
+			const response = await (httpcloakGet as any)(url, {
+				httpVersion: "h2",
+				tlsOnly: true,
+				headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+			});
+			finalUrl = response.url;
+			const html = await responseText(response);
+			const scriptContent = JSON.parse(html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0]);
+			const findShare = scriptContent.__DEFAULT_SCOPE__["webapp.reflow.global.shareUser"].shareUser;
+			const findQuery = scriptContent.__DEFAULT_SCOPE__["webapp.reflow.global.queryData"].queryData;
+			htmlaweme = scriptContent.__DEFAULT_SCOPE__["webapp.reflow.video.detail"];
+			const findMeta = htmlaweme.shareMeta;
+			const typeSharePlatform = findQuery.share_app_id == 1233 ? "IOS" : findQuery.share_app_id == 1180 || findQuery.share_app_id == 1340 ? "ANDROID" : "";
+			const typeShareConv = findQuery.share_app_id == 1233 || findQuery.share_app_id == 1180 ? "Tiktok" : findQuery.share_app_id == 1340 ? "Tiktok Lite" : "";
+			responseData.shareInfo = { ...findShare, shareMeta: findMeta, shareItemCreated: findQuery.timestamp || 0, shareItemId: findQuery.share_item_id || 0, shareAppFrom: typeSharePlatform, shareAppType: typeShareConv };
+		} catch {
+			responseData.shareInfo = { error: "Failed to resolve this info" };
 		}
 	}
 
@@ -1665,6 +1660,7 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 
 	try {
 		const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
+		finalUrl = targetUrl;
 		let scriptContent: string | undefined;
 		for (let i = 0; i < 15; i++) {
 			try {
@@ -1693,19 +1689,9 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		const checkVideo = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"];
 		const videoDetail = checkVideo?.itemInfo?.itemStruct;
 
-		if (!videoDetail?.video) return { ...(checkVideo ? { error: checkVideo } : { data: null }) };
+		if (!videoDetail?.video) return { ...(checkVideo ? { url: finalUrl, error: checkVideo } : { data: null }) };
 
-		let savetikData: any = null;
-		try {
-			savetikData = await SavetikVideo(targetUrl);
-		} catch (e) {
-			// savetik is optional fallback, keep page data
-		}
-
-		const responseData: any = {
-			aweme_id: videoDetail.id?.toString(),
-			original_play_url: savetikData?.video_url || null,
-		};
+		responseData.aweme_id = videoDetail.id?.toString();
 
 		if (videoDetail.video?.videoID) responseData.videoId = videoDetail.video?.videoID;
 
@@ -1783,9 +1769,8 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		}
 
 		return {
-			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
 			data: responseData,
-			altData: videoDetail,
+			altData: [videoDetail, htmlaweme?.itemInfo?.itemStruct || null],
 		};
 	} catch (e) {
 		console.error(e);
@@ -3525,52 +3510,98 @@ export const infoITunes = async function infoITunes(que: string) {
 	}
 };
 
-export const pinterest = async function pinterest(que: string, type: string = "all", limit_number: number = 20) {
+export const pinterest = async function pinterest(que: string, type: string = "all", limit_number: number = 20, ratio: string = "all") {
 	if (!que) return null;
+	let fallbackCount = 0;
 	try {
 		const isVideo = type === "video";
-		const feat = { options: { query: que + (type === "gif" ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: limit_number }, context: {} };
-		const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=/search/pins/?q=${encodeURIComponent(que)}&data=${encodeURIComponent(JSON.stringify(feat))}`, {
-			headers: {
-				...commonHeaders,
-				Referer: "https://www.pinterest.com/",
-				"Sec-Fetch-Dest": "empty",
-				"Sec-Fetch-Mode": "cors",
-				"Sec-Fetch-Site": "same-origin",
-				"X-Pinterest-PWS-Handler": "www/index.js",
-				"X-Pinterest-Source-Url": "/",
-				"X-Requested-With": "XMLHttpRequest",
-			},
-		});
+		const headers = {
+			...commonHeaders,
+			Referer: "https://www.pinterest.com/",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
+			"X-Pinterest-PWS-Handler": "www/index.js",
+			"X-Pinterest-Source-Url": "/",
+			"X-Requested-With": "XMLHttpRequest",
+		};
 
-		const res: any = await req.json();
+		const ratioFilter = (r: any): boolean => {
+			if (ratio === "all") return true;
+			const img = r?.images?.orig || Object.values(r?.images ?? {})?.[0] || null;
+			const w = img?.width || 0;
+			const h = img?.height || 0;
+			if (!w || !h) return true;
+			if (ratio === "portrait") return h > w;
+			if (ratio === "landscape") return w > h;
+			if (ratio === "square") return Math.abs(w - h) <= Math.min(w, h) * 0.1;
+			return true;
+		};
 
-		if (res?.resource_response?.http_status != 200) {
-			return {
-				error: `Can't process this: ${res?.resource_response?.message}`,
-			};
+		const buildResults = (res: any) => {
+			if (res?.resource_response?.http_status != 200) {
+				return { error: `Can't process this: ${res?.resource_response?.message}` };
+			}
+			const rawResults = res.resource_response?.data?.results;
+			if (rawResults?.[0]) {
+				const results = rawResults.filter((r: any) => r?.type === "pin" && ratioFilter(r));
+				let finalResults: any;
+				if (results?.[0]) {
+					if (type === "gif") {
+						finalResults = results.filter((r: any) => r?.is_gif || Object.values(r?.images ?? {}).some((i: any) => (i?.url ?? "").toLowerCase().endsWith(".gif")));
+					} else if (type === "image") {
+						finalResults = results.filter((r: any) => !r?.is_gif && !Object.values(r?.images ?? {}).some((i: any) => (i?.url ?? "").toLowerCase().endsWith(".gif")) && !(r?.videos?.video_list ?? null));
+					} else {
+						finalResults = results;
+					}
+					if (!finalResults?.[0] && fallbackCount <= 2) return null;
+					return { isFallback: fallbackCount !== 0, ...(finalResults?.[0] ? { data: finalResults } : { error: "Pins not found" }) };
+				}
+			}
+			// Check Sensitive Content (Regional based usually)
+			if (res?.resource_response?.data?.sensitivity?.type) return null;
+
+			return { isFallback: fallbackCount !== 0, error: "Pins not found" };
+		};
+
+		const search = async (query: string, sourceUrl: string, forceShow: boolean) => {
+			const feat = { options: { query: query + (type === "gif" && !forceShow ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: 50 }, context: {} };
+			const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=${encodeURIComponent(sourceUrl)}&data=${encodeURIComponent(JSON.stringify(feat))}`, { headers });
+			return buildResults(await req.json());
+		};
+
+		let result = await search(que, `/search/pins/?q=${encodeURIComponent(que)}`, false);
+
+		// Retry but use autocomplete query
+		// Auto-skipped for nsfw query
+		if (!result) {
+			fallbackCount += 1;
+			try {
+				const words = que.trim().split(/\s+/);
+				const termQue = words.length > 1 ? words.slice(0, -1).join(" ") : que;
+				const acData = { options: { pin_scope: "pins", autocomplete_request_surface: 0, count: null, term: termQue }, context: {} };
+				const acReq = await fetch(`https://www.pinterest.com/resource/AdvancedTypeaheadResource/get/?source_url=/&data=${encodeURIComponent(JSON.stringify(acData))}`, { headers });
+				const acRes: any = await acReq.json();
+				const items = acRes?.resource_response?.data?.items || [];
+				const queryItems = items.filter((k: any) => k?.type === "query" && typeof k?.query === "string");
+				const targetItem = queryItems.find((k: any) => que.toLowerCase() !== k.query.toLowerCase()) || queryItems[0];
+				const suggestionUrl: string | null = targetItem?.url ?? null;
+				if (suggestionUrl) {
+					const suggestedQuery = decodeURIComponent(new URL(suggestionUrl, "https://www.pinterest.com").searchParams.get("q") || que);
+					result = await search(suggestedQuery, suggestionUrl, false);
+					if (!result) {
+						fallbackCount += 1;
+						result = await search(suggestedQuery, suggestionUrl, true);
+					}
+				}
+			} catch {}
 		}
 
-		if (res?.resource_response?.data?.sensitivity?.type) {
-			return {
-				error: `Pins not found. Your query may violate our terms of service`,
-			};
+		if (!result) {
+			return { isFallback: fallbackCount !== 0, error: "Pins not found. Your query may violate terms of service" };
 		}
-
-		const results = res.resource_response?.data?.results;
-		if (!results?.[0]) {
-			return {
-				error: "Pins not found",
-			};
-		}
-
-		if (type === "gif") {
-			return { data: results.filter((r: any) => r?.is_gif || Object.values(r?.images ?? {}).some((i: any) => (i?.url ?? "").toLowerCase().endsWith(".gif"))) };
-		}
-		if (type === "image") {
-			return { data: results.filter((r: any) => !r?.is_gif && !Object.values(r?.images ?? {}).some((i: any) => (i?.url ?? "").toLowerCase().endsWith(".gif")) && !(r?.videos?.video_list ?? null)) };
-		}
-		return { data: results };
+		if ("data" in result && Array.isArray(result.data)) result.data = result.data.slice(0, limit_number);
+		return result;
 	} catch {
 		return null;
 	}
@@ -5380,7 +5411,9 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 	try {
 		let urlObj: URL;
 		try {
-			urlObj = new URL(url);
+			const urlRedirect = await fetch(url, { method: "HEAD", headers: commonHeaders });
+			const location = urlRedirect.url;
+			urlObj = new URL(location);
 		} catch {
 			return { error: "Invalid URL" };
 		}

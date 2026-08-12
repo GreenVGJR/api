@@ -4,6 +4,7 @@ import { removeSessionJobTime } from "../config.json";
 export interface AsyncJobSession {
 	processId: string;
 	guildId: string;
+	roleId?: string;
 	status: "awaiting" | "done";
 	total: number;
 	success: number;

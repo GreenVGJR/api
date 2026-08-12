@@ -17,12 +17,15 @@ app.get("/discord/modifyAllRoles", async (c) => {
 		if (!job) {
 			return c.json({ error: "Invalid or expired processId" }, 202);
 		}
+		const roleKey = job.roleId || "roleId";
 		if (job.status === "awaiting") {
 			return c.json({
 				total: job.total,
-				success: job.success,
-				failed: job.failed,
-				none: job.none || 0,
+				[roleKey]: {
+					success: job.success,
+					failed: job.failed,
+					none: job.none || 0,
+				},
 				data: {
 					status: "awaiting",
 					process_id: job.processId,
@@ -31,14 +34,18 @@ app.get("/discord/modifyAllRoles", async (c) => {
 		} else {
 			return c.json({
 				total: job.total,
-				success: job.success,
-				failed: job.failed,
-				none: job.none || 0,
+				[roleKey]: {
+					success: job.success,
+					failed: job.failed,
+					none: job.none || 0,
+				},
 				data: {
 					status: "done",
-					success: job.data.success || [],
-					fail: job.data.fail || [],
-					none: job.data.none || [],
+					[roleKey]: {
+						success: job.data.success || [],
+						fail: job.data.fail || [],
+						none: job.data.none || [],
+					},
 				},
 			});
 		}
@@ -167,6 +174,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 			const session: AsyncJobSession = {
 				processId,
 				guildId,
+				roleId: roleIdParam,
 				status: "awaiting",
 				total: totalCount,
 				success: 0,
@@ -234,9 +242,11 @@ app.get("/discord/modifyAllRoles", async (c) => {
 
 				return {
 					total: session.total,
-					success: session.success,
-					failed: session.failed,
-					none: session.none,
+					[roleIdParam]: {
+						success: session.success,
+						failed: session.failed,
+						none: session.none,
+					},
 					data: {
 						status: "awaiting",
 						process_id: processId,
@@ -250,14 +260,18 @@ app.get("/discord/modifyAllRoles", async (c) => {
 
 				return {
 					total: session.total,
-					success: session.success,
-					failed: session.failed,
-					none: session.none,
+					[roleIdParam]: {
+						success: session.success,
+						failed: session.failed,
+						none: session.none,
+					},
 					data: {
 						status: "done",
-						success: session.data.success || [],
-						fail: session.data.fail || [],
-						none: session.data.none || [],
+						[roleIdParam]: {
+							success: session.data.success || [],
+							fail: session.data.fail || [],
+							none: session.data.none || [],
+						},
 					},
 				};
 			}

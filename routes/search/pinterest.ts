@@ -5,6 +5,7 @@ import { pinterest } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
 const ALLOWED_TYPES = ["image", "video", "gif", "all"];
+const ALLOWED_RATIOS = ["all", "portrait", "landscape", "square"];
 
 app.get("/pinterest", async (c) => {
 	const query = c.req.query("q");
@@ -19,10 +20,17 @@ app.get("/pinterest", async (c) => {
 		return c.json({ error: `Invalid type. Available: ${ALLOWED_TYPES.join(", ")}` }, 202);
 	}
 	const type = rawType || "all";
+
+	const rawRatio = c.req.query("ratio")?.toLowerCase();
+	if (rawRatio !== undefined && (typeof rawRatio !== "string" || !ALLOWED_RATIOS.includes(rawRatio))) {
+		return c.json({ error: `Invalid ratio. Available: ${ALLOWED_RATIOS.join(", ")}` }, 202);
+	}
+	const ratio = rawRatio || "all";
+
 	const limitStr: any = c.req.query("limit");
 	const limit = isNaN(limitStr) ? 20 : Math.min(40, Math.max(1, parseInt(limitStr, 10)));
 	c.header("X-Route", "www.pinterest.com");
-	return await dispatch(c, () => pinterest(query, type, limit));
+	return await dispatch(c, () => pinterest(query, type, limit, ratio));
 });
 
 export default app;

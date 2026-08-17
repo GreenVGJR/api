@@ -9838,14 +9838,20 @@ export const IMDB = async (query: string): Promise<any> => {
 		const res = await fetch(`https://caching.graphql.imdb.com/?operationName=FindPageSearch&variables=${encodeURIComponent(JSON.stringify(resBody))}&extensions=${encodeURIComponent(JSON.stringify(exter))}`, {
 			headers: {
 				...commonHeaders,
+				Referer: "https://www.imdb.com/",
 				Accept: "application/json",
 				"Content-Type": "application/json",
 			},
 		});
 
+		if (!res.ok) {
+			return { error: "Can't process this" };
+		}
+
 		const response = await res.json();
 
 		const finalres: any = response?.data?.results?.edges;
+		if (!Array.isArray(finalres)) return { data: null };
 
 		return {
 			data: finalres.map((a: any) => {

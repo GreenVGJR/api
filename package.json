@@ -1,20 +1,20 @@
 {
 	"type": "module",
 	"dependencies": {
-		"@hono/node-server": "^2.1.0",
+		"@hono/node-server": "^2.1.1",
 		"bgutils-js": "^4.0.3",
 		"discord.js": "^14.27.0",
 		"emojibase-data": "^17.0.0",
 		"entities": "^8.0.0",
-		"hono": "^4.13.1",
-		"httpcloak": "^1.6.8",
+		"hono": "^4.13.2",
+		"httpcloak": "^1.6.11",
 		"jsdom": "^30.0.1",
 		"lavalink-client": "^2.10.3",
 		"linkedom": "^0.18.13",
 		"sharp": "^0.35.3",
 		"tslib": "^2.8.1",
 		"x-client-transaction-id": "^0.3.1",
-		"youtubei.js": "^17.2.0"
+		"youtubei.js": "^18.0.0"
 	},
 	"scripts": {
 		"pm2-check": "command -v pm2 >/dev/null 2>&1 || npm install -g pm2",

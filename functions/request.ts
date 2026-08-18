@@ -1795,7 +1795,13 @@ export async function SavetikVideo(url: string) {
 			}).toString(),
 		});
 
-		const json: any = await response.json();
+		if (!response.ok) return null;
+		let json: any;
+		try {
+			json = await response.json();
+		} catch {
+			return null;
+		}
 		if (!json || !json.data) return null;
 
 		const { document } = parseHTML(json.data);

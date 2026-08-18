@@ -36,8 +36,6 @@ app.get("/ai-image/flux_schnell", async (c) => {
 					body: JSON.stringify({
 						prompt: query,
 						steps: 1,
-						width: 768,
-						height: 768,
 					}),
 				});
 

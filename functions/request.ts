@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, vnm_2xd } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -489,6 +489,8 @@ let twitterAuth: string | undefined = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejR
 let redditCookies: string = "";
 let tiktokSessionKeys: any = {};
 let tiktokWafCookie: string = "";
+let unsplashClientHash: string = "f048c76212df482c67befc2ffebd9b96941f7bce32";
+let unsplashWafCookie: string = "";
 
 const setTiktokWafCookie = (solved: string) => {
 	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
@@ -2364,6 +2366,7 @@ function decryptConvo(encoded: string): string {
 
 let geminiWiz: { fSid: string; bl: string; expire: number } | null = null;
 let geminiCookies: string | null = null;
+const geminiClientUuid = crypto.randomUUID().toUpperCase();
 
 const getGeminiWiz = async () => {
 	if (geminiWiz && geminiWiz.expire > Date.now()) return geminiWiz;
@@ -2411,15 +2414,13 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 		lastUUID = parsebody?.contentUUID;
 	}
 
-	const qCookies = geminiCookies;
-
 	if (!lastUUID) lastUUID = crypto.randomUUID().toUpperCase();
-	const inner = new Array(69).fill(null);
+	const inner = new Array(97).fill(null);
 	inner[0] = [que, 0, null, null, null, null, 0];
-	inner[1] = ["en"];
+	inner[1] = ["en-US"];
 	inner[2] = [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, ""];
-	inner[3] = null;
-	inner[4] = crypto.randomUUID().replace(/-/g, "");
+	inner[3] = "";
+	inner[4] = crypto.randomBytes(16).toString("hex");
 	inner[6] = [1];
 	inner[7] = 1;
 	inner[10] = 1;
@@ -2428,14 +2429,18 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[18] = 0;
 	inner[27] = 1;
 	inner[30] = [4];
-	inner[41] = [1];
+	inner[41] = [2];
 	inner[53] = 0;
-	inner[59] = null;
+	inner[59] = geminiClientUuid;
 	inner[61] = [];
 	inner[68] = 2;
+	inner[79] = 6;
+	inner[91] = 0;
+	inner[96] = 0;
 	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
 	const wiz = await getGeminiWiz();
+	const qCookies = geminiCookies;
 	geminiReqId = (geminiReqId + 1) % 100000;
 	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
 	if (wiz) {
@@ -2447,10 +2452,11 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			...commonHeaders,
 			...(qCookies ? { Cookie: qCookies } : {}),
 			Accept: "*/*",
-			"Content-Type": "application/x-www-form-urlencoded",
+			"Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
 			Referer: "https://gemini.google.com",
 			Origin: "https://gemini.google.com",
-			"x-goog-ext-525001261-jspb": `[1,null,null,null,"fbb127bbb056c959",null,null,0,[4,6],null,null,1,null,null,1,null,"${lastUUID}"]`,
+			"x-goog-ext-525001261-jspb": `[1,null,null,null,"cf41b0e0dd7d53e5",null,null,0,[4,6,4,6],null,null,1,null,null,6,null,"${lastUUID}"]`,
+			"x-goog-ext-525005358-jspb": `["${geminiClientUuid}",1]`,
 			"x-goog-ext-73010989-jspb": "[0]",
 			"x-goog-ext-73010990-jspb": "[0,0,0]",
 			"Sec-Fetch-Dest": "empty",
@@ -2489,7 +2495,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 	const resText = await req.text();
 	let response;
-	let finalres;
+	let finalres: any;
 	let errorCode: number | null = null;
 
 	try {
@@ -2515,6 +2521,26 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 				}
 			} catch {}
 			if (innerData) break;
+		}
+
+		if (errorCode === 1060) {
+			const err = getGeminiError(1060);
+			return {
+				isFallback: retry !== 0,
+				response: null,
+				error: err?.message || null,
+				code: 1060,
+				data: {
+					responseInfo: {
+						sessionId: wiz?.fSid || null,
+						id: finalres ? finalres[4]?.[0]?.[0]?.split("_")?.[1] || null : null,
+						language: finalres ? finalres[4]?.[0]?.[9] || null : null,
+					},
+					conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
+					expire: finalres ? String(geminiWiz?.expire) : null,
+					model: "gemini-3.5-flash-lite",
+				},
+			};
 		}
 
 		if (!innerData) {
@@ -2557,7 +2583,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 			},
 			conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
 			expire: finalres ? String(geminiWiz?.expire) : null,
-			model: "gemini-3.6-flash",
+			model: "gemini-3.5-flash-lite",
 		},
 	};
 
@@ -3608,7 +3634,8 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 		}
 		if ("data" in result && Array.isArray(result.data)) result.data = result.data.slice(0, limit_number);
 		return result;
-	} catch {
+	} catch (e) {
+		console.error(e);
 		return null;
 	}
 };
@@ -4048,19 +4075,46 @@ export const GettyImage = async function GettyImage(que: string) {
 export const Unsplash = async function Unsplash(que: string) {
 	if (!que) return null;
 
-	try {
-		const pull = await fetch(`https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}`, {
-			headers: commonHeaders,
+	const napiUrl = `https://unsplash.com/napi/search/photos?page=1&per_page=20&query=${encodeURIComponent(que)}&xp=search-affiliate%3Aexperiment`;
+
+	const doFetch = (cookie?: string) =>
+		fetch(napiUrl, {
+			headers: {
+				...commonHeaders,
+				Accept: "*/*",
+				Referer: `https://unsplash.com/s/photos/${encodeURIComponent(que)}`,
+				"client-geo-region": "global",
+				"x-client-version": unsplashClientHash,
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Site": "same-origin",
+				...(cookie ? { Cookie: cookie } : {}),
+			},
 		});
 
+	try {
+		let pull = await doFetch(unsplashWafCookie ?? "");
+		let waf = unsplashWafCookie !== "";
+		if (pull.status === 401 || pull.status === 403) {
+			if (!unsplashWafCookie) {
+				const cookie = await vnm_2xd();
+				if (cookie) {
+					unsplashWafCookie = cookie;
+					return await Unsplash(que);
+				}
+			}
+		}
+
 		if (pull.status === 403) {
-			return {
-				error: "IP Blocked",
-			};
+			return { error: "IP Blocked" };
+		}
+		if (pull.status === 401) {
+			return { error: "Unresolved challenge. Your IP may be temp-blocked" };
 		}
 
 		const res: any = await pull.json();
 		return {
+			_wafChallenge: waf,
 			data: res?.results?.[0]
 				? {
 						non_premium: res?.results.filter((a: any) => !a.premium),
@@ -11968,6 +12022,200 @@ export const AppstoreSearch = async function AppstoreSearch(query: string, type:
 	}
 };
 
+const cleanDescription = (html: any): string | null => {
+	if (typeof html !== "string") return null;
+	return decodeHTML(html)
+		.replace(/<br\s*\/?>/gi, "\n")
+		.replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+		.replace(/<li[^>]*>/gi, "• ")
+		.replace(/<[^>]+>/g, "")
+		.replace(/[ \t]+\n/g, "\n")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+};
+
+let playStoreBootstrap: { fSid: string; bl: string; x: string; expire: number } | null = null;
+
+const getPlayStoreBootstrap = async () => {
+	if (playStoreBootstrap && playStoreBootstrap.expire > Date.now()) return playStoreBootstrap;
+	try {
+		const boot = await fetch("https://play.google.com/store/games", { headers: commonHeaders });
+		const html = await boot.text();
+		const fSid = html.match(/"FdrFJe":"(.*?)"/)?.[1];
+		const bl = html.match(/"cfb2h":"(.*?)"/)?.[1];
+		const x = extractPlayStoreX(html);
+		if (!fSid || !bl || !x) return null;
+		playStoreBootstrap = { fSid, bl, x, expire: Date.now() + 21600 * 1000 };
+	} catch {
+		return null;
+	}
+	return playStoreBootstrap;
+};
+
+export const PlayStoreSearch = async function PlayStoreSearch(query: string) {
+	if (!query) return null;
+	try {
+		const cdnThumb = (u: any) => (typeof u === "string" && u.includes("googleusercontent.com") ? `${u.split("=")[0]}=s0` : u);
+		const boot = await getPlayStoreBootstrap();
+		if (!boot) return { data: null };
+
+		const x = JSON.parse(boot.x);
+		const inner = [[[], x, [query], 4, [null, 1], null, null, [], [1]], [1]];
+		const payload = [
+			["AZO9Cb", JSON.stringify([query, 4, []]), null, "1"],
+			["lGYRle", JSON.stringify(inner), null, "3"],
+		];
+
+		const url = `https://play.google.com/_/PlayStoreUi/data/batchexecute?rpcids=AZO9Cb%2ClGYRle&source-path=%2Fstore%2Fsearch&f.sid=${encodeURIComponent(boot.fSid)}&bl=${encodeURIComponent(boot.bl)}&hl=en-US&authuser&soc-app=121&soc-platform=1&soc-device=1&_reqid=${Math.floor(Math.random() * 1000000)}&rt=c`;
+
+		const req = await fetch(url, {
+			method: "POST",
+			headers: {
+				...commonHeaders,
+				Accept: "*/*",
+				"Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+				Referer: "https://play.google.com/",
+				Origin: "https://play.google.com",
+				"X-Same-Domain": "1",
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Site": "same-origin",
+			},
+			body: `f.req=${encodeURIComponent(JSON.stringify([payload]))}&`,
+		});
+
+		const text = await req.text();
+		let apps: any[] = [];
+		for (const line of text.split("\n")) {
+			const t = line.trim();
+			if (!t.startsWith("[")) continue;
+			try {
+				const arr: any = JSON.parse(t);
+				const items = Array.isArray(arr[0]) ? arr : [arr];
+				for (const it of items) {
+					if (it?.[0] !== "wrb.fr" || it?.[1] !== "lGYRle" || typeof it[2] !== "string") continue;
+					const lgy = JSON.parse(it[2]);
+					const clusters: any[] = lgy?.[0]?.[1] || [];
+					for (const c of clusters) {
+						const f16 = c?.[23]?.[16];
+						const featured = f16?.[2];
+						if (Array.isArray(featured)) {
+							const pkg = f16?.[3]?.["12"]?.[0]?.[0];
+							if (pkg) {
+								const previewImages: string[] = [];
+								const isImg = (u: any) => typeof u === "string" && /^https:\/\/(play-lh\.googleusercontent\.com|i\.ytimg\.com)/.test(u);
+								const vids = featured[100];
+								if (Array.isArray(vids)) {
+									for (const v of vids) {
+										const t = v?.[1]?.[3]?.[2];
+										if (isImg(t)) previewImages.push(cdnThumb(t));
+										const p = v?.[0]?.[3]?.[2];
+										if (isImg(p)) previewImages.push(cdnThumb(p));
+									}
+								}
+								const shots = Array.isArray(featured[78]?.[0]) ? featured[78][0] : featured[78];
+								if (Array.isArray(shots)) {
+									for (const s of shots) {
+										const u = s?.[3]?.[2];
+										if (isImg(u)) previewImages.push(cdnThumb(u));
+									}
+								}
+								apps.push({
+									name: featured[0]?.[0] || null,
+									package: pkg,
+									icon: cdnThumb(featured[95]?.[0]?.[3]?.[2] || null),
+									rating: featured[51]?.[0]?.[0] || null,
+									genre: featured[79]?.[0]?.[0]?.[0] || null,
+									developer: featured[68]?.[0] || null,
+									downloads: featured[13]?.[0] || null,
+									description: cleanDescription(featured[72]?.[0]?.[1]),
+									url: featured[41]?.[0]?.[2] || null,
+									contentRating: featured[9]?.[0] || null,
+									priceText: featured[19]?.[0] || featured[57]?.[0]?.[0]?.[0]?.[0]?.[3]?.[1] || null,
+									previewImage: previewImages,
+									highlighted: true,
+								});
+							}
+						}
+						const list = c?.[22]?.[0];
+						if (Array.isArray(list)) apps.push(...list);
+					}
+					break;
+				}
+			} catch {}
+		}
+
+		const seen = new Set<string>();
+		const data: any[] = [];
+		for (const a of apps) {
+			if (a?.package) {
+				if (seen.has(a.package)) continue;
+				seen.add(a.package);
+				data.push(a);
+				continue;
+			}
+			const o = a?.[0];
+			if (!o) continue;
+			const pkg = o[0]?.[0];
+			if (!pkg || seen.has(pkg)) continue;
+			seen.add(pkg);
+			const previewImages: string[] = [];
+			const isImg = (u: any) => typeof u === "string" && /^https:\/\/(play-lh\.googleusercontent\.com|i\.ytimg\.com)/.test(u);
+			const so = o[2];
+			if (Array.isArray(so)) {
+				for (const s of so) {
+					const u = s?.[3]?.[2];
+					if (isImg(u)) previewImages.push(cdnThumb(u));
+				}
+			}
+			data.push({
+				name: o[3] || null,
+				package: pkg,
+				icon: cdnThumb(o[1]?.[3]?.[2] || null),
+				rating: o[4]?.[0] || null,
+				genre: o[5] || null,
+				developer: o[14] || null,
+				downloads: o[15] || null,
+				description: cleanDescription(o[13]?.[1]),
+				url: o[10]?.[4]?.[2] ? `https://play.google.com${o[10][4][2]}` : null,
+				contentRating: o[24]?.[0] || null,
+				priceText: o[25]?.[0]?.[0]?.[0]?.[0]?.[3]?.[1] || null,
+				previewImage: previewImages,
+			});
+		}
+
+		return { data };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+function extractPlayStoreX(html: string): string | null {
+	const marker = "[[8,[20,50]],null,null,[96,108,72,100,27,177";
+	const idx = html.indexOf(marker);
+	if (idx < 0) return null;
+	let depth = 0;
+	let inStr = false;
+	let escape = false;
+	for (let i = idx; i < html.length; i++) {
+		const ch = html[i];
+		if (inStr) {
+			if (escape) escape = false;
+			else if (ch === "\\") escape = true;
+			else if (ch === '"') inStr = false;
+			continue;
+		}
+		if (ch === '"') inStr = true;
+		else if (ch === "[") depth++;
+		else if (ch === "]") {
+			depth--;
+			if (depth === 0) return html.slice(idx, i + 1);
+		}
+	}
+	return null;
+}
+
 export const DiscordListMemberTags = async (token: string, guildId: string, type: string = "all", outputLimit: number | null = null, self: boolean = false) => {
 	if (!token || token === "null") return { error: "Missing token" };
 	if (!guildId) return { error: "Missing guildId" };
@@ -12855,9 +13103,11 @@ export const DeviantArt = async (query: string, refresh_auth: boolean = false): 
 export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRetried: boolean = false) {
 	if (!query) return null;
 	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+
 		const response = await (httpcloakGet as any)(`https://www.tiktok.com/@${query.toLowerCase()}`, {
 			httpVersion: "h2",
-			tlsOnly: false,
+			tlsOnly: true,
 			headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
 		});
 		const html = await responseText(response);

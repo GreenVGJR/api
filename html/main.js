@@ -28,7 +28,8 @@ const initSPA = () => {
   // Build the UI structure
   document.body.className =
     "bg-black text-white font-sans";
-  document.body.innerHTML = `
+  const appRoot = document.getElementById("appRoot");
+  appRoot.innerHTML = `
     <div class="h-dvh flex flex-col max-w-5xl xl:max-w-[84rem] mx-auto px-4 sm:px-6 py-3 sm:py-6">
         <section id="playgroundView" class="flex flex-col flex-1 min-h-0">
         <div class="flex flex-col xl:grid xl:grid-cols-[150px_minmax(0,64rem)_150px] gap-1.5 xl:gap-4 flex-1 min-h-0">
@@ -156,6 +157,22 @@ const initSPA = () => {
 
 // Start SPA immediately
 initSPA();
+
+// Splash screen shown on load (like x.com/home), centered on mobile.
+// The markup already lives in playground.html so it paints during parse,
+// while scripts/CSS are still loading. We just dismiss it once ready.
+(function dismissSplash() {
+  const splash = document.getElementById("splashScreen");
+  if (!splash) return;
+
+  const dismiss = () => {
+    splash.remove();
+  };
+
+  window.addEventListener("load", () => dismiss());
+  splash.addEventListener("click", dismiss, { once: true });
+  document.addEventListener("keydown", dismiss, { once: true });
+})();
 
 // Force a full reload if the page was restored from bfcache (back/forward cache)
 // so a stale/cached instance is never reused.

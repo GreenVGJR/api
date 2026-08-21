@@ -1,11 +1,13 @@
 import crypto from "crypto";
 import { Hono } from "hono";
 import { commonHeaders } from "../../functions/request.js";
-import { blobDispatch } from "../../functions/httpRequest.js";
+import { blobDispatch, aiImageHandshake, cacheAiImage, getFailingImage } from "../../functions/httpRequest.js";
 
 const app = new Hono();
 
 app.get("/ai-image/magicstudio", async (c) => {
+	const gate = await aiImageHandshake(c);
+	if (gate) return gate;
 	const query = c.req.query("prompt");
 	if (query === undefined) {
 		return c.json({ error: "Missing parameter required" }, 202);
@@ -26,8 +28,8 @@ app.get("/ai-image/magicstudio", async (c) => {
 
 	return await blobDispatch(
 		c,
-		async () =>
-			await fetch("https://ai-api.magicstudio.com/api/ai-art-generator", {
+		async () => {
+			const r = await fetch("https://ai-api.magicstudio.com/api/ai-art-generator", {
 				method: "POST",
 				headers: {
 					...commonHeaders,
@@ -35,7 +37,15 @@ app.get("/ai-image/magicstudio", async (c) => {
 					Referer: "https://magicstudio.com/ai-art-generator",
 				},
 				body: formq,
-			}),
+			});
+			if (!r.ok) {
+				c.header("X-Message", `Upstream returned ${r.status}`);
+				return new Response(await getFailingImage(), { status: 200, headers: { "Content-Type": "image/png" } });
+			}
+			const buf = await r.arrayBuffer();
+			cacheAiImage(c, buf, "image/png");
+			return new Response(buf, { status: r.status, headers: { "Content-Type": "image/png" } });
+		},
 		{ "content-type": "image/png" },
 	);
 });

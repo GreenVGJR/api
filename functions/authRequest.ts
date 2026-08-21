@@ -562,3 +562,62 @@ export const devianKey = async function devianKey(): Promise<{
 		return null;
 	}
 };
+
+let zmn_0ka: string | null = null;
+let lqp_7xb = 0;
+
+const qwz_8kp = async (): Promise<string | null> => {
+	try {
+		// Sometimes unsplash redirect multiple times
+		const base = await fetch("https://unsplash.com/", {
+			headers: commonHeaders,
+		});
+		if (base.status !== 401) return null;
+		const baseSC = (base.headers.getSetCookie ? base.headers.getSetCookie() : [base.headers.get("set-cookie")]) as string[];
+		const html = await base.text();
+		const marker = '<script id="anubis_challenge" type="application/json">';
+		const i = html.indexOf(marker);
+		if (i < 0) return null;
+		const ch = JSON.parse(html.slice(i + marker.length, html.indexOf("</script>", i)));
+		const target = "0".repeat(ch.challenge.difficulty);
+		let nonce = 0;
+		let hash = "";
+		const solveStart = Date.now();
+		for (;;) {
+			hash = crypto
+				.createHash("sha256")
+				.update(ch.challenge.randomData + nonce, "utf8")
+				.digest("hex");
+			if (hash.startsWith(target)) break;
+			nonce++;
+			if (nonce > 50_000_000) return null;
+		}
+		const elapsedTime = Date.now() - solveStart;
+		const submitUrl = `https://unsplash.com/.within.website/x/cmd/anubis/api/pass-challenge?id=${encodeURIComponent(ch.challenge.id)}&response=${hash}&nonce=${nonce}&redir=%2F&elapsedTime=${elapsedTime}`;
+		const sub = await fetch(submitUrl, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://unsplash.com/.within.website?redir=%2F",
+				"Sec-Fetch-Site": "same-origin",
+				Cookie: baseSC.map((c: string) => c.split(";")[0]).join("; "),
+			},
+			redirect: "manual",
+		});
+		const subSC = (sub.headers.getSetCookie ? sub.headers.getSetCookie() : [sub.headers.get("set-cookie")]) as string[];
+		const auth = subSC.find((c: string) => c.startsWith("techaro.lol-anubis-auth="));
+		if (!auth) return null;
+		return auth.split(";")[0];
+	} catch {
+		return null;
+	}
+};
+
+export const vnm_2xd = async (): Promise<string | null> => {
+	if (zmn_0ka && lqp_7xb > Date.now()) return zmn_0ka;
+	const c = await qwz_8kp();
+	if (c) {
+		zmn_0ka = c;
+		lqp_7xb = Date.now() + 6 * 3600 * 1000;
+	}
+	return c;
+};

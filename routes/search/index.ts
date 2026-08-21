@@ -54,5 +54,6 @@ import pixabay from "./pixabay.js";
 import radio from "./radio.js";
 import appStore from "./appStore.js";
 import deviantart from "./deviantart.js";
+import playstore from "./playstore.js";
 
-export default [youtubeVideo, youtubeMusic, soundcloud, spotify, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, youtubePlaylist, tidalOpen, flickr, audiomack, cruncy, safebooru, konachan, giphyV2, tumblr, googleImage, googleImageV2, googleSearch, duckSearch, stockCake, pixabay, radio, appStore, deviantart] as any[];
+export default [youtubeVideo, youtubeMusic, soundcloud, spotify, deezer, tidal, genius, pinterest, istockphoto, unsplash, pixiv, discordDiscovery, Bilibili, discordApps, jiosaavn, twitch, threadUsers, pexels, tiktokVideo, tiktokMusic, tiktokUser, redditMedia, robloxGames, youtubeChannel, robloxAudio, bandcamp, capcut, tenor, giphy, appleMusic, imgur, klipy, tiktokFeed, patreon, trakteer, imdb, imgflip, youtubePlaylist, tidalOpen, flickr, audiomack, cruncy, safebooru, konachan, giphyV2, tumblr, googleImage, googleImageV2, googleSearch, duckSearch, stockCake, pixabay, radio, appStore, deviantart, playstore] as any[];

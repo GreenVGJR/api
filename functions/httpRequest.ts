@@ -2,6 +2,9 @@ import { Context } from "hono";
 import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
 import zlib from "zlib";
+import crypto from "crypto";
+import { readFile } from "fs/promises";
+import path from "path";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara } from "../app.js";
@@ -12,20 +15,100 @@ const logResponse = <T extends Response>(c: Context, response: T, statusCode = r
 	return response;
 };
 
-export const blobDispatch = async (c: Context, body: any, headers?: any) => {
-	await rateLimit();
+type AiImageEntry = { prompt: Buffer; image?: Buffer; contentType?: string; ts?: string; expire: number };
 
+const aiImageRegistry = new Map<string, AiImageEntry>();
+const AI_IMAGE_TTL = 7 * 24 * 3600 * 1000;
+
+const pruneAiImageRegistry = () => {
+	const now = Date.now();
+	for (const [k, v] of aiImageRegistry) if (v.expire < now) aiImageRegistry.delete(k);
+};
+
+// Scopes the handshake/cache entry to BOTH the prompt and the current URL path,
+// so the same prompt on a different AI-image route gets its own validation.
+const aiImageKey = (c: Context): string => {
+	const prompt = c.req.query("prompt") || "";
+	const pathname = new URL(c.req.url).pathname;
+	return crypto.createHash("md5").update(`${prompt}|${pathname}`, "utf8").digest("hex");
+};
+
+export const aiImageHandshake = async (c: Context): Promise<Response | null> => {
+	const prompt = c.req.query("prompt");
+	if (prompt === undefined || prompt === "") return null;
+	const hash = aiImageKey(c);
+	const hs = c.req.query("hs");
+	const ts = c.req.query("ts");
+	const url = new URL(c.req.url);
+
+	if (hs || ts) {
+		if (hs !== hash) return c.text("Forbidden", 403);
+		pruneAiImageRegistry();
+		const entry = aiImageRegistry.get(hash);
+		if (entry && entry.expire > Date.now()) {
+			if (ts && entry.ts && ts !== entry.ts) return c.text("Forbidden", 403);
+			if (entry.image) {
+				return new Response(entry.image, {
+					headers: {
+						"Content-Type": entry.contentType || "image/png",
+						"Cache-Control": "public, max-age=3600, s-maxage=3600",
+					},
+				});
+			}
+			return null;
+		}
+	}
+
+	const newTs = String(Date.now());
+	aiImageRegistry.set(hash, { prompt: Buffer.from(prompt, "utf8"), ts: newTs, expire: Date.now() + AI_IMAGE_TTL });
+	url.searchParams.set("hs", hash);
+	url.searchParams.set("ts", newTs);
+	return c.redirect(url.toString(), 302);
+};
+
+export const cacheAiImage = (c: Context, buffer: Buffer | ArrayBuffer, contentType: string) => {
+	const hash = aiImageKey(c);
+	const prompt = c.req.query("prompt") || "";
+	const existing = aiImageRegistry.get(hash);
+	aiImageRegistry.set(hash, {
+		prompt: existing?.prompt || Buffer.from(prompt, "utf8"),
+		ts: existing?.ts || String(Date.now()),
+		image: buffer instanceof ArrayBuffer ? Buffer.from(new Uint8Array(buffer)) : Buffer.from(buffer),
+		contentType,
+		expire: Date.now() + AI_IMAGE_TTL,
+	});
+};
+
+export const aiImageDispatch = async (c: Context, buffer: Buffer | ArrayBuffer, contentType: string) => {
+	if (c.req.query("prompt")) cacheAiImage(c, buffer, contentType);
+	return await blobDispatch(c, buffer, { "content-type": contentType });
+};
+
+let _failingImage: Buffer | null = null;
+export const getFailingImage = async (): Promise<Buffer> => {
+	if (!_failingImage) {
+		_failingImage = await readFile(path.join(__dirname, "..", "public", "failingimage.png"));
+	}
+	return _failingImage;
+};
+
+// Returns the "generation failed" image with the error reason in X-Message.
+export const aiImageFailure = async (c: Context, message: string): Promise<Response> => {
+	const buf = await getFailingImage();
+	return new Response(buf, {
+		status: 200,
+		headers: { "Content-Type": "image/png", "x-message": message },
+	});
+};
+
+export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
 		return logResponse(c, c.text("", 200));
 	}
 
-	if (Object.entries(c.req.queries()).length >= 3) {
-		return logResponse(c, c.text("Forbidden", 403));
-	}
-
-	c.header("X-Enc-Route", "v3");
+	c.header("X-Enc-Route", "v4");
 
 	const type = headers?.get ? headers.get("content-type") : headers?.["content-type"];
 	const filtype1 = type?.split("/")?.[0];
@@ -41,7 +124,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	const contentType = filtype2 ? `${filtype1}/${filtype2}` : type || "application/octet-stream";
 
 	c.header("Content-Type", contentType);
-	c.header("Cache-Control", "public, max-age=30, must-revalidate, no-transform");
+	c.header("Cache-Control", "public, max-age=3600, s-maxage=3600, must-revalidate, no-transform");
 
 	return logResponse(
 		c,

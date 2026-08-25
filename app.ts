@@ -20,7 +20,7 @@ const _g = globalThis as any;
 export const autoGenBuild: any = _g.__vgjr_autoGenBuild || (_g.__vgjr_autoGenBuild = crypto.randomBytes(6).toString("base64url"));
 export const autoGenBuildPara: any = _g.__vgjr_autoGenBuildPara || (_g.__vgjr_autoGenBuildPara = crypto.randomBytes(6).toString("base64url"));
 
-const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), import("./routes/suggest/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "public/splashloadvgjr.png")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
+const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), import("./routes/suggest/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
 const API_ROUTES = {
 	suggestion: [
@@ -59,7 +59,6 @@ const API_ROUTES = {
 		ai: {
 			chat: [
 				["/tools/chat/gemma?prompt=", "string"],
-				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
 			],
 			image_generation: [
@@ -80,6 +79,7 @@ const API_ROUTES = {
 			["/tools/tts?q=&lang=", "string", "string"],
 			["/tools/cloud-tts?q=&lang=", "string", "string"],
 		],
+		network: [["/tools/dnslookup?url=", "string"]],
 		db: [
 			["/tools/db/get?q=&hash=", "string", "string"],
 			["/tools/db/getAll?q=&hash=", "string", "string"],
@@ -285,7 +285,7 @@ app.use("*", async (c: Context, next: Next) => {
 
 const starttime = (globalThis as any).__vgjr_starttime || Date.now();
 
-const [reqsModule, lyricsModule, toolsModule, infoModule, profileModule, downloadModule, musicModule, suggestModule, honoPackageJson, robots, favicon, splashImage, playgroundTemplateSource, mainJs, cfJs, backChallengeTemplateSource, challengeTemplateSource, rawCss, amcTemplateSource] = await startupDataPromise;
+const [reqsModule, lyricsModule, toolsModule, infoModule, profileModule, downloadModule, musicModule, suggestModule, honoPackageJson, robots, favicon, playgroundTemplateSource, mainJs, cfJs, backChallengeTemplateSource, challengeTemplateSource, rawCss, amcTemplateSource] = await startupDataPromise;
 
 const reqs = reqsModule.default;
 const lyrics = lyricsModule.default;
@@ -464,7 +464,7 @@ app.use("*", async (c: Context, next: Next) => {
 
 if (BUILD_ID) {
 	const apiPrefixes = ["search", "lyrics", "tools", "info", "music"];
-	const excludedPaths = ["favicon.ico", "robots.txt", "playground", "terms", "privacy", "storage"];
+	const excludedPaths = ["favicon.ico", "robots.txt", "playground", "terms", "privacy"];
 
 	app.use("*", async (c: Context, next: Next) => {
 		const url = new URL(c.req.url);
@@ -522,12 +522,6 @@ app.get("/favicon.ico", (c: Context) => {
 	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 	c.header("Content-Type", "image/x-icon");
 	return c.body(favicon);
-});
-
-app.get("/storage/playground/splashloadvgjr.png", (c: Context) => {
-	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
-	c.header("Content-Type", "image/png");
-	return c.body(splashImage);
 });
 
 app.get("/robots.txt", (c: Context) => {
@@ -589,15 +583,14 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	c.header("Content-Encoding", "gzip");
 	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
 		const host = (c.req.header("host") || "").toLowerCase();
-		const isLocal = isLocalRequest(host);
-		const apiBaseUrl = isLocal ? `http://${host}` : `https://${targetDomain}`;
+		const fwdProto = (c.req.header("x-forwarded-proto") || "").split(",")[0].trim();
+		const pageProto = fwdProto || (c.req.url.startsWith("https:") ? "https" : "http");
+		const apiBaseUrl = pageProto === "https" ? `https://${host}` : `http://${host}`;
 		const tsKeys = getTurnstileKeys(host);
 		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)};`;
 		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 
 		const rendered = playgroundTemplateBase.replace("{{INLINE_CSS}}", mainCss).replace("{{INLINE_CF}}", cfJs).replace("{{INLINE_JS}}", finalJs);
-
-		c.header("Link", "</storage/playground/splashloadvgjr.png>; rel=preload; as=image");
 
 		return stream(c, async (s) => {
 			await s.write("");
@@ -646,20 +639,6 @@ app.get("/", (c: Context) => {
 
 		const listapi = [
 			{
-				source: [
-					{
-						title: "Support Me",
-						url: "https://ko-fi.com/greenvgjr",
-					},
-					{
-						title: "Source Code",
-						url: "https://github.com/GreenVGJR/api",
-					},
-					{
-						title: "Playground",
-						url: `https://${targetDomain}/playground`,
-					},
-				],
 				stats: {
 					cpu: cpu,
 					ram: ram,
@@ -712,6 +691,26 @@ music.forEach((val: any) => {
 suggest.forEach((val: any) => {
 	app.route(`${routeBase}/suggest`, val);
 });
+
+// ── Startup: log loaded endpoint counts per route type ───────────────────────
+const logLoadedEndpoints = (label: string, apps: any[]): number => {
+	const count = apps.reduce((acc, app) => acc + (app?.routes?.length || 0), 0);
+	console.log(`📦 Loaded ${count} ${label} endpoint${count === 1 ? "" : "s"}`);
+	return count;
+};
+
+const routeTypeTotals: Record<string, number> = {
+	search: logLoadedEndpoints("search", reqs),
+	lyrics: logLoadedEndpoints("lyrics", lyrics),
+	tools: logLoadedEndpoints("tools", tools),
+	info: logLoadedEndpoints("info", info),
+	profile: logLoadedEndpoints("profile", profile),
+	download: logLoadedEndpoints("download", download),
+	music: logLoadedEndpoints("music", music),
+	suggest: logLoadedEndpoints("suggest", suggest),
+};
+const totalEndpoints = Object.values(routeTypeTotals).reduce((a, b) => a + b, 0);
+console.log(`✅ Loaded ${totalEndpoints} endpoints total`);
 
 // ── Radio Stream Proxy ────────────────────────────────────────────────────────
 // Lavalink sometimes chokes on non-compliant HTTP responses from radio streams.

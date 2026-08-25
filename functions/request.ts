@@ -6212,73 +6212,6 @@ export async function googleWeather(query: string): Promise<any> {
 	}
 }
 
-export async function OpenRouterGPT(query: string, convo: any = null): Promise<any> {
-	if (!query) return null;
-
-	let messages: any[] = [];
-
-	if (convo) {
-		try {
-			const parsed = JSON.parse(decryptConvo(convo));
-			if (Array.isArray(parsed)) messages = parsed;
-		} catch {
-			messages = [];
-		}
-	}
-
-	messages.push({ role: "user", content: query });
-
-	try {
-		const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-			method: "POST",
-			body: JSON.stringify({
-				model: "openai/gpt-oss-20b:free",
-				messages: messages,
-				reasoning: { enabled: true },
-			}),
-			headers: {
-				Authorization: `Bearer ${process.env.OPEN}`,
-				"Content-Type": "application/json",
-			},
-		});
-
-		if (res.status === 429) {
-			return {
-				error: "Rate-limited",
-			};
-		}
-
-		if (!res.ok) {
-			return {
-				error: "Service unavailable",
-			};
-		}
-
-		const data: any = await res.json();
-		const response = data.choices?.[0]?.message?.content;
-		const reasoning = data.choices?.[0]?.message?.reasoning;
-
-		if (response) {
-			messages.push({ role: "assistant", content: response });
-		}
-
-		if (messages.length > 20) {
-			messages = messages.slice(-20);
-		}
-
-		return {
-			reasoning: reasoning || null,
-			response: response || null,
-			data: {
-				conversation: encryptConvo(JSON.stringify(messages)),
-				model: "gpt-oss-20b",
-			},
-		};
-	} catch {
-		return null;
-	}
-}
-
 let driftCookies: string | null = null;
 
 export async function DriftProfile(query: string): Promise<any> {
@@ -11902,6 +11835,7 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 		}
 
 		return {
+			_warning: "This endpoint will be removed at a certain time",
 			response: response || null,
 			data: { model: "gemma-7b-it", ...(usage || {}) },
 		};

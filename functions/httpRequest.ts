@@ -40,6 +40,8 @@ export const aiImageHandshake = async (c: Context): Promise<Response | null> => 
 	const hs = c.req.query("hs");
 	const ts = c.req.query("ts");
 	const url = new URL(c.req.url);
+	const fwdProto = (c.req.header("x-forwarded-proto") || "").split(",")[0].trim();
+	if (fwdProto === "https") url.protocol = "https:";
 
 	if (hs || ts) {
 		if (hs !== hash) return c.text("Forbidden", 403);

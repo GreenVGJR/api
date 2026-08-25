@@ -158,22 +158,6 @@ const initSPA = () => {
 // Start SPA immediately
 initSPA();
 
-// Splash screen shown on load (like x.com/home), centered on mobile.
-// The markup already lives in playground.html so it paints during parse,
-// while scripts/CSS are still loading. We just dismiss it once ready.
-(function dismissSplash() {
-  const splash = document.getElementById("splashScreen");
-  if (!splash) return;
-
-  const dismiss = () => {
-    splash.remove();
-  };
-
-  window.addEventListener("load", () => dismiss());
-  splash.addEventListener("click", dismiss, { once: true });
-  document.addEventListener("keydown", dismiss, { once: true });
-})();
-
 // Force a full reload if the page was restored from bfcache (back/forward cache)
 // so a stale/cached instance is never reused.
 window.addEventListener("pageshow", (event) => {
@@ -269,7 +253,6 @@ const statusSizer = document.getElementById("statusSizer");
 function syncStatusWidth() {
   if (statusSizer && statusTextWrap) statusTextWrap.style.width = statusSizer.offsetWidth + "px";
 }
-syncStatusWidth();
 
 function slideStatusText(text, className) {
   if (slideAnimTimeout) clearTimeout(slideAnimTimeout);
@@ -2398,7 +2381,6 @@ fetchInitialEndpoints().then(() => {
   // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
   afterFontsReady(async () => {
     adjustHeight();
-    syncStatusWidth();
 
     const updated = await refreshEndpointsFromJson();
     if (!updated) selectInitialEndpointFromCurrentCategory();

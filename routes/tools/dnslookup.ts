@@ -244,6 +244,7 @@ app.get("/dnslookup", async (c) => {
 	if (url === undefined) return c.json({ error: "Missing parameter required" }, 202);
 	if (url === "") return c.json({ error: "Nothing to do" }, 202);
 
+	c.header("X-Route", "dns.google, crt.sh, api.hackertarget.com");
 	return await dispatch(c, () => dnsLookup(url));
 });
 

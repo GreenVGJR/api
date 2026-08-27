@@ -15,7 +15,10 @@ function extractHost(input: string): string | null {
 			return null;
 		}
 	}
-	return trimmed.replace(/^[a-z]+:\/\//i, "").split("/")[0].split(":")[0];
+	return trimmed
+		.replace(/^[a-z]+:\/\//i, "")
+		.split("/")[0]
+		.split(":")[0];
 }
 
 function normalize(name: string, base: string): string | null {
@@ -82,23 +85,20 @@ function fromTlsCert(domain: string, base: string): Promise<string[]> {
 			} catch {}
 			resolve(Array.from(out));
 		};
-		const sock = tls.connect(
-			{ host: domain, port: 443, servername: domain, timeout: 5000 },
-			() => {
-				try {
-					const cert = sock.getPeerCertificate(true);
-					const san = (cert && cert.subjectaltname) || "";
-					for (const part of san.split(",")) {
-						const m = part.trim().match(/^DNS:(.+)$/i);
-						if (m) {
-							const n = normalize(m[1], base);
-							if (n) out.add(n);
-						}
+		const sock = tls.connect({ host: domain, port: 443, servername: domain, timeout: 5000 }, () => {
+			try {
+				const cert = sock.getPeerCertificate(true);
+				const san = (cert && cert.subjectaltname) || "";
+				for (const part of san.split(",")) {
+					const m = part.trim().match(/^DNS:(.+)$/i);
+					if (m) {
+						const n = normalize(m[1], base);
+						if (n) out.add(n);
 					}
-				} catch {}
-				finish();
-			},
-		);
+				}
+			} catch {}
+			finish();
+		});
 		sock.setTimeout(5000, finish);
 		sock.on("error", finish);
 		sock.on("timeout", finish);
@@ -107,11 +107,7 @@ function fromTlsCert(domain: string, base: string): Promise<string[]> {
 
 async function enumerateSubdomains(domain: string): Promise<string[]> {
 	const base = domain.toLowerCase();
-	const [a, b, c] = await Promise.all([
-		fromCrtSh(domain, base),
-		fromHackertarget(domain, base),
-		fromTlsCert(domain, base),
-	]);
+	const [a, b, c] = await Promise.all([fromCrtSh(domain, base), fromHackertarget(domain, base), fromTlsCert(domain, base)]);
 	return Array.from(new Set([...a, ...b, ...c])).sort();
 }
 
@@ -145,9 +141,7 @@ async function queryDoH(host: string, typeName: string): Promise<{ status: numbe
 		const json = (await res.json()) as any;
 		const answers = json.Answer || [];
 		const typeNum = DNS_TYPES.find(([n]) => n === typeName)?.[1];
-		const records = answers
-			.filter((a: any) => a.type === typeNum)
-			.map((a: any) => ({ ttl: a.TTL, data: a.data }));
+		const records = answers.filter((a: any) => a.type === typeNum).map((a: any) => ({ ttl: a.TTL, data: a.data }));
 		return { status: json.Status ?? 0, records };
 	} catch {
 		return { status: -1, records: [] };
@@ -191,9 +185,9 @@ async function dnsLookup(input: string): Promise<any> {
 			domain: host,
 			queryType: "reverse",
 			data: {
-			records: { PTR: ptr.records },
-			subdomains: [],
-			}
+				records: { PTR: ptr.records },
+				subdomains: [],
+			},
 		};
 	}
 
@@ -210,19 +204,14 @@ async function dnsLookup(input: string): Promise<any> {
 	records.SOA = records.SOA.length ? records.SOA[0] : null;
 
 	// Reverse lookup for every resolved address (A / AAAA).
-	const addrs: string[] = [
-		...records.A.map((r: any) => r.data),
-		...records.AAAA.map((r: any) => r.data),
-	];
+	const addrs: string[] = [...records.A.map((r: any) => r.data), ...records.AAAA.map((r: any) => r.data)];
 	const reverse = await Promise.all(
 		addrs.map(async (ip) => {
 			const arpa = ipToArpa(ip);
 			let addr = "";
 			if (arpa) {
 				const pr = await queryDoH(arpa, "PTR");
-				addr = pr.records
-					.map((r: any) => String(r.data).replace(/\.$/, ""))
-					.join(", ");
+				addr = pr.records.map((r: any) => String(r.data).replace(/\.$/, "")).join(", ");
 			}
 			return { ip, addr };
 		}),
@@ -232,10 +221,10 @@ async function dnsLookup(input: string): Promise<any> {
 		domain: host,
 		queryType: "forward",
 		data: {
-		records,
-		reverse,
-		subdomains: await enumerateSubdomains(host),
-		}
+			records,
+			reverse,
+			subdomains: await enumerateSubdomains(host),
+		},
 	};
 }
 

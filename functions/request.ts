@@ -1669,7 +1669,7 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 				const response = await (httpcloakGet as any)(targetUrl, {
 					httpVersion: "h2",
 					tlsOnly: true,
-					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie },
+					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" },
 				});
 				const html = await responseText(response);
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];

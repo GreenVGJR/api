@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, vnm_2xd } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, vnm_2xd, shazamSession } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -287,8 +287,8 @@ export async function getYoutubei() {
 	return youtubeiPromise;
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0";
-export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/151.0.0.0 Mobile/15E148 Safari/604.1";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0";
+export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/153.0.0.0 Mobile/15E148 Safari/604.1";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -299,7 +299,6 @@ export const commonHeaders = {
 	"Sec-Fetch-Dest": "document",
 	"Sec-Fetch-Mode": "navigate",
 	"Sec-Fetch-Site": "none",
-	TE: "trailers",
 	"User-Agent": userAgent,
 };
 
@@ -491,6 +490,7 @@ let tiktokSessionKeys: any = {};
 let tiktokWafCookie: string = "";
 let unsplashClientHash: string = "f048c76212df482c67befc2ffebd9b96941f7bce32";
 let unsplashWafCookie: string = "";
+let shazamCfCookie: string | null = "";
 
 const setTiktokWafCookie = (solved: string) => {
 	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
@@ -1392,7 +1392,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	}
 };
 
-export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<any> {
+export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_auth: boolean = false): Promise<any> {
 	if (!que) return null;
 	try {
 		const itunesRes = await fetch(`https://itunes.apple.com/search?media=music&limit=1&country=US&term=${encodeURIComponent(que)}`, { headers: commonHeaders });
@@ -1406,15 +1406,16 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 		const firstTrack = tracks[0];
 		const trackViewUrl: string = firstTrack.trackViewUrl || "";
 
+		let iParam: string | null = null;
 		let shazamUrl: string | null = null;
 		try {
 			const parsedUrl = new URL(trackViewUrl);
-			const iParam = parsedUrl.searchParams.get("i");
+			iParam = parsedUrl.searchParams.get("i");
 			const pathSegments = parsedUrl.pathname.split("/").filter(Boolean);
 			const slugSegment = pathSegments.length >= 3 ? pathSegments[2] : null;
 
 			if (iParam && slugSegment) {
-				shazamUrl = `https://www.shazam.com/song/${iParam}/${slugSegment}`;
+				shazamUrl = `https://shazam.com/song/${iParam}/${slugSegment}`;
 			}
 		} catch {}
 
@@ -1427,10 +1428,14 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 		if (shazamUrl) {
 			try {
 				// Have TLS Fingerprint (Akamai anti-bot protection)
+				// When detects suspicious, shazam would rotate the response to different track
 				const shazamRes = await (httpcloakGet as any)(shazamUrl, {
 					httpVersion: "h2",
-					tlsOnly: true,
-					headers: commonHeaders,
+					headers: {
+						...commonHeaders,
+						...(shazamCfCookie ? { Cookie: shazamCfCookie } : {}),
+						"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Shazam/v16.56.0",
+					},
 				});
 
 				const html = await responseText(shazamRes);
@@ -1440,6 +1445,29 @@ export const ShazamLyrics = async function ShazamLyrics(que: string): Promise<an
 					if (ldJsonMatch.length > 1) {
 						const ldJsonStr = ldJsonMatch[1].split("</script>")[0];
 						const ldJson = JSON.parse(ldJsonStr);
+
+						try {
+							const ldJsonUrl = typeof ldJson?.url === "string" ? ldJson.url : "";
+							if (ldJsonUrl) {
+								const parsedLdJsonUrl = new URL(ldJsonUrl);
+								const ldJsonTrackId = parsedLdJsonUrl.pathname.split("/").filter(Boolean)[1];
+								if (ldJsonTrackId && ldJsonTrackId !== iParam) {
+									if (!refresh_auth) {
+										shazamCfCookie = await shazamSession();
+										return await ShazamLyrics(que, true);
+									}
+									console.log(ldJson);
+									shazamInfo = {
+										error: "Can't process this. Akamai anti-bot protection rotated the response",
+									};
+									return {
+										data: [trackInfo, shazamInfo],
+										lyrics: null,
+										syncLyrics: null,
+									};
+								}
+							}
+						} catch {}
 
 						let parsedDuration: number | null = null;
 						if (ldJson.duration && ldJson.duration.startsWith("PT")) {
@@ -4176,6 +4204,50 @@ export const DiscordServers = async function DiscordServers(que: string) {
 	}
 };
 
+export const BilibiliGlobal = async function BilibiliGlobal(que: string) {
+	if (!que) return null;
+
+	try {
+		const wts = String(Math.floor(Date.now() / 1000));
+		const baseParams: Record<string, string> = {
+			keyword: que,
+			page: "1",
+			pagesize: "10",
+			search_type: "video",
+			highlight: "1",
+			wts,
+		};
+		const signedPayload = Object.entries(baseParams)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([key, value]) => `${key}=${value}`)
+			.join("&");
+		const w_rid = crypto.createHash("md5").update(`${signedPayload}XgB5zU5l`).digest("hex");
+		const params = new URLSearchParams({ ...baseParams, w_rid });
+
+		const per = await fetch(`https://api.bilibili.com/x/web-interface/wbi/search/all/v2?${params.toString()}`, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://www.bilibili.com/",
+				Origin: "https://www.bilibili.com",
+			},
+		});
+
+		if (per.status === 403) {
+			return {
+				error: "Bilibili WBI search is asking to verify you're not a bot",
+			};
+		}
+
+		const res: any = await per.json();
+		return {
+			data: res?.data?.result?.find((f: any) => f?.result_type?.startsWith("video"))?.data || null,
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
 export const Bilibili = async function Bilibili(que: string) {
 	if (!que) return null;
 
@@ -4371,10 +4443,11 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 	try {
 		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
-		const pul = await fetch(`https://api-boot.tiktokv.com/aweme/v1/search/item/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+		const pul = await fetch(`https://api.tiktokv.com/aweme/v1/search/item/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
 			headers: {
 				...commonHeaders,
 				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
+				"X-Bogus": "1",
 				Cookie: tiktokSessionKeys?.cookie,
 			},
 		});
@@ -4409,6 +4482,7 @@ export const TiktokMusic = async function TiktokMusic(que: string, limit: number
 			headers: {
 				...commonHeaders,
 				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
+				"X-Bogus": "1",
 				Cookie: tiktokSessionKeys?.cookie,
 			},
 		});
@@ -4443,6 +4517,7 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 			headers: {
 				...commonHeaders,
 				"X-Khronos": String(Math.floor(Date.now() / 1000)),
+				"X-Bogus": "1",
 				Cookie: tiktokSessionKeys?.cookie,
 			},
 		});

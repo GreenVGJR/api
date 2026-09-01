@@ -116,6 +116,7 @@ export const soundcloudKey = async function soundcloudKey() {
 			method: "GET",
 			headers: {
 				...commonHeaders,
+				"User-Agent": userAgent_mobile,
 			},
 		});
 		const text = await res.text();
@@ -491,7 +492,7 @@ export const devianKey = async function devianKey(): Promise<{
 	csrfToken: string;
 } | null> {
 	try {
-		const res = await fetch("https://www.deviantart.com/join", { headers: commonHeaders });
+		const res = await fetch("https://www.deviantart.com", { headers: commonHeaders });
 		let cookie: string;
 
 		if (res.headers.getSetCookie) {
@@ -620,4 +621,38 @@ export const vnm_2xd = async (): Promise<string | null> => {
 		lqp_7xb = Date.now() + 6 * 3600 * 1000;
 	}
 	return c;
+};
+
+export const shazamSession = async function shazamSession(): Promise<string | null> {
+	try {
+		const rootRes = await fetch("https://www.shazam.com/", {
+			headers: commonHeaders,
+			redirect: "manual",
+		});
+		const html = await rootRes.text();
+
+		const preloadMatch = html.match(/<link\s+rel=["']preload["']\s+href=["']\/([^"']+\/assets\/script\.js)["']\s+as=["']script["']/i);
+		const scriptPath = preloadMatch?.[1];
+		if (!scriptPath) return null;
+
+		const challengeToken = scriptPath.split("/")[0];
+		if (!challengeToken) return null;
+
+		const detectionRes = await fetch(`https://www.shazam.com/${challengeToken}/check-detection`, {
+			headers: {
+				...commonHeaders,
+				"Referer": "https://www.shazam.com/",
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Site": "same-origin",
+			},
+			redirect: "manual",
+		});
+
+		const cookieHeader = detectionRes.headers.getSetCookie ? detectionRes.headers.getSetCookie() : detectionRes.headers.get("set-cookie");
+
+		return normalizeCookies(cookieHeader);
+	} catch {
+		return null;
+	}
 };

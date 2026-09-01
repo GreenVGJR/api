@@ -128,7 +128,7 @@ const initSPA = () => {
                         </div>
 
                         <div id="sendRow" class="mt-2 sm:mt-3 mb-4 md:mb-0 pb-[env(safe-area-inset-bottom)] flex flex-col md:flex-row items-center gap-2 sm:gap-4 flex-shrink-0">
-                            <button id="sendBtn" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none">
+                            <button id="sendBtn" disabled aria-disabled="true" class="w-full md:flex-1 text-black font-semibold py-2 sm:py-2.5 px-5 sm:px-6 rounded-lg text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none focus:outline-none active:outline-none opacity-50 cursor-not-allowed">
                                 <span class="send-label">Send</span><span class="send-arrow">➜</span>
                             </button>
                         </div>
@@ -225,6 +225,9 @@ const copyResponseBtn = document.getElementById("copyResponseBtn");
 const clearResponseBtn = document.getElementById("clearResponseBtn");
 const sendBtn = document.getElementById("sendBtn");
 const sendBtnLabel = sendBtn.querySelector(".send-label");
+sendBtn.disabled = true;
+sendBtn.classList.add("opacity-50", "cursor-not-allowed");
+sendBtn.classList.remove("opacity-70");
 const responseArea = document.getElementById("responseArea");
 const statusDotEl = document.getElementById("statusDot");
 const statusText = { textContent: "", className: "" };
@@ -717,6 +720,12 @@ function setSendButtonLabel(text) {
   sendBtnLabel.textContent = text;
 }
 
+function restoreSendButtonState() {
+  sendBtn.classList.remove("opacity-50", "cursor-not-allowed", "opacity-70");
+  sendBtn.disabled = false;
+  sendBtn.style.filter = "";
+}
+
 function hasConnection() {
   return navigator.onLine !== false;
 }
@@ -733,7 +742,7 @@ function updateConnectionUI() {
 
   if (!isLoading && !isCoolingDown && statusText.textContent !== "Connecting") {
     setSendButtonLabel("Send");
-    sendBtn.classList.remove("opacity-50", "cursor-not-allowed", "opacity-70");
+    restoreSendButtonState();
 
     if (statusText.textContent === "Offline") setStatus("gray-500", "Idle", "text-gray-500");
   }
@@ -1644,6 +1653,7 @@ function showTurnstileChallenge() {
   turnstileRendered = true;
   isLoading = true;
   setSendButtonLabel("Send");
+  sendBtn.disabled = true;
   sendBtn.classList.add("opacity-50", "cursor-not-allowed");
   sendBtn.classList.remove("opacity-70");
 
@@ -1682,8 +1692,7 @@ function showTurnstileChallenge() {
       callback: async (token) => {
         turnstileRendered = false;
         responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
-        sendBtn.classList.remove("opacity-50", "cursor-not-allowed");
-        sendBtn.classList.add("opacity-70");
+        restoreSendButtonState();
         await refreshEndpointsFromJson();
       },
       "expired-callback": () => {
@@ -1733,6 +1742,9 @@ async function refreshEndpointsFromJson() {
 
         const freshEndpoints = normalizeEndpointPayload(statsPayload);
         if (freshEndpoints) {
+          restoreSendButtonState();
+        }
+        if (freshEndpoints) {
           const previousPath = currentEndpoint?.path;
           endpoints = freshEndpoints;
           const categoryList = endpoints[currentCategory] || [];
@@ -1762,7 +1774,7 @@ async function refreshEndpointsFromJson() {
     return true;
   } catch {
     setStatus("red-500", "Failed", "text-red-400");
-    sendBtn.classList.remove("opacity-50", "cursor-not-allowed");
+    restoreSendButtonState();
     return false;
   }
 }

@@ -641,7 +641,7 @@ export const shazamSession = async function shazamSession(): Promise<string | nu
 		const detectionRes = await fetch(`https://www.shazam.com/${challengeToken}/check-detection`, {
 			headers: {
 				...commonHeaders,
-				"Referer": "https://www.shazam.com/",
+				Referer: "https://www.shazam.com/",
 				"Sec-Fetch-Dest": "empty",
 				"Sec-Fetch-Mode": "cors",
 				"Sec-Fetch-Site": "same-origin",

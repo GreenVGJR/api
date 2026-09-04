@@ -25,6 +25,46 @@ const pruneAiImageRegistry = () => {
 	for (const [k, v] of aiImageRegistry) if (v.expire < now) aiImageRegistry.delete(k);
 };
 
+// Opportunistic playground attestation via `x-sf-l` header.
+export const verifySfL = async (c: Context): Promise<boolean | null> => {
+	let raw: string | undefined;
+	try {
+		raw = c.req.header("x-sf-l");
+	} catch {
+		return null;
+	}
+	if (!raw) return null;
+	try {
+		const parts = raw.split(".");
+		if (parts.length !== 3) return false;
+		const [tStr, n, sig] = parts;
+		if (!/^\d{10,15}$/.test(tStr)) return false;
+		if (!/^[0-9a-fA-F]{8,64}$/.test(n)) return false;
+		if (!/^[0-9a-fA-F]{64}$/.test(sig)) return false;
+		const t = Number(tStr);
+		if (!Number.isFinite(t)) return false;
+		if (Math.abs(Date.now() - t) > 5 * 60 * 1000) return false;
+		const url = new URL(c.req.url);
+		const hmac = (msg: string) => crypto.createHmac("sha256", String(autoGenBuild)).update(msg, "utf8").digest("hex");
+		const matches = (msg: string) => {
+			const a = Buffer.from(hmac(msg), "utf8");
+			const b = Buffer.from(sig.toLowerCase(), "utf8");
+			return a.length === b.length && crypto.timingSafeEqual(a, b);
+		};
+		if (matches(`GET\n${url.pathname}${url.search}\n${tStr}.${n}`)) return true;
+		// aiImageHandshake() 302-redirects (appending the hs/ts registry cache key)
+		// after the client signed the URL, and fetch follows it transparently with
+		// the old header — so also accept the signature over the pre-redirect URL.
+		const stripped = new URL(c.req.url);
+		stripped.searchParams.delete("hs");
+		stripped.searchParams.delete("ts");
+		if (stripped.search !== url.search && matches(`GET\n${stripped.pathname}${stripped.search}\n${tStr}.${n}`)) return true;
+		return false;
+	} catch {
+		return false;
+	}
+};
+
 // Scopes the handshake/cache entry to BOTH the prompt and the current URL path,
 // so the same prompt on a different AI-image route gets its own validation.
 const aiImageKey = (c: Context): string => {
@@ -109,6 +149,8 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	} catch {
 		return logResponse(c, c.text("", 200));
 	}
+
+	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
 	c.header("X-Enc-Route", "v4");
 
@@ -199,6 +241,8 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		return logResponse(c, c.text("", 403));
 	}
 
+	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
@@ -244,7 +288,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 			let gzip: zlib.Gzip | null = null;
 
 			if (useGzip) {
-				gzip = zlib.createGzip({ level: 1 });
+				gzip = zlib.createGzip({ level: 9 });
 				const headerChunk: Buffer = await new Promise((resolve) => {
 					gzip!.once("data", resolve);
 					gzip!.flush(zlib.constants.Z_SYNC_FLUSH);

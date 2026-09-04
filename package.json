@@ -7,7 +7,7 @@
 		"emojibase-data": "^17.0.0",
 		"entities": "^8.0.0",
 		"hono": "^4.13.5",
-		"httpcloak": "^1.6.11",
+		"httpcloak": "^1.7.2",
 		"jsdom": "^30.0.1",
 		"lavalink-client": "^2.11.0",
 		"linkedom": "^0.18.13",
@@ -29,8 +29,8 @@
 		"soft-update": "rm -rf functions routes public html && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun run gen && npm run pm2-check && npm update -g"
 	},
 	"devDependencies": {
-		"@types/node": "^26.4.0",
-		"bun-types": "^1.4.0",
+		"@types/node": "^26.4.1",
+		"bun-types": "^1.4.1",
 		"tsx": "^4.23.13",
 		"typescript": "^7.0.2"
 	}

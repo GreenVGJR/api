@@ -709,6 +709,27 @@ function formatChallengeHash(hash) {
 
 let solvedChallengeCode = null;
 
+// Builds the opportunistic `x-sf-l` attestation header:
+// `${t}.${n}.${sig}` with sig = HMAC-SHA256(key=prt, `GET\n<pathname><search>\n${t}.${n}`).
+// Returns null when unavailable so the request goes out without crypto (server lets it pass).
+async function buildSfLHeader(fetchUrl) {
+  try {
+    if (!prt || !crypto?.subtle) return null;
+    const u = new URL(fetchUrl);
+    const t = String(Date.now());
+    const n = crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, "")
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const msg = `GET\n${u.pathname}${u.search}\n${t}.${n}`;
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(prt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg));
+    const sig = Array.from(new Uint8Array(sigBuf), (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${t}.${n}.${sig}`;
+  } catch {
+    return null;
+  }
+}
+
 function triggerSendButtonAnimation() {
   sendBtn.classList.remove("send-clicked");
   void sendBtn.offsetWidth;
@@ -776,6 +797,83 @@ async function renderBlobMedia(response, startTime, buildTag) {
   responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${buildTag(url)}</div>`;
 }
 
+const JSON_WORKER_THRESHOLD = 50000; // chars
+
+let _jsonWorker = null;
+let _jsonWorkerReqId = 0;
+const _jsonWorkerPending = new Map();
+
+function getJsonWorker() {
+  if (_jsonWorker) return _jsonWorker;
+  const workerSrc = `
+    self.onmessage = (e) => {
+      const { id, text } = e.data;
+      try {
+        const data = JSON.parse(text);
+        if (data !== null && typeof data === "object") {
+          self.postMessage({ id, isJson: true, formatted: JSON.stringify(data, null, 1) });
+        } else {
+          self.postMessage({ id, isJson: false, formatted: String(data) });
+        }
+      } catch {
+        self.postMessage({ id, isJson: false, formatted: null });
+      }
+    };
+  `;
+  const blob = new Blob([workerSrc], { type: "application/javascript" });
+  _jsonWorker = new Worker(URL.createObjectURL(blob));
+  _jsonWorker.onmessage = (e) => {
+    const { id, isJson, formatted } = e.data;
+    const resolve = _jsonWorkerPending.get(id);
+    if (resolve) {
+      _jsonWorkerPending.delete(id);
+      resolve({ isJson, formatted });
+    }
+  };
+  _jsonWorker.onerror = () => {
+    // If the worker itself crashes, fail every pending request so callers
+    // fall back instead of hanging forever.
+    for (const resolve of _jsonWorkerPending.values()) {
+      resolve({ isJson: false, formatted: null });
+    }
+    _jsonWorkerPending.clear();
+    _jsonWorker = null;
+  };
+  return _jsonWorker;
+}
+
+function parseJsonSync(text) {
+  try {
+    const data = JSON.parse(text);
+    if (data !== null && typeof data === "object") {
+      return { isJson: true, formatted: JSON.stringify(data, null, 1) };
+    }
+    return { isJson: false, formatted: String(data) };
+  } catch {
+    return { isJson: false, formatted: null };
+  }
+}
+
+// Resolves to { isJson, formatted }. `formatted` is null when the text
+// isn't valid JSON (caller should fall back to the raw text in that case).
+function parseAndFormatJSON(text) {
+  if (text.length < JSON_WORKER_THRESHOLD || typeof Worker === "undefined") {
+    return Promise.resolve(parseJsonSync(text));
+  }
+
+  try {
+    const worker = getJsonWorker();
+    const id = ++_jsonWorkerReqId;
+    return new Promise((resolve) => {
+      _jsonWorkerPending.set(id, resolve);
+      worker.postMessage({ id, text });
+    });
+  } catch {
+    // Workers unavailable (e.g. blocked by CSP) — fall back to sync parsing.
+    return Promise.resolve(parseJsonSync(text));
+  }
+}
+
 async function performRequest(targetUrl, retryCount = 0) {
   if (retryCount === 0 && isBusy()) return null;
   if (retryCount === 0 && !hasConnection()) {
@@ -821,10 +919,16 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = url.toString();
     }
     const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "no-referrer", redirect: isDownload ? "manual" : undefined };
+    try {
+      const sfL = await buildSfLHeader(fetchUrl);
+      if (sfL) headers["x-sf-l"] = sfL;
+    } catch {}
     response = await fetch(fetchUrl, fetchOptions);
     setStatus("blue-400", "Rendering", "text-gray-400");
 
     let duration;
+    let preParsedJson = null;
+    let hasPreParsedJson = false;
 
     if (isDownload) {
       const contentType = response.headers.get("content-type") || "";
@@ -832,7 +936,9 @@ async function performRequest(targetUrl, retryCount = 0) {
       if (contentType === "application/json") {
         try {
           const text = await response.clone().text();
-          const json = JSON.parse(text);
+          preParsedJson = JSON.parse(text);
+          hasPreParsedJson = true;
+          const json = preParsedJson;
           if (json.url && json.type) {
             const mediaUrl = json.url;
             const isVideo = json.type === "video";
@@ -969,8 +1075,8 @@ async function performRequest(targetUrl, retryCount = 0) {
       let formatted = text;
       let isJson = false;
 
-      try {
-        const data = JSON.parse(decryptedText);
+      if (hasPreParsedJson) {
+        const data = preParsedJson;
         if (typeof data === "object" || Array.isArray(data)) {
           formatted = JSON.stringify(data, null, 1);
           isJson = true;
@@ -978,7 +1084,15 @@ async function performRequest(targetUrl, retryCount = 0) {
           formatted = String(data);
         }
         resultData = data;
-      } catch {}
+      } else {
+        // Large responses are parsed & pretty-printed in a Web Worker so
+        // this doesn't block the main thread / freeze the UI.
+        const result = await parseAndFormatJSON(decryptedText);
+        if (result.formatted !== null) {
+          isJson = result.isJson;
+          formatted = result.formatted;
+        }
+      }
 
       lastRawResponse = decryptedText;
 
@@ -1722,13 +1836,27 @@ function showTurnstileChallenge() {
   });
 }
 
+let initialStatsPromise = fetch("/?json", {
+  credentials: "include",
+  cache: "default",
+  referrerPolicy: "strict-origin-when-cross-origin",
+  headers: { Accept: "application/json" },
+});
+
 async function refreshEndpointsFromJson() {
   try {
     setStatus("blue-400", "Connecting", "text-gray-400");
 
     let statsRes = null;
     try {
-      statsRes = await fetch("/?json", { priority: "low", cache: "no-store", mode: "same-origin", referrerPolicy: "no-referrer", headers: { Accept: "application/json" } });
+      const statsPromise = initialStatsPromise;
+      initialStatsPromise = null;
+      statsRes = await (statsPromise || fetch("/?json", {
+        credentials: "include",
+        cache: "default",
+        referrerPolicy: "strict-origin-when-cross-origin",
+        headers: { Accept: "application/json" },
+      }));
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;

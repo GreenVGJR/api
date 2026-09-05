@@ -1,5 +1,5 @@
 {
-	"maxLimitRequestsPerSec": 30,
+	"maxLimitRequestsPerSec": 15,
 	"targetDomain": "api.vgjr.top",
 	"buildId": false,
 	"restrictLocal": false,

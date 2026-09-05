@@ -185,8 +185,12 @@ const API_ROUTES = {
 		["/info/giphy?url=", "url"],
 		["/info/klipy?url=", "url"],
 		["/info/pinterest?url=", "url"],
+		["/info/googleImage/reverse?url=", "url"],
 	],
-	download: [["/download/tiktok/video?url=&json=", "url", "boolean"]],
+	download: [
+		["/download/tiktok/video?url=&json=", "url", "boolean"],
+		["/download/instagram/video?url=&json=", "url", "boolean"],
+	],
 	music: [
 		["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
 		["/music/disconnect?token=&guildId=", "string", "number"],

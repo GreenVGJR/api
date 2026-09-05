@@ -5770,6 +5770,214 @@ export const instagramUser = async function instagramUser(que: string) {
 	}
 };
 
+const instagramShortcodeToId = function instagramShortcodeToId(shortcode: string): string | null {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+	let id = BigInt(0);
+	for (const ch of shortcode) {
+		const idx = alphabet.indexOf(ch);
+		if (idx < 0) return null;
+		id = id * BigInt(64) + BigInt(idx);
+	}
+	return id.toString();
+};
+
+const instagramFindMediaNode = function instagramFindMediaNode(node: any): any {
+	if (!node || typeof node !== "object") return undefined;
+	if (typeof node.xig_polaris_media !== "undefined") return node.xig_polaris_media;
+	if (Array.isArray(node)) {
+		for (const v of node) {
+			const r = instagramFindMediaNode(v);
+			if (typeof r !== "undefined") return r;
+		}
+		return undefined;
+	}
+	for (const v of Object.values(node)) {
+		const r = instagramFindMediaNode(v);
+		if (typeof r !== "undefined") return r;
+	}
+	return undefined;
+};
+
+export const InstagramVideo = async function InstagramVideo(que: string) {
+	if (!que) return null;
+
+	let shortcode: string | null = null;
+	try {
+		const u = new URL(que);
+		if (!/(^|\.)instagram\.com$/.test(u.hostname) && u.hostname !== "instagr.am") return null;
+		const parts = u.pathname.split("/").filter(Boolean);
+		if (u.hostname === "instagr.am" && parts.length === 1) {
+			shortcode = parts[0];
+		} else {
+			const idx = parts.findIndex((p) => p === "p" || p === "reel" || p === "reels" || p === "tv");
+			shortcode = idx >= 0 ? parts[idx + 1] || null : null;
+		}
+	} catch {
+		return null;
+	}
+	if (!shortcode) return null;
+	const mediaId = instagramShortcodeToId(shortcode);
+
+	if (!keyInstagram) {
+		keyInstagram = await instagramSession();
+	}
+
+	const instagramHeaders = {
+		...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+		...(keyInstagram?.csrf ? { "X-CSRFToken": keyInstagram.csrf } : {}),
+		...(keyInstagram?.app_id ? { "X-IG-App-ID": keyInstagram.app_id } : { "X-IG-App-ID": "936619743392459" }),
+	};
+
+	try {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			let media: any = null;
+			let loginWall = false;
+
+			// Tier 1: Instagram GraphQL API (PolarisLoggedOutDesktopWWWPostRootContentQuery)
+			if (mediaId) {
+				try {
+					const req = await fetch(`https://www.instagram.com/api/graphql`, {
+						method: "POST",
+						body: `lsd=${keyInstagram?.lsd || ""}&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=PolarisLoggedOutDesktopWWWPostRootContentQuery&server_timestamps=true&variables=${encodeURIComponent(JSON.stringify({ media_id: mediaId }))}&doc_id=27130156389949648`,
+						headers: {
+							...commonHeaders,
+							...instagramHeaders,
+							Accept: "*/*",
+							"Content-Type": "application/x-www-form-urlencoded",
+							"Sec-Fetch-Site": "same-origin",
+							...(keyInstagram?.lsd ? { "X-FB-LSD": keyInstagram.lsd } : {}),
+							"X-ASBD-ID": "359341",
+						},
+					});
+					if (req.status === 403 || req.status === 429) {
+						loginWall = true;
+					} else {
+						try {
+							const res: any = await req.json();
+							if (res?.data?.require_login) loginWall = true;
+							media = res?.data?.xig_polaris_media?.if_not_gated_logged_out || res?.data?.xig_polaris_media || null;
+						} catch {}
+					}
+				} catch {}
+			}
+
+			// Tier 2: Instagram embed webpage
+			if (!media) {
+				try {
+					const req = await fetch(`https://www.instagram.com/p/${shortcode}/embed?_fb_noscript=1`, {
+						headers: {
+							...commonHeaders,
+							"Sec-Fetch-Dest": "iframe",
+							"Sec-Fetch-Site": "none",
+							Referer: "https://www.instagram.com/",
+							...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+						},
+					});
+					if (req.status === 403 || req.status === 429) {
+						loginWall = true;
+					} else {
+						const text = await req.text();
+						const raw = /"contextJSON":"((?:[^"\\]|\\.)*)"/.exec(text)?.[1];
+						if (raw) {
+							try {
+								media = JSON.parse(JSON.parse(`"${raw}"`))?.gql_data || null;
+							} catch {}
+						}
+					}
+				} catch {}
+			}
+
+			// Tier 3: Full post webpage (embedded RelayPrefetchedStreamCache JSON)
+			if (!media) {
+				try {
+					const req = await fetch(que, {
+						headers: {
+							...commonHeaders,
+							...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+						},
+					});
+					if (req.status === 403 || req.status === 429) {
+						loginWall = true;
+					} else {
+						const text = await req.text();
+						const scripts = [...text.matchAll(/<script type="application\/json"[^>]*data-sjs[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+						for (const script of scripts) {
+							if (!script.includes("xig_polaris_media")) continue;
+							try {
+								const found = instagramFindMediaNode(JSON.parse(script));
+								const node = found?.if_not_gated_logged_out || found || null;
+								if (node?.pk || node?.id || node?.video_url) {
+									media = node;
+									break;
+								}
+							} catch {}
+						}
+					}
+				} catch {}
+			}
+
+			if (media) {
+				// Shape varies by tier: embed/page nodes expose `video_url` directly,
+				// GraphQL nodes expose a `video_versions` array (pick widest).
+				let videoUrl: string | null = typeof media.video_url === "string" && media.video_url ? media.video_url : null;
+				if (!videoUrl && Array.isArray(media.video_versions) && media.video_versions.length > 0) {
+					const best = [...media.video_versions].sort((x: any, y: any) => (y?.width || 0) - (x?.width || 0))[0];
+					videoUrl = typeof best?.url === "string" && best.url ? best.url : null;
+				}
+				if (videoUrl && media.is_video !== false) {
+					return { video_url: videoUrl };
+				}
+				return null;
+			}
+			if (loginWall && attempt === 1) {
+				return { error: "Please sign in" };
+			}
+			if (keyInstagram) keyInstagram = await instagramSession();
+		}
+		return null;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export async function googleImageReverse(url: string) {
+	const warn = { _warning: "This endpoint is highly protected anti-bot" };
+	if (!url || !url.startsWith("http")) return null;
+
+	try {
+		const v: any = await fetch(`https://vision.googleapis.com/v1/images:annotate?prettyPrint=false`, {
+			method: "POST",
+			headers: {
+				...commonHeaders,
+				"Content-Type": "application/json",
+				Referer: process.env.GOOG_RX || "",
+				"X-Goog-Api-Key": process.env.GOOG_EX || "",
+			},
+			body: JSON.stringify({ requests: [{ image: { source: { imageUri: url } }, features: [{ type: "WEB_DETECTION", maxResults: 10 }] }] }),
+			signal: AbortSignal.timeout(20000),
+		});
+		if (v.status === 429) {
+			return {
+				...warn,
+				error: "Rate-limited"
+			}
+		}
+		if (v.status === 451) {
+			return {
+				...warn,
+				error: "This image contains content that is restricted for accessing"
+			}
+		}
+		const vj: any = await v.json().catch(() => null);
+
+		return { ...warn, data: vj || null };
+	} catch (e) {
+		console.error("Lens error:", e);
+		return null;
+	}
+}
+
 export const infoThreadUser = async function infoThreadUser(que: string) {
 	if (!que) return null;
 

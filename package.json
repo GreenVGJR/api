@@ -6,7 +6,7 @@
 		"discord.js": "^14.27.0",
 		"emojibase-data": "^17.0.0",
 		"entities": "^8.0.0",
-		"hono": "^4.13.5",
+		"hono": "^4.13.7",
 		"httpcloak": "^1.7.2",
 		"jsdom": "^30.0.1",
 		"lavalink-client": "^2.11.0",

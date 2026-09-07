@@ -5960,14 +5960,14 @@ export async function googleImageReverse(url: string) {
 		if (v.status === 429) {
 			return {
 				...warn,
-				error: "Rate-limited"
-			}
+				error: "Rate-limited",
+			};
 		}
 		if (v.status === 451) {
 			return {
 				...warn,
-				error: "This image contains content that is restricted for accessing"
-			}
+				error: "This image contains content that is restricted for accessing",
+			};
 		}
 		const vj: any = await v.json().catch(() => null);
 

@@ -1,9 +1,9 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, vnm_2xd, shazamSession } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, qcq_6uj, shazamSession, bat_2uw, hwo_6qi } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
-import { get as httpcloakGet } from "httpcloak";
+import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
 
@@ -491,6 +491,7 @@ let tiktokWafCookie: string = "";
 let unsplashClientHash: string = "f048c76212df482c67befc2ffebd9b96941f7bce32";
 let unsplashWafCookie: string = "";
 let shazamCfCookie: string | null = "";
+let magnificBuildId: string | null = "";
 
 const setTiktokWafCookie = (solved: string) => {
 	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
@@ -1299,6 +1300,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	videoId = videoId || undefined;
 	if (!videoId) return null;
 
+	await getYoutubeVisitorKey();
 	try {
 		const responseBody: any = {
 			data: null,
@@ -1313,6 +1315,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 				client: {
 					clientName: "WEB_REMIX",
 					clientVersion: "1.20261230",
+					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 					hl: "en",
 					gl: "US",
 				},
@@ -1336,6 +1339,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 					client: {
 						clientName: "WEB_REMIX",
 						clientVersion: "1.20261230",
+						...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 						hl: "en",
 						gl: "US",
 					},
@@ -1348,6 +1352,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 					client: {
 						clientName: "ANDROID_MUSIC",
 						clientVersion: "9.25.50",
+						...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
 						hl: "en",
 						gl: "US",
 					},
@@ -1429,10 +1434,11 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 			try {
 				// Have TLS Fingerprint (Akamai anti-bot protection)
 				// When detects suspicious, shazam would rotate the response to different track
+				const { "Sec-Fetch-Dest": _sfd, "Sec-Fetch-Mode": _sfm, "Sec-Fetch-Site": _sfs, ...kfmv } = commonHeaders;
 				const shazamRes = await (httpcloakGet as any)(shazamUrl, {
 					httpVersion: "h2",
 					headers: {
-						...commonHeaders,
+						...kfmv,
 						...(shazamCfCookie ? { Cookie: shazamCfCookie } : {}),
 						"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Shazam/v16.56.0",
 					},
@@ -1458,7 +1464,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 									}
 									console.log(ldJson);
 									shazamInfo = {
-										error: "Can't process this. Akamai anti-bot protection rotated the response",
+										error: "Can't process this. Akamai rotated the response",
 									};
 									return {
 										data: [trackInfo, shazamInfo],
@@ -2392,7 +2398,7 @@ function decryptConvo(encoded: string): string {
 	return decipher.update(encrypted) + decipher.final("utf-8");
 }
 
-let geminiWiz: { fSid: string; bl: string; expire: number } | null = null;
+let geminiWiz: { fSid: string; bl: string; at: string | null; expire: number } | null = null;
 let geminiCookies: string | null = null;
 const geminiClientUuid = crypto.randomUUID().toUpperCase();
 
@@ -2405,8 +2411,9 @@ const getGeminiWiz = async () => {
 		const text = await res.text();
 		const fSid = text.match(/"FdrFJe":"(.*?)"/)?.[1];
 		const bl = text.match(/"cfb2h":"(.*?)"/)?.[1];
+		const at = text.match(/"SNlM0e":"(.*?)"/)?.[1] || null;
 		if (!fSid || !bl) return null;
-		geminiWiz = { fSid, bl, expire: Date.now() + 21600 * 1000 };
+		geminiWiz = { fSid, bl, at, expire: Date.now() + 21600 * 1000 };
 		if (res.headers.getSetCookie) {
 			geminiCookies = normalizeCookies(res.headers.getSetCookie());
 		} else {
@@ -2448,7 +2455,8 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[1] = ["en-US"];
 	inner[2] = [objectbody.cid || "", objectbody.rid || "", objectbody.rcid || "", null, null, null, null, null, null, ""];
 	inner[3] = "";
-	inner[4] = crypto.randomBytes(16).toString("hex");
+	const gTa = crypto.randomBytes(16).toString("hex");
+	inner[4] = gTa;
 	inner[6] = [1];
 	inner[7] = 1;
 	inner[10] = 1;
@@ -2465,9 +2473,12 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 	inner[79] = 6;
 	inner[91] = 0;
 	inner[96] = 0;
-	const reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
+	const fTa = await bat_2uw(que, gTa, objectbody.cid); // PoW
+	if (fTa) inner[3] = fTa;
+	let reqPayload = `f.req=${encodeURIComponent(JSON.stringify([null, JSON.stringify(inner)]))}&`;
 
 	const wiz = await getGeminiWiz();
+	if (wiz?.at) reqPayload += `at=${encodeURIComponent(wiz.at)}&`;
 	const qCookies = geminiCookies;
 	geminiReqId = (geminiReqId + 1) % 100000;
 	let geminiQuery = `hl=en-US&_reqid=${geminiReqId}&rt=c`;
@@ -2553,6 +2564,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 		if (errorCode === 1060) {
 			const err = getGeminiError(1060);
+			hwo_6qi();
 			return {
 				isFallback: retry !== 0,
 				response: null,
@@ -2563,6 +2575,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 						sessionId: wiz?.fSid || null,
 						id: finalres ? finalres[4]?.[0]?.[0]?.split("_")?.[1] || null : null,
 						language: finalres ? finalres[4]?.[0]?.[9] || null : null,
+						pow: fTa || null,
 					},
 					conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
 					expire: finalres ? String(geminiWiz?.expire) : null,
@@ -2608,6 +2621,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 				sessionId: wiz?.fSid || null,
 				id: finalres ? finalres[4]?.[0]?.[0]?.split("_")?.[1] || null : null,
 				language: finalres ? finalres[4]?.[0]?.[9] || null : null,
+				pow: fTa || null,
 			},
 			conversation: finalres ? encryptConvo(JSON.stringify(objectbody)) : null,
 			expire: finalres ? String(geminiWiz?.expire) : null,
@@ -4125,7 +4139,7 @@ export const Unsplash = async function Unsplash(que: string) {
 		let waf = unsplashWafCookie !== "";
 		if (pull.status === 401 || pull.status === 403) {
 			if (!unsplashWafCookie) {
-				const cookie = await vnm_2xd();
+				const cookie = await qcq_6uj();
 				if (cookie) {
 					unsplashWafCookie = cookie;
 					return await Unsplash(que);
@@ -4258,7 +4272,7 @@ export const Bilibili = async function Bilibili(que: string) {
 
 		if (per.status === 403) {
 			return {
-				error: "Akamai Captcha asking to verify you're not a bot",
+				error: "Akamai asking to verify you're not a bot",
 			};
 		}
 
@@ -4455,7 +4469,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 		const res = await pul.text();
 		if (res === "") {
 			return {
-				error: "Akamai Captcha asking to verify you're not a bot",
+				error: "Akamai asking to verify you're not a bot",
 			};
 		}
 		let testres;
@@ -4490,7 +4504,7 @@ export const TiktokMusic = async function TiktokMusic(que: string, limit: number
 		const res = await pul.text();
 		if (res === "") {
 			return {
-				error: "Akamai Captcha asking to verify you're not a bot",
+				error: "Akamai asking to verify you're not a bot",
 			};
 		}
 		let testres;
@@ -4525,7 +4539,7 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 		const res = await pul.text();
 		if (res === "") {
 			return {
-				error: "Akamai Captcha asking to verify you're not a bot",
+				error: "Akamai asking to verify you're not a bot",
 			};
 		}
 		let testres;
@@ -4575,7 +4589,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 			const res = await pul.text();
 
 			if (res === "" || pul.status !== 200) {
-				if (i === 2 || res === "") return { error: "Akamai Captcha asking to verify you're not a bot" };
+				if (i === 2 || res === "") return { error: "Akamai asking to verify you're not a bot" };
 				await new Promise((r) => setTimeout(r, 1000));
 				continue;
 			}
@@ -4732,7 +4746,7 @@ export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string,
 	}
 
 	const feed = await TiktokFeed();
-	if (!feed || !feed.data) return { error: "Akamai Captcha asking to verify you're not a bot" };
+	if (!feed || !feed.data) return { error: "Akamai asking to verify you're not a bot" };
 
 	const item = feed.data;
 	const footerText = "TikTok • " + new Date(Number(item.create_time) * 1000).toLocaleString() + " • ❤️ " + formatAbbreviatedNumber(item.statistics.digg_count) + " 👁️ " + formatAbbreviatedNumber(item.statistics.play_count) + " 💬 " + formatAbbreviatedNumber(item.statistics.comment_count);
@@ -13338,7 +13352,7 @@ export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRe
 			}
 		}
 
-		if (!scriptContent) return { error: "Akamai Captcha asking to verify you're not a bot" };
+		if (!scriptContent) return { error: "Akamai asking to verify you're not a bot" };
 
 		const json = JSON.parse(scriptContent);
 		const userDetail = json?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo?.user;
@@ -13348,5 +13362,56 @@ export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRe
 	} catch (e) {
 		console.error(e);
 		return null;
+	}
+};
+
+export const Magnific = async function Magnific(que: string, buildRetried: boolean = false) {
+	if (!que) return null;
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 }); // Handling TLS Handshake for fingerprint
+	const q = encodeURIComponent(que);
+	const pullJson = async (build: string) => {
+		const dataRes: any = await session.get(`https://www.magnific.com/_next/data/${build}/en/search.json?format=search&last_filter=query&last_value=${q}&query=${q}`, {
+			headers: { ...commonHeaders, Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
+		});
+		if (dataRes?.statusCode === 403) return { challenged: true };
+		if (dataRes?.statusCode !== 200) return null;
+		try {
+			return await dataRes.json();
+		} catch {
+			const text = await responseText(dataRes);
+			if (text.includes("_sec/verify") || text.includes("bm-verify") || text.includes("challenge.magnific")) return { challenged: true };
+			return JSON.parse(text);
+		}
+	};
+	try {
+		if (!magnificBuildId) {
+			const fresh = await magnificKey(session);
+			if (fresh) magnificBuildId = fresh;
+		}
+		let json: any = magnificBuildId ? await pullJson(magnificBuildId) : null;
+		if (!json?.pageProps?.regularList?.items?.length && !json?.challenged && !buildRetried) {
+			const fresh = await magnificKey(session);
+			if (fresh) magnificBuildId = fresh;
+			return await Magnific(que, true);
+		}
+		if (!json || json?.challenged) return { error: "Akamai asking to verify you're not a bot" };
+		const list = json?.pageProps?.regularList;
+		if (!list?.items?.length) return { data: null };
+		return {
+			data: {
+				page: list?.pagination?.currentPage || 1,
+				perPage: list?.pagination?.perPage || list.items.length,
+				lastPage: list?.pagination?.lastPage || 1,
+				total: list?.pagination?.total || list.items.length,
+				items: list.items || [],
+			},
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
 	}
 };

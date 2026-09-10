@@ -53,7 +53,7 @@ let requestQueue: Promise<any> = Promise.resolve();
 
 function initSubprocess() {
 	const projectRoot = process.cwd();
-	const pythonPath = join(projectRoot, ".venv", "bin", "python");
+	const pythonPath = join(projectRoot, ".venv", process.platform === "win32" ? "Scripts" : "bin", process.platform === "win32" ? "python.exe" : "python");
 	const bridgePath = join(projectRoot, "functions", "scrapling_bridge.py");
 
 	persistentProc = Bun.spawn({

@@ -1,5 +1,8 @@
 import crypto from "crypto";
+import vm from "node:vm";
 import { Buffer } from "buffer";
+import { JSDOM } from "jsdom";
+import { post as httpcloakPost } from "httpcloak";
 import { commonHeaders, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from "linkedom";
@@ -564,10 +567,23 @@ export const devianKey = async function devianKey(): Promise<{
 	}
 };
 
-let zmn_0ka: string | null = null;
-let lqp_7xb = 0;
+export const magnificKey = async function magnificKey(session: any): Promise<string | null> {
+	try {
+		const res: any = await session.get(`https://www.magnific.com/en/search`, { headers: { ...commonHeaders } });
+		if (res?.statusCode === 403) return null;
+		const html: string = typeof res?.text === "string" ? res.text : "";
+		if (!html) return null;
+		if (html.includes("_sec/verify") || html.includes("bm-verify") || html.includes("challenge.magnific") || html.includes("security filter")) return null;
+		return html.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
+	} catch {
+		return null;
+	}
+};
 
-const qwz_8kp = async (): Promise<string | null> => {
+let qrb_8lw: string | null = null;
+let tum_1ph = 0;
+
+const aef_4iy = async (): Promise<string | null> => {
 	try {
 		// Sometimes unsplash redirect multiple times
 		const base = await fetch("https://unsplash.com/", {
@@ -613,12 +629,12 @@ const qwz_8kp = async (): Promise<string | null> => {
 	}
 };
 
-export const vnm_2xd = async (): Promise<string | null> => {
-	if (zmn_0ka && lqp_7xb > Date.now()) return zmn_0ka;
-	const c = await qwz_8kp();
+export const qcq_6uj = async (): Promise<string | null> => {
+	if (qrb_8lw && tum_1ph > Date.now()) return qrb_8lw;
+	const c = await aef_4iy();
 	if (c) {
-		zmn_0ka = c;
-		lqp_7xb = Date.now() + 6 * 3600 * 1000;
+		qrb_8lw = c;
+		tum_1ph = Date.now() + 6 * 3600 * 1000;
 	}
 	return c;
 };
@@ -656,3 +672,279 @@ export const shazamSession = async function shazamSession(): Promise<string | nu
 		return null;
 	}
 };
+
+const imr_2cl = "https://waa-pa.clients6.google.com/$rpc/google.internal.waa.v1.Waa/Create";
+const byu_6eo = "AIzaSyBGb5fGAyC-pRcRU6MUHb__b_vKha71HRE";
+const ncd_3qy = "br1aemAN9owlYRs9NnsA";
+const kjx_2ge = 12 * 3600 * 1000;
+const rmm_4wq = 30000;
+
+const sjv_2fs = () => {};
+
+class yly_4wq {
+	tagName: string;
+	style: Record<string, string> = {};
+	children: any[] = [];
+	childNodes: any[] = [];
+	_lis: Record<string, ((e: any) => void)[]> = {};
+	contentWindow: any = null;
+	_src: string = "";
+	_origin: string = "https://gemini.google.com";
+	constructor(tag: string) {
+		this.tagName = String(tag).toUpperCase();
+		this.childNodes = this.children;
+		if (this.tagName === "IFRAME") this.lpgReset("about:blank");
+	}
+	get lastChild() {
+		return this.children.length ? this.children[this.children.length - 1] : null;
+	}
+	get firstChild() {
+		return this.children.length ? this.children[0] : null;
+	}
+	lpgReset(href: string) {
+		let abs = href;
+		let cross = true;
+		try {
+			const u = new URL(href, this._origin);
+			abs = u.href;
+			cross = u.origin !== this._origin;
+		} catch {}
+		if (cross) {
+			this.contentWindow = {
+				get location(): any {
+					return {
+						get href() {
+							throw new Error("SecurityError");
+						},
+						set href(v: string) {},
+					};
+				},
+				set location(v: any) {},
+				get document(): any {
+					throw new Error("SecurityError");
+				},
+			};
+		} else {
+			let doc = null;
+			try {
+				doc = new JSDOM("<!DOCTYPE html>", { url: abs }).window.document;
+			} catch {}
+			const fc = lpg_2uz(abs, doc, (this as any)._sb);
+			fc.location = { href: abs };
+			fc.document = doc;
+			this.contentWindow = fc;
+		}
+	}
+	setAttribute() {}
+	getAttribute() {
+		return null;
+	}
+	appendChild(c: any) {
+		this.children.push(c);
+		return c;
+	}
+	removeChild(c: any) {
+		this.children = this.children.filter((x) => x !== c);
+		return c;
+	}
+	addEventListener(t: string, f: (e: any) => void) {
+		(this._lis[t] = this._lis[t] || []).push(f);
+	}
+	removeEventListener(t: string, f: (e: any) => void) {
+		this._lis[t] = (this._lis[t] || []).filter((x) => x !== f);
+	}
+	set src(v: string) {
+		this._src = v;
+		this.lpgReset(v);
+		setTimeout(() => {
+			for (const f of this._lis.load || []) {
+				try {
+					f({ type: "load", target: this });
+				} catch {}
+			}
+		}, 10);
+	}
+	get src() {
+		return this._src;
+	}
+}
+
+function lpg_2uz(href: string, doc: any, parent: any): any {
+	const fc: any = { console };
+	fc.window = fc;
+	fc.self = fc;
+	fc.globalThis = fc;
+	fc.top = parent;
+	fc.parent = parent;
+	fc.opener = null;
+	fc.frameElement = null;
+	fc.atob = (s: string) => Buffer.from(s, "base64").toString("binary");
+	fc.btoa = (s: string) => Buffer.from(s, "binary").toString("base64");
+	fc.setTimeout = setTimeout;
+	fc.clearTimeout = clearTimeout;
+	fc.setInterval = setInterval;
+	fc.clearInterval = clearInterval;
+	fc.addEventListener = sjv_2fs;
+	fc.removeEventListener = sjv_2fs;
+	fc.document = doc;
+	fc.navigator = { userAgent: commonHeaders["User-Agent"], language: "en-US" };
+	fc.location = { href };
+	vm.createContext(fc);
+	fc.eval = (code: string) => vm.runInContext(code, fc);
+	return fc;
+}
+
+function hla_5gn(): any {
+	const sandbox: any = { console };
+	sandbox.window = sandbox;
+	sandbox.self = sandbox;
+	sandbox.globalThis = sandbox;
+	sandbox.top = sandbox;
+	sandbox.parent = sandbox;
+	sandbox.opener = null;
+	sandbox.frameElement = null;
+	sandbox.atob = (s: string) => Buffer.from(s, "base64").toString("binary");
+	sandbox.btoa = (s: string) => Buffer.from(s, "binary").toString("base64");
+	sandbox.setTimeout = setTimeout;
+	sandbox.clearTimeout = clearTimeout;
+	sandbox.setInterval = setInterval;
+	sandbox.clearInterval = clearInterval;
+	sandbox.addEventListener = sjv_2fs;
+	sandbox.removeEventListener = sjv_2fs;
+	sandbox.dispatchEvent = () => true;
+	sandbox.document = {
+		createElement: (t: string) => {
+			const el: any = new yly_4wq(t);
+			el._sb = sandbox;
+			return el;
+		},
+		getElementsByTagName: () => [],
+		documentElement: new yly_4wq("html"),
+		head: new yly_4wq("head"),
+		body: new yly_4wq("body"),
+	};
+	sandbox.document.addEventListener = sjv_2fs;
+	sandbox.document.removeEventListener = sjv_2fs;
+	sandbox.navigator = { userAgent: commonHeaders["User-Agent"], language: "en-US" };
+	sandbox.location = { href: "https://gemini.google.com/app" };
+	vm.createContext(sandbox);
+	sandbox.eval = (code: string) => vm.runInContext(code, sandbox);
+	return sandbox;
+}
+
+function ozy_3ft<T>(label: string, fn: (resolve: (v: T) => void, reject: (e: Error) => void) => void): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const to = setTimeout(() => reject(new Error(`${label} timeout`)), rmm_4wq);
+		fn(
+			(v) => {
+				clearTimeout(to);
+				resolve(v);
+			},
+			(e) => {
+				clearTimeout(to);
+				reject(e);
+			},
+		);
+	});
+}
+
+interface tdw_9uf {
+	key: string;
+	jwe: (...args: any[]) => void;
+	expire: number;
+}
+
+let nfr_4qx: tdw_9uf | null = null;
+let uom_7gs: Promise<tdw_9uf | null> | null = null;
+
+async function egl_1yt(): Promise<tdw_9uf | null> {
+	const res: any = await (httpcloakPost as any)(imr_2cl, {
+		headers: {
+			"Content-Type": "application/json+protobuf",
+			"X-Goog-Api-Key": byu_6eo,
+			"X-User-Agent": "grpc-web-javascript/0.1",
+		},
+		body: JSON.stringify([ncd_3qy]),
+	});
+	const item = res?.json?.()?.[0] ?? res?.[0];
+	const scriptUrl: string | undefined = item?.[2]?.[3];
+	const key: string | undefined = item?.[3];
+	const blob: string | undefined = item?.[4];
+	const globalName: string | undefined = item?.[5];
+	let xbd: any = null;
+	try {
+		xbd = JSON.parse(item?.[7] ?? "null");
+	} catch {}
+	if (!scriptUrl || !key || !blob || !globalName) return null;
+	if (nfr_4qx && nfr_4qx.key === key && nfr_4qx.expire > Date.now()) return nfr_4qx;
+	const progRes = await fetch(`https:${scriptUrl}`, { headers: commonHeaders });
+	if (!progRes.ok) return null;
+	const progJs = await progRes.text();
+	const sandbox = hla_5gn();
+	vm.runInContext(progJs, sandbox, { filename: "gemini-bg.js" });
+	const entry = sandbox?.[globalName]?.a;
+	if (typeof entry !== "function") return null;
+	let cArr: any[] = [];
+	let c2Arr: any[] = [];
+	let f5: any = "";
+	try {
+		const f6 = xbd?.[5];
+		if (Array.isArray(f6)) {
+			for (const e of f6) {
+				if (!Array.isArray(e)) continue;
+				if (Number(e[1]) <= 53) cArr.push(e[0]);
+				else c2Arr.push(e[0]);
+			}
+		}
+		f5 = xbd?.[4] ?? "";
+	} catch {}
+	const jwe: any = await ozy_3ft<any>("entry", (resolve, reject) => {
+		try {
+			entry.call(sandbox, blob, (...a: any[]) => resolve(a[0]), true, undefined, sjv_2fs, [cArr, c2Arr], f5, false, [sjv_2fs, sjv_2fs, sjv_2fs, sjv_2fs]);
+		} catch (e: any) {
+			reject(e);
+		}
+	});
+	if (typeof jwe !== "function") return null;
+	nfr_4qx = { key, jwe, expire: Date.now() + kjx_2ge };
+	return nfr_4qx;
+}
+
+const pmp_7as = async (): Promise<tdw_9uf | null> => {
+	if (nfr_4qx && nfr_4qx.expire > Date.now()) return nfr_4qx;
+	if (!uom_7gs) {
+		uom_7gs = egl_1yt().finally(() => {
+			uom_7gs = null;
+		});
+	}
+	try {
+		return await uom_7gs;
+	} catch {
+		return null;
+	}
+};
+
+export async function bat_2uw(que: string, gTa: string, cid?: string): Promise<string | null> {
+	try {
+		const st = await pmp_7as();
+		if (!st) return null;
+		const qh = crypto.createHash("sha256").update(`${que}${gTa}`).digest("hex");
+		const fTa: any = await ozy_3ft<any>("snapshot", (resolve, reject) => {
+			try {
+				st.jwe.call(null, (...a: any[]) => resolve(a[0]), [{ qh, cid: cid || "", prqid: "", prsid: "" }, undefined, undefined, undefined]);
+			} catch (e: any) {
+				reject(e);
+			}
+		});
+		if (typeof fTa !== "string" || !fTa.length) return null;
+		return fTa;
+	} catch {
+		return null;
+	}
+}
+
+export function hwo_6qi() {
+	nfr_4qx = null;
+}
+
+void pmp_7as().catch(() => {});

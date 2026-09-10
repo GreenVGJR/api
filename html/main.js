@@ -1840,7 +1840,7 @@ let initialStatsPromise = fetch("/?json", {
   credentials: "include",
   cache: "default",
   referrerPolicy: "strict-origin-when-cross-origin",
-  headers: { Accept: "application/json" },
+  headers: { Accept: "*/*" },
 });
 
 async function refreshEndpointsFromJson() {
@@ -1855,14 +1855,18 @@ async function refreshEndpointsFromJson() {
         credentials: "include",
         cache: "default",
         referrerPolicy: "strict-origin-when-cross-origin",
-        headers: { Accept: "application/json" },
+        headers: { Accept: "*/*" },
       }));
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;
       }
       if (statsRes.ok) {
-        const statsPayload = await statsRes.json();
+        const statsRaw = new Uint8Array(await statsRes.arrayBuffer());
+        const statsText = statsRaw[0] === 0x1f && statsRaw[1] === 0x8b
+          ? await new Response(new Blob([statsRaw]).stream().pipeThrough(new DecompressionStream("gzip"))).text()
+          : new TextDecoder().decode(statsRaw);
+        const statsPayload = JSON.parse(statsText);
         isLoading = false;
         prt = statsPayload[1]._build[1];
         lfprt = statsPayload[1]._build[0];

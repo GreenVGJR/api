@@ -25,6 +25,7 @@
 		"gen": "bun gen-routes.ts",
 		"prettier": "npx prettier --print-width 10000 --write . --use-tabs",
 		"browser-install": "python3 -m venv .venv && ./.venv/bin/pip install \"scrapling[ai]\" && ./.venv/bin/python -m playwright install chromium",
+		"win-browser-install": "py -m venv .venv && .venv/Scripts/pip install \"scrapling[ai]\" && .venv/Scripts/python -m playwright install chromium",
 		"gen-update": "bun run stop; rm -rf node_modules bun.lock functions routes public html && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun install && bun run gen && npm run pm2-check && bun run start && npm update -g",
 		"soft-update": "rm -rf functions routes public html && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun run gen && npm run pm2-check && npm update -g"
 	},

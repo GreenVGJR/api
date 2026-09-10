@@ -26,6 +26,7 @@ import istockphoto from "./istockphoto.js";
 import jiosaavn from "./jiosaavn.js";
 import klipy from "./klipy.js";
 import konachan from "./konachan.js";
+import magnific from "./magnific.js";
 import patreon from "./patreon.js";
 import pexels from "./pexels.js";
 import pinterest from "./pinterest.js";
@@ -57,4 +58,4 @@ import youtubeMusic from "./youtubeMusic.js";
 import youtubePlaylist from "./youtubePlaylist.js";
 import youtubeVideo from "./youtubeVideo.js";
 
-export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, capcut, cruncy, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, giphyV2, googleImage, googleImageV2, googleSearch, imdb, imgflip, imgur, istockphoto, jiosaavn, klipy, konachan, patreon, pexels, pinterest, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, safebooru, soundcloud, spotify, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];
+export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, capcut, cruncy, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, giphyV2, googleImage, googleImageV2, googleSearch, imdb, imgflip, imgur, istockphoto, jiosaavn, klipy, konachan, magnific, patreon, pexels, pinterest, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, safebooru, soundcloud, spotify, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];

@@ -13415,3 +13415,188 @@ export const Magnific = async function Magnific(que: string, buildRetried: boole
 		} catch {}
 	}
 };
+
+const canvaSlug = (title: string) =>
+	title
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+const CanvaSearch = async function CanvaSearch(que: string, searchType: string, withRich: boolean) {
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	try {
+		const res: any = await session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=${searchType}&query=${encodeURIComponent(que)}&locale=en`, {
+			headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
+		});
+		if (res?.statusCode === 403) return { challenged: true as const };
+		if (!res || res.statusCode < 200 || res.statusCode >= 300) return null;
+		const raw = await responseText(res);
+		const json = JSON.parse(raw.slice(raw.indexOf("{")));
+		const blocks: any[] = Array.isArray(json?.B) ? json.B : [];
+		const suggBlock = blocks.find((b) => b?.C === "LIST");
+		const itemsBlock = blocks.find((b) => Array.isArray(b?.B) && b.B.length > 0 && b.B[0]?.y);
+		const suggestions = Array.isArray(suggBlock?.B)
+			? suggBlock.B.map((s: any) => ({
+					text: String(s?.["0"] ?? "").replace(/<[^>]*>/g, ""),
+					url: s?.Bk?.A ? `https://www.canva.com${s.Bk.A}` : null,
+				})).filter((s: any) => s.text)
+			: [];
+		const items = Array.isArray(itemsBlock?.B)
+			? itemsBlock.B.map((item: any) => {
+					const title = item?.["0"] ?? "";
+					const slug = canvaSlug(String(title));
+					return {
+						id: item?.Bk?.DI ?? null,
+						title: title || null,
+						type: item?.Bk?.DP ?? null,
+						thumbnail: item?.y ? { url: item.y.C ?? null, width: item.y.D ?? null, height: item.y.E ?? null } : null,
+						url: item?.Bk?.DI && slug ? `https://www.canva.com/templates/${item.Bk.DI}-${slug}/` : null,
+					};
+				}).filter((item: any) => item.id)
+			: [];
+		let results = items;
+		if (withRich && items.length > 0) {
+			results = await Promise.all(
+				items.map(async (item: any) => {
+					try {
+						const prevRes: any = await session.get(`https://www.canva.com/_ajax/seopage/previews?type=GET_TEMPLATE_PREVIEWS_REQUEST&locale=en&offset=1&limit=100&templateId=${item.id}`, {
+							headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
+						});
+						if (!prevRes || prevRes.statusCode !== 200) return { ...item, richContent: null };
+						const prevRaw = await responseText(prevRes);
+						const prevJson = JSON.parse(prevRaw.slice(prevRaw.indexOf("{")));
+						const pages = Array.isArray(prevJson?.B) ? prevJson.B : [];
+						return {
+							...item,
+							richContent: {
+								totalPages: prevJson?.A ?? pages.length,
+								pages: pages.map((p: any) => ({
+									background: p?.y ?? null,
+									title: p?.z ?? null,
+									images: Array.isArray(p?.Bk) ? p.Bk.map((v: any) => ({ url: v?.C ?? null, width: v?.D ?? null, height: v?.E ?? null })) : [],
+									transparent: Array.isArray(p?.Bl) ? p.Bl.map((v: any) => ({ url: v?.C ?? null, width: v?.D ?? null, height: v?.E ?? null })) : [],
+								})),
+							},
+						};
+					} catch {
+						return { ...item, richContent: null };
+					}
+				}),
+			);
+		} else {
+			results = items.map((item: any) => ({ ...item, richContent: null }));
+		}
+		return { total: itemsBlock?.D ?? items.length, suggestions, data: results };
+	} catch (e) {
+		console.error(e);
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};
+
+export const CanvaTemplates = async function CanvaTemplates(que: string) {
+	if (!que) return null;
+	try {
+		const out: any = await CanvaSearch(que, "B", true);
+		if (!out || out?.challenged) return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+		return out;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const CanvaGraphics = async function CanvaGraphics(que: string) {
+	if (!que) return null;
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	try {
+		const q = encodeURIComponent(que);
+		const [suggRes, pageRes]: any[] = await Promise.all([
+			session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=C&query=${q}&locale=en`, {
+				headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/graphics/" },
+			}),
+			session.get(`https://www.canva.com/graphics/?query=${q}`, {
+				headers: { ...commonHeaders },
+			}),
+		]);
+		if (suggRes?.statusCode === 403 || pageRes?.statusCode === 403) return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+		let suggestions: any[] = [];
+		try {
+			const raw = await responseText(suggRes);
+			const json = JSON.parse(raw.slice(raw.indexOf("{")));
+			const listBlock = (Array.isArray(json?.B) ? json.B : []).find((b: any) => b?.C === "LIST");
+			if (Array.isArray(listBlock?.B)) {
+				suggestions = listBlock.B.map((s: any) => ({
+					text: String(s?.["0"] ?? "").replace(/<[^>]*>/g, ""),
+					url: s?.Bk?.A ? `https://www.canva.com${s.Bk.A}` : null,
+				})).filter((s: any) => s.text);
+			}
+		} catch {}
+		const html = await responseText(pageRes);
+		const total = Number(html.match(/"Bm":\{"A":"SEARCH_MASONRY","K":"[^"]+","H":(\d+)\}/)?.[1] ?? 0);
+		const seen = new Set<string>();
+		const results: any[] = [];
+		const needle = '{"N":{"A?":"K","A":"';
+		let idx = 0;
+		while ((idx = html.indexOf(needle, idx)) !== -1) {
+			let i = idx;
+			let depth = 0;
+			let inStr = false;
+			let esc = false;
+			for (; i < html.length; i++) {
+				const ch = html[i];
+				if (inStr) {
+					if (esc) esc = false;
+					else if (ch === "\\") esc = true;
+					else if (ch === '"') inStr = false;
+				} else if (ch === '"') inStr = true;
+				else if (ch === "{") depth++;
+				else if (ch === "}") {
+					depth--;
+					if (depth === 0) {
+						i++;
+						break;
+					}
+				}
+			}
+			try {
+				const obj = JSON.parse(html.slice(idx, i));
+				const ref = obj?.I?.reference;
+				const href = obj?.N?.K?.A;
+				if (ref && typeof href === "string" && href.startsWith("/graphics/") && !href.startsWith("/graphics/search/") && !href.startsWith("/graphics/s/") && !href.startsWith("/graphics/collection/") && !seen.has(ref)) {
+					seen.add(ref);
+					const thumb = obj?.L?.[0]?.X?.[0];
+					results.push({
+						id: ref,
+						title: obj?.M?.A ?? null,
+						type: obj?.I?.type ?? null,
+						badge: obj?.M?.C ?? null,
+						thumbnail: thumb ? { url: thumb.B ?? null, width: thumb.C ?? null, height: thumb.D ?? null } : null,
+						url: `https://www.canva.com${href}`,
+					});
+				}
+			} catch {}
+			idx = i;
+		}
+		const collections: any[] = [];
+		const colRe = /\{"A":"([A-Za-z0-9_-]+)","B":"((?:\\.|[^"\\])*)","C":\[([^\]]*)\],"D":"(\/graphics\/collection\/[^"]+)","E":(\d+),"F":"([^"]*)","G":"GRAPHIC_SET"\}/g;
+		let m: RegExpExecArray | null;
+		while ((m = colRe.exec(html)) !== null) {
+			try {
+				const col = JSON.parse(m[0]);
+				collections.push({ id: col.A, title: col.B, covers: col.C, url: `https://www.canva.com${col.D}`, count: col.E, label: col.F });
+			} catch {}
+		}
+		return { total, suggestions, data: { items: results, collections } };
+	} catch (e) {
+		console.error(e);
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};

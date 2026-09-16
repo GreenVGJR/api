@@ -3,6 +3,7 @@ import vm from "node:vm";
 import { Buffer } from "buffer";
 import { JSDOM } from "jsdom";
 import { post as httpcloakPost } from "httpcloak";
+import { BotGuardClient, getChallenge } from "bgutils-js/botguard";
 import { commonHeaders, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
 import { parseHTML } from "linkedom";
@@ -680,8 +681,6 @@ export const shazamSession = async function shazamSession(): Promise<string | nu
 	}
 };
 
-const imr_2cl = "https://waa-pa.clients6.google.com/$rpc/google.internal.waa.v1.Waa/Create";
-const byu_6eo = "AIzaSyBGb5fGAyC-pRcRU6MUHb__b_vKha71HRE";
 const ncd_3qy = "br1aemAN9owlYRs9NnsA";
 const kjx_2ge = 12 * 3600 * 1000;
 const rmm_4wq = 30000;
@@ -839,81 +838,34 @@ function hla_5gn(): any {
 	return sandbox;
 }
 
-function ozy_3ft<T>(label: string, fn: (resolve: (v: T) => void, reject: (e: Error) => void) => void): Promise<T> {
-	return new Promise<T>((resolve, reject) => {
-		const to = setTimeout(() => reject(new Error(`${label} timeout`)), rmm_4wq);
-		fn(
-			(v) => {
-				clearTimeout(to);
-				resolve(v);
-			},
-			(e) => {
-				clearTimeout(to);
-				reject(e);
-			},
-		);
-	});
-}
-
 interface tdw_9uf {
 	key: string;
-	jwe: (...args: any[]) => void;
+	bg: any;
 	expire: number;
 }
 
 let nfr_4qx: tdw_9uf | null = null;
 let uom_7gs: Promise<tdw_9uf | null> | null = null;
 
+const bgFetchAdapter: any = async (url: string, init: any) => {
+	const r: any = await (httpcloakPost as any)(url, { headers: init?.headers ?? {}, body: init?.body });
+	const text = typeof r?.text === "function" ? await r.text() : typeof r?.text === "string" ? r.text : JSON.stringify(r);
+	return { ok: r?.statusCode >= 200 && r?.statusCode < 300, status: r?.statusCode, json: async () => JSON.parse(text) };
+};
+
 async function egl_1yt(): Promise<tdw_9uf | null> {
-	const res: any = await (httpcloakPost as any)(imr_2cl, {
-		headers: {
-			"Content-Type": "application/json+protobuf",
-			"X-Goog-Api-Key": byu_6eo,
-			"X-User-Agent": "grpc-web-javascript/0.1",
-		},
-		body: JSON.stringify([ncd_3qy]),
-	});
-	const item = res?.json?.()?.[0] ?? res?.[0];
-	const scriptUrl: string | undefined = item?.[2]?.[3];
-	const key: string | undefined = item?.[3];
-	const blob: string | undefined = item?.[4];
-	const globalName: string | undefined = item?.[5];
-	let xbd: any = null;
-	try {
-		xbd = JSON.parse(item?.[7] ?? "null");
-	} catch {}
-	if (!scriptUrl || !key || !blob || !globalName) return null;
+	const ch: any = await getChallenge({ requestKey: ncd_3qy, fetchFunction: bgFetchAdapter });
+	const interpUrl: string | undefined = ch?.interpreterUrl?.privateDoNotAccessOrElseTrustedResourceUrlWrappedValue;
+	if (!ch?.program || !ch?.globalName || !interpUrl) return null;
+	const key: string = ch?.interpreterHash ?? crypto.createHash("sha256").update(ch.program).digest("hex");
 	if (nfr_4qx && nfr_4qx.key === key && nfr_4qx.expire > Date.now()) return nfr_4qx;
-	const progRes = await fetch(`https:${scriptUrl}`, { headers: commonHeaders });
+	const progRes = await fetch(`https:${interpUrl}`, { headers: commonHeaders });
 	if (!progRes.ok) return null;
 	const progJs = await progRes.text();
 	const sandbox = hla_5gn();
 	vm.runInContext(progJs, sandbox, { filename: "gemini-bg.js" });
-	const entry = sandbox?.[globalName]?.a;
-	if (typeof entry !== "function") return null;
-	let cArr: any[] = [];
-	let c2Arr: any[] = [];
-	let f5: any = "";
-	try {
-		const f6 = xbd?.[5];
-		if (Array.isArray(f6)) {
-			for (const e of f6) {
-				if (!Array.isArray(e)) continue;
-				if (Number(e[1]) <= 53) cArr.push(e[0]);
-				else c2Arr.push(e[0]);
-			}
-		}
-		f5 = xbd?.[4] ?? "";
-	} catch {}
-	const jwe: any = await ozy_3ft<any>("entry", (resolve, reject) => {
-		try {
-			entry.call(sandbox, blob, (...a: any[]) => resolve(a[0]), true, undefined, sjv_2fs, [cArr, c2Arr], f5, false, [sjv_2fs, sjv_2fs, sjv_2fs, sjv_2fs]);
-		} catch (e: any) {
-			reject(e);
-		}
-	});
-	if (typeof jwe !== "function") return null;
-	nfr_4qx = { key, jwe, expire: Date.now() + kjx_2ge };
+	const bg = await BotGuardClient.create({ program: ch.program, globalName: ch.globalName, globalObject: sandbox });
+	nfr_4qx = { key, bg, expire: Date.now() + kjx_2ge };
 	return nfr_4qx;
 }
 
@@ -936,13 +888,7 @@ export async function bat_2uw(que: string, gTa: string, cid?: string): Promise<s
 		const st = await pmp_7as();
 		if (!st) return null;
 		const qh = crypto.createHash("sha256").update(`${que}${gTa}`).digest("hex");
-		const fTa: any = await ozy_3ft<any>("snapshot", (resolve, reject) => {
-			try {
-				st.jwe.call(null, (...a: any[]) => resolve(a[0]), [{ qh, cid: cid || "", prqid: "", prsid: "" }, undefined, undefined, undefined]);
-			} catch (e: any) {
-				reject(e);
-			}
-		});
+		const fTa: string = await st.bg.snapshot({ contentBinding: { qh, cid: cid || "", prqid: "", prsid: "" } }, rmm_4wq);
 		if (typeof fTa !== "string" || !fTa.length) return null;
 		return fTa;
 	} catch {

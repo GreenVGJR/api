@@ -440,18 +440,25 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
 export const refreshRedditAuth = async (): Promise<any> => {
 	try {
-		const fetchLogin = async (targetDomain: string) => {
-			return await fetch(`https://${targetDomain}/login/`, {
-				headers: commonHeaders,
+		const fetchLogin = async (targetUrl: string, retrCookies: string | null) => {
+			const response = await fetch(targetUrl, {
+				headers: {
+					...commonHeaders,
+					...(retrCookies ? { Cookie: retrCookies } : {}),
+				},
 				redirect: "manual",
 			});
+			const html = await response.clone().text();
+			if (/class=["']g-recaptcha["']/i.test(html)) {
+				const tempResCookies = response.headers.getSetCookie ? normalizeCookies(response.headers.getSetCookie()) : normalizeCookies(response.headers.get("set-cookie"));
+				if (tempResCookies && tempResCookies !== retrCookies) {
+					return await fetchLogin(targetUrl, tempResCookies);
+				}
+			}
+			return response;
 		};
 
-		let loginRes = await fetchLogin("old.reddit.com");
-
-		if (loginRes.status === 403) {
-			loginRes = await fetchLogin("www.reddit.com");
-		}
+		let loginRes = await fetchLogin("https://www.reddit.com/svc/shreddit/styling-overrides", null);
 
 		if (loginRes.headers.getSetCookie) {
 			return normalizeCookies(loginRes.headers.getSetCookie());

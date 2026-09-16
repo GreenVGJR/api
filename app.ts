@@ -536,9 +536,6 @@ app.get("/robots.txt", (c: Context) => {
 app.get("/logs", async (c: Context) => {
 	c.header("Cache-Control", "public, max-age=0, no-transform, must-revalidate");
 	c.header("Content-Type", "text/plain");
-	if (c.req.header("cache-control") !== "max-age=0" && c.req.header("sec-fetch-site") !== "same-origin" && c.req.header("referer") !== c.req.url) {
-		return c.body("Precondition failed. Navigate this from playground page.", 412);
-	}
 	c.header("Refresh", "5");
 
 	return stream(c, async (s) => {

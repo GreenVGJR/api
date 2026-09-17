@@ -12,6 +12,11 @@
 		"localSecKeyForTest": "1x0000000000000000000000000000000AA",
 		"localSiteKeyForTest": "1x00000000000000000000AA"
 	},
+	"maintenance": {
+		"enabled": false,
+		"pageMessage": "503 - Service Temporarily Unavailable",
+		"apiMessage": "Service Temporarily Unavailable"
+	},
 	"nodeConnectTimeout": 3000,
 	"removeSessionJobTime": 86400000
 }

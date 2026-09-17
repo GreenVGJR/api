@@ -20,7 +20,9 @@ const _g = globalThis as any;
 export const autoGenBuild: any = _g.__vgjr_autoGenBuild || (_g.__vgjr_autoGenBuild = crypto.randomBytes(6).toString("base64url"));
 export const autoGenBuildPara: any = _g.__vgjr_autoGenBuildPara || (_g.__vgjr_autoGenBuildPara = crypto.randomBytes(6).toString("base64url"));
 
-const startupDataPromise = Promise.all([import("./routes/search/index.js"), import("./routes/lyrics/index.js"), import("./routes/tools/index.js"), import("./routes/info/index.js"), import("./routes/profile/index.js"), import("./routes/download/index.js"), import("./routes/music/index.js"), import("./routes/suggest/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
+const skipRouteLoad = (config as any)?.maintenance?.enabled === true;
+const lazyRouteModule = (spec: string): Promise<any> => (skipRouteLoad ? Promise.resolve({ default: [] }) : import(spec));
+const startupDataPromise = Promise.all([lazyRouteModule("./routes/search/index.js"), lazyRouteModule("./routes/lyrics/index.js"), lazyRouteModule("./routes/tools/index.js"), lazyRouteModule("./routes/info/index.js"), lazyRouteModule("./routes/profile/index.js"), lazyRouteModule("./routes/download/index.js"), lazyRouteModule("./routes/music/index.js"), lazyRouteModule("./routes/suggest/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
 
 const API_ROUTES = {
 	suggestion: [
@@ -221,7 +223,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain, turnstile: turnstileConfig } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain, turnstile: turnstileConfig, maintenance: maintenanceConfig } = config;
 
 const turnstileLocalKeys = {
 	siteKey: turnstileConfig.localSiteKeyForTest,
@@ -238,6 +240,23 @@ function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKe
 }
 
 const app = new Hono({ strict: false });
+
+// ── Maintenance mode ────────────────────────────────────────────────────────
+// When enabled: browsers (UA starts with "Mozilla/5.0") are 302-redirected to
+// /maintenance, API clients get a 503 JSON error directly.
+if (maintenanceConfig?.enabled) {
+	app.use("*", async (c: Context, next: Next) => {
+		const pathname = new URL(c.req.url).pathname;
+		if (pathname === "/maintenance" || pathname === "/favicon.ico" || pathname === "/robots.txt" || pathname === "/amc/terms" || pathname === "/amc/privacy") {
+			await next();
+			return;
+		}
+		if (c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
+			return c.redirect("/maintenance", 302);
+		}
+		return c.json({ error: maintenanceConfig.apiMessage }, 503);
+	});
+}
 
 app.use("*", async (c: Context, next: Next) => {
 	if (restrictLocal) {
@@ -532,6 +551,22 @@ app.get("/robots.txt", (c: Context) => {
 	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
 	return c.text(robots, 200);
 });
+
+function escapeMaintenanceHtml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+if (maintenanceConfig?.enabled) {
+	app.get("/maintenance", (c: Context) => {
+		if (!c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
+			return c.json({ error: maintenanceConfig.apiMessage }, 503);
+		}
+		c.header("Content-Type", "text/html");
+		c.header("Cache-Control", "public, no-store, max-age=0, no-transform");
+		const pageMessage = escapeMaintenanceHtml(maintenanceConfig.pageMessage ?? "");
+		return c.body(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#111;color:#eee"><p style="max-width:520px;text-align:center;line-height:1.6">${pageMessage}</p></body></html>`);
+	});
+}
 
 app.get("/logs", async (c: Context) => {
 	c.header("Cache-Control", "public, max-age=0, no-transform, must-revalidate");

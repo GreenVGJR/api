@@ -3,7 +3,7 @@ import { Hono, Context, Next } from "hono";
 import { cors } from "hono/cors";
 import { stream } from "hono/streaming";
 import { getCookie } from "hono/cookie";
-import { sign } from "hono/jwt";
+import { sign, verify } from "hono/jwt";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
@@ -379,6 +379,59 @@ async function createBackChallengeJwt(maxAge: number): Promise<string> {
 	);
 }
 
+const VF_COOKIE = "vf";
+const VF_MAX_AGE = 30;
+
+function isVfEligible(c: Context): boolean {
+	if (c.req.header("sec-fetch-site") !== "same-origin") return false;
+	if (!c.req.header("user-agent")?.startsWith("Mozilla/5.0")) return false;
+	// Browsers omit Origin on same-origin GETs (including preloads), so only
+	// enforce it when present — otherwise the legitimate preload would 406.
+	const origin = c.req.header("origin");
+	if (origin) {
+		const host = (c.req.header("host") || "").toLowerCase();
+		const fwdProto = (c.req.header("x-forwarded-proto") || "").split(",")[0].trim().toLowerCase();
+		let scheme = fwdProto === "https" || fwdProto === "http" ? fwdProto : "";
+		if (!scheme) {
+			try {
+				scheme = new URL(c.req.url).protocol.replace(":", "").toLowerCase();
+			} catch {
+				return false;
+			}
+		}
+		if (!host || !scheme) return false;
+		if (origin.toLowerCase() !== `${scheme}://${host}`) return false;
+	}
+	return true;
+}
+
+async function createVfTokenResponse(c: Context) {
+	const now = Math.floor(Date.now() / 1000);
+	const token = await sign(
+		{
+			sub: "vf",
+			iat: now,
+			exp: now + VF_MAX_AGE,
+			n: crypto.randomBytes(8).toString("base64url"),
+		},
+		getBackChallengeJwtKey(),
+	);
+	c.header("Set-Cookie", `${VF_COOKIE}=${token}; Path=/; Max-Age=${VF_MAX_AGE}; SameSite=Lax`);
+	c.header("Cache-Control", "no-store, no-transform");
+	return c.json({ ok: true });
+}
+
+async function verifyVfHeader(c: Context): Promise<boolean> {
+	try {
+		const token = c.req.header("x-sf-e");
+		if (!token) return false;
+		const payload: any = await verify(token, getBackChallengeJwtKey(), "HS256");
+		return payload?.sub === "vf";
+	} catch {
+		return false;
+	}
+}
+
 function encodeBackChallengePayload(payload: Buffer, userAgent: string, jwtToken: string): string {
 	const userAgentKey = crypto.createHash("sha512").update(userAgent).digest();
 	const jwtKey = crypto.createHash("sha512").update(jwtToken).digest();
@@ -658,10 +711,19 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	});
 });
 
-app.get("/", (c: Context) => {
+app.get("/", async (c: Context) => {
+	c.header("Cache-Control", "public, no-store, no-transform");
+	if (c.req.query("vf") !== undefined) {
+		if (!isVfEligible(c)) {
+			return c.body(null, 406);
+		}
+		return createVfTokenResponse(c);
+	}
 	if (c.req.query("json") !== undefined) {
+		if (!(await verifyVfHeader(c))) {
+			return c.body(null, 406);
+		}
 		c.header("Content-Type", "application/json");
-		c.header("Cache-Control", "public, max-age=60, no-transform");
 
 		const uptime = String(Math.floor(starttime / 1000));
 		const os_uptime = String(Math.floor(Date.now() / 1000) - Math.floor(os.uptime()));
@@ -691,7 +753,7 @@ app.get("/", (c: Context) => {
 			{ routes: API_ROUTES },
 		];
 
-		return c.body(zlib.gzipSync(JSON.stringify(listapi)));
+		return c.body(JSON.stringify(listapi));
 	}
 
 	c.status(302);

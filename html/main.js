@@ -1836,12 +1836,35 @@ function showTurnstileChallenge() {
   });
 }
 
-let initialStatsPromise = fetch("/?json", {
-  credentials: "include",
-  cache: "default",
-  referrerPolicy: "strict-origin-when-cross-origin",
-  headers: { Accept: "*/*" },
-});
+let vfToken = null;
+function readVfCookie() {
+  try {
+    const part = document.cookie.split("; ").find((p) => p.startsWith("vf="));
+    const val = part ? part.slice(3) : "";
+    if (val) vfToken = val;
+  } catch {}
+  return vfToken;
+}
+
+function fetchJsonStats() {
+  const token = readVfCookie();
+  const headers = { Accept: "*/*" };
+  if (token) headers["x-sf-e"] = token;
+  return fetch("/?json", {
+    credentials: "include",
+    cache: "default",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    headers,
+  });
+}
+
+function clearVfCookie() {
+  try {
+    document.cookie = "vf=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+  } catch {}
+}
+
+let initialStatsPromise = fetchJsonStats();
 
 async function refreshEndpointsFromJson() {
   try {
@@ -1851,17 +1874,18 @@ async function refreshEndpointsFromJson() {
     try {
       const statsPromise = initialStatsPromise;
       initialStatsPromise = null;
-      statsRes = await (statsPromise || fetch("/?json", {
-        credentials: "include",
-        cache: "default",
-        referrerPolicy: "strict-origin-when-cross-origin",
-        headers: { Accept: "*/*" },
-      }));
+      statsRes = await (statsPromise || fetchJsonStats());
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;
       }
+      if (statsRes.status === 406) {
+        setStatus("yellow-400", "Verifying", "text-yellow-400");
+        location.reload();
+        return false;
+      }
       if (statsRes.ok) {
+        clearVfCookie();
         const statsRaw = new Uint8Array(await statsRes.arrayBuffer());
         const statsText = statsRaw[0] === 0x1f && statsRaw[1] === 0x8b
           ? await new Response(new Blob([statsRaw]).stream().pipeThrough(new DecompressionStream("gzip"))).text()

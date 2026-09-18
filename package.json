@@ -20,6 +20,7 @@
 		"pm2-check": "command -v pm2 >/dev/null 2>&1 || npm install -g pm2",
 		"start-t": "bun -b --experimental-http2-fetch --experimental-http3-fetch --tls-max-v1.3 .",
 		"start": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun -b --hot --experimental-http2-fetch --experimental-http3-fetch --tls-max-v1.3 .\" --name api -i 1 && pm2 save --force",
+		"start-4": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun -b --hot --experimental-http2-fetch --experimental-http3-fetch --tls-max-v1.3 --dns-result-order=ipv4first .\" --name api -i 1 && pm2 save --force",
 		"start-6": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun -b --hot --experimental-http2-fetch --experimental-http3-fetch --tls-max-v1.3 --dns-result-order=ipv6first .\" --name api -i 1 && pm2 save --force",
 		"stop": "npm run pm2-check && pm2 delete api 2>/dev/null && pm2 save --force",
 		"gen": "bun gen-routes.ts",
@@ -30,7 +31,7 @@
 		"soft-update": "rm -rf functions routes public html && curl -L https://github.com/GreenVGJR/api/tarball/main | tar -xz --strip-components=1 && bun run gen && npm run pm2-check && npm update -g"
 	},
 	"devDependencies": {
-		"@types/node": "^26.5.1",
+		"@types/node": "^26.6.1",
 		"bun-types": "^1.4.2",
 		"tsx": "^4.23.13",
 		"typescript": "^7.0.2"

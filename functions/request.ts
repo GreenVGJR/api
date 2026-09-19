@@ -492,6 +492,7 @@ let unsplashClientHash: string = "f048c76212df482c67befc2ffebd9b96941f7bce32";
 let unsplashWafCookie: string = "";
 let shazamCfCookie: string | null = "";
 let magnificBuildId: string | null = "";
+let magnificCookies: string = "";
 
 const setTiktokWafCookie = (solved: string) => {
 	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
@@ -13371,7 +13372,7 @@ export const Magnific = async function Magnific(que: string, buildRetried: boole
 	const q = encodeURIComponent(que);
 	const pullJson = async (build: string) => {
 		const dataRes: any = await session.get(`https://www.magnific.com/_next/data/${build}/en/search.json?format=search&last_filter=query&last_value=${q}&query=${q}`, {
-			headers: { ...commonHeaders, Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
+			headers: { ...commonHeaders, ...(magnificCookies ? { Cookie: magnificCookies } : {}), Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
 		});
 		if (dataRes?.statusCode === 403) return { challenged: true };
 		if (dataRes?.statusCode !== 200) return null;
@@ -13385,13 +13386,19 @@ export const Magnific = async function Magnific(que: string, buildRetried: boole
 	};
 	try {
 		if (!magnificBuildId) {
-			const fresh = await magnificKey(session);
-			if (fresh) magnificBuildId = fresh;
+			const fresh = await magnificKey();
+			if (fresh) {
+				magnificBuildId = fresh.buildId;
+				magnificCookies = fresh.cookies;
+			}
 		}
 		let json: any = magnificBuildId ? await pullJson(magnificBuildId) : null;
 		if (!json?.pageProps?.regularList?.items?.length && !json?.challenged && !buildRetried) {
-			const fresh = await magnificKey(session);
-			if (fresh) magnificBuildId = fresh;
+			const fresh = await magnificKey();
+			if (fresh) {
+				magnificBuildId = fresh.buildId;
+				magnificCookies = fresh.cookies;
+			}
 			return await Magnific(que, true);
 		}
 		if (!json || json?.challenged) return { error: "Akamai asking to verify you're not a bot" };

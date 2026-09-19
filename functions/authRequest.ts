@@ -2,7 +2,7 @@ import crypto from "crypto";
 import vm from "node:vm";
 import { Buffer } from "buffer";
 import { JSDOM } from "jsdom";
-import { post as httpcloakPost } from "httpcloak";
+import { post as httpcloakPost, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 import { BotGuardClient, getChallenge } from "bgutils-js/botguard";
 import { commonHeaders, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
@@ -441,31 +441,29 @@ export const twitterKey = async function twitterKey(typeName: string) {
 
 export const refreshRedditAuth = async (): Promise<any> => {
 	try {
-		const fetchLogin = async (targetUrl: string, retrCookies: string | null) => {
+		const jar = new Map<string, string>();
+		const collect = (res: any) => {
+			const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("set-cookie")].filter(Boolean);
+			for (const c of raw) {
+				const m = /^([^=]+)=([^;]*)/.exec(c);
+				if (m) jar.set(m[1].trim(), m[2]);
+			}
+		};
+		const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+		const targetUrl = "https://www.reddit.com/svc/shreddit/styling-overrides";
+		for (let attempt = 0; attempt < 3; attempt++) {
 			const response = await fetch(targetUrl, {
 				headers: {
 					...commonHeaders,
-					...(retrCookies ? { Cookie: retrCookies } : {}),
+					...(jar.size ? { Cookie: jarStr() } : {}),
 				},
 				redirect: "manual",
 			});
+			collect(response);
 			const html = await response.clone().text();
-			if (/class=["']g-recaptcha["']/i.test(html)) {
-				const tempResCookies = response.headers.getSetCookie ? normalizeCookies(response.headers.getSetCookie()) : normalizeCookies(response.headers.get("set-cookie"));
-				if (tempResCookies && tempResCookies !== retrCookies) {
-					return await fetchLogin(targetUrl, tempResCookies);
-				}
-			}
-			return response;
-		};
-
-		let loginRes = await fetchLogin("https://www.reddit.com/svc/shreddit/styling-overrides", null);
-
-		if (loginRes.headers.getSetCookie) {
-			return normalizeCookies(loginRes.headers.getSetCookie());
-		} else {
-			return normalizeCookies(loginRes.headers.get("set-cookie"));
+			if (!/class=["']g-recaptcha["']/i.test(html)) break;
 		}
+		return jarStr() || null;
 	} catch {
 		return null;
 	}
@@ -575,14 +573,42 @@ export const devianKey = async function devianKey(): Promise<{
 	}
 };
 
-export const magnificKey = async function magnificKey(session: any): Promise<string | null> {
+export const magnificKey = async function magnificKey(): Promise<{ buildId: string; cookies: string } | null> {
+	const chromeHeaders = {
+		...commonHeaders,
+		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+	};
+	const jar = new Map<string, string>();
+	const collect = (res: any) => {
+		const raw = res?.headers?.["set-cookie"] ?? (typeof res?.headers?.getSetCookie === "function" ? res.headers.getSetCookie() : []);
+		for (const c of Array.isArray(raw) ? raw : [raw]) {
+			const m = /^([^=]+)=([^;]*)/.exec(c);
+			if (m) jar.set(m[1].trim(), m[2]);
+		}
+	};
+	const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
 	try {
-		const res: any = await session.get(`https://www.magnific.com/en/search`, { headers: { ...commonHeaders } });
-		if (res?.statusCode === 403) return null;
-		const html: string = typeof res?.text === "string" ? res.text : "";
-		if (!html) return null;
-		if (html.includes("_sec/verify") || html.includes("bm-verify") || html.includes("challenge.magnific") || html.includes("security filter")) return null;
-		return html.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const session = new HttpcloakSession({ preset: HttpcloakPreset.CHROME_LATEST_WINDOWS, timeout: 30 });
+			try {
+				if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+				const res: any = await session.get(`https://magnific.com/en/search`, {
+					headers: { ...chromeHeaders, ...(attempt > 1 ? { "Cache-Control": "max-age=0" } : {}), ...(jar.size ? { Cookie: jarStr() } : {}) },
+				});
+				collect(res);
+				if (res?.statusCode === 403) continue;
+				const html: string = typeof res?.text === "string" ? res.text : "";
+				if (!html) continue;
+				if (html.includes("_sec/verify") || html.includes("bm-verify") || html.includes("challenge.magnific") || html.includes("security filter")) continue;
+				const buildId = html.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
+				if (buildId) return { buildId, cookies: jarStr() };
+			} finally {
+				try {
+					session.close();
+				} catch {}
+			}
+		}
+		return null;
 	} catch {
 		return null;
 	}

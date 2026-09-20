@@ -33,7 +33,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/startpage?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -381,12 +381,24 @@ async function createBackChallengeJwt(maxAge: number): Promise<string> {
 
 const VF_COOKIE = "vf";
 const VF_MAX_AGE = 30;
+// Consumed vf token nonces (`n` claim) mapped to their expiry (unix seconds).
+// Tokens are single-use: presenting the same token twice is rejected (406).
+const usedVfNonces = new Map<string, number>();
+// Guaranteed cleanup even when no verifications are running (verifyVfHeader
+// also prunes lazily on each call).
+setInterval(() => {
+	const nowSec = Math.floor(Date.now() / 1000);
+	for (const [seen, exp] of usedVfNonces) {
+		if (exp <= nowSec) usedVfNonces.delete(seen);
+	}
+}, 60_000);
 
 function isVfEligible(c: Context): boolean {
 	if (c.req.header("sec-fetch-site") !== "same-origin") return false;
 	if (!c.req.header("user-agent")?.startsWith("Mozilla/5.0")) return false;
-	// Browsers omit Origin on same-origin GETs (including preloads), so only
-	// enforce it when present — otherwise the legitimate preload would 406.
+	// Browsers omit Origin on same-origin GETs (including the manual /?vf
+	// fetch), so only enforce it when present — otherwise legitimate
+	// same-origin requests would 406.
 	const origin = c.req.header("origin");
 	if (origin) {
 		const host = (c.req.header("host") || "").toLowerCase();
@@ -426,7 +438,18 @@ async function verifyVfHeader(c: Context): Promise<boolean> {
 		const token = c.req.header("x-sf-e");
 		if (!token) return false;
 		const payload: any = await verify(token, getBackChallengeJwtKey(), "HS256");
-		return payload?.sub === "vf";
+		if (payload?.sub !== "vf") return false;
+		// Single-use guard: each vf token may be presented exactly once.
+		// Replays (same `n`) are rejected so the caller must mint a fresh token.
+		const n = payload?.n;
+		if (typeof n !== "string" || !n) return false;
+		const nowSec = Math.floor(Date.now() / 1000);
+		for (const [seen, exp] of usedVfNonces) {
+			if (exp <= nowSec) usedVfNonces.delete(seen);
+		}
+		if (usedVfNonces.has(n)) return false;
+		usedVfNonces.set(n, Number(payload?.exp) || nowSec + VF_MAX_AGE);
+		return true;
 	} catch {
 		return false;
 	}

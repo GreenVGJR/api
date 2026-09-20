@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, qcq_6uj, shazamSession, bat_2uw, hwo_6qi } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -13413,6 +13413,65 @@ export const Magnific = async function Magnific(que: string, buildRetried: boole
 				items: list.items || [],
 			},
 		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};
+
+export const StartpageSearch = async function StartpageSearch(que: string, authRetried: boolean = false): Promise<any> {
+	if (!que) return null;
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const q = encodeURIComponent(que);
+	const searchUrl = `https://www.startpage.com/do/search?query=${q}&lui=english`;
+	let wafStatus = false;
+	let wafAttempt = 0;
+	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
+	try {
+		let auth = await getStartpageAuth(searchUrl);
+		if (!auth) return { error: "Anubis asking to verify you're not a bot", _wafChallenge: waf() };
+		wafStatus = true;
+		wafAttempt = auth.reused ? 0 : auth.attempts;
+		const fetchResults = async (cookie: string) => {
+			const res: any = await session.get(searchUrl, {
+				headers: { ...commonHeaders, Cookie: cookie, Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", Referer: "https://www.startpage.com/" },
+			});
+			return typeof res?.text === "string" ? res.text : "";
+		};
+		let html = await fetchResults(auth.cookie);
+		if (html.includes("anubis_challenge") && !authRetried) {
+			invalidateStartpageAuth();
+			auth = await getStartpageAuth(searchUrl);
+			if (!auth) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+			wafAttempt = auth.reused ? 0 : auth.attempts;
+			html = await fetchResults(auth.cookie);
+		}
+		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+		const { document } = parseHTML(html);
+		const items: any[] = [];
+		for (const el of Array.from(document.querySelectorAll(".w-gl .result"))) {
+			const titleA = (el as any).querySelector("a.result-title");
+			const url = titleA?.getAttribute("href") || "";
+			if (!url) continue;
+			const title = titleA?.querySelector("h2")?.textContent?.trim() || titleA?.textContent?.trim() || "";
+			const siteName = (el as any).querySelector("a.wgl-site-title .link-text")?.textContent?.trim() || "";
+			const displayUrl = (el as any).querySelector("a.wgl-display-url .structured-link-text")?.textContent?.replace(/\s+/g, " ").trim() || (el as any).querySelector("a.wgl-display-url")?.textContent?.trim() || "";
+			const snippet = (el as any).querySelector("p.description")?.textContent?.replace(/\s+/g, " ").trim() || "";
+			const sitelinks: any[] = [];
+			for (const s of Array.from((el as any).querySelectorAll(".wgl-sitelinks a"))) {
+				const su = (s as any).getAttribute("href") || "";
+				const st = (s as any).textContent?.trim() || "";
+				if (su) sitelinks.push({ title: st, url: su.startsWith("http") ? su : `https://www.startpage.com${su}` });
+			}
+			const anonymousViewUrl = (el as any).querySelector(".anonymous-view-link a")?.getAttribute("href") || "";
+			items.push({ title, url, siteName, displayUrl, snippet, sitelinks, anonymousViewUrl });
+		}
+		if (!items.length) return { _wafChallenge: waf(), data: null };
+		return { _wafChallenge: waf(), total: items.length, data: items };
 	} catch (e) {
 		console.error(e);
 		return null;

@@ -485,6 +485,14 @@ function renderPlaygroundPage() {
 
 let lastRenderedPage = null;
 
+function hasLoadedEndpoints() {
+  try {
+    return Object.values(endpoints).some((list) => Array.isArray(list) && list.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 function renderCurrentPage() {
   const page = pageFromPath(window.location.pathname);
   const isLegalPage = page === "terms" || page === "privacy";
@@ -501,7 +509,9 @@ function renderCurrentPage() {
     responseArea.scrollTop = 0;
   } else {
     renderPlaygroundPage();
-    if (prevPage && prevPage !== "playground") refreshEndpointsFromJson();
+    // Only (re)fetch the endpoint list when it isn't loaded yet — returning
+    // from terms/privacy with cached endpoints must not burn a vf token.
+    if (prevPage && prevPage !== "playground" && !hasLoadedEndpoints()) refreshEndpointsFromJson();
   }
   updateConnectionUI();
 }
@@ -1846,6 +1856,15 @@ function readVfCookie() {
   return vfToken;
 }
 
+function fetchVf() {
+  return fetch("/?vf", {
+    credentials: "include",
+    cache: "no-store",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    headers: { Accept: "*/*" },
+  });
+}
+
 function fetchJsonStats() {
   const token = readVfCookie();
   const headers = { Accept: "*/*" };
@@ -1864,7 +1883,12 @@ function clearVfCookie() {
   } catch {}
 }
 
-let initialStatsPromise = fetchJsonStats();
+let initialStatsPromise = (async () => {
+  try {
+    await fetchVf();
+  } catch {}
+  return fetchJsonStats();
+})();
 
 async function refreshEndpointsFromJson() {
   try {

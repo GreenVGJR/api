@@ -1,5 +1,7 @@
 import crypto from "crypto";
 import vm from "node:vm";
+import os from "node:os";
+import { Worker } from "node:worker_threads";
 import { Buffer } from "buffer";
 import { JSDOM } from "jsdom";
 import { post as httpcloakPost, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
@@ -671,6 +673,129 @@ export const qcq_6uj = async (): Promise<string | null> => {
 		tum_1ph = Date.now() + 6 * 3600 * 1000;
 	}
 	return c;
+};
+
+// ---- Startpage Anubis (parallel fast-PoW solver) ----
+let spc_1qw: string | null = null;
+let spe_5qw = 0;
+let spi_9qw: Promise<{ cookie: string; reused: boolean; attempts: number } | null> | null = null;
+
+const SP_NONCE_CAP = 50_000_000;
+
+// Parallel SHA256(randomData + nonce) search: worker i of N checks nonces
+// i, i+N, i+2N... First match wins, rest are terminated. Resolves the
+// winning { nonce, hash } so callers can report attempts as nonce + 1.
+const jkw_4qx = (randomData: string, difficulty: number): Promise<{ nonce: number; hash: string } | null> => {
+	return new Promise((resolve) => {
+		let count = 1;
+		try {
+			count = Math.max(1, os.availableParallelism?.() ?? os.cpus().length);
+		} catch {}
+		const target = "0".repeat(difficulty);
+		const code = "const{parentPort,workerData}=require('node:worker_threads');" + "const crypto=require('node:crypto');" + "const{randomData,target,index,stride,cap}=workerData;" + "let nonce=index;for(;;){" + "const hash=crypto.createHash('sha256').update(randomData+nonce,'utf8').digest('hex');" + "if(hash.startsWith(target)){parentPort.postMessage({nonce:nonce,hash:hash});break;}" + "nonce+=stride;if(nonce>cap){parentPort.postMessage(null);break;}}";
+		const workers: Worker[] = [];
+		let done = false;
+		let dead = 0;
+		const finish = (v: { nonce: number; hash: string } | null) => {
+			if (done) return;
+			done = true;
+			for (const w of workers) {
+				try {
+					w.terminate();
+				} catch {}
+			}
+			resolve(v);
+		};
+		for (let i = 0; i < count; i++) {
+			try {
+				const w = new Worker(code, { eval: true, workerData: { randomData, target, index: i, stride: count, cap: SP_NONCE_CAP } });
+				workers.push(w);
+				w.on("message", (m: any) => {
+					if (m) finish(m);
+					else if (++dead >= workers.length) finish(null);
+				});
+				w.on("error", () => {
+					if (++dead >= workers.length) finish(null);
+				});
+			} catch {
+				if (++dead >= count) finish(null);
+			}
+		}
+		if (!workers.length) resolve(null);
+	});
+};
+
+const yop_8zm = async (searchUrl: string): Promise<{ cookie: string; attempts: number } | null> => {
+	const headers = commonHeaders;
+	const jar = new Map<string, string>();
+	const collect = (res: any) => {
+		const raw = res?.headers?.["set-cookie"] ?? (typeof res?.headers?.getSetCookie === "function" ? res.headers.getSetCookie() : []);
+		for (const c of Array.isArray(raw) ? raw : [raw]) {
+			const m = /^([^=]+)=([^;]*)/.exec(c);
+			if (m) jar.set(m[1].trim(), m[2]);
+		}
+	};
+	const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	try {
+		const base: any = await session.get(searchUrl, { headers });
+		collect(base);
+		const html: string = typeof base?.text === "string" ? base.text : "";
+		if (!html) return null;
+		const marker = '<script id="anubis_challenge" type="application/json">';
+		const i = html.indexOf(marker);
+		if (i < 0) return jar.size ? { cookie: jarStr(), attempts: 0 } : null;
+		const ch = JSON.parse(html.slice(i + marker.length, html.indexOf("</script>", i)));
+		const solveStart = Date.now();
+		const solved = await jkw_4qx(String(ch.challenge.randomData), Number(ch.challenge.difficulty) || 6);
+		if (!solved) return null;
+		const elapsedTime = Date.now() - solveStart;
+		const redir = encodeURIComponent(new URL(searchUrl).pathname + new URL(searchUrl).search);
+		const sub: any = await session.get(`https://www.startpage.com/.within.website/x/cmd/anubis/api/pass-challenge?id=${encodeURIComponent(ch.challenge.id)}&response=${solved.hash}&nonce=${solved.nonce}&redir=${redir}&elapsedTime=${elapsedTime}`, {
+			allowRedirects: false,
+			headers: {
+				...headers,
+				Referer: searchUrl,
+				"Sec-Fetch-Site": "same-origin",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Dest": "empty",
+				...(jar.size ? { Cookie: jarStr() } : {}),
+			},
+		});
+		collect(sub);
+		if (!jar.size) return null;
+		return { cookie: jarStr(), attempts: solved.nonce + 1 };
+	} catch {
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};
+
+export const getStartpageAuth = async (searchUrl: string): Promise<{ cookie: string; reused: boolean; attempts: number } | null> => {
+	if (spc_1qw && spe_5qw > Date.now()) return { cookie: spc_1qw, reused: true, attempts: 0 };
+	if (spi_9qw) return spi_9qw;
+	spi_9qw = (async () => {
+		const s = await yop_8zm(searchUrl);
+		if (s) {
+			spc_1qw = s.cookie;
+			spe_5qw = Date.now() + 6 * 3600 * 1000;
+			return { cookie: s.cookie, reused: false, attempts: s.attempts };
+		}
+		return null;
+	})();
+	try {
+		return await spi_9qw;
+	} finally {
+		spi_9qw = null;
+	}
+};
+
+export const invalidateStartpageAuth = () => {
+	spc_1qw = null;
+	spe_5qw = 0;
 };
 
 export const shazamSession = async function shazamSession(): Promise<string | null> {

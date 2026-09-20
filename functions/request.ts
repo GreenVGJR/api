@@ -13438,7 +13438,7 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
 			const res: any = await session.get(searchUrl, {
-				headers: { ...commonHeaders, Cookie: cookie, Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", Referer: "https://www.startpage.com/" },
+				headers: { ...commonHeaders, Cookie: cookie, Referer: "https://www.startpage.com/" },
 			});
 			return typeof res?.text === "string" ? res.text : "";
 		};
@@ -13453,8 +13453,11 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
 		const { document } = parseHTML(html);
 		const items: any[] = [];
-		for (const el of Array.from(document.querySelectorAll(".w-gl .result"))) {
-			const titleA = (el as any).querySelector("a.result-title");
+		let nodes = Array.from(document.querySelectorAll(".w-gl .result"));
+		if (!nodes.length) nodes = Array.from(document.querySelectorAll("div.result"));
+		for (const el of nodes) {
+			const h2 = (el as any).querySelector("h2");
+			const titleA = (el as any).querySelector("a.result-title") || (h2?.closest?.("a") as any) || (el as any).querySelector("a[href^='http']");
 			const url = titleA?.getAttribute("href") || "";
 			if (!url) continue;
 			const title = titleA?.querySelector("h2")?.textContent?.trim() || titleA?.textContent?.trim() || "";

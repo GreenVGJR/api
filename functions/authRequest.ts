@@ -683,45 +683,152 @@ let spi_9qw: Promise<{ cookie: string; reused: boolean; attempts: number } | nul
 const SP_NONCE_CAP = 50_000_000;
 
 // Parallel SHA256(randomData + nonce) search: worker i of N checks nonces
-// i, i+N, i+2N... First match wins, rest are terminated. Resolves the
+// i, i+N, i+2N... First match wins, rest stop via shared flag. Resolves the
 // winning { nonce, hash } so callers can report attempts as nonce + 1.
-const jkw_4qx = (randomData: string, difficulty: number): Promise<{ nonce: number; hash: string } | null> => {
-	return new Promise((resolve) => {
-		let count = 1;
+//
+// Part A: fastest loop per benchmark (crypto.hash one-shot, 416k h/s vs
+// 156k h/s for createHash+hex) with Buffer byte-check instead of hex
+// (difficulty hex zeros == leading zero bytes + optional half nibble).
+// Part B: persistent pool — workers spawn once and are reused across solves.
+const powWorkerCode = "const{parentPort}=require('node:worker_threads');" + "const crypto=require('node:crypto');" + "const oneShot=typeof crypto.hash==='function';" + "parentPort.on('message',(job)=>{" + "const{solveId,randomData,full,half,index,stride,cap,stop}=job;" + "const flag=new Int32Array(stop);" + "let nonce=index;for(;;){" + "let d;" + "if(oneShot){d=crypto.hash('sha256',randomData+nonce,'buffer');}" + "else{d=crypto.createHash('sha256').update(randomData+nonce,'utf8').digest();}" + "let ok=true;" + "for(let b=0;b<full;b++){if(d[b]!==0){ok=false;break;}}" + "if(ok&&half&&(d[full]&240)!==0){ok=false;}" + "if(ok){parentPort.postMessage({solveId:solveId,nonce:nonce,hash:d.toString('hex')});return;}" + "nonce+=stride;" + "if((nonce&255)===0&&Atomics.load(flag,0)!==0){parentPort.postMessage({solveId:solveId,stopped:true});return;}" + "if(nonce>cap){parentPort.postMessage({solveId:solveId,exhausted:true});return;}" + "}});";
+
+let powPoolSize = 0;
+let powPool: Worker[] = [];
+let powSolveSeq = 0;
+let powActive = false;
+const powQueue: Array<() => void> = [];
+const powPending = new Map<
+	number,
+	{
+		resolve: (v: { nonce: number; hash: string } | null) => void;
+		finish: (v: { nonce: number; hash: string } | null) => void;
+		stop: Int32Array;
+		remaining: number;
+		done: boolean;
+		randomData: string;
+		difficulty: number;
+		retried: boolean;
+	}
+>();
+
+const powPoolCount = (): number => {
+	if (powPoolSize) return powPoolSize;
+	try {
+		powPoolSize = Math.max(1, os.availableParallelism?.() ?? os.cpus().length);
+	} catch {
+		powPoolSize = 1;
+	}
+	return powPoolSize;
+};
+
+const powEnsurePool = () => {
+	const count = powPoolCount();
+	while (powPool.length < count) {
 		try {
-			count = Math.max(1, os.availableParallelism?.() ?? os.cpus().length);
-		} catch {}
-		const target = "0".repeat(difficulty);
-		const code = "const{parentPort,workerData}=require('node:worker_threads');" + "const crypto=require('node:crypto');" + "const{randomData,target,index,stride,cap}=workerData;" + "let nonce=index;for(;;){" + "const hash=crypto.createHash('sha256').update(randomData+nonce,'utf8').digest('hex');" + "if(hash.startsWith(target)){parentPort.postMessage({nonce:nonce,hash:hash});break;}" + "nonce+=stride;if(nonce>cap){parentPort.postMessage(null);break;}}";
-		const workers: Worker[] = [];
-		let done = false;
-		let dead = 0;
-		const finish = (v: { nonce: number; hash: string } | null) => {
-			if (done) return;
-			done = true;
-			for (const w of workers) {
-				try {
-					w.terminate();
-				} catch {}
-			}
+			const w = new Worker(powWorkerCode, { eval: true });
+			(w as any).powSolve = 0;
+			w.on("message", (m: any) => powOnMessage(w, m));
+			w.on("error", () => powOnWorkerDead(w));
+			w.on("exit", () => powOnWorkerDead(w));
+			powPool.push(w);
+		} catch {
+			break;
+		}
+	}
+};
+
+const powOnMessage = (w: Worker, m: any) => {
+	if (!m || typeof m.solveId !== "number") return;
+	const state = powPending.get(m.solveId);
+	if (!state || state.done) return;
+	if ((w as any).powSolve === m.solveId) (w as any).powSolve = 0;
+	if (typeof m.nonce === "number" && m.nonce >= 0 && typeof m.hash === "string") {
+		state.finish({ nonce: m.nonce, hash: m.hash });
+		return;
+	}
+	if (--state.remaining <= 0) state.finish(null);
+};
+
+const powOnWorkerDead = (w: Worker) => {
+	powPool = powPool.filter((x) => x !== w);
+	const solveId = (w as any).powSolve as number;
+	if (!solveId) return;
+	const state = powPending.get(solveId);
+	if (!state || state.done) return;
+	// Coverage lost with the dead worker: abort the rest and retry once.
+	state.done = true;
+	try {
+		Atomics.store(state.stop, 0, 1);
+	} catch {}
+	powPending.delete(solveId);
+	for (const x of powPool) if ((x as any).powSolve === solveId) (x as any).powSolve = 0;
+	if (!state.retried) {
+		powRunSolve(state.randomData, state.difficulty, true).then(state.resolve);
+	} else {
+		state.resolve(null);
+	}
+};
+
+const powRunSolve = (randomData: string, difficulty: number, retried: boolean): Promise<{ nonce: number; hash: string } | null> => {
+	return new Promise((resolve) => {
+		powEnsurePool();
+		if (!powPool.length) return resolve(null);
+		const count = powPool.length;
+		const solveId = ++powSolveSeq;
+		const stop = new Int32Array(new SharedArrayBuffer(4));
+		const full = Math.floor(difficulty / 2);
+		const half = difficulty % 2;
+		const state = { resolve, finish: (_v: { nonce: number; hash: string } | null) => {}, stop, remaining: 0, done: false, randomData, difficulty, retried };
+		state.finish = (v) => {
+			if (state.done) return;
+			state.done = true;
+			try {
+				Atomics.store(stop, 0, 1);
+			} catch {}
+			powPending.delete(solveId);
+			for (const x of powPool) if ((x as any).powSolve === solveId) (x as any).powSolve = 0;
 			resolve(v);
 		};
+		powPending.set(solveId, state);
+		let assigned = 0;
 		for (let i = 0; i < count; i++) {
+			const w = powPool[i];
+			(w as any).powSolve = solveId;
 			try {
-				const w = new Worker(code, { eval: true, workerData: { randomData, target, index: i, stride: count, cap: SP_NONCE_CAP } });
-				workers.push(w);
-				w.on("message", (m: any) => {
-					if (m) finish(m);
-					else if (++dead >= workers.length) finish(null);
-				});
-				w.on("error", () => {
-					if (++dead >= workers.length) finish(null);
-				});
+				w.postMessage({ solveId, randomData, full, half, index: i, stride: count, cap: SP_NONCE_CAP, stop: stop.buffer });
+				assigned++;
 			} catch {
-				if (++dead >= count) finish(null);
+				(w as any).powSolve = 0;
 			}
 		}
-		if (!workers.length) resolve(null);
+		state.remaining = assigned;
+		if (!assigned) {
+			powPending.delete(solveId);
+			resolve(null);
+		}
+	});
+};
+
+// Serializes solves: a tight-loop worker can't take a second job until it
+// finishes the first, so extra solves queue behind the active one.
+const jkw_4qx = (randomData: string, difficulty: number): Promise<{ nonce: number; hash: string } | null> => {
+	return new Promise((resolve) => {
+		const run = () => {
+			powRunSolve(randomData, difficulty, false).then((v) => {
+				powActive = false;
+				const next = powQueue.shift();
+				if (next) {
+					powActive = true;
+					next();
+				}
+				resolve(v);
+			});
+		};
+		if (powActive) powQueue.push(run);
+		else {
+			powActive = true;
+			run();
+		}
 	});
 };
 

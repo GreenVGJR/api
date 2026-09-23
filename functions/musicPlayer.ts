@@ -4,7 +4,7 @@ import { stream } from "hono/streaming";
 
 import zlib from "zlib";
 import config from "../config.json" with { type: "json" };
-import { generateChallenge, verifyChallenge, verifyChallengeHash, ipToNumber } from "./musicChallenges.ts";
+import { generateChallenge, verifyChallenge, verifyChallengeHash, verifyMcToken, ipToNumber } from "./musicChallenges.ts";
 import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
 import { discordFetch } from "./request.js";
@@ -150,35 +150,29 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 	c.header("Content-Type", "application/json");
 	c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
-	// temp allowed for all countries
-	// c.req.header("cf-ipcountry")
-	const lookExistChallengeC = "DE";
-	if (["DE"].includes(lookExistChallengeC) === false) {
+	// BDFD clients must identify with a dated UA shaped like BDFD-..-..-..-
+	// (e.g. BDFD-11-09-2026-), optionally suffixed with one extra segment
+	// (e.g. BDFD-11-09-2026-81b210b). Only the shape is checked, not the values.
+	const lookExistChallengeC = /^BDFD-[^-]+-[^-]+-[^-]+-([^-]+)?$/;
+	if (!lookExistChallengeC.test(c.req.header("user-agent") || "")) {
 		const checkAccept = c.req.header("accept") === "application/json";
-		let checkReferer = false;
-		try {
-			const referer = c.req.header("referer");
-			if (referer) {
-				const refUrl = new URL(referer);
-				const reqUrl = new URL(c.req.url);
-				checkReferer = refUrl.host === reqUrl.host && referer.endsWith("/playground");
-			}
-		} catch {}
+		let checkBrowserMode = c.req.header("sec-fetch-mode") === "same-origin";
 		const ipLL = ipToNumber(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "127.0.0.1");
 		const rrmc = c.req.header("x-challenge-codes") || "";
 		const challengeHash = c.req.header("x-challenge") || "";
-		const checkValidChallenges = !verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL));
+		const mcToken = c.req.header("x-mc-token") || "";
+		const checkValidChallenges = !verifyChallengeHash(rrmc, challengeHash) || !(await verifyChallenge(rrmc, ipLL)) || !verifyMcToken(rrmc, mcToken);
 		if (checkValidChallenges) {
 			c.header("X-Player", "lavalink");
-			c.header("X-Warning", "Germany (DE) only. Outside that, you need to solve this challenge");
+			c.header("X-Warning", "This music endpoint only for BDFD users. Beside that, you need to solve this challenge");
 			c.header("Content-Type", "text/event-stream");
 			c.header("Cache-Control", "public, no-cache, no-store, no-transform, max-age=0, must-revalidate");
-			if (!(checkAccept && checkReferer)) {
+			if (!(checkAccept && checkBrowserMode)) {
 				c.header("Location", "/playground");
 			}
 			const challengeData = generateChallenge(ipLL);
 			c.status(302);
-			if (checkAccept && checkReferer) {
+			if (checkAccept && checkBrowserMode) {
 				const ch = challengeData.challenge;
 				const parts: string[] = [];
 				let i = 0;
@@ -633,6 +627,13 @@ export function get247(token: string, guildId: string): boolean {
 }
 export function clear247(token: string, guildId: string) {
 	state247.delete(get247Key(token, guildId));
+}
+// Wipes every 24/7 entry for a token (all guilds) — used by full destroy so
+// a re-created client can never auto-rejoin voice channels.
+export function clearAll247(token: string) {
+	for (const [key] of state247) {
+		if (key.startsWith(token + ":")) state247.delete(key);
+	}
 }
 
 function musicErrorMessage(err: any): string {
@@ -1233,10 +1234,18 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 								try {
 									const fallbackNode = findPlayerCapableNode(manager, node.id, player.queue.current);
 									if (!fallbackNode) return;
+									// Re-check: this event may have fired before a destroy/
+									// disconnect completed — never move players of a dead context,
+									// to a dead node, or without voice data (changeNode throws).
+									if (!players.has(token)) return;
+									if (manager.players.get(player.guildId) !== player) return;
+									if (!fallbackNode.connected) return;
+									const voice = (player as any).voice;
+									if (!voice?.endpoint || !voice?.sessionId || !voice?.token) return;
 									warnMusicThrottled(`node-switch:${player.guildId}`, `Switched guild ${player.guildId} from "${node.id}" to "${fallbackNode.id}"`, 10_000);
 									await player.changeNode(fallbackNode, false);
 								} catch (err) {
-									console.error(`Failed to change node for guild ${player.guildId}:`, err);
+									console.error(`Failed to change node for guild ${player.guildId}:`, (err as any)?.message || err);
 								}
 							})();
 						}
@@ -1429,17 +1438,29 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 		console.error("Error clearing voice status during destroy:", err);
 	}
 
+	// Explicitly destroy every Lavalink player concurrently — allSettled so one
+	// guild failing can't block teardown of the rest or the discord.js client.
 	try {
+		const guildPlayers = [...managed.player.players.values()];
+		await Promise.allSettled(
+			guildPlayers.map((p) =>
+				p.destroy().catch(() => {
+					/* already destroyed / node gone */
+				}),
+			),
+		);
+	} catch {}
+
+	try {
+		// node.destroy() (not disconnect()): closes the socket, removes listeners,
+		// stops heartbeat/reconnect timers, deletes the node from the map, and
+		// emits "destroy" (not "disconnect") so the auto-switch handler above
+		// never fires during teardown. Any surviving players on the node are
+		// destroyed internally via allSettled as a backstop.
 		const nodesToKill = [...managed.player.nodeManager.nodes.values()];
 		for (const node of nodesToKill) {
 			try {
-				(node as any).resetReconnectionAttempts?.();
-			} catch {}
-			try {
-				managed.player.nodeManager.nodes.delete(node.id);
-			} catch {}
-			try {
-				node.disconnect();
+				node.destroy("discord client destroyed", true, false);
 			} catch {}
 		}
 		await managed.client.destroy().catch(() => {});

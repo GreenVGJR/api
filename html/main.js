@@ -16,16 +16,13 @@ function getDefaultResponseHTML() {
 }
 const DEFAULT_RESPONSE_HTML = getDefaultResponseHTML();
 
-// Initialize layout and Tailwind config dynamically
 const initSPA = () => {
-  // Inject Fonts
   const fontsLink = document.createElement("link");
   fontsLink.rel = "stylesheet";
   fontsLink.href =
     "https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap";
   document.head.appendChild(fontsLink);
 
-  // Build the UI structure
   document.body.className =
     "bg-black text-white font-sans";
   const appRoot = document.getElementById("appRoot");
@@ -155,17 +152,12 @@ const initSPA = () => {
     </div>`;
 };
 
-// Start SPA immediately
 initSPA();
 
-// Force a full reload if the page was restored from bfcache (back/forward cache)
-// so a stale/cached instance is never reused.
 window.addEventListener("pageshow", (event) => {
   if (event.persisted) window.location.reload();
 });
 
-// Sync --url-bar-h so the right sidebar "Categories" label fills the same
-// vertical space as the URL bar (desktop view gap fix).
 requestAnimationFrame(() => {
   const _urlBarEl = document.getElementById("urlBar");
   if (_urlBarEl) {
@@ -282,7 +274,6 @@ function slideStatusText(text, className) {
   }, 200);
 }
 
-// Shared helper for the common "set dot color + status text + animate" sequence.
 function setStatus(dotColor, text, textClass) {
   setStatusDotColor(dotColor);
   statusText.textContent = text;
@@ -400,8 +391,6 @@ function setPageLinkState(page) {
   });
 }
 
-// Shows/hides the playground-only chrome (url bar, category tabs, endpoint
-// list, response header/actions, send row) shared by both page renderers.
 function setPlaygroundChromeVisible(visible) {
   urlBar.classList.toggle("hidden", !visible);
   categoryTabs.forEach((el) => el.classList.toggle("tabs-hidden", !visible));
@@ -509,8 +498,6 @@ function renderCurrentPage() {
     responseArea.scrollTop = 0;
   } else {
     renderPlaygroundPage();
-    // Only (re)fetch the endpoint list when it isn't loaded yet — returning
-    // from terms/privacy with cached endpoints must not burn a vf token.
     if (prevPage && prevPage !== "playground" && !hasLoadedEndpoints()) refreshEndpointsFromJson();
   }
   updateConnectionUI();
@@ -520,7 +507,6 @@ function isVerifying() {
   return statusText && statusText.textContent === "Verifying";
 }
 
-// Shared guard used before sending a request or handling send-related shortcuts.
 function isBusy() {
   return isLoading || isCoolingDown || turnstileRendered || !!document.getElementById("turnstileWidget") || isVerifying();
 }
@@ -718,10 +704,27 @@ function formatChallengeHash(hash) {
 }
 
 let solvedChallengeCode = null;
+let solvedMcToken = null;
 
-// Builds the opportunistic `x-sf-l` attestation header:
-// `${t}.${n}.${sig}` with sig = HMAC-SHA256(key=prt, `GET\n<pathname><search>\n${t}.${n}`).
-// Returns null when unavailable so the request goes out without crypto (server lets it pass).
+async function buildMcToken(codes) {
+  try {
+    if (!codes || typeof CompressionStream === "undefined") return null;
+    const buf = new Uint8Array(
+      await new Response(
+        new Blob([String(codes)]).stream().pipeThrough(new CompressionStream("gzip")),
+      ).arrayBuffer(),
+    );
+    if (buf.length < 16) return null;
+    const tail = buf.slice(-16);
+    return btoa(String.fromCharCode(...tail))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 async function buildSfLHeader(fetchUrl) {
   try {
     if (!prt || !crypto?.subtle) return null;
@@ -792,8 +795,6 @@ function removeOfflinePlayground() {
 
 removeOfflinePlayground();
 
-// Renders a fetched blob (image/video/audio) into the response area.
-// `buildTag(url)` returns the markup for the specific media element.
 async function renderBlobMedia(response, startTime, buildTag) {
   const blob = await response.blob();
   const duration = Math.round(performance.now() - startTime);
@@ -807,7 +808,7 @@ async function renderBlobMedia(response, startTime, buildTag) {
   responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${buildTag(url)}</div>`;
 }
 
-const JSON_WORKER_THRESHOLD = 50000; // chars
+const JSON_WORKER_THRESHOLD = 50000;
 
 let _jsonWorker = null;
 let _jsonWorkerReqId = 0;
@@ -841,8 +842,6 @@ function getJsonWorker() {
     }
   };
   _jsonWorker.onerror = () => {
-    // If the worker itself crashes, fail every pending request so callers
-    // fall back instead of hanging forever.
     for (const resolve of _jsonWorkerPending.values()) {
       resolve({ isJson: false, formatted: null });
     }
@@ -864,8 +863,6 @@ function parseJsonSync(text) {
   }
 }
 
-// Resolves to { isJson, formatted }. `formatted` is null when the text
-// isn't valid JSON (caller should fall back to the raw text in that case).
 function parseAndFormatJSON(text) {
   if (text.length < JSON_WORKER_THRESHOLD || typeof Worker === "undefined") {
     return Promise.resolve(parseJsonSync(text));
@@ -879,7 +876,6 @@ function parseAndFormatJSON(text) {
       worker.postMessage({ id, text });
     });
   } catch {
-    // Workers unavailable (e.g. blocked by CSP) — fall back to sync parsing.
     return Promise.resolve(parseJsonSync(text));
   }
 }
@@ -920,6 +916,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     if (solvedChallengeCode && parseUrl.pathname.startsWith("/music/")) {
       headers["x-challenge-codes"] = solvedChallengeCode;
       headers["x-challenge"] = formatChallengeHash(md5(solvedChallengeCode));
+      if (solvedMcToken) headers["x-mc-token"] = solvedMcToken;
     }
 
     const isDownload = parseUrl.pathname.startsWith("/download/");
@@ -1018,8 +1015,6 @@ async function performRequest(targetUrl, retryCount = 0) {
       const decompressFormat = isGzip ? "gzip" : isDeflate ? "deflate" : null;
       const needsDecompress = !!decompressFormat;
 
-      // Rebuild a stream starting with the already-peeked first chunk,
-      // then continue draining the original reader.
       const rebuiltStream = new ReadableStream({
         async start(controller) {
           if (!firstDone && firstChunk) controller.enqueue(firstChunk);
@@ -1047,7 +1042,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           if (done) break;
           text += decoder.decode(value, { stream: true });
         }
-        text += decoder.decode(); // flush any remaining bytes
+        text += decoder.decode();
       } catch {}
 
       duration = Math.round(performance.now() - startTime);
@@ -1074,12 +1069,14 @@ async function performRequest(targetUrl, retryCount = 0) {
             const solved = await d(data.c, data.d || 10);
             if (solved) {
               solvedChallengeCode = solved;
+              solvedMcToken = await buildMcToken(solved);
               return await performRequest(targetUrl, retryCount + 1);
             }
           }
         } catch {}
       } else if (response.status === 302 && isLavalink) {
         solvedChallengeCode = null;
+        solvedMcToken = null;
       }
 
       let formatted = text;
@@ -1095,8 +1092,6 @@ async function performRequest(targetUrl, retryCount = 0) {
         }
         resultData = data;
       } else {
-        // Large responses are parsed & pretty-printed in a Web Worker so
-        // this doesn't block the main thread / freeze the UI.
         const result = await parseAndFormatJSON(decryptedText);
         if (result.formatted !== null) {
           isJson = result.isJson;
@@ -1282,7 +1277,6 @@ const PARAM_TYPES = new Set([
   "json",
 ]);
 
-// Splits a comma-separated string into trimmed, non-empty parts.
 function parseCSVList(value) {
   return value ? value.split(",").map((v) => v.trim()).filter(Boolean) : [];
 }
@@ -1739,7 +1733,6 @@ function selectInitialEndpointFromCurrentCategory() {
     renderEndpoints();
     renderParams();
 
-    // Deep sync to ensure the bar and panel match
     syncUrlToParams();
     syncParamsToUrl();
   } else {
@@ -1765,8 +1758,6 @@ function restoreResponseArea() {
   if (lastRawResponse) responseArea.style.display = null;
 }
 
-// Restores the response area after params panel animations settle
-// (skips the delay entirely if the user prefers reduced motion).
 function scheduleRestoreResponseArea() {
   const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150;
   setTimeout(() => requestAnimationFrame(restoreResponseArea), delay);
@@ -1969,10 +1960,8 @@ let animationTimeout = null;
 function renderEndpoints(animate = false) {
   const categoryEndpoints = endpoints[currentCategory] || [];
 
-  // Capture old state if animating
   let oldHTML = "";
   if (animate) {
-    // If already animating, take the content from the 'new' layer that was coming in
     const currentNewLayer = endpointsList.querySelector(".swipe-layer.new");
     if (currentNewLayer) {
       oldHTML = currentNewLayer.innerHTML;
@@ -2065,7 +2054,6 @@ tabBtns.forEach((btn) => {
     const wasLegalPage =
       pageFromPath(window.location.pathname) !== "playground";
 
-    // Prevent re-rendering and animating if clicking the already active tab
     if (!wasLegalPage && currentCategory === nextCategory) return;
 
     if (!confirmDiscardParams()) return;
@@ -2160,8 +2148,6 @@ urlInput.addEventListener("input", () => {
       : val.substring(apiBaseUrl.length, queryIdx);
   let queryPart = queryIdx === -1 ? "" : val.substring(queryIdx);
 
-  // Keep the live input readable while typing to prevent cursor jumps
-  // We only do basic normalization here.
   const hostOnly = apiBaseUrl.replace(/^https?:\/\//, "");
 
   let dirty = true;
@@ -2216,7 +2202,6 @@ function updateParamHighlight() {
   const pos = urlInput.selectionStart;
   const qIdx = val.indexOf("?");
 
-  // Clear all highlights first
   document
     .querySelectorAll(".param-input")
     .forEach((el) => el.classList.remove("highlight-active"));
@@ -2230,21 +2215,19 @@ function updateParamHighlight() {
   let currentLen = 0;
   for (let i = 0; i < parts.length; i++) {
     const partLen = parts[i].length;
-    // Check if cursor is within this parameter's range
     if (posInQuery >= currentLen && posInQuery <= currentLen + partLen) {
       const input = document.querySelector(
         `.param-input[data-param-index="${i}"]`,
       );
       if (input) {
         input.classList.add("highlight-active");
-        // Ensure the panel is visible if it was closed
         if (!paramsOpen && window.innerWidth >= 768) {
           paramsToggle.click();
         }
       }
       break;
     }
-    currentLen += partLen + 1; // +1 for '&'
+    currentLen += partLen + 1;
   }
 }
 
@@ -2253,7 +2236,6 @@ urlInput.addEventListener("keyup", updateParamHighlight);
 urlInput.addEventListener("focus", updateParamHighlight);
 
 urlInput.addEventListener("blur", () => {
-  // Clear highlights when focus is lost
   document
     .querySelectorAll(".param-input")
     .forEach((el) => el.classList.remove("highlight-active"));
@@ -2562,7 +2544,6 @@ fetchInitialEndpoints().then(() => {
   renderCurrentPage();
   updateConnectionUI();
 
-  // Final height adjustment after everything is loaded and rendered
   adjustHeight();
 
   const afterFontsReady = (fn) => {
@@ -2570,7 +2551,6 @@ fetchInitialEndpoints().then(() => {
     else fn();
   };
 
-  // Also re-adjust when fonts are ready (prevents height jump from system font -> custom font)
   afterFontsReady(async () => {
     adjustHeight();
 
@@ -2579,7 +2559,6 @@ fetchInitialEndpoints().then(() => {
   });
 });
 
-// Mobile custom scrollbar — draggable, rAF-batched.
 (() => {
   const track = document.getElementById("customScrollTrack");
   const thumb = document.getElementById("customScrollThumb");

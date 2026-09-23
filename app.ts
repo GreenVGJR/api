@@ -196,6 +196,7 @@ const API_ROUTES = {
 	music: [
 		["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
 		["/music/disconnect?token=&guildId=", "string", "number"],
+		["/music/destroy?token=", "string"],
 		["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=", "string", "string", "enum:youtube,youtubemusic,soundcloud,spotify,applemusic,deezer,tidal", "number", "number", "number", "boolean", "boolean", "boolean"],
 		["/music/radio?token=&stationId=&voiceId=&guildId=&authorId=&isDeaf=&247=", "string", "string", "number", "number", "number", "boolean", "boolean"],
 		["/music/pause?token=&guildId=", "string", "number"],

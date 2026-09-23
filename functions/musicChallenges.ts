@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import zlib from "zlib";
 
 function getMdKey(): string {
 	const key = process.env.MD_KEY;
@@ -43,6 +44,31 @@ export function verifyChallengeHash(solution: string | undefined | null, challen
 
 	const expectedHash = formatChallengeHash(md5(solution));
 	return crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(normalizedHash));
+}
+
+// Binds the solution to its exact bytes: X-Mc-Token must be the base64url
+// (no padding, 22 chars) of the last 16 bytes of gzip (RFC 1952) over the
+// UTF-8 bytes of the x-challenge-codes value. Stateless — the server
+// recomputes it from the echoed codes, so no store is needed.
+export function mcTokenForCodes(codes: string | undefined | null): string | null {
+	if (!codes) return null;
+	try {
+		const gz = zlib.gzipSync(Buffer.from(codes, "utf8"));
+		if (gz.length < 16) return null;
+		return gz.subarray(gz.length - 16).toString("base64url");
+	} catch {
+		return null;
+	}
+}
+
+export function verifyMcToken(codes: string | undefined | null, mcToken: string | undefined | null): boolean {
+	if (!codes || !mcToken) return false;
+	const expected = mcTokenForCodes(codes);
+	if (!expected) return false;
+	// NOTE: base64url is case-sensitive — never lowercase the candidate.
+	const got = mcToken.trim();
+	if (!/^[A-Za-z0-9_-]{22}$/.test(got)) return false;
+	return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(got));
 }
 
 function encryptPayload(data: object, key: string): string {

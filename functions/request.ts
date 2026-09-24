@@ -1801,7 +1801,6 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 										shazamCfCookie = await shazamSession();
 										return await ShazamLyrics(que, true);
 									}
-									console.log(ldJson);
 									shazamInfo = {
 										error: "Can't process this. Akamai rotated the response",
 									};

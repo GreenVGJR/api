@@ -382,6 +382,92 @@ export const discordFetch = async (url: string, options: RequestInit = {}): Prom
 
 const responseStatus = (response: any): number => response?.status ?? response?.statusCode ?? 0;
 
+const YOUTUBE_JSON_MAX_RETRIES = 10;
+const YOUTUBE_JSON_RETRY_DELAY_MS = 1000;
+
+type YoutubeFetchResult<T> = { ok: true; data: T } | { ok: false };
+
+const sleepYoutubeRetry = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseYoutubeJsonResponse = async (response: Response): Promise<any> => {
+	const text = await response.text();
+
+	if (response.status === 429 || response.status >= 500) {
+		throw new Error(`YouTube responded with status ${response.status}`);
+	}
+
+	const contentType = response.headers.get("content-type") ?? "";
+	const candidate = text.trimStart();
+	if (candidate.startsWith("<") || (!contentType.toLowerCase().includes("json") && !(candidate.startsWith("{") || candidate.startsWith("[")))) {
+		throw new Error(`YouTube responded with status ${response.status} and non-JSON content`);
+	}
+
+	const data = JSON.parse(text);
+	if (data === null || typeof data !== "object") {
+		throw new Error("YouTube returned an empty JSON response");
+	}
+	return data;
+};
+
+const parseYoutubeInitialDataResponse = async (response: Response): Promise<any> => {
+	const html = await response.text();
+
+	if (response.status === 429 || response.status >= 500) {
+		throw new Error(`YouTube responded with status ${response.status}`);
+	}
+
+	const data = parseYtInitial(html);
+	if (!data || typeof data !== "object") {
+		throw new Error(`YouTube responded with status ${response.status} and unusable page data`);
+	}
+	return data;
+};
+
+const parseYoutubeSuggestResponse = async (response: Response): Promise<any> => {
+	const raw = (await response.text()).trim();
+
+	if (response.status === 429 || response.status >= 500) {
+		throw new Error(`YouTube responded with status ${response.status}`);
+	}
+
+	const prefix = "window.google.ac.h(";
+	if (!raw.startsWith(prefix) || !raw.endsWith(")")) {
+		throw new Error(`YouTube responded with status ${response.status} and non-JSONP content`);
+	}
+
+	const data = JSON.parse(raw.slice(prefix.length, -1));
+	if (!Array.isArray(data) || !Array.isArray(data[1])) {
+		throw new Error("YouTube returned an empty suggestion response");
+	}
+	return data;
+};
+
+async function fetchYoutubeWithRetry<T>(request: () => Promise<Response>, parse: (response: Response) => Promise<T>, label: string): Promise<YoutubeFetchResult<T>> {
+	for (let attempt = 0; attempt <= YOUTUBE_JSON_MAX_RETRIES; attempt++) {
+		try {
+			const response = await request();
+			return { ok: true, data: await parse(response) };
+		} catch (error) {
+			if (attempt === YOUTUBE_JSON_MAX_RETRIES) {
+				console.error(`${label} failed after ${YOUTUBE_JSON_MAX_RETRIES + 1} attempts`, error);
+				return { ok: false };
+			}
+			console.warn(`${label} attempt ${attempt + 1} failed; retrying in ${YOUTUBE_JSON_RETRY_DELAY_MS}ms`, error);
+			keyYoutubeVisitor = null;
+			await sleepYoutubeRetry(YOUTUBE_JSON_RETRY_DELAY_MS);
+		}
+	}
+	return { ok: false };
+}
+
+const isRetryableYoutubeInfoError = (error: any): boolean => {
+	const status = error?.statusCode ?? error?.status ?? error?.info?.statusCode ?? error?.info?.status;
+	if (status === 429 || (typeof status === "number" && status >= 500 && status < 600)) return true;
+	const haystack = [error?.name, error?.message, error?.cause?.message, error?.info?.reason, error?.info?.status].filter(Boolean).join(" ").toLowerCase();
+	if (/\b(429|500|502|503|504)\b/.test(haystack)) return true;
+	return /json|unexpected token|unrecognized token|invalid json|syntaxerror|html|doctype|decompress|zstd|fetch failed|network|socket hang up|timed out|timeout|econn|eai_again|rate.?limit|too many requests|service unavailable|bad gateway|gateway timeout/.test(haystack);
+};
+
 const responseText = async (response: any): Promise<string> => {
 	if (!response) return "";
 	if (typeof response.text === "function") return await response.text();
@@ -464,6 +550,176 @@ export const parseYtInitial = (html: any) => {
 		console.error(e);
 		return null;
 	}
+};
+
+// Extracts a balanced `{...}` object literal starting at `bracePos`,
+// string-aware. Returns null when no balanced object starts there.
+const extractBalancedJsObjectAt = (html: string, bracePos: number): string | null => {
+	if (html[bracePos] !== "{") return null;
+	let depth = 0;
+	let quote: string | null = null;
+	let escaped = false;
+	for (let i = bracePos; i < html.length; i++) {
+		const ch = html[i];
+		if (quote) {
+			if (escaped) escaped = false;
+			else if (ch === "\\") escaped = true;
+			else if (ch === quote) quote = null;
+			continue;
+		}
+		if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+		else if (ch === "{") depth++;
+		else if (ch === "}") {
+			depth--;
+			if (depth === 0) return html.substring(bracePos, i + 1);
+		}
+	}
+	return null;
+};
+
+// Parses a JS object-literal payload with unquoted keys (SvelteKit embeds
+// these instead of strict JSON). Unknown identifier references resolve to
+// null; duplicate keys resolve last-wins like normal JS evaluation.
+const parseLooseJsValue = (input: string): any => {
+	let pos = 0;
+	const skipWs = () => {
+		while (pos < input.length && /\s/.test(input[pos]!)) pos++;
+	};
+	const parseString = (): string => {
+		const quote = input[pos++]!;
+		let out = "";
+		while (pos < input.length) {
+			const ch = input[pos++]!;
+			if (ch === "\\") {
+				const esc = input[pos++]!;
+				if (esc === "n") out += "\n";
+				else if (esc === "t") out += "\t";
+				else if (esc === "r") out += "\r";
+				else if (esc === "u") {
+					out += String.fromCharCode(parseInt(input.substr(pos, 4), 16));
+					pos += 4;
+				} else out += esc;
+				continue;
+			}
+			if (ch === quote) break;
+			out += ch;
+		}
+		return out;
+	};
+	const parseValue = (): any => {
+		skipWs();
+		const ch = input[pos];
+		if (ch === "{") {
+			pos++;
+			const obj: Record<string, any> = {};
+			skipWs();
+			if (input[pos] === "}") {
+				pos++;
+				return obj;
+			}
+			while (true) {
+				skipWs();
+				let key: string;
+				if (input[pos] === '"' || input[pos] === "'" || input[pos] === "`") key = parseString();
+				else {
+					const match = /^[A-Za-z_$][\w$]*/.exec(input.slice(pos));
+					if (!match) throw new Error("Invalid object key");
+					key = match[0];
+					pos += key.length;
+				}
+				skipWs();
+				if (input[pos] !== ":") throw new Error("Expected colon");
+				pos++;
+				obj[key] = parseValue();
+				skipWs();
+				if (input[pos] === ",") {
+					pos++;
+					continue;
+				}
+				if (input[pos] === "}") {
+					pos++;
+					break;
+				}
+				throw new Error("Expected comma or closing brace");
+			}
+			return obj;
+		}
+		if (ch === "[") {
+			pos++;
+			const arr: any[] = [];
+			skipWs();
+			if (input[pos] === "]") {
+				pos++;
+				return arr;
+			}
+			while (true) {
+				arr.push(parseValue());
+				skipWs();
+				if (input[pos] === ",") {
+					pos++;
+					continue;
+				}
+				if (input[pos] === "]") {
+					pos++;
+					break;
+				}
+				throw new Error("Expected comma or closing bracket");
+			}
+			return arr;
+		}
+		if (ch === '"' || ch === "'" || ch === "`") return parseString();
+		const rest = input.slice(pos);
+		const num = /^-?\d+(\.\d+)?([eE][+-]?\d+)?/.exec(rest);
+		if (num) {
+			pos += num[0].length;
+			return Number(num[0]);
+		}
+		if (rest.startsWith("true")) {
+			pos += 4;
+			return true;
+		}
+		if (rest.startsWith("false")) {
+			pos += 5;
+			return false;
+		}
+		if (rest.startsWith("null")) {
+			pos += 4;
+			return null;
+		}
+		if (rest.startsWith("undefined")) {
+			pos += 9;
+			return undefined;
+		}
+		const ident = /^[A-Za-z_$][\w$]*/.exec(rest);
+		if (ident) {
+			pos += ident[0].length;
+			return null;
+		}
+		throw new Error("Unexpected token");
+	};
+	const value = parseValue();
+	skipWs();
+	if (pos !== input.length) throw new Error("Trailing characters");
+	return value;
+};
+
+// Guns.lol profile payload signature inside Next.js Flight rows.
+const isGunsProfileData = (data: any): boolean => {
+	return !!data && typeof data === "object" && !Array.isArray(data) && !!data.config && typeof data.config === "object" && (typeof data.username === "string" || typeof data._id === "string" || typeof data.account_created === "number");
+};
+
+const collectGunsFlightData = (node: any, out: any[]): void => {
+	if (!node || typeof node !== "object") return;
+	if (Array.isArray(node)) {
+		for (const item of node) collectGunsFlightData(item, out);
+		return;
+	}
+	const data = (node as Record<string, any>).data;
+	if (data && typeof data === "object" && !Array.isArray(data) && isGunsProfileData(data)) {
+		out.push(data);
+		return;
+	}
+	for (const value of Object.values(node)) collectGunsFlightData(value, out);
 };
 
 let keysc: string | undefined;
@@ -636,32 +892,42 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
 export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
-		await getYoutubeVisitorKey();
-		const bodyload = JSON.stringify({
-			query: que,
-			context: {
-				client: {
-					clientName: "WEB",
-					clientVersion: "2.20261230",
-					hl: "en",
-					gl: "US",
-					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-				},
-			},
-			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
-		});
+		const jsonResult = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				const bodyload = JSON.stringify({
+					query: que,
+					context: {
+						client: {
+							clientName: "WEB",
+							clientVersion: "2.20261230",
+							hl: "en",
+							gl: "US",
+							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+						},
+					},
+					...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+				});
 
-		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
-			headers: {
-				...commonHeaders,
-				"content-type": "application/json",
-				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+				return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
+					headers: {
+						...commonHeaders,
+						"content-type": "application/json",
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+					body: bodyload,
+					method: "POST",
+				});
 			},
-			body: bodyload,
-			method: "POST",
-		});
+			parseYoutubeJsonResponse,
+			"YTVideo",
+		);
 
-		const res: any = await response.json();
+		if (!jsonResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const res: any = jsonResult.data;
 
 		const sectionContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
 		const inrtubeContents = sectionContents.flatMap((sec: any) => sec?.itemSectionRenderer?.contents || []);
@@ -685,12 +951,21 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 
 			if (checkmix && deepSearch) {
 				try {
-					const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
-						headers: commonHeaders,
-					});
+					const mixPageResult = await fetchYoutubeWithRetry(
+						async () => {
+							return await fetch(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
+								headers: commonHeaders,
+							});
+						},
+						parseYoutubeInitialDataResponse,
+						"YTVideo",
+					);
 
-					let rlkresText = await rlkreq.text();
-					let rlkres: any = parseYtInitial(rlkresText);
+					if (!mixPageResult.ok) {
+						throw new Error("Rate-limited");
+					}
+
+					const rlkres: any = mixPageResult.data;
 
 					if (rlkres) {
 						const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
@@ -742,6 +1017,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 						}
 					}
 				} catch (e) {
+					if (e instanceof Error && e.message === "Rate-limited") throw e;
 					console.error("Mix fetch error:", e);
 				}
 			}
@@ -825,6 +1101,9 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 
 		return { searchParams: queryId, data: alk?.concat(finalTask2) };
 	} catch (e) {
+		if (e instanceof Error && e.message === "Rate-limited") {
+			return { error: "Rate-limited" };
+		}
 		console.error(e);
 		return null;
 	}
@@ -833,36 +1112,46 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 export const YTMusic = async function YTMusic(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
-		await getYoutubeVisitorKey();
 		const videoIdFromPlaylist = (playlistId: string | undefined | null) => {
 			if (!playlistId) return null;
 			return playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1] || playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1] || null;
 		};
-		const bodyload = JSON.stringify({
-			query: que,
-			params: "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D",
-			context: {
-				client: {
-					clientName: "WEB_REMIX",
-					clientVersion: "1.20261230",
-					hl: "en",
-					gl: "US",
-					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-				},
+		const jsonResult = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				const bodyload = JSON.stringify({
+					query: que,
+					params: "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D",
+					context: {
+						client: {
+							clientName: "WEB_REMIX",
+							clientVersion: "1.20261230",
+							hl: "en",
+							gl: "US",
+							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+						},
+					},
+					...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+				});
+				return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents", {
+					headers: {
+						...commonHeaders,
+						"Content-Type": "application/json",
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+					body: bodyload,
+					method: "POST",
+				});
 			},
-			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
-		});
-		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents", {
-			headers: {
-				...commonHeaders,
-				"Content-Type": "application/json",
-				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
-			},
-			body: bodyload,
-			method: "POST",
-		});
+			parseYoutubeJsonResponse,
+			"YTMusic",
+		);
 
-		const res: any = await response.json();
+		if (!jsonResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const res: any = jsonResult.data;
 
 		if (!res?.contents?.tabbedSearchResultsRenderer) {
 			return {
@@ -918,12 +1207,21 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 				let mixData: any = null;
 				if (muspl && deepSearch) {
 					try {
-						const rlkreq = await fetch(`https://www.youtube.com/watch?v=&list=${muspl}`, {
-							headers: commonHeaders,
-						});
+						const mixPageResult = await fetchYoutubeWithRetry(
+							async () => {
+								return await fetch(`https://www.youtube.com/watch?v=&list=${muspl}`, {
+									headers: commonHeaders,
+								});
+							},
+							parseYoutubeInitialDataResponse,
+							"YTMusic",
+						);
 
-						let rlkresText = await rlkreq.text();
-						let rlkres: any = parseYtInitial(rlkresText);
+						if (!mixPageResult.ok) {
+							throw new Error("Rate-limited");
+						}
+
+						const rlkres: any = mixPageResult.data;
 
 						if (rlkres) {
 							const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
@@ -975,6 +1273,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 							}
 						}
 					} catch (e) {
+						if (e instanceof Error && e.message === "Rate-limited") throw e;
 						console.error("YTMusic mix fetch error:", e);
 					}
 				}
@@ -1022,6 +1321,9 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 
 		return { data: alk };
 	} catch (e) {
+		if (e instanceof Error && e.message === "Rate-limited") {
+			return { error: "Rate-limited" };
+		}
 		console.error(e);
 		return null;
 	}
@@ -1075,33 +1377,43 @@ export const DuckDuckGoSuggest = async function DuckDuckGoSuggest(que: string) {
 export const YTPlaylist = async function YTPlaylist(que: string) {
 	if (!que) return null;
 	try {
-		await getYoutubeVisitorKey();
-		const bodyload = JSON.stringify({
-			query: que,
-			params: "EgIQAw==",
-			context: {
-				client: {
-					clientName: "WEB",
-					clientVersion: "2.20261230",
-					hl: "en",
-					gl: "US",
-					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-				},
-			},
-			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
-		});
+		const jsonResult = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				const bodyload = JSON.stringify({
+					query: que,
+					params: "EgIQAw==",
+					context: {
+						client: {
+							clientName: "WEB",
+							clientVersion: "2.20261230",
+							hl: "en",
+							gl: "US",
+							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+						},
+					},
+					...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+				});
 
-		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false", {
-			headers: {
-				...commonHeaders,
-				"content-type": "application/json",
-				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+				return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false", {
+					headers: {
+						...commonHeaders,
+						"content-type": "application/json",
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+					body: bodyload,
+					method: "POST",
+				});
 			},
-			body: bodyload,
-			method: "POST",
-		});
+			parseYoutubeJsonResponse,
+			"YTPlaylist",
+		);
 
-		const res: any = await response.json();
+		if (!jsonResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const res: any = jsonResult.data;
 		const contents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
 		const alk: any[] = [];
@@ -1310,76 +1622,102 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 			footer: null,
 		};
 
-		const bodyload = JSON.stringify({
-			videoId: videoId,
-			context: {
-				client: {
-					clientName: "WEB_REMIX",
-					clientVersion: "1.20261230",
-					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-					hl: "en",
-					gl: "US",
-				},
+		const jsonResult = await fetchYoutubeWithRetry(
+			async () => {
+				const bodyload = JSON.stringify({
+					videoId: videoId,
+					context: {
+						client: {
+							clientName: "WEB_REMIX",
+							clientVersion: "1.20261230",
+							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+							hl: "en",
+							gl: "US",
+						},
+					},
+				});
+				return await fetch("https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))", {
+					headers: {
+						...commonHeaders,
+						"Content-Type": "application/json",
+					},
+					body: bodyload,
+					method: "POST",
+				});
 			},
-		});
-		const response = await fetch("https://m.youtube.com/youtubei/v1/next?prettyPrint=false&fields=contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer(tabs.tabRenderer(endpoint(browseEndpoint/browseId),content/musicQueueRenderer/content/playlistPanelRenderer/contents/playlistPanelVideoRenderer(title,longBylineText,thumbnail,lengthText,videoId,shortBylineText)))", {
-			headers: {
-				...commonHeaders,
-				"Content-Type": "application/json",
-			},
-			body: bodyload,
-			method: "POST",
-		});
-		const res: any = await response.json();
+			parseYoutubeJsonResponse,
+			"YTLyrics",
+		);
+
+		if (!jsonResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const res: any = jsonResult.data;
 		const browseId: string = res?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[1]?.tabRenderer?.endpoint?.browseEndpoint?.browseId || "";
 
 		if (browseId) {
-			const bodyload2 = JSON.stringify({
-				browseId: browseId,
-				context: {
-					client: {
-						clientName: "WEB_REMIX",
-						clientVersion: "1.20261230",
-						...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-						hl: "en",
-						gl: "US",
+			const [browseResult, timedLyricsResult] = await Promise.all([
+				fetchYoutubeWithRetry(
+					async () => {
+						const bodyload2 = JSON.stringify({
+							browseId: browseId,
+							context: {
+								client: {
+									clientName: "WEB_REMIX",
+									clientVersion: "1.20261230",
+									...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+									hl: "en",
+									gl: "US",
+								},
+							},
+						});
+						return await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents", {
+							headers: {
+								...commonHeaders,
+								"Content-Type": "application/json",
+							},
+							body: bodyload2,
+							method: "POST",
+						});
 					},
-				},
-			});
-
-			const bodyload3 = JSON.stringify({
-				browseId: browseId,
-				context: {
-					client: {
-						clientName: "ANDROID_MUSIC",
-						clientVersion: "9.25.50",
-						...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-						hl: "en",
-						gl: "US",
+					parseYoutubeJsonResponse,
+					"YTLyrics",
+				),
+				fetchYoutubeWithRetry(
+					async () => {
+						const bodyload3 = JSON.stringify({
+							browseId: browseId,
+							context: {
+								client: {
+									clientName: "ANDROID_MUSIC",
+									clientVersion: "9.25.50",
+									...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+									hl: "en",
+									gl: "US",
+								},
+							},
+						});
+						return await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents.elementRenderer.newElement.type.componentType.model.timedLyricsModel.lyricsData(timedLyricsData(lyricLine,cueRange(startTimeMilliseconds)))", {
+							headers: {
+								...commonHeaders,
+								"Content-Type": "application/json",
+							},
+							body: bodyload3,
+							method: "POST",
+						});
 					},
-				},
-			});
-
-			const [pull, pull3] = await Promise.all([
-				fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents", {
-					headers: {
-						...commonHeaders,
-						"Content-Type": "application/json",
-					},
-					body: bodyload2,
-					method: "POST",
-				}),
-				fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false&fields=contents.elementRenderer.newElement.type.componentType.model.timedLyricsModel.lyricsData(timedLyricsData(lyricLine,cueRange(startTimeMilliseconds)))", {
-					headers: {
-						...commonHeaders,
-						"Content-Type": "application/json",
-					},
-					body: bodyload3,
-					method: "POST",
-				}),
+					parseYoutubeJsonResponse,
+					"YTLyrics",
+				),
 			]);
 
-			const [res2, res3] = await Promise.all([pull.json(), pull3.json()]);
+			if (!browseResult.ok || !timedLyricsResult.ok) {
+				return { error: "Rate-limited" };
+			}
+
+			const res2 = browseResult.data;
+			const res3 = timedLyricsResult.data;
 			responseBody["lyrics"] = (res2 as any)?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer?.description?.runs?.[0]?.text || null;
 			responseBody["syncLyrics"] =
 				(res3 as any)?.contents?.elementRenderer?.newElement?.type?.componentType?.model?.timedLyricsModel?.lyricsData?.timedLyricsData?.map((j: any) => ({
@@ -2784,20 +3122,40 @@ export const infoYoutube = async function infoYoutube(que: string) {
 	if (!videoId) return null;
 
 	try {
-		const youtubei: any = await getYoutubei();
-		const info: any = await youtubei.getInfo(videoId).catch((e: any) => ({ __youtubeError: e }));
+		let info: any = null;
+		for (let attempt = 0; attempt <= YOUTUBE_JSON_MAX_RETRIES; attempt++) {
+			try {
+				const youtubei: any = await getYoutubei();
+				const candidate: any = await youtubei.getInfo(videoId);
+				if (!candidate || typeof candidate !== "object") {
+					throw new Error("YouTube returned an invalid info response");
+				}
+				info = candidate;
+				break;
+			} catch (error) {
+				if (!isRetryableYoutubeInfoError(error)) {
+					return {
+						error: getYoutubeErrorMessage(error),
+					};
+				}
+				if (attempt === YOUTUBE_JSON_MAX_RETRIES) {
+					return { error: "Rate-limited" };
+				}
+				console.warn(`infoYoutube attempt ${attempt + 1} failed; retrying in ${YOUTUBE_JSON_RETRY_DELAY_MS}ms`, error);
+				youtubeiPromise = null;
+				keyYoutubeVisitor = null;
+				await sleepYoutubeRetry(YOUTUBE_JSON_RETRY_DELAY_MS);
+			}
+		}
+		if (!info) {
+			return { error: "Rate-limited" };
+		}
 		const poToken = await getYoutubeCaptionPoToken(videoId);
 		const challenge = getYoutubeChallengeObject(videoId, poToken);
 
 		if (info?.playability_status?.status && info.playability_status.status !== "OK") {
 			return {
 				error: info.playability_status.reason || info.playability_status.status,
-			};
-		}
-
-		if (info?.__youtubeError) {
-			return {
-				error: getYoutubeErrorMessage(info.__youtubeError),
 			};
 		}
 
@@ -2887,16 +3245,25 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 	const requestUrl = `https://www.youtube.com/${prefix}${identifier}`;
 
 	try {
-		await getYoutubeVisitorKey();
-
-		const response = await fetch(requestUrl, {
-			headers: {
-				...commonHeaders,
-				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+		const pageResult = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				return await fetch(requestUrl, {
+					headers: {
+						...commonHeaders,
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+				});
 			},
-		});
-		const html = await response.text();
-		let data: any = parseYtInitial(html);
+			parseYoutubeInitialDataResponse,
+			"infoYoutubeChannel",
+		);
+
+		if (!pageResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		let data: any = pageResult.data;
 
 		if (!data) return { data: null };
 
@@ -3155,34 +3522,41 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 		const visitorData = data?.responseContext?.visitorData;
 
 		if (continuationToken) {
-			try {
-				const continuationReq = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
-					method: "POST",
-					headers: commonHeaders,
-					body: JSON.stringify({
-						continuation: continuationToken,
-						context: {
-							client: {
-								clientName: "WEB",
-								clientVersion: "2.20260204.01.00",
-								hl: "en",
-								gl: "US",
-								visitorData: visitorData,
+			const continuationResult = await fetchYoutubeWithRetry(
+				async () => {
+					return await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+						method: "POST",
+						headers: commonHeaders,
+						body: JSON.stringify({
+							continuation: continuationToken,
+							context: {
+								client: {
+									clientName: "WEB",
+									clientVersion: "2.20260204.01.00",
+									hl: "en",
+									gl: "US",
+									visitorData: visitorData,
+								},
 							},
-						},
-						...(poTokenCache?.po_token
-							? {
-									serviceIntegrityDimensions: {
-										poToken: poTokenCache.po_token,
-									},
-								}
-							: {}),
-					}),
-				});
-				const continuationRes: any = await continuationReq.json();
+							...(poTokenCache?.po_token
+								? {
+										serviceIntegrityDimensions: {
+											poToken: poTokenCache.po_token,
+										},
+									}
+								: {}),
+						}),
+					});
+				},
+				parseYoutubeJsonResponse,
+				"infoYoutubeChannel",
+			);
 
-				extractData(continuationRes);
-			} catch {}
+			if (!continuationResult.ok) {
+				return { error: "Rate-limited" };
+			}
+
+			extractData(continuationResult.data);
 		}
 
 		const extraEndpoints: any[] = [];
@@ -3241,7 +3615,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 		};
 
 		if (deepFetch) {
-			const results = await Promise.all(
+			const results: any[] = await Promise.all(
 				combinedTabs.map(async (tab: any) => {
 					if (tab.content) return { title: tab.title, content: tab.content };
 					if (!tab.endpoint?.browseEndpoint) return null;
@@ -3249,37 +3623,47 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 					const { browseId, params } = tab.endpoint.browseEndpoint;
 
 					try {
-						const bodyload = JSON.stringify({
-							browseId: browseId,
-							params: params,
-							context: {
-								client: {
-									clientName: "WEB",
-									clientVersion: "2.20260204.01.00",
-									hl: "en",
-									gl: "US",
-									visitorData: visitorData,
-								},
-							},
-							...(poTokenCache?.po_token
-								? {
-										serviceIntegrityDimensions: {
-											poToken: poTokenCache.po_token,
+						const tabResult = await fetchYoutubeWithRetry(
+							async () => {
+								const bodyload = JSON.stringify({
+									browseId: browseId,
+									params: params,
+									context: {
+										client: {
+											clientName: "WEB",
+											clientVersion: "2.20260204.01.00",
+											hl: "en",
+											gl: "US",
+											visitorData: visitorData,
 										},
-									}
-								: {}),
-						});
+									},
+									...(poTokenCache?.po_token
+										? {
+												serviceIntegrityDimensions: {
+													poToken: poTokenCache.po_token,
+												},
+											}
+										: {}),
+								});
 
-						const req = await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
-							method: "POST",
-							headers: {
-								...commonHeaders,
-								"Content-Type": "application/json",
+								return await fetch("https://m.youtube.com/youtubei/v1/browse?prettyPrint=false", {
+									method: "POST",
+									headers: {
+										...commonHeaders,
+										"Content-Type": "application/json",
+									},
+									body: bodyload,
+								});
 							},
-							body: bodyload,
-						});
+							parseYoutubeJsonResponse,
+							"infoYoutubeChannel",
+						);
 
-						const res: any = await req.json();
+						if (!tabResult.ok) {
+							return { title: tab.title, rateLimited: true };
+						}
+
+						const res: any = tabResult.data;
 						const tabContent = res?.contents?.twoColumnBrowseResultsRenderer?.tabs?.find((t: any) => t?.tabRenderer?.selected)?.tabRenderer?.content || res?.contents?.sectionListRenderer || res?.contents || res;
 
 						return {
@@ -3293,6 +3677,9 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 			);
 
 			const finalResults = results.filter(Boolean);
+			if (finalResults.some((result: any) => result?.rateLimited)) {
+				return { error: "Rate-limited" };
+			}
 
 			const flatten = (obj: any): any => {
 				if (!obj || typeof obj !== "object") return obj;
@@ -4478,6 +4865,12 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 			testres = JSON.parse(res);
 			if (!testres?.aweme_list && !refresh_auth) return await TiktokSearchVideo(que, limit, true);
 		} catch {}
+
+		if (testres?.search_nil_info) {
+			return {
+				error: "Tiktok blocked this request",
+			};
+		}
 		return {
 			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
 			data: testres?.aweme_list || null,
@@ -5316,33 +5709,43 @@ export const robloxGames = async function robloxGames(que: string) {
 export const YTChannel = async function YTChannel(que: string) {
 	if (!que) return null;
 	try {
-		await getYoutubeVisitorKey();
-		const bodyload = JSON.stringify({
-			query: que,
-			params: "EgIQAg%3D%3D",
-			context: {
-				client: {
-					clientName: "MWEB",
-					clientVersion: "2.20261230",
-					hl: "en",
-					gl: "US",
-					...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
-				},
-			},
-			...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
-		});
+		const jsonResult = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				const bodyload = JSON.stringify({
+					query: que,
+					params: "EgIQAg%3D%3D",
+					context: {
+						client: {
+							clientName: "MWEB",
+							clientVersion: "2.20261230",
+							hl: "en",
+							gl: "US",
+							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+						},
+					},
+					...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+				});
 
-		const response = await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer", {
-			headers: {
-				...commonHeaders,
-				"content-type": "application/json",
-				...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+				return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.sectionListRenderer.contents.itemSectionRenderer.contents.compactChannelRenderer", {
+					headers: {
+						...commonHeaders,
+						"content-type": "application/json",
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+					body: bodyload,
+					method: "POST",
+				});
 			},
-			body: bodyload,
-			method: "POST",
-		});
+			parseYoutubeJsonResponse,
+			"YTChannel",
+		);
 
-		const res: any = await response.json();
+		if (!jsonResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const res: any = jsonResult.data;
 		const contents = res?.contents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
 
 		let alk: any[] = [];
@@ -7104,24 +7507,13 @@ export async function GunsProfile(query: string): Promise<any> {
 						const lines = content.split("\n").filter((l: string) => l.trim());
 
 						for (const line of lines) {
+							if (!line.includes('"data"')) continue;
 							const colonIdx = line.indexOf(":");
 							if (colonIdx === -1) continue;
 
-							const jsonPart = line.substring(colonIdx + 1);
-							if (!jsonPart.includes('"data"')) continue;
-
 							try {
-								const innerParsed = JSON.parse(jsonPart);
-
-								if (Array.isArray(innerParsed)) {
-									for (const item of innerParsed) {
-										if (item && typeof item === "object" && !Array.isArray(item) && "data" in item) {
-											dataResults.push(item.data);
-										}
-									}
-								} else if (innerParsed && typeof innerParsed === "object" && "data" in innerParsed) {
-									dataResults.push(innerParsed.data);
-								}
+								const row = JSON.parse(line.substring(colonIdx + 1));
+								collectGunsFlightData(row, dataResults);
 							} catch {}
 						}
 					} catch {}
@@ -7204,6 +7596,24 @@ export async function RageProfile(query: string): Promise<any> {
 			return { data: null };
 		}
 
+		// Current rage.wtf structure: SvelteKit embeds the profile payload as a
+		// JS object literal inside the kit.start() bootstrap script.
+		const svelteMarker = "data:{profile:";
+		const svelteMarkerIdx = html.indexOf(svelteMarker);
+		const svelteObjStr = svelteMarkerIdx === -1 ? null : extractBalancedJsObjectAt(html, svelteMarkerIdx + "data:".length);
+		if (svelteObjStr) {
+			try {
+				const svelteData = parseLooseJsValue(svelteObjStr);
+				const profile = svelteData?.profile;
+				if (profile && typeof profile === "object") {
+					return { data: { profile, meta: svelteData?.meta ?? null, view: svelteData?.view ?? null } };
+				}
+			} catch (e) {
+				console.error("RageProfile SvelteKit parse error:", e);
+			}
+		}
+
+		// Legacy Next.js Flight fallback.
 		const chunks = html.split("self.__next_f.push(");
 		chunks.shift();
 
@@ -13105,15 +13515,23 @@ export const googleCloudTTS = async (text: string, lang: string): Promise<Buffer
 export const YTSuggest = async function YTSuggest(que: string) {
 	if (!que) return null;
 	try {
-		const rescomplete = await fetch(`https://suggestqueries-clients6.youtube.com/complete/search?ds=yt&hl=en&client=youtube&gs_ri=youtube&ytvs=1&q=${encodeURIComponent(que)}`, { headers: commonHeaders });
-		const autoresText = (await rescomplete.text()).slice(19, -1);
-		let alj: any[] = [];
-		try {
-			const autores = JSON.parse(autoresText);
-			(autores?.[1] || []).forEach((o: any) => {
-				if (o?.[0]) alj.push(o[0]);
-			});
-		} catch {}
+		const suggestResult = await fetchYoutubeWithRetry(
+			async () => {
+				return await fetch(`https://suggestqueries-clients6.youtube.com/complete/search?ds=yt&hl=en&client=youtube&gs_ri=youtube&ytvs=1&q=${encodeURIComponent(que)}`, { headers: commonHeaders });
+			},
+			parseYoutubeSuggestResponse,
+			"YTSuggest",
+		);
+
+		if (!suggestResult.ok) {
+			return { error: "Rate-limited" };
+		}
+
+		const autores = suggestResult.data;
+		const alj: any[] = [];
+		(autores?.[1] || []).forEach((o: any) => {
+			if (o?.[0]) alj.push(o[0]);
+		});
 		return { autocomplete: alj };
 	} catch (e) {
 		console.error(e);

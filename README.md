@@ -1,7 +1,7 @@
 > [!NOTE]
 > Most of codes are vibecoded
 
-___
+---
 
 ## Setup
 
@@ -9,9 +9,10 @@ ___
 > You need a VPS instance to run this.<br>
 > Recommended at least 2GB of RAM, or 4GB with browser scraping installed
 
-___
+---
 
 #### Requirements
+
 - Git - clone the repo and `git pull` updates
 - Bun - install deps, generate routes, run the server
 - Node.js + npm - provides PM2 (`pm2-check` auto-installs it)

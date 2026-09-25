@@ -231,7 +231,7 @@ const turnstileLocalKeys = {
 	secretKey: turnstileConfig.localSecKeyForTest,
 };
 
-export function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKey: string } {
+function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKey: string } {
 	const isLocal = isLocalRequest(host);
 	if (isLocal) return turnstileLocalKeys;
 	return {
@@ -277,15 +277,6 @@ app.use("*", async (c: Context, next: Next) => {
 			return c.body("", 200, { "Content-Type": "application/json" });
 		}
 	}
-
-	/*
-	if (getCookie(c, "cf_clearance")) {
-		const expiry = "Thu, 01 Jan 1970 00:00:00 GMT";
-		const domain = isLocalRequest(c.req.header("host")) ? "" : "Domain=.vgjr.top; ";
-		c.header("Set-Cookie", `cf_clearance=; Max-Age=0; Expires=${expiry}; ${domain}Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-		c.header("Set-Cookie", `cf_clearance=; Max-Age=0; Expires=${expiry}; Path=/; Secure; HttpOnly; SameSite=None; Partitioned;`, { append: true });
-	}
-	*/
 
 	const currentUrl = new URL(c.req.url);
 	const currentHost = currentUrl.host;

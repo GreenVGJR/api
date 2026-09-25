@@ -756,14 +756,6 @@ async function performRequest(targetUrl, retryCount = 0) {
     return null;
   }
 
-  if (retryCount === 0 && typeof q3nd === "function" && pageFromPath(window.location.pathname) === "playground" && !q3nd()) {
-    try {
-      pendingChallengeRetry = { targetUrl };
-    } catch {}
-    showTurnstileChallenge();
-    return null;
-  }
-
   if (retryCount === 0) {
     isLoading = true;
     setSendButtonLabel("Loading...");
@@ -790,13 +782,6 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = await j9ls(targetUrl, headers);
     } catch {}
     response = await fetch(fetchUrl, fetchOptions);
-    if (response && response.status === 403 && retryCount === 0 && typeof q3nd === "function" && pageFromPath(window.location.pathname) === "playground" && !pendingChallengeRetry) {
-      try {
-        pendingChallengeRetry = { targetUrl };
-      } catch {}
-      showTurnstileChallenge();
-      return null;
-    }
     setStatus("blue-400", "Rendering", "text-gray-400");
 
     let duration;
@@ -1612,7 +1597,6 @@ function setActiveCategoryTab() {
 }
 
 let turnstileRendered = false;
-let pendingChallengeRetry = null;
 
 function hideResponseArea() {
   if (lastRawResponse) responseArea.style.display = "none";
@@ -1669,19 +1653,12 @@ function showTurnstileChallenge() {
       sitekey: window.TURNSTILE_SITE_KEY,
       theme: "dark",
       callback: async (token) => {
-        try { t9qx(token); } catch {}
         turnstileRendered = false;
         responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
         restoreSendButtonState();
         await refreshEndpointsFromJson();
-        try {
-          const pend = pendingChallengeRetry;
-          pendingChallengeRetry = null;
-          if (pend && pend.targetUrl) await performRequest(pend.targetUrl, 0);
-        } catch {}
       },
       "expired-callback": () => {
-        try { t9qx(null); } catch {}
         const el = document.getElementById("turnstileWidget");
         if (window.turnstile && el) window.turnstile.reset(el);
       },

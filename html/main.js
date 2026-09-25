@@ -181,8 +181,6 @@ let endpoints = {
   music: [],
 };
 
-let prt = "";
-let lfprt = "";
 let currentCategory = "search";
 let currentEndpoint = null;
 let isLoading = false;
@@ -614,135 +612,6 @@ function flattenRoutes(obj) {
   return flatResults;
 }
 
-const MD5_S = [
-  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5,
-  9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11,
-  16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15,
-  21,
-];
-const MD5_K = Array.from({ length: 64 }, (_, i) =>
-  Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000),
-);
-
-function md5(input) {
-  const bytes = new TextEncoder().encode(String(input));
-  const bitLength = bytes.length * 8;
-  const paddedLength = ((bytes.length + 9 + 63) >> 6) << 6;
-  const buffer = new Uint8Array(paddedLength);
-  buffer.set(bytes);
-  buffer[bytes.length] = 0x80;
-
-  const view = new DataView(buffer.buffer);
-  view.setUint32(paddedLength - 8, bitLength >>> 0, true);
-  view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
-
-  let a0 = 0x67452301;
-  let b0 = 0xefcdab89;
-  let c0 = 0x98badcfe;
-  let d0 = 0x10325476;
-
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    const words = new Array(16);
-    for (let i = 0; i < 16; i++)
-      words[i] = view.getUint32(offset + i * 4, true);
-
-    let a = a0;
-    let b = b0;
-    let c = c0;
-    let d = d0;
-
-    for (let i = 0; i < 64; i++) {
-      let f;
-      let g;
-      if (i < 16) {
-        f = (b & c) | (~b & d);
-        g = i;
-      } else if (i < 32) {
-        f = (d & b) | (~d & c);
-        g = (5 * i + 1) % 16;
-      } else if (i < 48) {
-        f = b ^ c ^ d;
-        g = (3 * i + 5) % 16;
-      } else {
-        f = c ^ (b | ~d);
-        g = (7 * i) % 16;
-      }
-
-      const rotatedInput = (f + a + MD5_K[i] + words[g]) >>> 0;
-      a = d;
-      d = c;
-      c = b;
-      b =
-        (b +
-          ((rotatedInput << MD5_S[i]) | (rotatedInput >>> (32 - MD5_S[i])))) >>>
-        0;
-    }
-
-    a0 = (a0 + a) >>> 0;
-    b0 = (b0 + b) >>> 0;
-    c0 = (c0 + c) >>> 0;
-    d0 = (d0 + d) >>> 0;
-  }
-
-  return [a0, b0, c0, d0]
-    .map((word) =>
-      [0, 8, 16, 24]
-        .map((shift) => ((word >>> shift) & 0xff).toString(16).padStart(2, "0"))
-        .join(""),
-    )
-    .join("");
-}
-
-function formatChallengeHash(hash) {
-  let numbers = "";
-  let letters = "";
-  for (const char of hash.toLowerCase()) {
-    if (char >= "0" && char <= "9") numbers += char;
-    else if (char >= "a" && char <= "f") letters += char;
-  }
-  return numbers + letters;
-}
-
-let solvedChallengeCode = null;
-let solvedMcToken = null;
-
-async function buildMcToken(codes) {
-  try {
-    if (!codes || typeof CompressionStream === "undefined") return null;
-    const buf = new Uint8Array(
-      await new Response(
-        new Blob([String(codes)]).stream().pipeThrough(new CompressionStream("gzip")),
-      ).arrayBuffer(),
-    );
-    if (buf.length < 16) return null;
-    const tail = buf.slice(-16);
-    return btoa(String.fromCharCode(...tail))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  } catch {
-    return null;
-  }
-}
-
-async function buildSfLHeader(fetchUrl) {
-  try {
-    if (!prt || !crypto?.subtle) return null;
-    const u = new URL(fetchUrl);
-    const t = String(Date.now());
-    const n = crypto.randomUUID
-      ? crypto.randomUUID().replace(/-/g, "")
-      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
-    const msg = `GET\n${u.pathname}${u.search}\n${t}.${n}`;
-    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(prt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg));
-    const sig = Array.from(new Uint8Array(sigBuf), (b) => b.toString(16).padStart(2, "0")).join("");
-    return `${t}.${n}.${sig}`;
-  } catch {
-    return null;
-  }
-}
-
 function triggerSendButtonAnimation() {
   sendBtn.classList.remove("send-clicked");
   void sendBtn.offsetWidth;
@@ -906,29 +775,11 @@ async function performRequest(targetUrl, retryCount = 0) {
     const headers = {
       Accept: "application/json",
     };
-    let fetchUrl = targetUrl;
-    if (prt) {
-      headers["x-sz-token"] = prt;
-      const url = new URL(targetUrl);
-      url.searchParams.set(lfprt, prt);
-      fetchUrl = url.toString();
-    }
-    if (solvedChallengeCode && parseUrl.pathname.startsWith("/music/")) {
-      headers["x-challenge-codes"] = solvedChallengeCode;
-      headers["x-challenge"] = formatChallengeHash(md5(solvedChallengeCode));
-      if (solvedMcToken) headers["x-mc-token"] = solvedMcToken;
-    }
-
     const isDownload = parseUrl.pathname.startsWith("/download/");
-    if (isDownload) {
-      const url = new URL(targetUrl);
-      url.searchParams.set('json', 'true');
-      fetchUrl = url.toString();
-    }
-    const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "no-referrer", redirect: isDownload ? "manual" : undefined };
+    const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
+    let fetchUrl = targetUrl;
     try {
-      const sfL = await buildSfLHeader(fetchUrl);
-      if (sfL) headers["x-sf-l"] = sfL;
+      fetchUrl = await j9ls(targetUrl, headers);
     } catch {}
     response = await fetch(fetchUrl, fetchOptions);
     setStatus("blue-400", "Rendering", "text-gray-400");
@@ -1061,22 +912,19 @@ async function performRequest(targetUrl, retryCount = 0) {
       if (response.status === 302 && isLavalink && retryCount < 4) {
         try {
           const data = JSON.parse(decryptedText);
-          if (data && data.c && data._challenge && typeof d === "function") {
+          if (data && data.c && data._challenge && typeof f3wn === "function") {
             responseArea.innerHTML = "";
             await new Promise((resolve) =>
               requestAnimationFrame(() => requestAnimationFrame(resolve)),
             );
-            const solved = await d(data.c, data.d || 10);
+            const solved = await h6tq(data.c, data.d || 10);
             if (solved) {
-              solvedChallengeCode = solved;
-              solvedMcToken = await buildMcToken(solved);
               return await performRequest(targetUrl, retryCount + 1);
             }
           }
         } catch {}
       } else if (response.status === 302 && isLavalink) {
-        solvedChallengeCode = null;
-        solvedMcToken = null;
+        try { c5vd(); } catch {}
       }
 
       let formatted = text;
@@ -1837,48 +1685,11 @@ function showTurnstileChallenge() {
   });
 }
 
-let vfToken = null;
-function readVfCookie() {
-  try {
-    const part = document.cookie.split("; ").find((p) => p.startsWith("vf="));
-    const val = part ? part.slice(3) : "";
-    if (val) vfToken = val;
-  } catch {}
-  return vfToken;
-}
-
-function fetchVf() {
-  return fetch("/?vf", {
-    credentials: "include",
-    cache: "no-store",
-    referrerPolicy: "strict-origin-when-cross-origin",
-    headers: { Accept: "*/*" },
-  });
-}
-
-function fetchJsonStats() {
-  const token = readVfCookie();
-  const headers = { Accept: "*/*" };
-  if (token) headers["x-sf-e"] = token;
-  return fetch("/?json", {
-    credentials: "include",
-    cache: "default",
-    referrerPolicy: "strict-origin-when-cross-origin",
-    headers,
-  });
-}
-
-function clearVfCookie() {
-  try {
-    document.cookie = "vf=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
-  } catch {}
-}
-
 let initialStatsPromise = (async () => {
   try {
-    await fetchVf();
+    await r2kn();
   } catch {}
-  return fetchJsonStats();
+  return n8sj();
 })();
 
 async function refreshEndpointsFromJson() {
@@ -1889,7 +1700,7 @@ async function refreshEndpointsFromJson() {
     try {
       const statsPromise = initialStatsPromise;
       initialStatsPromise = null;
-      statsRes = await (statsPromise || fetchJsonStats());
+      statsRes = await (statsPromise || n8sj());
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;
@@ -1900,15 +1711,14 @@ async function refreshEndpointsFromJson() {
         return false;
       }
       if (statsRes.ok) {
-        clearVfCookie();
+        t4bm();
         const statsRaw = new Uint8Array(await statsRes.arrayBuffer());
         const statsText = statsRaw[0] === 0x1f && statsRaw[1] === 0x8b
           ? await new Response(new Blob([statsRaw]).stream().pipeThrough(new DecompressionStream("gzip"))).text()
           : new TextDecoder().decode(statsRaw);
         const statsPayload = JSON.parse(statsText);
         isLoading = false;
-        prt = statsPayload[1]._build[1];
-        lfprt = statsPayload[1]._build[0];
+        a8zk(statsPayload[1]._build[0], statsPayload[1]._build[1]);
         setUptimeFromJsonPayload(statsPayload);
 
         const freshEndpoints = normalizeEndpointPayload(statsPayload);

@@ -1,4 +1,5 @@
 import { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
 import zlib from "zlib";
@@ -60,6 +61,34 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 		stripped.searchParams.delete("ts");
 		if (stripped.search !== url.search && matches(`GET\n${stripped.pathname}${stripped.search}\n${tStr}.${n}`)) return true;
 		return false;
+	} catch {
+		return false;
+	}
+};
+
+// Playground-only `x-cf-<build>` attestation. Enforced solely for browser
+// requests originating from /playground (browser UA + playground Referer);
+// every other request skips the check entirely (null), header or not.
+export const verifyCfClearance = (c: Context): boolean | null => {
+	// Gate: browser UA + playground Referer. Anything else skips.
+	try {
+		const ua = c.req.header("user-agent") || "";
+		if (!ua.startsWith("Mozilla/5.0")) return null;
+		const ref = c.req.header("referer") || "";
+		if (!ref) return null;
+		if (new URL(ref).pathname !== "/playground") return null;
+	} catch {
+		return null;
+	}
+	// Enforce: header must exist and equal the cf_clearance cookie.
+	try {
+		const sent = c.req.header(`x-cf-${String(autoGenBuild)}`);
+		if (!sent) return false;
+		const cookie = getCookie(c, "cf_clearance");
+		if (!cookie) return false;
+		const a = Buffer.from(sent, "utf8");
+		const b = Buffer.from(cookie, "utf8");
+		return a.length === b.length && crypto.timingSafeEqual(a, b);
 	} catch {
 		return false;
 	}
@@ -151,6 +180,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	}
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+	if (verifyCfClearance(c) === false) return logResponse(c, c.text("Forbidden", 403));
 
 	c.header("X-Enc-Route", "v4");
 
@@ -242,6 +272,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	}
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+	if (verifyCfClearance(c) === false) return logResponse(c, c.text("Forbidden", 403));
 
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));

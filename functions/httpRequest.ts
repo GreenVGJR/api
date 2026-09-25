@@ -1,5 +1,4 @@
 import { Context } from "hono";
-import { getCookie } from "hono/cookie";
 import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
 import zlib from "zlib";
@@ -8,7 +7,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
-import { autoGenBuild, autoGenBuildPara } from "../app.js";
+import { autoGenBuild, autoGenBuildPara, getTurnstileKeys } from "../app.js";
 import { maxLimitRequestsPerSec } from "../config.json";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
@@ -66,10 +65,11 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 	}
 };
 
-// Playground-only `x-cf-<build>` attestation. Enforced solely for browser
-// requests originating from /playground (browser UA + playground Referer);
-// every other request skips the check entirely (null), header or not.
-export const verifyCfClearance = (c: Context): boolean | null => {
+// Playground-only `x-cf-<build>` attestation carrying the Turnstile token
+// solved on the page. Enforced solely for browser requests originating from
+// /playground (browser UA + playground Referer); every other request skips
+// the check entirely (null), header or not.
+export const verifyCfClearance = async (c: Context): Promise<boolean | null> => {
 	// Gate: browser UA + playground Referer. Anything else skips.
 	try {
 		const ua = c.req.header("user-agent") || "";
@@ -80,15 +80,64 @@ export const verifyCfClearance = (c: Context): boolean | null => {
 	} catch {
 		return null;
 	}
-	// Enforce: header must exist and equal the cf_clearance cookie.
+	// Enforce: header must carry a Turnstile token verified via siteverify.
 	try {
-		const sent = c.req.header(`x-cf-${String(autoGenBuild)}`);
-		if (!sent) return false;
-		const cookie = getCookie(c, "cf_clearance");
-		if (!cookie) return false;
-		const a = Buffer.from(sent, "utf8");
-		const b = Buffer.from(cookie, "utf8");
-		return a.length === b.length && crypto.timingSafeEqual(a, b);
+		const token = c.req.header(`x-cf-${String(autoGenBuild)}`);
+		if (!token) return false;
+		pruneTurnstileCache();
+		const now = Date.now();
+		const cached = verifiedTurnstileTokens.get(token);
+		if (cached !== undefined && cached > now) return true;
+		const v = await siteverifyTurnstile(c, token);
+		if (v === null) return null;
+		if (!v) return false;
+		verifiedTurnstileTokens.set(token, now + TURNSTILE_TOKEN_TTL);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+// Verified Turnstile tokens (single-use server-side): token -> expiry ms.
+// Tokens live ~5 minutes and re-verifying one fails with
+// `timeout-or-duplicate`, so successes are cached for the token lifetime.
+const verifiedTurnstileTokens = new Map<string, number>();
+const TURNSTILE_TOKEN_TTL = 5 * 60 * 1000;
+
+const pruneTurnstileCache = () => {
+	const now = Date.now();
+	for (const [tok, exp] of verifiedTurnstileTokens) if (exp <= now) verifiedTurnstileTokens.delete(tok);
+	while (verifiedTurnstileTokens.size > 1500) {
+		const oldest = verifiedTurnstileTokens.keys().next();
+		if (oldest.done) break;
+		verifiedTurnstileTokens.delete(oldest.value);
+	}
+};
+
+const siteverifyTurnstile = async (c: Context, token: string): Promise<boolean | null> => {
+	try {
+		const keys = getTurnstileKeys(c.req.header("host"));
+		if (!keys.secretKey) {
+			console.warn("[attestation] TURNSTILE_SECRET_KEY is not set; skipping X-Cf check");
+			return null;
+		}
+		const body = new URLSearchParams();
+		body.set("secret", keys.secretKey);
+		body.set("response", token);
+		let ip = "";
+		try {
+			ip = c.req.header("cf-connecting-ip") || "";
+			if (!ip) ip = (c.req.header("x-forwarded-for") || "").split(",")[0].trim();
+		} catch {}
+		if (ip) body.set("remoteip", ip);
+		const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: body.toString(),
+			signal: AbortSignal.timeout(15000),
+		});
+		const out = (await res.json()) as any;
+		return out?.success === true;
 	} catch {
 		return false;
 	}
@@ -180,7 +229,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	}
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
-	if (verifyCfClearance(c) === false) return logResponse(c, c.text("Forbidden", 403));
+	if ((await verifyCfClearance(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
 	c.header("X-Enc-Route", "v4");
 
@@ -272,7 +321,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	}
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
-	if (verifyCfClearance(c) === false) return logResponse(c, c.text("Forbidden", 403));
+	if ((await verifyCfClearance(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));

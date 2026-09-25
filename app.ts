@@ -231,7 +231,7 @@ const turnstileLocalKeys = {
 	secretKey: turnstileConfig.localSecKeyForTest,
 };
 
-function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKey: string } {
+export function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKey: string } {
 	const isLocal = isLocalRequest(host);
 	if (isLocal) return turnstileLocalKeys;
 	return {

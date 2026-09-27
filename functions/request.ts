@@ -7,7 +7,7 @@ import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPr
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
 
-import { Innertube, Log, ProtoUtils } from "youtubei.js";
+import { ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
 import { createColdStartToken, WebPoMinter } from "bgutils-js/webpo";
 import { parseHTML } from "linkedom";
@@ -25,8 +25,6 @@ declare global {
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-Log.setLevel(Log.Level.ERROR);
-
 export let keyYoutubeVisitor: {
 	visitor_data: string;
 	cookie: string;
@@ -40,7 +38,6 @@ export const getYoutubeVisitorKey = async () => {
 	}
 	return keyYoutubeVisitor;
 };
-let youtubeiPromise: Promise<any> | null = null;
 let poTokenCache: { po_token: string; visitor_data: string } | null = null;
 
 const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || "";
@@ -113,9 +110,6 @@ async function refreshBotGuardIntegrity() {
 			globalObject: globalThis,
 		});
 		const webPoSignalOutput: any[] = [];
-		// Bind the snapshot to the same visitorData the Innertube session uses,
-		// otherwise the integrity token (and thus the caption pot) is visitor-less
-		// and YouTube intermittently rejects it (empty 200).
 		const botguardResponse = await botguard.snapshot({
 			webPoSignalOutput,
 			contentBinding: bgVisitorData || poTokenCache?.visitor_data ? { c: bgVisitorData || poTokenCache?.visitor_data! } : undefined,
@@ -270,21 +264,6 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 			targetId: videoId,
 		},
 	};
-}
-
-export async function getYoutubei() {
-	if (!youtubeiPromise) {
-		const { po_token, visitor_data } = await getPoToken();
-		await getYoutubeVisitorKey();
-		youtubeiPromise = Innertube.create({
-			po_token,
-			visitor_data,
-		}).catch((e) => {
-			youtubeiPromise = null;
-			throw e;
-		});
-	}
-	return youtubeiPromise;
 }
 
 export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0";
@@ -446,6 +425,10 @@ async function fetchYoutubeWithRetry<T>(request: () => Promise<Response>, parse:
 	for (let attempt = 0; attempt <= YOUTUBE_JSON_MAX_RETRIES; attempt++) {
 		try {
 			const response = await request();
+			const status = responseStatus(response);
+			if (status === 403 || status === 429) {
+				throw new Error(`YouTube returned ${status}`);
+			}
 			return { ok: true, data: await parse(response) };
 		} catch (error) {
 			if (attempt === YOUTUBE_JSON_MAX_RETRIES) {
@@ -459,14 +442,6 @@ async function fetchYoutubeWithRetry<T>(request: () => Promise<Response>, parse:
 	}
 	return { ok: false };
 }
-
-const isRetryableYoutubeInfoError = (error: any): boolean => {
-	const status = error?.statusCode ?? error?.status ?? error?.info?.statusCode ?? error?.info?.status;
-	if (status === 429 || (typeof status === "number" && status >= 500 && status < 600)) return true;
-	const haystack = [error?.name, error?.message, error?.cause?.message, error?.info?.reason, error?.info?.status].filter(Boolean).join(" ").toLowerCase();
-	if (/\b(429|500|502|503|504)\b/.test(haystack)) return true;
-	return /json|unexpected token|unrecognized token|invalid json|syntaxerror|html|doctype|decompress|zstd|fetch failed|network|socket hang up|timed out|timeout|econn|eai_again|rate.?limit|too many requests|service unavailable|bad gateway|gateway timeout/.test(haystack);
-};
 
 const responseText = async (response: any): Promise<string> => {
 	if (!response) return "";
@@ -3068,13 +3043,10 @@ function getYoutubeiText(value: any) {
 	if (!value) return "";
 	if (typeof value === "string") return value;
 	if (typeof value.text === "string") return value.text;
+	if (typeof value.simpleText === "string") return value.simpleText;
 	if (Array.isArray(value.runs)) return value.runs.map((run: any) => run.text || "").join("");
 	if (typeof value.toString === "function" && value.toString !== Object.prototype.toString) return value.toString();
 	return "";
-}
-
-function getYoutubeErrorMessage(e: any) {
-	return e?.info?.reason || e?.info?.status || e?.message || "Video unavailable";
 }
 
 function parseHlsAttributes(line: string) {
@@ -3087,8 +3059,129 @@ function parseHlsAttributes(line: string) {
 	return attrs;
 }
 
-async function getYoutubeLiveCaptions(info: any) {
-	const hlsUrl = info?.streaming_data?.hls_manifest_url;
+const extractYoutubePageJson = (html: string, variable: string) => {
+	if (typeof html !== "string" || !html) return null;
+	const match = new RegExp(`(?:var\\s+)?${variable}\\s*=\\s*`).exec(html);
+	if (!match) return null;
+	let start = match.index + match[0].length;
+	while (start < html.length && /\s/.test(html[start]!)) start++;
+	if (html[start] !== "{") return null;
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < html.length; i++) {
+		const ch = html[i];
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (ch === "\\") escaped = true;
+			else if (ch === '"') inString = false;
+			continue;
+		}
+		if (ch === '"') inString = true;
+		else if (ch === "{") depth++;
+		else if (ch === "}") {
+			depth--;
+			if (depth === 0) {
+				try {
+					return JSON.parse(html.slice(start, i + 1));
+				} catch {
+					return null;
+				}
+			}
+		}
+	}
+	return null;
+};
+
+const collectYoutubeRenderers = (node: any, key: string, out: any[] = [], depth = 0): any[] => {
+	if (!node || typeof node !== "object" || depth > 40) return out;
+	if (Array.isArray(node)) {
+		for (const child of node) collectYoutubeRenderers(child, key, out, depth + 1);
+		return out;
+	}
+	for (const [name, value] of Object.entries(node)) {
+		if (name === key && value) out.push(value);
+		collectYoutubeRenderers(value, key, out, depth + 1);
+	}
+	return out;
+};
+
+const formatYoutubePublishDate = (value: any) => {
+	if (!value || typeof value !== "string") return null;
+	const parsed = new Date(value);
+	if (isNaN(parsed.getTime())) return null;
+	return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+};
+
+const buildYoutubeOwnerUrls = (paths: any): string[] | null => {
+	const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => typeof p === "string" && p);
+	if (!list.length) return null;
+	return Array.from(new Set(list.map((p: string) => (p.startsWith("http") ? p : "https://www.youtube.com" + p))));
+};
+
+const buildYoutubeFeeds = (initialData: any) => {
+	const renderers = collectYoutubeRenderers(initialData, "endScreenVideoRenderer");
+	const seen = new Set<string>();
+	const feeds: any[] = [];
+	for (const item of renderers) {
+		const rId = item?.videoId;
+		if (!rId || !/^[A-Za-z0-9_-]{11}$/.test(rId) || seen.has(rId)) continue;
+		seen.add(rId);
+		const thumbs = item?.thumbnail?.thumbnails || [];
+		const byline = item?.shortBylineText?.runs || [];
+		feeds.push({
+			videoId: rId,
+			url: "https://www.youtube.com/watch?v=" + rId,
+			altUrl: "https://www.youtube.com/watch?v=" + rId,
+			title: item?.title?.simpleText || getYoutubeiText(item?.title) || null,
+			thumbnail: thumbs[thumbs.length - 1]?.url || "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
+			owner: {
+				name: byline.map((run: any) => run?.text || "").join("") || null,
+				url: buildYoutubeOwnerUrls(byline.map((run: any) => run?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || run?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || null)),
+				avatar: null,
+			},
+		});
+	}
+	return feeds;
+};
+
+const buildYoutubeData = (challenge: any, source: any) => ({
+	_challenge: challenge,
+	data: {
+		videoId: source.videoId,
+		thumbnail: "https://i.ytimg.com/vi/" + source.videoId + "/maxresdefault.jpg",
+		previewThumbnail: "https://i.ytimg.com/vi/" + source.videoId + "/maxres1.jpg",
+		title: source.title || null,
+		description: source.description || null,
+		releaseDate: source.releaseDate || null,
+		viewCount: String(source.viewCount || 0),
+		owners: {
+			name: source.ownerName || null,
+			url: source.ownerUrl || null,
+			avatar: source.ownerAvatars?.length ? Array.from(new Set(source.ownerAvatars)) : null,
+		},
+		tags: (source.keywords || []).map((tag: string) => ({
+			text: tag,
+			url: "https://www.youtube.com/hashtag/" + encodeURIComponent(tag),
+		})),
+		feeds: source.feeds || [],
+		captions: source.captions || [],
+	},
+});
+
+const normalizeYoutubeCaptions = (tracks: any[], poToken: string) =>
+	tracks
+		.filter((track: any) => track?.baseUrl || track?.base_url)
+		.map((track: any) => ({
+			rawName: track.name,
+			name: cleanTranscriptText(getYoutubeiText(track.name)),
+			languageCode: track.languageCode || track.language_code || null,
+			kind: track.kind || null,
+			isTranslatable: !!(track.isTranslatable ?? track.is_translatable),
+			url: withYoutubePoToken(track.baseUrl || track.base_url, poToken),
+		}));
+
+async function getYoutubeLiveCaptions(hlsUrl: string | null | undefined) {
 	if (!hlsUrl) return [];
 	try {
 		const response = await fetch(hlsUrl);
@@ -3121,112 +3214,63 @@ export const infoYoutube = async function infoYoutube(que: string) {
 	if (!videoId) return null;
 
 	try {
-		let info: any = null;
-		for (let attempt = 0; attempt <= YOUTUBE_JSON_MAX_RETRIES; attempt++) {
-			try {
-				const youtubei: any = await getYoutubei();
-				const candidate: any = await youtubei.getInfo(videoId);
-				if (!candidate || typeof candidate !== "object") {
-					throw new Error("YouTube returned an invalid info response");
+		const page = await fetchYoutubeWithRetry(
+			async () => {
+				await getYoutubeVisitorKey();
+				return await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+					headers: {
+						...commonHeaders,
+						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+					},
+				});
+			},
+			async (response) => {
+				const res: any = await response.text();
+				const ytInitialPlayerResponse = extractYoutubePageJson(res, "ytInitialPlayerResponse");
+				if (!ytInitialPlayerResponse || typeof ytInitialPlayerResponse !== "object") {
+					throw new Error("YouTube returned no player response");
 				}
-				info = candidate;
-				break;
-			} catch (error) {
-				if (!isRetryableYoutubeInfoError(error)) {
-					return {
-						error: getYoutubeErrorMessage(error),
-					};
-				}
-				if (attempt === YOUTUBE_JSON_MAX_RETRIES) {
-					return { error: "Rate-limited" };
-				}
-				console.warn(`infoYoutube attempt ${attempt + 1} failed; retrying in ${YOUTUBE_JSON_RETRY_DELAY_MS}ms`, error);
-				youtubeiPromise = null;
-				keyYoutubeVisitor = null;
-				await sleepYoutubeRetry(YOUTUBE_JSON_RETRY_DELAY_MS);
-			}
+				return { ytInitialPlayerResponse, ytInitialData: extractYoutubePageJson(res, "ytInitialData") };
+			},
+			"infoYoutube",
+		);
+		if (!page.ok || !page.data) return { error: "Rate-limited" };
+
+		const { ytInitialPlayerResponse, ytInitialData } = page.data;
+
+		const playability = ytInitialPlayerResponse.playabilityStatus || {};
+		if (playability.status && playability.status !== "OK") {
+			return { error: playability.reason || playability.subreason || playability.status };
 		}
-		if (!info) {
-			return { error: "Rate-limited" };
+		if (!ytInitialPlayerResponse.videoDetails?.videoId) {
+			return { error: "YouTube returned an invalid info response" };
 		}
+
 		const poToken = await getYoutubeCaptionPoToken(videoId);
 		const challenge = getYoutubeChallengeObject(videoId, poToken);
 
-		if (info?.playability_status?.status && info.playability_status.status !== "OK") {
-			return {
-				error: info.playability_status.reason || info.playability_status.status,
-			};
-		}
+		const details = ytInitialPlayerResponse.videoDetails || {};
+		const microformat = ytInitialPlayerResponse.microformat?.playerMicroformatRenderer || {};
+		const streaming = ytInitialPlayerResponse.streamingData || {};
 
-		const tracks = info?.captions?.caption_tracks || [];
-		let captions: any[] = tracks.map((track: any) => {
-			const url = withYoutubePoToken(track.base_url, poToken);
-			return {
-				rawName: track.name,
-				name: cleanTranscriptText(getYoutubeiText(track.name)),
-				languageCode: track.language_code || null,
-				kind: track.kind || null,
-				isTranslatable: !!track.is_translatable,
-				url,
-			};
+		const captions: any[] = normalizeYoutubeCaptions(ytInitialPlayerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks || [], poToken);
+		const isLive = !!details.isLiveContent || !!playability.liveStreamability;
+
+		const ownerRenderer = collectYoutubeRenderers(ytInitialData, "videoOwnerRenderer")[0] || {};
+
+		return buildYoutubeData(challenge, {
+			videoId: details.videoId,
+			title: details.title || null,
+			description: details.shortDescription || null,
+			releaseDate: formatYoutubePublishDate(microformat.publishDate || microformat.uploadDate),
+			viewCount: details.viewCount || 0,
+			ownerName: ownerRenderer.title?.simpleText || details.author || null,
+			ownerUrl: buildYoutubeOwnerUrls([ownerRenderer.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || ownerRenderer.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || null]),
+			ownerAvatars: (ownerRenderer.thumbnail?.thumbnails || []).map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean),
+			keywords: details.keywords || [],
+			feeds: buildYoutubeFeeds(ytInitialData),
+			captions: captions.length || !isLive ? captions : await getYoutubeLiveCaptions(streaming.hlsManifestUrl),
 		});
-
-		if (!captions.length && info?.basic_info?.is_live) {
-			captions = await getYoutubeLiveCaptions(info);
-		}
-
-		const basic = info.basic_info || {};
-		const primary = info.primary_info || {};
-		const secondary = info.secondary_info || {};
-		const owner = secondary.owner?.author || basic.channel || {};
-		const ownerUrls = owner.url ? [owner.url] : owner.id ? ["https://www.youtube.com/channel/" + owner.id] : [];
-		const ownerAvatars = (owner.thumbnails || []).map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean);
-		const feeds = (info.watch_next_feed || [])
-			.map((item: any) => {
-				const rId = item.content_id;
-				if (!rId || !/^[A-Za-z0-9_-]{11}$/.test(rId)) return null;
-				const feedOwner = item.metadata?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text?.text || null;
-				const feedOwnerPath = item.metadata?.image?.renderer_context?.command_context?.on_tap?.metadata?.url || item.metadata?.image?.renderer_context?.command_context?.on_tap?.payload?.canonicalBaseUrl;
-				const feedOwnerUrl = feedOwnerPath ? [String(feedOwnerPath).startsWith("http") ? feedOwnerPath : "https://www.youtube.com" + feedOwnerPath] : null;
-				const feedOwnerAvatar = item.metadata?.image?.avatar?.image?.map((thumbnail: any) => thumbnail?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean) || null;
-				return {
-					videoId: rId,
-					url: "https://www.youtube.com/watch?v=" + rId,
-					altUrl: "https://www.youtube.com/watch?v=" + rId,
-					title: item.metadata?.title?.text || null,
-					thumbnail: item.content_image?.image?.[0]?.url || "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
-					owner: {
-						name: feedOwner,
-						url: feedOwnerUrl,
-						avatar: feedOwnerAvatar?.length ? Array.from(new Set(feedOwnerAvatar)) : null,
-					},
-				};
-			})
-			.filter(Boolean);
-
-		return {
-			_challenge: challenge,
-			data: {
-				videoId: videoId,
-				thumbnail: "https://i.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
-				previewThumbnail: "https://i.ytimg.com/vi/" + videoId + "/maxres1.jpg",
-				title: basic.title || getYoutubeiText(primary.title) || null,
-				description: getYoutubeiText(secondary.description) || basic.short_description || null,
-				releaseDate: getYoutubeiText(primary.published) || null,
-				viewCount: String(basic.view_count || 0),
-				owners: {
-					name: owner.name || basic.author || null,
-					url: ownerUrls,
-					avatar: Array.from(new Set(ownerAvatars)),
-				},
-				tags: (basic.tags || []).map((tag: string) => ({
-					text: tag,
-					url: null,
-				})),
-				feeds,
-				captions: captions,
-			},
-		};
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -4026,7 +4070,7 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 		};
 
 		const search = async (query: string, sourceUrl: string, forceShow: boolean) => {
-			const feat = { options: { query: query + (type === "gif" && !forceShow ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: 50 }, context: {} };
+			const feat = { options: { query: query + (type === "gif" && !forceShow ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: 50, gated: null }, context: {} };
 			const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=${encodeURIComponent(sourceUrl)}&data=${encodeURIComponent(JSON.stringify(feat))}`, { headers });
 			return buildResults(await req.json());
 		};
@@ -4062,6 +4106,97 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 			return { isFallback: fallbackCount !== 0, error: "Pins not found. Your query may violate terms of service" };
 		}
 		if ("data" in result && Array.isArray(result.data)) result.data = result.data.slice(0, limit_number);
+		return result;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const pinterestExplore = async function pinterestExplore(que: string, ratio: string = "all") {
+	if (!que) return null;
+	let fallbackCount = 0;
+	try {
+		const headers = {
+			...commonHeaders,
+			Referer: "https://www.pinterest.com/",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
+			"X-Pinterest-PWS-Handler": "www/[scope].js",
+			"X-Pinterest-Source-Url": "/search/boards/",
+			"X-Requested-With": "XMLHttpRequest",
+		};
+
+		let activeRatio = ratio;
+		const ratioFilter = (r: any): boolean => {
+			if (activeRatio === "all") return true;
+			const thumb = r?.images?.["236x"]?.[0];
+			const w = thumb?.width || 0;
+			const h = thumb?.height || 0;
+			if (!w || !h) return true;
+			if (activeRatio === "portrait") return h > w;
+			if (activeRatio === "landscape") return w > h;
+			if (activeRatio === "square") return Math.abs(w - h) <= Math.min(w, h) * 0.1;
+			return true;
+		};
+
+		const buildResults = (res: any) => {
+			if (res?.resource_response?.http_status != 200) {
+				return { error: `Can't process this: ${res?.resource_response?.message}` };
+			}
+			const rawResults = res.resource_response?.data?.results;
+			if (rawResults?.[0]) {
+				const results = rawResults.filter((r: any) => r?.type === "board" && ratioFilter(r));
+				if (results?.[0]) return { isFallback: fallbackCount !== 0, data: results };
+				return null;
+			}
+			return null;
+		};
+
+		const search = async (query: string, sourceUrl: string) => {
+			const options = {
+				query,
+				scope: "boards",
+				source_url: sourceUrl,
+				static_feed: false,
+				gated: null,
+				rs: "direct_navigation",
+			};
+			const req = await fetch(`https://id.pinterest.com/resource/BaseSearchResource/get/?source_url=${encodeURIComponent(sourceUrl)}&data=${encodeURIComponent(JSON.stringify({ options, context: {} }))}&_=${Date.now()}`, { headers });
+			return buildResults(await req.json());
+		};
+
+		const boardsUrl = (q: string) => `/search/boards/?filter_location=1&q=${encodeURIComponent(q)}`;
+
+		let result = await search(que, boardsUrl(que));
+
+		if (!result) {
+			fallbackCount += 1;
+			activeRatio = "all";
+			result = await search(que, boardsUrl(que));
+		}
+
+		if (!result) {
+			fallbackCount += 1;
+			try {
+				const words = que.trim().split(/\s+/);
+				const termQue = words.length > 1 ? words.slice(0, -1).join(" ") : que;
+				const acData = { options: { pin_scope: "pins", autocomplete_request_surface: 0, count: null, term: termQue }, context: {} };
+				const acReq = await fetch(`https://id.pinterest.com/resource/AdvancedTypeaheadResource/get/?source_url=/&data=${encodeURIComponent(JSON.stringify(acData))}`, { headers });
+				const acRes: any = await acReq.json();
+				const items = acRes?.resource_response?.data?.items || [];
+				const queryItems = items.filter((k: any) => k?.type === "query" && typeof k?.query === "string");
+				const targetItem = queryItems.find((k: any) => que.toLowerCase() !== k.query.toLowerCase()) || queryItems[0];
+				if (targetItem?.query) {
+					result = await search(targetItem.query, boardsUrl(targetItem.query));
+				}
+			} catch {}
+		}
+
+		if (!result) {
+			return { isFallback: fallbackCount !== 0, error: "Boards not found. Your query may violate terms of service" };
+		}
 		return result;
 	} catch (e) {
 		console.error(e);
@@ -6045,7 +6180,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 export const instagramUser = async function instagramUser(que: string) {
 	if (!que) return null;
 
-	if (!keyInstagram) {
+	if (!keyInstagram?.lsd) {
 		keyInstagram = await instagramSession();
 	}
 
@@ -6235,7 +6370,7 @@ export const InstagramVideo = async function InstagramVideo(que: string) {
 	if (!shortcode) return null;
 	const mediaId = instagramShortcodeToId(shortcode);
 
-	if (!keyInstagram) {
+	if (!keyInstagram?.lsd) {
 		keyInstagram = await instagramSession();
 	}
 
@@ -6251,7 +6386,7 @@ export const InstagramVideo = async function InstagramVideo(que: string) {
 			let loginWall = false;
 
 			// Tier 1: Instagram GraphQL API (PolarisLoggedOutDesktopWWWPostRootContentQuery)
-			if (mediaId) {
+			if (mediaId && keyInstagram?.lsd) {
 				try {
 					const req = await fetch(`https://www.instagram.com/api/graphql`, {
 						method: "POST",
@@ -6352,6 +6487,611 @@ export const InstagramVideo = async function InstagramVideo(que: string) {
 			if (keyInstagram) keyInstagram = await instagramSession();
 		}
 		return null;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+// --- Social download helpers (share-link aware) ---
+
+const resolveShareUrl = async function resolveShareUrl(url: string): Promise<string> {
+	if (!url) return url;
+	try {
+		const res: any = await fetch(url, {
+			headers: { ...commonHeaders, Referer: "https://www.google.com/" },
+			redirect: "follow",
+			signal: AbortSignal.timeout(15000),
+		});
+		const finalUrl = res?.url || url;
+		try {
+			if (res?.body?.cancel) await res.body.cancel();
+		} catch {}
+		return typeof finalUrl === "string" && finalUrl ? finalUrl : url;
+	} catch {
+		return url;
+	}
+};
+
+const tiktokFetchItemStruct = async function tiktokFetchItemStruct(url: string, wafRetried: boolean = false): Promise<any> {
+	let finalUrl = url;
+	if (/v[mt]\.tiktok\.com|tiktok\.com\/t\//.test(url)) {
+		try {
+			const response = await (httpcloakGet as any)(url, {
+				httpVersion: "h2",
+				tlsOnly: true,
+				headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+			});
+			if (response?.url) finalUrl = response.url;
+		} catch {}
+		if (finalUrl === url) finalUrl = await resolveShareUrl(url);
+	}
+
+	let videoId: string | null = null;
+	for (const pattern of [/(?:video|photo)\/(\d+)/, /\/v\/(\d+)/, /^(\d+)$/]) {
+		const match = finalUrl.match(pattern);
+		if (match) {
+			videoId = match[1];
+			break;
+		}
+	}
+	if (!videoId) return { error: "Invalid or expired link" };
+
+	const targets = [`https://www.tiktok.com/@/video/${videoId}`, `https://www.tiktok.com/@/photo/${videoId}`];
+	let lastError: any = null;
+	for (const targetUrl of targets) {
+		let scriptContent: string | undefined;
+		for (let i = 0; i < 15; i++) {
+			try {
+				const response = await (httpcloakGet as any)(targetUrl, {
+					httpVersion: "h2",
+					tlsOnly: true,
+					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" },
+				});
+				const html = await responseText(response);
+				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
+				if (scriptContent) break;
+				if (!wafRetried) {
+					const testIfNeedSolve = await solveTiktokWAF(html);
+					if (testIfNeedSolve) {
+						setTiktokWafCookie(testIfNeedSolve);
+						return await tiktokFetchItemStruct(url, true);
+					}
+				}
+			} catch (e) {
+				lastError = e;
+			}
+		}
+		if (!scriptContent) continue;
+		try {
+			const json = JSON.parse(scriptContent);
+			const videoDetail = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
+			if (videoDetail?.id || videoDetail?.video || videoDetail?.imagePost) return { videoDetail, finalUrl: targetUrl };
+		} catch (e) {
+			lastError = e;
+		}
+	}
+	if (lastError) console.error(lastError);
+	return { error: "Can't process this due to WAF Challenge" };
+};
+
+const tiktokCollectImages = function tiktokCollectImages(videoDetail: any): string[] {
+	const urls: string[] = [];
+	const push = (u: any) => {
+		if (typeof u === "string" && u.startsWith("http") && !urls.includes(u)) urls.push(u);
+	};
+	const images = videoDetail?.imagePost?.images;
+	if (Array.isArray(images)) {
+		for (const img of images) {
+			const list = img?.imageURL?.urlList;
+			if (Array.isArray(list) && list.length) push(list[list.length - 1]);
+			const disp = img?.displayImage?.images;
+			if (Array.isArray(disp)) for (const d of disp) push(Array.isArray(d?.urlList) && d.urlList.length ? d.urlList[d.urlList.length - 1] : d?.url);
+			const thumb = img?.thumbnail?.urlList;
+			if (Array.isArray(thumb) && thumb.length) push(thumb[thumb.length - 1]);
+			if (Array.isArray(list) && list.length) push(list[0]);
+		}
+	}
+	if (!urls.length) {
+		push(videoDetail?.video?.cover);
+		push(videoDetail?.video?.originCover);
+		push(videoDetail?.video?.dynamicCover);
+	}
+	return urls.slice(0, 10);
+};
+
+export const TiktokPhoto = async function TiktokPhoto(url: string) {
+	if (!url) return null;
+	try {
+		const fetched: any = await tiktokFetchItemStruct(url);
+		if (!fetched || fetched.error) return fetched;
+		const urls = tiktokCollectImages(fetched.videoDetail);
+		if (!urls.length) return null;
+		return { urls };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+const instagramResolveShortcode = async function instagramResolveShortcode(que: string): Promise<string | null> {
+	let url = que;
+	if (/instagram\.com\/share\//.test(que)) url = await resolveShareUrl(que);
+	try {
+		const u = new URL(url);
+		if (!/(^|\.)instagram\.com$/.test(u.hostname) && u.hostname !== "instagr.am") return null;
+		const parts = u.pathname.split("/").filter(Boolean);
+		if (u.hostname === "instagr.am" && parts.length >= 1) return parts[0].split("?")[0] || null;
+		const idx = parts.findIndex((p) => p === "p" || p === "reel" || p === "reels" || p === "tv");
+		if (idx >= 0) return (parts[idx + 1] || "").split("?")[0] || null;
+		return null;
+	} catch {
+		return null;
+	}
+};
+
+const instagramFetchMedia = async function instagramFetchMedia(shortcode: string, originalUrl: string): Promise<any> {
+	const mediaId = instagramShortcodeToId(shortcode);
+	if (!keyInstagram?.lsd) {
+		keyInstagram = await instagramSession();
+	}
+
+	const instagramHeaders = {
+		...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+		...(keyInstagram?.csrf ? { "X-CSRFToken": keyInstagram.csrf } : {}),
+		...(keyInstagram?.app_id ? { "X-IG-App-ID": keyInstagram.app_id } : { "X-IG-App-ID": "936619743392459" }),
+	};
+
+	for (let attempt = 0; attempt < 2; attempt++) {
+		let media: any = null;
+		let loginWall = false;
+
+		if (mediaId && keyInstagram?.lsd) {
+			try {
+				const req = await fetch(`https://www.instagram.com/api/graphql`, {
+					method: "POST",
+					body: `lsd=${keyInstagram?.lsd || ""}&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=PolarisLoggedOutDesktopWWWPostRootContentQuery&server_timestamps=true&variables=${encodeURIComponent(JSON.stringify({ media_id: mediaId }))}&doc_id=27130156389949648`,
+					headers: {
+						...commonHeaders,
+						...instagramHeaders,
+						Accept: "*/*",
+						"Content-Type": "application/x-www-form-urlencoded",
+						"Sec-Fetch-Site": "same-origin",
+						...(keyInstagram?.lsd ? { "X-FB-LSD": keyInstagram.lsd } : {}),
+						"X-ASBD-ID": "359341",
+					},
+				});
+				if (req.status === 403 || req.status === 429) {
+					loginWall = true;
+				} else {
+					try {
+						const res: any = await req.json();
+						if (res?.data?.require_login) loginWall = true;
+						media = res?.data?.xig_polaris_media?.if_not_gated_logged_out || res?.data?.xig_polaris_media || null;
+					} catch {}
+				}
+			} catch {}
+		}
+
+		if (!media) {
+			try {
+				const req = await fetch(`https://www.instagram.com/p/${shortcode}/embed?_fb_noscript=1`, {
+					headers: {
+						...commonHeaders,
+						"Sec-Fetch-Dest": "iframe",
+						"Sec-Fetch-Site": "none",
+						Referer: "https://www.instagram.com/",
+						...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+					},
+				});
+				if (req.status === 403 || req.status === 429) {
+					loginWall = true;
+				} else {
+					const text = await req.text();
+					const raw = /"contextJSON":"((?:[^"\\]|\\.)*)"/.exec(text)?.[1];
+					if (raw) {
+						try {
+							media = JSON.parse(JSON.parse(`"${raw}"`))?.gql_data || null;
+						} catch {}
+					}
+				}
+			} catch {}
+		}
+
+		if (!media) {
+			try {
+				const req = await fetch(originalUrl, {
+					headers: {
+						...commonHeaders,
+						...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+					},
+				});
+				if (req.status === 403 || req.status === 429) {
+					loginWall = true;
+				} else {
+					const text = await req.text();
+					const scripts = [...text.matchAll(/<script type="application\/json"[^>]*data-sjs[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+					for (const script of scripts) {
+						if (!script.includes("xig_polaris_media")) continue;
+						try {
+							const found = instagramFindMediaNode(JSON.parse(script));
+							const node = found?.if_not_gated_logged_out || found || null;
+							if (node?.pk || node?.id || node?.video_url) {
+								media = node;
+								break;
+							}
+						} catch {}
+					}
+				}
+			} catch {}
+		}
+
+		if (media) return media;
+		if (loginWall && attempt === 1) return { error: "Please sign in" };
+		if (keyInstagram) keyInstagram = await instagramSession();
+	}
+	return null;
+};
+
+const instagramCollectImages = function instagramCollectImages(media: any): string[] {
+	const urls: string[] = [];
+	const seen = new Set<string>();
+	const push = (u: any) => {
+		if (typeof u !== "string" || !u.startsWith("http")) return;
+		let key = u;
+		try {
+			key = new URL(u).pathname.split("/").pop() || u;
+		} catch {}
+		if (!key || seen.has(key)) return;
+		seen.add(key);
+		urls.push(u);
+	};
+	const carousel = Array.isArray(media?.carousel_media) ? media.carousel_media : null;
+	if (carousel?.length) {
+		for (const m of carousel) {
+			push(m?.image_versions2?.candidates?.[0]?.url);
+			push(m?.display_uri);
+		}
+		return urls.slice(0, 10);
+	}
+	const edges = media?.edge_sidecar_to_children?.edges || media?.shortcode_media?.edge_sidecar_to_children?.edges;
+	if (Array.isArray(edges) && edges.length) {
+		for (const e of edges) {
+			push(e?.node?.display_url);
+			push(e?.node?.image_versions2?.candidates?.[0]?.url);
+		}
+		return urls.slice(0, 10);
+	}
+	push(media?.display_url);
+	push(media?.thumbnail_src);
+	push(media?.image_versions2?.candidates?.[0]?.url);
+	push(media?.display_uri);
+	push(media?.shortcode_media?.display_url);
+	push(media?.shortcode_media?.image_versions2?.candidates?.[0]?.url);
+	return urls.slice(0, 10);
+};
+
+export const InstagramPhoto = async function InstagramPhoto(que: string) {
+	if (!que) return null;
+	try {
+		const shortcode = await instagramResolveShortcode(que);
+		if (!shortcode) return null;
+		const media: any = await instagramFetchMedia(shortcode, que);
+		if (!media) return null;
+		if (media.error) return media;
+		const urls = instagramCollectImages(media);
+		if (!urls.length) return null;
+		return { urls };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+const threadsResolveCode = async function threadsResolveCode(que: string): Promise<string | null> {
+	let url = que;
+	if (/\/share\//.test(que)) url = await resolveShareUrl(que);
+	try {
+		const u = new URL(url);
+		if (!/(^|\.)threads\.com$/.test(u.hostname) && !/(^|\.)threads\.net$/.test(u.hostname)) return null;
+		return u.pathname.match(/\/(?:post|t)\/([A-Za-z0-9_-]+)/)?.[1] || null;
+	} catch {
+		return null;
+	}
+};
+
+const threadsFetchEmbed = async function threadsFetchEmbed(code: string): Promise<any> {
+	const req = await fetch(`https://www.threads.com/@/post/${code}/embed?_fb_noscript=1`, {
+		headers: {
+			...commonHeaders,
+			"Sec-Fetch-Dest": "iframe",
+			"Sec-Fetch-Site": "none",
+			Referer: "https://www.threads.com/",
+		},
+	});
+	if (req.status === 403 || req.status === 429) return { error: "Sign in for view this content" };
+	if (!req.ok) return null;
+	const html = await req.text();
+	const video = decodeHTML(/source src="([^"]+)"/.exec(html)?.[1] || "");
+	const images: string[] = [];
+	for (const m of html.matchAll(/<img class="img" src="([^"]+)"/g)) {
+		const u = decodeHTML(m[1]);
+		if (!u.startsWith("http") || images.includes(u)) continue;
+		if (/s(100|150)x(100|150)|profile_pic/i.test(u)) continue;
+		images.push(u);
+	}
+	const og = /og:image" content="([^"]+)"/.exec(html)?.[1];
+	if (og) {
+		const u = decodeHTML(og);
+		if (u.startsWith("http") && !images.includes(u)) images.push(u);
+	}
+	return { video: video || null, images: images.slice(0, 10) };
+};
+
+export const ThreadsVideo = async function ThreadsVideo(que: string) {
+	if (!que) return null;
+	try {
+		const code = await threadsResolveCode(que);
+		if (!code) return null;
+		const embed: any = await threadsFetchEmbed(code);
+		if (!embed) return null;
+		if (embed.error) return embed;
+		if (!embed.video) return { error: "This post is a photo, use the photo endpoint" };
+		return { video_url: embed.video };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const ThreadsPhoto = async function ThreadsPhoto(que: string) {
+	if (!que) return null;
+	try {
+		const code = await threadsResolveCode(que);
+		if (!code) return null;
+		const embed: any = await threadsFetchEmbed(code);
+		if (!embed) return null;
+		if (embed.error) return embed;
+		if (!embed.images?.length) return { error: embed.video ? "This post is a video, use the video endpoint" : "Photos not found" };
+		return { urls: embed.images };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+const twitterResolveId = async function twitterResolveId(que: string): Promise<string | null> {
+	const direct = String(que).match(/\/status\/(\d+)/)?.[1];
+	if (direct) return direct;
+	if (/t\.co\//.test(String(que))) {
+		const resolved = await resolveShareUrl(que);
+		return resolved.match(/\/status\/(\d+)/)?.[1] || null;
+	}
+	return null;
+};
+
+const twitterFetchSyndication = async function twitterFetchSyndication(id: string): Promise<any> {
+	const pul = await fetch(`https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(id)}&lang=en&token=abc`, {
+		headers: commonHeaders,
+	});
+	if (!pul.ok) return { error: "Item not found" };
+	let data: any = null;
+	try {
+		data = await pul.json();
+	} catch {
+		return { error: "Item not found" };
+	}
+	if (!data || typeof data !== "object") return { error: "Item not found" };
+	if (data?.tombstone?.text?.text) return { error: data.tombstone.text.text };
+	return { data };
+};
+
+const twitterCollectImages = function twitterCollectImages(root: any): string[] {
+	const urls: string[] = [];
+	const push = (u: any) => {
+		if (typeof u === "string" && u.startsWith("http") && !urls.includes(u)) urls.push(u);
+	};
+	const collectSource = (src: any) => {
+		if (!src || typeof src !== "object") return;
+		const mediaDetails = Array.isArray(src.mediaDetails) ? src.mediaDetails : [];
+		for (const m of mediaDetails) {
+			if (m?.type === "photo" && typeof m?.media_url_https === "string") {
+				const ext = m.media_url_https.split(".").pop() || "jpg";
+				push(`${m.media_url_https}?format=${ext}&name=orig`);
+			} else {
+				push(m?.media_url_https);
+			}
+		}
+		const photos = Array.isArray(src.photos) ? src.photos : [];
+		for (const p of photos) {
+			if (typeof p?.url === "string") {
+				const ext = p.url.split(".").pop() || "jpg";
+				push(`${p.url}?format=${ext}&name=orig`);
+			}
+		}
+		push(src?.video?.poster);
+		const binding = src?.card?.binding_values;
+		if (binding && typeof binding === "object") {
+			const orig: string[] = [];
+			const rest: string[] = [];
+			for (const v of Object.values(binding) as any[]) {
+				const u = v?.image_value?.url;
+				if (typeof u !== "string" || !u.startsWith("http")) continue;
+				if (u.includes("name=orig")) orig.push(u);
+				else rest.push(u);
+			}
+			for (const u of [...orig, ...rest]) push(u);
+		}
+	};
+	collectSource(root);
+	collectSource(root?.quoted_tweet);
+	return urls.slice(0, 10);
+};
+
+const twitterPickVideo = function twitterPickVideo(root: any): string | null {
+	const pick = (variants: any): string | null => {
+		if (!Array.isArray(variants) || !variants.length) return null;
+		const last = variants[variants.length - 1];
+		return last?.src || last?.url || null;
+	};
+	let url = pick(root?.video?.variants);
+	if (url) return url;
+	try {
+		const raw = root?.entities?.card_legacy?.[0]?.value?.string_value;
+		if (typeof raw === "string" && raw) {
+			const card = JSON.parse(raw);
+			const entries = Object.entries(card?.mediaDetails || {});
+			if (entries.length) url = pick((entries[0][1] as any)?.video?.variants);
+			if (url) return url;
+		}
+	} catch {}
+	return pick(root?.quoted_tweet?.video?.variants);
+};
+
+export const TwitterVideo = async function TwitterVideo(que: string) {
+	if (!que) return null;
+	try {
+		const id = await twitterResolveId(que);
+		if (!id) return null;
+		const fetched: any = await twitterFetchSyndication(id);
+		if (!fetched || fetched.error) return fetched;
+		const videoUrl = twitterPickVideo(fetched.data);
+		if (!videoUrl) return { error: "This post is a photo, use the photo endpoint" };
+		return { video_url: videoUrl };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const TwitterPhoto = async function TwitterPhoto(que: string) {
+	if (!que) return null;
+	try {
+		const id = await twitterResolveId(que);
+		if (!id) return null;
+		const fetched: any = await twitterFetchSyndication(id);
+		if (!fetched || fetched.error) return fetched;
+		const urls = twitterCollectImages(fetched.data);
+		if (!urls.length) return null;
+		return { urls };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+const facebookExtractNodeId = function facebookExtractNodeId(url: string): string | null {
+	try {
+		const u = new URL(url);
+		if (!/(^|\.)facebook\.com$/.test(u.hostname) && u.hostname !== "fb.watch" && !u.hostname.endsWith(".fb.watch")) return null;
+		const watchV = u.searchParams.get("v");
+		if (watchV && /^\d+$/.test(watchV)) return watchV;
+		const story = u.searchParams.get("story_fbid");
+		if (story && /^\d+$/.test(story)) return story;
+		const fbid = u.searchParams.get("fbid");
+		if (fbid && /^\d+$/.test(fbid)) return fbid;
+		const parts = u.pathname.split("/").filter(Boolean);
+		for (let i = parts.length - 1; i >= 0; i--) {
+			if (/^\d{6,}$/.test(parts[i])) return parts[i];
+		}
+		return null;
+	} catch {
+		return null;
+	}
+};
+
+const facebookFetchMedia = async function facebookFetchMedia(nodeId: string): Promise<any> {
+	for (let attempt = 0; attempt < 2; attempt++) {
+		if (!keyInstagram?.lsd) {
+			keyInstagram = await instagramSession();
+		}
+		if (!keyInstagram?.lsd) continue;
+		const body =
+			`lsd=${keyInstagram?.lsd || ""}&fb_api_caller_class=RelayModern&fb_api_req_friendly_name=PolarisLoggedOutDesktopWWWPostRootContentQuery&server_timestamps=true&variables=` +
+			encodeURIComponent(
+				JSON.stringify({
+					feedLocation: "COMET_MEDIA_VIEWER",
+					privacySelectorRenderLocation: "COMET_MEDIA_VIEWER",
+					renderLocation: "comet_media_viewer",
+					nodeID: nodeId,
+					scale: 1,
+					shouldShowComments: false,
+				}),
+			) +
+			`&doc_id=28067965802883859`;
+		try {
+			const req = await fetch("https://www.facebook.com/api/graphql", {
+				method: "POST",
+				body,
+				headers: {
+					...commonHeaders,
+					Accept: "*/*",
+					"Content-Type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-origin",
+					"X-ASBD-ID": "359341",
+					...(keyInstagram?.lsd ? { "X-FB-LSD": keyInstagram.lsd } : {}),
+					"User-Agent": userAgent,
+					...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
+				},
+			});
+			if (!req.ok) {
+				if (req.status === 403 || req.status === 429) return { error: "Rate-limited" };
+			} else {
+				const rawText = await req.text();
+				for (const line of rawText.split("\n")) {
+					const trimmed = line.trim();
+					if (!trimmed.startsWith("{")) continue;
+					try {
+						const res: any = JSON.parse(trimmed);
+						if (res?.data?.currMedia) return res.data.currMedia;
+					} catch {}
+				}
+			}
+		} catch {}
+		keyInstagram = await instagramSession();
+	}
+	return null;
+};
+
+export const FacebookVideo = async function FacebookVideo(que: string) {
+	if (!que) return null;
+	try {
+		let url = que;
+		if (/fb\.watch|facebook\.com\/share|\bfb\.com\//.test(que)) url = await resolveShareUrl(que);
+		const nodeId = facebookExtractNodeId(url);
+		if (!nodeId) return null;
+		const media: any = await facebookFetchMedia(nodeId);
+		if (!media) return { error: "Facebook lookup failed, try again later" };
+		if (media.error) return media;
+		if (!media || media.is_live_streaming) return { error: "This video may no longer exist, or you don't have permission to view it" };
+		if (media.__typename === "Video") {
+			if (media.is_playable === false) return { error: "This video may no longer exist, or you don't have permission to view it" };
+			const videoUrl = media.videoDeliveryLegacyFields?.browser_native_hd_url || media.videoDeliveryLegacyFields?.browser_native_sd_url || null;
+			if (!videoUrl) return null;
+			return { video_url: videoUrl };
+		}
+		return { error: "This post is a photo, use the photo endpoint" };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const FacebookPhoto = async function FacebookPhoto(que: string) {
+	if (!que) return null;
+	try {
+		let url = que;
+		if (/fb\.watch|facebook\.com\/share|\bfb\.com\//.test(que)) url = await resolveShareUrl(que);
+		const nodeId = facebookExtractNodeId(url);
+		if (!nodeId) return null;
+		const media: any = await facebookFetchMedia(nodeId);
+		if (!media) return { error: "Facebook lookup failed, try again later" };
+		if (media.error) return media;
+		const urls: string[] = [];
+		if (media.__typename === "Photo" && typeof media.image?.uri === "string") urls.push(media.image.uri);
+		else if (media.__typename === "Video" && typeof media.preferred_thumbnail?.image?.uri === "string") urls.push(media.preferred_thumbnail.image.uri);
+		if (!urls.length) return null;
+		return { urls: urls.slice(0, 10) };
 	} catch (e) {
 		console.error(e);
 		return null;

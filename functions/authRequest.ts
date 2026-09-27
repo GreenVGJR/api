@@ -458,6 +458,10 @@ export const refreshRedditAuth = async (): Promise<any> => {
 				headers: {
 					...commonHeaders,
 					...(jar.size ? { Cookie: jarStr() } : {}),
+					Referer: "https://www.google.com/",
+					"Sec-Fetch-Dest": "document",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Site": "cross-site",
 				},
 				redirect: "manual",
 			});

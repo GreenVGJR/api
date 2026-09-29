@@ -9135,7 +9135,7 @@ export const DiscordInfoMember = async (token: string, userId: string, guildId?:
 		const perms = guildId ? getMemberPermissions(data, rolesData, guildData, guildId) : {};
 
 		const result: any = {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			dmChannelId: dmData?.id || null,
 			...data,
 			...perms,
@@ -9268,7 +9268,7 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 		data.serverCount = firstCount("approximate_guild_count") ?? directory?.directory_entry?.guild_count ?? 0;
 
 		return {
-			_warning: "Using this endpoint with token can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint with token can put your discord bot rate-limits faster",
 			data,
 		};
 	} catch (e: any) {
@@ -9312,7 +9312,7 @@ export const DiscordInfoClient = async (token: string | null) => {
 			return formatted;
 		});
 		return {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			data: {
 				dmChannels,
 				oauth2: data3,
@@ -9493,16 +9493,17 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 			}
 
 			return {
-				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+				_warning: "Using this endpoint can put your discord bot rate-limits faster",
 				botsCount,
 				usersCount,
 				cachedMembersCount,
 				limit: limit,
 				data,
+				membersData: data.map((member: any) => member?.user?.id || member?.id).filter(Boolean),
 			};
 		}
 
-		return { cachedMembersCount, data };
+		return { cachedMembersCount, data, membersData: Array.isArray(data) ? (data as any[]).map((member: any) => member?.user?.id || member?.id).filter(Boolean) : [] };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -9621,7 +9622,9 @@ export const DiscordListMemberRole = async (token: string, guildId: string, role
 			membersCount: data.length,
 			cachedMembersCount,
 			data,
+			membersData: data.map((member: any) => member?.user?.id || member?.id).filter(Boolean),
 			altData,
+			rolesData: Array.isArray(altData) ? altData.map((role: any) => role?.id).filter(Boolean) : [],
 		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
@@ -9724,15 +9727,16 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 			rolesData = rolesData.slice(0, limit);
 
 			return {
-				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+				_warning: "Using this endpoint can put your discord bot rate-limits faster",
 				rolesCount: totalRoles,
 				cachedRolesCount,
 				limit: limit,
 				data: rolesData,
+				rolesData: rolesData.map((role: any) => role?.id).filter(Boolean),
 			};
 		}
 
-		return { cachedRolesCount, data: rolesData };
+		return { cachedRolesCount, data: rolesData, rolesData: Array.isArray(rolesData) ? rolesData.map((role: any) => role?.id).filter(Boolean) : [] };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -9844,8 +9848,9 @@ export const DiscordListChannel = async (token: string, guildId: string, limit: 
 			data = data.slice(0, sliceLimit);
 
 			return {
-				_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+				_warning: "Using this endpoint can put your discord bot rate-limits faster",
 				data,
+				channelsData: data.map((channel: any) => channel?.id).filter(Boolean),
 				totalChannel,
 			};
 		}
@@ -10032,7 +10037,7 @@ export const DiscordInfoServer = async (token: string, guildId: string) => {
 		data.created_at = data.id ? String(getSnowflakeDate(data.id)) : null;
 
 		return {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			data,
 		};
 	} catch (e: any) {
@@ -10452,7 +10457,7 @@ export const DiscordInfoMessages = async (token: string, channelId: string, sort
 		}
 
 		return {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			limit,
 			data,
 		};
@@ -10653,10 +10658,11 @@ export const DiscordListInvite = async (token: string, guildId: string, limit: n
 				invitesCount: totalInvites,
 				limit,
 				data,
+				invitesData: data.map((invite: any) => invite?.code).filter(Boolean),
 			};
 		}
 
-		return { data };
+		return { data, invitesData: Array.isArray(data) ? data.map((invite: any) => invite?.code).filter(Boolean) : [] };
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -11019,8 +11025,9 @@ export const DiscordListWebhooks = async (token: string, guildId: string, type: 
 		}
 
 		return {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			data,
+			webhooksData: Array.isArray(data) ? data.map((w: any) => w?.id).filter(Boolean) : [],
 		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
@@ -13297,6 +13304,7 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
 
 export const GoogleGemma = async function GoogleGemma(query: string) {
 	if (!query) return null;
+	
 
 	try {
 		const res = await fetch(atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl"), {
@@ -13785,11 +13793,12 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 		const cachedMembersCount = data.length;
 
 		return {
-			_warning: "Using this endpoint can put your bot (discord) rate-limits faster",
+			_warning: "Using this endpoint can put your discord bot rate-limits faster",
 			tagsCount,
 			usersCount,
 			cachedMembersCount,
 			data: outputMap,
+			tagsData: output.map((entry: any) => entry?.id).filter(Boolean),
 		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };

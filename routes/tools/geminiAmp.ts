@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { Gemini } from "../../functions/request.js";
-import { dispatch } from "../../functions/httpRequest.js";
+// import { Gemini } from "../../functions/request.js";
+// import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/chat/gemini", async (c) => {
 	const query = c.req.query("prompt");
@@ -11,9 +11,10 @@ app.get("/chat/gemini", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	const conversation = c.req.query("conversation");
+//	const conversation = c.req.query("conversation");
 	c.header("X-Route", "gemini.google.com");
-	return await dispatch(c, () => Gemini(query, conversation));
+	return c.json({ error: "This endpoint has been discontinued. It will be removed soon from routes. Thank you" }, 410);
+	// return await dispatch(c, () => Gemini(query, conversation));
 });
 
 export default app;

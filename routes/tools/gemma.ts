@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { GoogleGemma } from "../../functions/request.js";
-import { dispatch } from "../../functions/httpRequest.js";
+// import { GoogleGemma } from "../../functions/request.js";
+// import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/chat/gemma", async (c) => {
 	const query = c.req.query("prompt");
@@ -12,7 +12,8 @@ app.get("/chat/gemma", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 	c.header("X-Route", "multi-modal.ai.cloudflare.com");
-	return await dispatch(c, () => GoogleGemma(query));
+	return c.json({ error: "This endpoint has been discontinued. It will be removed soon from routes. Thank you" }, 410);
+	// return await dispatch(c, () => GoogleGemma(query));
 });
 
 export default app;

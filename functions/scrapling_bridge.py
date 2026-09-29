@@ -5,6 +5,8 @@ from typing import Dict, Any
 def main():
     stealthy_session = None
     dynamic_session = None
+    stealthy_retries = None
+    dynamic_retries = None
 
     try:
         while True:
@@ -28,8 +30,10 @@ def main():
                 continue
 
             url = input_data.get("url")
+            request_id = input_data.get("request_id")
             if not url:
                 print(json.dumps({
+                    "request_id": request_id,
                     "success": False,
                     "error": "URL parameter is required"
                 }))
@@ -44,6 +48,7 @@ def main():
             headless = input_data.get("headless", True)
             network_idle = input_data.get("network_idle", False)
             timeout = input_data.get("timeout", 30000)
+            retries = input_data.get("retries", 3)
             solve_cloudflare = input_data.get("solve_cloudflare", True)
             wait_selector = input_data.get("wait_selector")
             wait_selector_state = input_data.get("wait_selector_state")
@@ -95,16 +100,28 @@ def main():
                         kwargs["proxy"] = proxy
 
                     if fetcher_type == "dynamic":
-                        if not dynamic_session:
+                        if not dynamic_session or dynamic_retries != retries:
+                            if dynamic_session:
+                                try:
+                                    dynamic_session.close()
+                                except:
+                                    pass
                             from scrapling.fetchers import DynamicSession
-                            dynamic_session = DynamicSession(headless=headless, cookies=cookies)
+                            dynamic_session = DynamicSession(headless=headless, cookies=cookies, retries=retries)
                             dynamic_session.start()
+                            dynamic_retries = retries
                         response = dynamic_session.fetch(url, **kwargs)
                     else:
-                        if not stealthy_session:
+                        if not stealthy_session or stealthy_retries != retries:
+                            if stealthy_session:
+                                try:
+                                    stealthy_session.close()
+                                except:
+                                    pass
                             from scrapling.fetchers import StealthySession
-                            stealthy_session = StealthySession(headless=headless, cookies=cookies)
+                            stealthy_session = StealthySession(headless=headless, cookies=cookies, retries=retries)
                             stealthy_session.start()
+                            stealthy_retries = retries
                         response = stealthy_session.fetch(url, **kwargs)
 
                 # Extract values using selectors
@@ -166,6 +183,7 @@ def main():
                             cookies_dict = {"raw": str(response.cookies)}
 
                 result = {
+                    "request_id": request_id,
                     "success": True,
                     "status": response.status,
                     "url": response.url,
@@ -193,6 +211,7 @@ def main():
 
             except Exception as e:
                 print(json.dumps({
+                    "request_id": request_id,
                     "success": False,
                     "error": str(e)
                 }))

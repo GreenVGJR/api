@@ -7680,6 +7680,10 @@ export async function DriftProfile(query: string): Promise<any> {
 					fetcherType: "stealthy",
 					headers: commonHeaders,
 					extractHtml: true,
+					// Scrapling re-solves the challenge on every retry, which multiplies
+					// the wait, so cap the total instead of hanging the request.
+					timeoutMs: 45000,
+					retries: 1,
 				});
 
 				if (!browserRes.success || browserRes.status === 403) {
@@ -8181,6 +8185,10 @@ export async function GunsProfile(query: string): Promise<any> {
 							fetcherType: "stealthy",
 							headers: commonHeaders,
 							extractHtml: true,
+							// Scrapling re-solves the challenge on every retry, which multiplies
+							// the wait, so cap the total instead of hanging the request.
+							timeoutMs: 45000,
+							retries: 1,
 						});
 
 						if (browserRes.status === 429) {
@@ -8304,6 +8312,8 @@ export async function GunsProfile(query: string): Promise<any> {
 	}
 }
 
+let rageCookies: string | null = null;
+
 export async function RageProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
@@ -8313,16 +8323,55 @@ export async function RageProfile(query: string): Promise<any> {
 
 	for (let attempts = 0; attempts < 3; attempts++) {
 		try {
-			res = await fetch(`https://rage.wtf/${username}`, {
-				headers: commonHeaders,
+			res = await (httpcloakGet as any)(`https://rage.wtf/${username}`, {
+				httpVersion: "h2",
+				tlsOnly: false,
+				headers: {
+					...commonHeaders,
+					...(rageCookies ? { cookie: rageCookies } : {}),
+				},
 			});
 
-			if (res.status !== 403) {
+			if (responseStatus(res) !== 403) {
 				break;
 			}
 
 			if (attempts === 2) {
-				return { error: "Rage.wtf asking to verify you're not a bot" };
+				// Cloudflare interstitial - a real browser can solve it, the cookies it
+				// earns are then replayed on subsequent httpcloak requests.
+				let browserRes: any;
+				try {
+					browserRes = await browserRequest({
+						url: `https://rage.wtf/${username}`,
+						fetcherType: "stealthy",
+						headers: commonHeaders,
+						extractHtml: true,
+						// Scrapling burns up to 3 fetch retries x 3 CF solve attempts on a
+						// stubborn challenge, so cap the wait instead of hanging the request.
+						timeoutMs: 45000,
+						retries: 1,
+					});
+				} catch (e) {
+					console.error("RageProfile browser fallback error:", e);
+					return { error: "Rage.wtf asking to verify you're not a bot" };
+				}
+
+				if (!browserRes.success || browserRes.status === 403) {
+					return { error: "Rage.wtf asking to verify you're not a bot" };
+				}
+
+				if (browserRes.cookies && Object.keys(browserRes.cookies).length > 0) {
+					rageCookies = Object.entries(browserRes.cookies)
+						.map(([key, val]) => `${key}=${val}`)
+						.join("; ");
+				}
+
+				res = {
+					status: browserRes.status ?? 200,
+					text: browserRes.html ?? "",
+					url: browserRes.url ?? `https://rage.wtf/${username}`,
+					headers: browserRes.headers ?? {},
+				};
 			}
 		} catch (e) {
 			if (attempts === 2) throw e;
@@ -8330,8 +8379,8 @@ export async function RageProfile(query: string): Promise<any> {
 	}
 
 	try {
-		const html = await res.text();
-		if (res.status !== 200) {
+		const html = await responseText(res);
+		if (responseStatus(res) !== 200) {
 			return { data: null };
 		}
 

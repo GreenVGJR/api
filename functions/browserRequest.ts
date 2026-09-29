@@ -20,6 +20,8 @@ export interface ScraplingOptions {
 	headless?: boolean;
 	networkIdle?: boolean;
 	timeout?: number;
+	timeoutMs?: number;
+	retries?: number;
 	solveCloudflare?: boolean;
 	googleSearch?: boolean;
 	waitSelector?: string;
@@ -47,9 +49,34 @@ export interface ScraplingResult<T = Record<string, any>> {
 
 let persistentProc: any = null;
 let rl: readline.Interface | null = null;
-let pendingResolve: ((value: any) => void) | null = null;
-let pendingReject: ((reason: any) => void) | null = null;
+let requestCounter = 0;
 let requestQueue: Promise<any> = Promise.resolve();
+
+// Requests are keyed by id instead of a single pending slot: a request that times
+// out may still produce a response later, and that stale line must never be
+// handed to whichever request is in flight by then.
+interface PendingRequest {
+	resolve: (value: any) => void;
+	reject: (reason: any) => void;
+	timer: ReturnType<typeof setTimeout> | null;
+}
+
+const pendingRequests = new Map<string, PendingRequest>();
+
+function settleRequest(id: string, fn: (pending: PendingRequest) => void) {
+	const pending = pendingRequests.get(id);
+	if (!pending) return false;
+	pendingRequests.delete(id);
+	if (pending.timer) clearTimeout(pending.timer);
+	fn(pending);
+	return true;
+}
+
+function rejectAllPending(reason: any) {
+	for (const [id] of pendingRequests) {
+		settleRequest(id, (pending) => pending.reject(reason));
+	}
+}
 
 function initSubprocess() {
 	const projectRoot = process.cwd();
@@ -69,16 +96,20 @@ function initSubprocess() {
 	});
 
 	rl.on("line", (line) => {
-		if (pendingResolve) {
-			try {
-				const parsed = JSON.parse(line);
-				pendingResolve(parsed);
-			} catch (err) {
-				pendingReject?.(new Error(`Failed to parse bridge output: ${line}`));
-			}
-			pendingResolve = null;
-			pendingReject = null;
+		if (!line || !line.trim()) return;
+
+		let parsed: any;
+		try {
+			parsed = JSON.parse(line);
+		} catch {
+			return; // not a bridge payload
 		}
+
+		const id = parsed?.request_id;
+		if (typeof id !== "string") return;
+
+		// Unknown id = timed-out/abandoned request, drop the stale response.
+		settleRequest(id, (pending) => pending.resolve(parsed));
 	});
 
 	const logStderr = async () => {
@@ -98,11 +129,7 @@ function initSubprocess() {
 	persistentProc.exited.then((exitCode: number) => {
 		persistentProc = null;
 		rl = null;
-		if (pendingReject) {
-			pendingReject(new Error(`Python bridge process exited unexpectedly with code ${exitCode}.`));
-			pendingResolve = null;
-			pendingReject = null;
-		}
+		rejectAllPending(new Error(`Python bridge process exited unexpectedly with code ${exitCode}.`));
 	});
 }
 
@@ -111,7 +138,10 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		initSubprocess();
 	}
 
+	const requestId = `${++requestCounter}`;
+
 	const payload = {
+		request_id: requestId,
 		url: options.url,
 		fetcher_type: options.fetcherType || "stealthy",
 		method: options.method || "GET",
@@ -121,6 +151,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		headless: options.headless !== false,
 		network_idle: options.networkIdle || false,
 		timeout: options.timeout || 30000,
+		retries: options.retries ?? 3,
 		solve_cloudflare: options.solveCloudflare !== false,
 		wait_selector: options.waitSelector,
 		wait_selector_state: options.waitSelectorState,
@@ -134,17 +165,22 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 	};
 
 	return new Promise((resolve, reject) => {
-		pendingResolve = resolve;
-		pendingReject = reject;
+		const pending: PendingRequest = { resolve, reject, timer: null };
+
+		if (options.timeoutMs && options.timeoutMs > 0) {
+			pending.timer = setTimeout(() => {
+				settleRequest(requestId, (p) => p.reject(new Error(`browserRequest timed out after ${options.timeoutMs}ms: ${options.url}`)));
+			}, options.timeoutMs);
+		}
+
+		pendingRequests.set(requestId, pending);
 
 		try {
 			const payloadBytes = new TextEncoder().encode(JSON.stringify(payload) + "\n");
 			persistentProc.stdin.write(payloadBytes);
 			persistentProc.stdin.flush();
 		} catch (err) {
-			reject(err);
-			pendingResolve = null;
-			pendingReject = null;
+			settleRequest(requestId, (p) => p.reject(err));
 		}
 	});
 }

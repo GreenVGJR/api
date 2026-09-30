@@ -13304,7 +13304,6 @@ export const SnapchatProfile = async function SnapchatProfile(query: string) {
 
 export const GoogleGemma = async function GoogleGemma(query: string) {
 	if (!query) return null;
-	
 
 	try {
 		const res = await fetch(atob("aHR0cHM6Ly9tdWx0aS1tb2RhbC5haS5jbG91ZGZsYXJlLmNvbS9hcGkvaW5mZXJlbmNl"), {

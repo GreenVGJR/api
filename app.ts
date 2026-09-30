@@ -59,10 +59,6 @@ const API_ROUTES = {
 	],
 	tools: {
 		ai: {
-			chat: [
-				["/tools/chat/gemma?prompt=", "string"],
-				["/tools/chat/gemini?prompt=&conversation=", "string", "string"],
-			],
 			image_generation: [
 				["/tools/ai-image/flux_schnell?prompt=", "string"],
 				["/tools/ai-image/magicstudio?prompt=", "string"],

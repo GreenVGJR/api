@@ -4364,23 +4364,43 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			return { data: [currentInfo, null] };
 		}
 
-		// Normalize values for comparison (treat null, undefined, and empty string as the same "empty" state)
-		const normalize = (v: any) => (v === "" || v === undefined || v === null ? null : v);
+		// Normalize values for comparison (treat null, undefined, empty string, and empty array as the same "empty" state)
+		const normalize = (v: any) => (v === "" || v === undefined || v === null || (Array.isArray(v) && v.length === 0) ? null : v);
+
+		// Discord nests the style fields under display_name_styles instead of returning them flat,
+		// so a flat lookup always reads undefined and makes every style write look like a no-op.
+		const STYLE_KEYS: Record<string, string> = {
+			display_name_font_id: "font_id",
+			display_name_effect_id: "effect_id",
+			display_name_colors: "colors",
+		};
+
+		const readField = (source: any, key: string) => {
+			const styleKey = STYLE_KEYS[key];
+			if (styleKey) return source?.display_name_styles?.[styleKey];
+			return source?.[key] !== undefined ? source[key] : source?.user?.[key];
+		};
+
+		// Arrays compare by identity in JS, so compare colors by value
+		const sameValue = (a: any, b: any) => (Array.isArray(a) || Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b);
+
+		// Discord requires the style triple to be all-set or all-null: mixing a null with any
+		// value returns 400/670009, even when the non-null fields carry the current values.
+		// Completing a partial edit from the current style cannot rescue a clear, so warn instead.
+		const styleFields = Object.keys(payload).filter((k) => STYLE_KEYS[k]);
+		if (styleFields.some((f) => payload[f] === null) && styleFields.some((f) => payload[f] !== null)) {
+			payloadError = [...(Array.isArray(payloadError) ? payloadError : []), "[effectStyle/fontStyle/colorsStyle] Discord rejects mixing a clear with a set (400/670009). Try with another combination."];
+		}
 
 		// Check if payload values already match current info — skip PATCH if nothing changed
-		const allSame = Object.keys(payload).every((key) => {
-			const currentVal = normalize(currentInfo[key] !== undefined ? currentInfo[key] : currentInfo.user?.[key]);
-			const payloadVal = normalize(payload[key]);
-			return currentVal === payloadVal;
-		});
+		const allSame = Object.keys(payload).every((key) => sameValue(normalize(readField(currentInfo, key)), normalize(payload[key])));
 
 		// Helper to generate changes object: all requested keys are present, true if successful AND actually changed state
 		const getChanges = (requested: any, successful: any, current: any) => {
 			return Object.keys(requested).reduce((acc: any, key) => {
-				const newVal = normalize(successful[key] !== undefined ? successful[key] : successful.user?.[key]);
-				const currentVal = normalize(current[key] !== undefined ? current[key] : current.user?.[key]);
-				// It's a "change" if the new state is actually different from the previous state
-				acc[key] = newVal !== currentVal;
+				const newVal = normalize(readField(successful, key));
+				const currentVal = normalize(readField(current, key));
+				acc[key] = !sameValue(newVal, currentVal);
 				return acc;
 			}, {});
 		};
@@ -4436,19 +4456,36 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			}
 		} catch (e) {}
 
+		// Discord applies display_name_styles on a cooldown that is separate from the HTTP rate
+		// limit: writes inside that window return 200 with the previous values and no error.
+		// Detect that so it is reported instead of looking like a successful change.
+		const unreappliedStyles = (p: any) => {
+			const requested = Object.keys(payload).filter((k) => STYLE_KEYS[k]);
+			if (requested.length === 0) return [];
+			return requested.filter((key) => !sameValue(normalize(readField(p, key)), normalize(payload[key]))).map((key) => key.replace("display_name_", ""));
+		};
+
 		if (response.status < 200 || response.status >= 300) {
+			// Include our own validation notes so the cause is visible next to Discord's error
+			const notes = Array.isArray(payloadError) && payloadError.length > 0 ? payloadError : null;
 			return {
-				data: [currentInfo.code === 0 ? null : currentInfo, null, response.status, null],
 				error: patchResponse || { status: response.status },
+				...(notes && { payloadErrors: notes }),
+				data: [currentInfo.code === 0 ? null : currentInfo, null, response.status, null],
 			};
 		}
 
+		const stale = unreappliedStyles(patchResponse);
+		if (stale.length > 0) {
+			payloadError = [...(Array.isArray(payloadError) ? payloadError : []), `[${stale.join(", ")}] Accepted but not applied — Discord throttles display name style changes (HTTP 200, values unchanged). Wait ~10s between style edits.`];
+		}
+
 		return {
-			data: [currentInfo, patchResponse, response.status, changes(patchResponse), ...(reasonAudit ? [reasonAudit] : [])],
 			...(payloadError?.[0] && {
 				error: payloadError,
 				errorMessage: "Continuing anyways",
 			}),
+			data: [currentInfo, patchResponse, response.status, changes(patchResponse), ...(reasonAudit ? [reasonAudit] : [])],
 		};
 	} catch {
 		return { error: "Something just happened" };

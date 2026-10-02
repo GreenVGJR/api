@@ -100,7 +100,7 @@ const API_ROUTES = {
 		],
 		client: [["/tools/discord/infoClient?token=", "string"]],
 		member: [
-			["/tools/discord/modifyMemberServer?token=&guildId=&effectStyle=&fontStyle=&colorsStyle=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "enum:none,solid,gradient,neon,toon,pop,glow", "enum:default,bangers,bio_rhyme,cherry_bomb,chicle,compagnon,museo_moderno,neo_castel,pixelify,ribes,sinistre,zilla_slab", "json", "string", "url", "url", "string", "string"],
+			["/tools/discord/modifyMemberServer?token=&guildId=&effectStyle=&fontStyle=&colorsStyle=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "enum:none,solid,gradient,neon,toon,pop,prism,gummy,glow", "enum:default,bangers,bio_rhyme,cherry_bomb,chicle,compagnon,museo_moderno,neo_castel,pixelify,ribes,sinistre,zilla_slab", "json", "string", "url", "url", "string", "string"],
 			["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
 			["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
 			["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],

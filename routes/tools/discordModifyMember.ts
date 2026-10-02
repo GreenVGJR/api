@@ -7,13 +7,13 @@ import { dispatch, processImage } from "../../functions/httpRequest.js";
 // Credits: @zombie.clanx
 // For name style codes
 
-function hexToDiscordColor(hex: string): number {
-	const val = parseInt(hex.replace("#", ""), 16);
-	return isNaN(val) ? 0 : Math.min(val, 0xffffff);
+function hexToDiscordColor(color: string | number): number {
+	if (typeof color === "number") return Math.min(Math.max(Math.trunc(color), 0), 0xffffff);
+	const val = parseInt(String(color).replace("#", ""), 16);
+	return isNaN(val) ? 0 : Math.min(Math.max(val, 0), 0xffffff);
 }
 
 const EFFECT_MAP: Record<string, number> = {
-	none: 0,
 	solid: 1,
 	gradient: 2,
 	neon: 3,
@@ -21,6 +21,8 @@ const EFFECT_MAP: Record<string, number> = {
 	pop: 5,
 	glow: 6,
 };
+
+const MAX_COLORS = 5;
 
 const FONT_MAP: Record<string, number> = {
 	bangers: 1,
@@ -104,10 +106,22 @@ app.get("/discord/modifyMemberServer", async (c) => {
 		}
 
 		if (effectStyle !== undefined) {
-			payload.display_name_effect_id = effectStyle === null ? 0 : (EFFECT_MAP[effectStyle] ?? 0);
+			if (effectStyle === null || effectStyle === "none") {
+				payload.display_name_effect_id = null;
+			} else if (effectStyle in EFFECT_MAP) {
+				payload.display_name_effect_id = EFFECT_MAP[effectStyle];
+			} else {
+				payloadError.push("[effectStyle] Unknown style");
+			}
 		}
 		if (fontStyle !== undefined) {
-			payload.display_name_font_id = fontStyle === null ? 11 : (FONT_MAP[fontStyle] ?? 11);
+			if (fontStyle === null) {
+				payload.display_name_font_id = null;
+			} else if (fontStyle in FONT_MAP) {
+				payload.display_name_font_id = FONT_MAP[fontStyle];
+			} else {
+				payloadError.push("[fontStyle] Unknown style");
+			}
 		}
 		if (colorsStyle !== undefined) {
 			if (colorsStyle === null) {
@@ -115,10 +129,12 @@ app.get("/discord/modifyMemberServer", async (c) => {
 			} else {
 				try {
 					const colors = JSON.parse(colorsStyle);
-					if (Array.isArray(colors) && colors.length >= 2) {
-						payload.display_name_colors = colors.map((c: string) => hexToDiscordColor(c));
+					if (!Array.isArray(colors) || colors.length === 0) {
+						payloadError.push("[colorsStyle] Expected a non-empty JSON array of hex colors");
+					} else if (colors.length > MAX_COLORS) {
+						payloadError.push(`[colorsStyle] Discord accepts at most ${MAX_COLORS} colors, got ${colors.length}`);
 					} else {
-						payloadError.push("[colorsStyle] Expected a JSON array with at least 2 hex colors");
+						payload.display_name_colors = colors.map((c: string) => hexToDiscordColor(c));
 					}
 				} catch {
 					payloadError.push("[colorsStyle] Invalid JSON");

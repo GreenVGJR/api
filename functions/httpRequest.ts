@@ -7,7 +7,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
-import { autoGenBuild, autoGenBuildPara } from "../app.js";
+import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
 import { maxLimitRequestsPerSec } from "../config.json";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
@@ -259,7 +259,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 			c.header("Content-Encoding", "n");
 			c.header("Content-Type", "image/x-icon");
 			useGzip = true;
-		} else if (fetchmode !== "same-origin") {
+		} else if (fetchmode !== "same-origin" && !isLocalRequest(c.req.header("host"))) {
 			return logResponse(c, c.text("", 412));
 		}
 	} else if (useGzip) c.header("Content-Encoding", "gzip");

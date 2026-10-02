@@ -33,12 +33,13 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/startpage?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/startpage?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/giphy/v2?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
 		["/profile/haunt?q=", "string"],
 		["/profile/rage?q=", "string"],
+		["/profile/kick?q=", "string"],
 		["/profile/snapchat?q=", "string"],
 		["/profile/twitter?q=", "string"],
 		["/profile/tiktok?q=", "string"],
@@ -539,7 +540,7 @@ function hostHeaderName(host: string | undefined): string {
 	return host.split(":")[0].toLowerCase();
 }
 
-function isLocalRequest(host: string | undefined): boolean {
+export function isLocalRequest(host: string | undefined): boolean {
 	const h = hostHeaderName(host);
 	return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.startsWith("192.168.") || h.startsWith("10.") || h.startsWith("172.");
 }
@@ -686,10 +687,11 @@ const CHALLENGE_ROUTES = ["/playground", "/terms", "/privacy"];
 
 app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 	const fm = c.req.query("fm");
-	setPlaygroundAssetCache(c);
 	c.header("Content-Type", "text/html");
 	c.header("Content-Encoding", "gzip");
+	c.header("Content-Security-Policy", "frame-ancestors 'self'");
 	if ((typeof fm === "string" && fm === PLAYGROUND_CHALLENGE) || playgroundChallenge === false) {
+		setPlaygroundAssetCache(c);
 		const host = (c.req.header("host") || "").toLowerCase();
 		const fwdProto = (c.req.header("x-forwarded-proto") || "").split(",")[0].trim();
 		const pageProto = fwdProto || (c.req.url.startsWith("https:") ? "https" : "http");
@@ -732,14 +734,18 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 
 app.get("/", async (c: Context) => {
 	c.header("Cache-Control", "public, no-store, no-transform");
+	// Private hosts (localhost / LAN) skip the vf gate: non-browser clients
+	// don't send sec-fetch-site, so they'd 406 on ?vf and could never mint
+	// the token ?json requires. Public hosts keep the full check.
+	const isPrivateHost = isLocalRequest(c.req.header("host"));
 	if (c.req.query("vf") !== undefined) {
-		if (!isVfEligible(c)) {
+		if (!isPrivateHost && !isVfEligible(c)) {
 			return c.body(null, 406);
 		}
 		return createVfTokenResponse(c);
 	}
 	if (c.req.query("json") !== undefined) {
-		if (!(await verifyVfHeader(c))) {
+		if (!isPrivateHost && !(await verifyVfHeader(c))) {
 			return c.body(null, 406);
 		}
 		c.header("Content-Type", "application/json");

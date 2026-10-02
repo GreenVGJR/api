@@ -52,27 +52,22 @@ const initSPA = () => {
                 </div>
 
                 <aside id="categoryTabsMobile" class="block xl:hidden category-tabs overflow-x-auto flex-shrink-0 min-h-0 border-b border-dark-700 pb-1.5 mb-1.5 no-scrollbar">
-                    <nav class="flex gap-1.5" aria-label="Endpoint categories">
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="search">Search</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="suggestion">Suggestion</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="profile">Profile</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="lyrics">Lyrics</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="tools">Tools</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="discord_tools">Discord</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="info">Info</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="download">Download</button>
-                        <button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="music">Music</button>
-                    </nav>
+                    <nav id="categoryTabsMobileNav" class="flex gap-1.5" aria-label="Endpoint categories"></nav>
                 </aside>
 
                 <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[300px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
-                    <div id="endpointPane" class="overflow-y-auto pr-1 flex-[2] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
-                        <div id="endpointsList" class="space-y-1"></div>
+                    <div id="endpointPane" class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
+                        <div id="endpointSearchWrap">
+                            <input id="endpointSearch" type="text" placeholder="Filter endpoints…" spellcheck="false" autocomplete="off" aria-label="Filter endpoints" />
+                            <span id="endpointSearchCount" aria-hidden="true"></span>
+                            <span id="endpointSearchKbd" aria-hidden="true"><kbd class="kbd">/</kbd></span>
+                        </div>
+                        <div id="endpointsList" role="listbox" aria-label="Endpoints" class="space-y-1"></div>
                     </div>
 
-                    <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[8] md:flex-[7]">
+                    <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[7]">
                         <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 flex flex-col min-h-0">
-                            <div id="responseHeader" class="rounded-t-lg sm:rounded-t-xl flex items-center align-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                            <div id="responseHeader" class="rounded-t-lg sm:rounded-t-xl flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
                                 <span class="text-xs text-gray-500 font-mono inline-flex items-center">
                                     <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span>
                                     <span id="statusTextWrap" class="relative inline-block overflow-hidden h-[1.2em] whitespace-nowrap">
@@ -134,19 +129,16 @@ const initSPA = () => {
             </div>
 
             <aside id="categoryTabsDesktop" class="hidden xl:block category-tabs overflow-y-auto flex-shrink-0 xl:h-full min-h-0 border-l border-dark-700 xl:pl-3 pb-1.5 no-scrollbar">
-                <div class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-1 mb-2 flex items-center" style="height: var(--url-bar-h, 44px); align-items: flex-end; padding-bottom: 6px;">Category</div>
-                <nav class="flex flex-col gap-1.5" aria-label="Endpoint categories">
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="search">Search</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="suggestion">Suggestion</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="profile">Profile</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="lyrics">Lyrics</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="tools">Tools</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="discord_tools">Discord</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="info">Info</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="download">Download</button>
-                    <button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="music">Music</button>
-                </nav>
+                <div class="rail-label text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-1 mb-2">Category</div>
+                <nav id="categoryTabsDesktopNav" class="flex flex-col gap-1.5" aria-label="Endpoint categories"></nav>
             </aside>
+        </div>
+        <div id="paletteOverlay" class="palette-overlay" hidden>
+            <div class="palette-box" role="dialog" aria-modal="true" aria-label="Jump to endpoint">
+                <input id="paletteInput" type="text" placeholder="Jump to endpoint… (all categories)" spellcheck="false" autocomplete="off" aria-label="Jump to endpoint" />
+                <div id="paletteList" role="listbox" aria-label="Matching endpoints"></div>
+                <div class="palette-hint">↑↓ navigate · Enter select · Esc close</div>
+            </div>
         </div>
         </section>
     </div>`;
@@ -156,17 +148,6 @@ initSPA();
 
 window.addEventListener("pageshow", (event) => {
   if (event.persisted) window.location.reload();
-});
-
-requestAnimationFrame(() => {
-  const _urlBarEl = document.getElementById("urlBar");
-  if (_urlBarEl) {
-    const syncUrlBarH = () => {
-      document.documentElement.style.setProperty("--url-bar-h", _urlBarEl.getBoundingClientRect().height + "px");
-    };
-    syncUrlBarH();
-    new ResizeObserver(syncUrlBarH).observe(_urlBarEl);
-  }
 });
 
 let endpoints = {
@@ -208,6 +189,421 @@ function normalizeEndpointPayload(payload) {
   }
   return found ? normalized : null;
 }
+
+
+
+const CATEGORIES = [
+  ["search", "Search"],
+  ["suggestion", "Suggestion"],
+  ["profile", "Profile"],
+  ["lyrics", "Lyrics"],
+  ["tools", "Tools"],
+  ["discord_tools", "Discord"],
+  ["info", "Info"],
+  ["download", "Download"],
+  ["music", "Music"],
+];
+
+const ALL_TAB = ["all", "All"];
+
+function renderCategoryTabs() {
+  const tabs = [ALL_TAB, ...CATEGORIES];
+  const mobileNav = document.getElementById("categoryTabsMobileNav");
+  const desktopNav = document.getElementById("categoryTabsDesktopNav");
+  if (mobileNav) {
+    mobileNav.innerHTML = tabs
+      .map(
+        ([key, label]) =>
+          `<button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="${key}">${label}</button>`,
+      )
+      .join("");
+  }
+  if (desktopNav) {
+    desktopNav.innerHTML = tabs
+      .map(
+        ([key, label]) =>
+          `<button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="${key}">${label}</button>`,
+      )
+      .join("");
+  }
+}
+
+function humanizeEndpoint(path) {
+  const seg = String(path || "").split("/").filter(Boolean).pop() || String(path || "");
+  return seg
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+
+const DISCORD_RESOURCE_RULES = [
+  [/^voice(\/|$)/i, "Voice"],
+  [/webhook/i, "Webhook"],
+  [/member/i, "Member"],
+  [/channel/i, "Channel"],
+  [/role/i, "Role"],
+  [/invite/i, "Invite"],
+  [/sticker/i, "Sticker"],
+  [/message/i, "Message"],
+];
+
+function endpointGroup(category, path) {
+  const segs = String(path || "").split("/").filter(Boolean);
+  if (category === "discord_tools") {
+    const rest = segs.slice(2).join("/");
+    for (const [re, label] of DISCORD_RESOURCE_RULES) {
+      if (re.test(rest)) return label;
+    }
+    return "Server";
+  }
+  const key = segs[1] || "Other";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function groupedEndpoints(list, category) {
+  const buckets = new Map();
+  for (const ep of list) {
+    const g = endpointGroup(category, ep.path);
+    if (!buckets.has(g)) buckets.set(g, []);
+    buckets.get(g).push(ep);
+  }
+  const out = [];
+  const other = [];
+  for (const [name, items] of buckets) {
+    if (items.length < 2) other.push(...items);
+    else out.push({ name, items });
+  }
+  if (other.length) out.push({ name: "Other", items: other });
+  return out;
+}
+
+function endpointMatches(ep, q) {
+  const query = String(q || "").trim().toLowerCase();
+  if (!query) return true;
+  const hay = (ep.path + " " + humanizeEndpoint(ep.path)).toLowerCase();
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((tok) => hay.includes(tok));
+}
+
+function fuzzyScore(query, text) {
+  const q = String(query || "").toLowerCase();
+  const t = String(text || "").toLowerCase();
+  if (!q) return 1;
+  let score = 0;
+  let ti = 0;
+  let consec = 0;
+  for (let qi = 0; qi < q.length; qi++) {
+    const idx = t.indexOf(q[qi], ti);
+    if (idx === -1) return -1;
+    if (idx === ti) {
+      consec++;
+      score += 2 + consec;
+    } else {
+      consec = 0;
+      score += 1;
+      if (idx === 0 || /[\s/_-]/.test(t[idx - 1])) score += 2;
+    }
+    ti = idx + 1;
+  }
+  return score;
+}
+
+let epSearchText = "";
+let epActiveIndex = -1;
+let visibleEndpoints = [];
+let visibleEpCats = [];
+let collapsedGroups = new Set();
+let showAllEndpoints = true;
+
+const endpointSearchInput = document.getElementById("endpointSearch");
+const endpointSearchCount = document.getElementById("endpointSearchCount");
+const paletteOverlay = document.getElementById("paletteOverlay");
+const paletteInput = document.getElementById("paletteInput");
+const paletteList = document.getElementById("paletteList");
+
+let paletteOpen = false;
+let paletteItems = [];
+let paletteIndex = 0;
+
+const PG_STATE_KEY = "vgjr-playground";
+
+function persistPlaygroundState() {
+  try {
+    sessionStorage.setItem(
+      PG_STATE_KEY,
+      JSON.stringify({
+        category: currentCategory,
+        path: currentEndpoint?.path || null,
+        search: epSearchText,
+        showAll: showAllEndpoints,
+        collapsed: [...collapsedGroups],
+      }),
+    );
+  } catch {}
+}
+
+function loadPlaygroundState() {
+  try {
+    const raw = sessionStorage.getItem(PG_STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || typeof s !== "object") return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function restorePlaygroundState() {
+  const s = loadPlaygroundState();
+  if (!s) return;
+  if (typeof s.category === "string" && endpoints[s.category]) currentCategory = s.category;
+  if (typeof s.search === "string" && endpointSearchInput) {
+    epSearchText = s.search;
+    endpointSearchInput.value = s.search;
+  }
+  if (typeof s.showAll === "boolean") showAllEndpoints = s.showAll;
+  if (Array.isArray(s.collapsed)) collapsedGroups = new Set(s.collapsed.filter((x) => typeof x === "string"));
+}
+
+function setEndpointSearch(text, opts) {
+  epSearchText = String(text ?? "");
+  if (endpointSearchInput && endpointSearchInput.value !== epSearchText) endpointSearchInput.value = epSearchText;
+  if (!opts || opts.render !== false) renderEndpoints();
+  persistPlaygroundState();
+}
+
+function selectEndpoint(ep, category) {
+  if (!ep || isVerifying()) return false;
+  if (currentEndpoint && currentEndpoint.path === ep.path && (!category || category === currentCategory)) return true;
+  if (!confirmDiscardParams()) return false;
+  if (category && category !== currentCategory) {
+    currentCategory = category;
+    setActiveCategoryTab();
+  }
+  currentEndpoint = ep;
+  urlInput.value = buildEndpointUrl(ep);
+  adjustHeight();
+  if (showAllEndpoints) {
+    const catLabel = (CATEGORIES.find((c) => c[0] === currentCategory) || [null, currentCategory])[1];
+    collapsedGroups.delete("all/" + catLabel);
+  } else {
+    collapsedGroups.delete(currentCategory + "/" + endpointGroup(currentCategory, ep.path));
+  }
+  renderEndpoints();
+  renderParams();
+  persistPlaygroundState();
+  return true;
+}
+
+function visibleButtons() {
+  return [...endpointsList.querySelectorAll(".endpoint-item")];
+}
+
+function paintKbActive(scroll) {
+  const btns = visibleButtons();
+  btns.forEach((b) => b.classList.remove("kb-active"));
+  const btn = btns[epActiveIndex];
+  if (btn) {
+    btn.classList.add("kb-active");
+    if (scroll !== false) btn.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function moveKbActive(delta) {
+  const btns = visibleButtons();
+  if (!btns.length) return;
+  let idx = btns.findIndex((b) => b.classList.contains("kb-active"));
+  if (idx === -1) idx = delta > 0 ? 0 : btns.length - 1;
+  else idx = Math.max(0, Math.min(btns.length - 1, idx + delta));
+  btns.forEach((b) => b.classList.remove("kb-active"));
+  btns[idx].classList.add("kb-active");
+  btns[idx].scrollIntoView({ block: "nearest" });
+  epActiveIndex = parseInt(btns[idx].dataset.index);
+}
+
+function activateKbSelection() {
+  const ep = visibleEndpoints[epActiveIndex];
+  if (ep) selectEndpoint(ep, visibleEpCats[epActiveIndex] || currentCategory);
+}
+
+function allEndpointsFlat() {
+  const out = [];
+  for (const [cat] of CATEGORIES) {
+    for (const ep of endpoints[cat] || []) out.push({ ep, category: cat });
+  }
+  return out;
+}
+
+function openPalette() {
+  if (paletteOpen || isVerifying() || activePage !== "playground") return;
+  paletteOpen = true;
+  paletteOverlay.hidden = false;
+  paletteInput.value = "";
+  renderPalette("");
+  setTimeout(() => paletteInput.focus(), 0);
+}
+
+function closePalette() {
+  if (!paletteOpen) return;
+  paletteOpen = false;
+  paletteOverlay.hidden = true;
+}
+
+function renderPalette(q) {
+  const query = String(q || "").trim();
+  let scored = allEndpointsFlat().map((item) => ({
+    item,
+    score: query ? fuzzyScore(query, item.category + " " + item.ep.path + " " + humanizeEndpoint(item.ep.path)) : 1,
+  }));
+  if (query) scored = scored.filter((s) => s.score >= 0);
+  scored.sort((a, b) => b.score - a.score);
+  paletteItems = scored.slice(0, 15).map((s) => s.item);
+  paletteIndex = 0;
+  if (!paletteItems.length) {
+    paletteList.innerHTML = `<div class="palette-empty">No matches</div>`;
+    return;
+  }
+  paletteList.innerHTML = paletteItems
+    .map(
+      (it, i) => `
+    <button class="palette-item${i === paletteIndex ? " pal-active" : ""}" data-pi="${i}" role="option" aria-selected="${i === paletteIndex}">
+      <span class="pal-cat">${escapeHTML(it.category.replace(/_/g, " "))}</span>
+      <span class="pal-label">${escapeHTML(humanizeEndpoint(it.ep.path))}</span>
+      <span class="pal-path">${escapeHTML(it.ep.path)}</span>
+    </button>`,
+    )
+    .join("");
+  paletteList.querySelectorAll(".palette-item").forEach((btn) => {
+    btn.addEventListener("click", () => choosePaletteItem(parseInt(btn.dataset.pi)));
+    btn.addEventListener("mousemove", () => {
+      const i = parseInt(btn.dataset.pi);
+      if (paletteIndex !== i) {
+        paletteIndex = i;
+        paintPaletteActive();
+      }
+    });
+  });
+}
+
+function paintPaletteActive() {
+  paletteList.querySelectorAll(".palette-item").forEach((btn) => {
+    const on = parseInt(btn.dataset.pi) === paletteIndex;
+    btn.classList.toggle("pal-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const active = paletteList.querySelector(".palette-item.pal-active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+}
+
+function choosePaletteItem(i) {
+  const it = paletteItems[i];
+  if (!it) return;
+  closePalette();
+  if (selectEndpoint(it.ep, it.category)) endpointPane.scrollTo({ top: 0 });
+}
+
+function isEditableTarget(t) {
+  return (
+    t instanceof Element &&
+    (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.tagName === "BUTTON" || t.tagName === "A" || t.isContentEditable)
+  );
+}
+
+if (endpointSearchInput) {
+  endpointSearchInput.addEventListener("input", () => {
+    epSearchText = endpointSearchInput.value;
+    renderEndpoints();
+    persistPlaygroundState();
+  });
+  endpointSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setEndpointSearch("");
+      endpointSearchInput.blur();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      moveKbActive(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const first = visibleButtons()[0];
+      if (first) {
+        epActiveIndex = parseInt(first.dataset.index);
+        paintKbActive(false);
+        activateKbSelection();
+      }
+    }
+  });
+}
+
+if (paletteInput) {
+  paletteInput.addEventListener("input", () => renderPalette(paletteInput.value));
+  paletteInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      paletteIndex = Math.min(paletteItems.length - 1, paletteIndex + 1);
+      paintPaletteActive();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      paletteIndex = Math.max(0, paletteIndex - 1);
+      paintPaletteActive();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      choosePaletteItem(paletteIndex);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closePalette();
+    }
+  });
+}
+
+if (paletteOverlay) {
+  paletteOverlay.addEventListener("mousedown", (e) => {
+    if (e.target === paletteOverlay) closePalette();
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    if (paletteOpen) closePalette();
+    else openPalette();
+    return;
+  }
+  if (e.key === "Escape") {
+    if (paletteOpen) {
+      e.preventDefault();
+      closePalette();
+    } else if (document.activeElement === endpointSearchInput && epSearchText) {
+      e.preventDefault();
+      setEndpointSearch("");
+    }
+    return;
+  }
+  if (paletteOpen || isVerifying() || isEditableTarget(e.target)) return;
+  if (e.key === "/") {
+    e.preventDefault();
+    if (endpointSearchInput) endpointSearchInput.focus();
+    return;
+  }
+  if (e.key === "j" || e.key === "k" || e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (!visibleButtons().length) return;
+    e.preventDefault();
+    moveKbActive(e.key === "j" || e.key === "ArrowDown" ? 1 : -1);
+    return;
+  }
+  if (e.key === "Enter" && epActiveIndex >= 0) {
+    e.preventDefault();
+    activateKbSelection();
+  }
+});
+
+renderCategoryTabs();
 
 const urlInput = document.getElementById("urlInput");
 const copyBtn = document.getElementById("copyBtn");
@@ -1257,7 +1653,15 @@ function closeEnumDropdowns(exceptControl = null) {
 
 function updateParamsBodyHeight() {
   if (!paramsOpen || currentParams.length === 0) return;
-  const maxH = window.innerHeight * 0.5;
+
+
+
+  const column = paramsPanel.parentElement;
+  const columnH = column ? column.clientHeight : 0;
+  const maxH =
+    window.innerWidth < 768 && columnH > 0
+      ? Math.max(120, columnH * 0.45)
+      : window.innerHeight * 0.5;
   paramsBody.style.height = Math.min(paramsContainer.offsetHeight, maxH) + "px";
 }
 
@@ -1573,6 +1977,7 @@ paramsToggle.addEventListener("click", () => {
 });
 
 function selectInitialEndpointFromCurrentCategory() {
+  restorePlaygroundState();
   if (endpoints[currentCategory] && endpoints[currentCategory].length > 0) {
     currentEndpoint = endpoints[currentCategory][0];
     urlInput.value = buildEndpointUrl(currentEndpoint);
@@ -1590,9 +1995,10 @@ function selectInitialEndpointFromCurrentCategory() {
 }
 
 function setActiveCategoryTab() {
+  const effective = showAllEndpoints ? "all" : currentCategory;
   tabBtns.forEach((btn) => btn.classList.remove("active"));
   document.querySelectorAll(
-    `.tab-btn[data-category="${currentCategory}"]`
+    `.tab-btn[data-category="${effective}"]`
   ).forEach((btn) => btn.classList.add("active"));
 }
 
@@ -1726,7 +2132,7 @@ async function refreshEndpointsFromJson() {
           restoreSendButtonState();
         }
         if (freshEndpoints) {
-          const previousPath = currentEndpoint?.path;
+          const previousPath = loadPlaygroundState()?.path || currentEndpoint?.path;
           endpoints = freshEndpoints;
           const categoryList = endpoints[currentCategory] || [];
           currentEndpoint =
@@ -1769,6 +2175,38 @@ let animationTimeout = null;
 
 function renderEndpoints(animate = false) {
   const categoryEndpoints = endpoints[currentCategory] || [];
+  const q = epSearchText.trim();
+
+
+  let groups = [];
+  let totalCount = 0;
+  visibleEndpoints = [];
+  visibleEpCats = [];
+
+  if (showAllEndpoints) {
+
+    for (const [cat, label] of CATEGORIES) {
+      const list = endpoints[cat] || [];
+      totalCount += list.length;
+      const matched = list.filter((ep) => endpointMatches(ep, q));
+      if (!matched.length) continue;
+      groups.push({ name: label, scope: "all", items: matched.map((ep) => ({ ep, cat })) });
+    }
+  } else {
+    totalCount = categoryEndpoints.length;
+    const filtered = categoryEndpoints.filter((ep) => endpointMatches(ep, q));
+    for (const g of groupedEndpoints(filtered, currentCategory)) {
+      groups.push({ name: g.name, scope: currentCategory, items: g.items.map((ep) => ({ ep, cat: currentCategory })) });
+    }
+  }
+  groups.forEach((g) => g.items.forEach(({ ep, cat }) => {
+    visibleEndpoints.push(ep);
+    visibleEpCats.push(cat);
+  }));
+  const shownCount = visibleEndpoints.length;
+  const indexByPath = new Map(visibleEndpoints.map((ep, i) => [ep.path, i]));
+
+  if (endpointSearchCount) endpointSearchCount.textContent = `${shownCount}/${totalCount}`;
 
   let oldHTML = "";
   if (animate) {
@@ -1780,31 +2218,63 @@ function renderEndpoints(animate = false) {
     }
   }
 
-  if (categoryEndpoints.length === 0) {
-    if (animationTimeout) clearTimeout(animationTimeout);
-    endpointsList.classList.remove("is-animating");
-    endpointsList.innerHTML = `
+  const renderBody = () => {
+    if (totalCount === 0) {
+      return `
             <div class="text-gray-600 text-xs p-4 text-center">
-                ${Object.keys(endpoints).length === 0 ? "Loading..." : "No endpoints found."}
+                ${hasLoadedEndpoints() ? "No endpoints found." : "Loading..."}
             </div>
          `;
-    return;
-  }
-
-  const newHTML = categoryEndpoints
-    .map(
-      (ep, index) => `
-        <button 
-            class="endpoint-item cursor-pointer block w-full text-left py-1 px-2 sm:px-3 rounded-lg font-mono text-xs text-white-400 hover:bg-dark-700 ${currentEndpoint && currentEndpoint.path === ep.path ? "active bg-dark-700 text-mint-400 border-l-2 border-mint-400" : ""} break-all transition-colors"
-            data-index="${index}"
+    }
+    if (shownCount === 0) {
+      return `
+            <div class="text-gray-600 text-xs p-4 text-center">
+                <div>No matches for &ldquo;${escapeHTML(q)}&rdquo;</div>
+                <button data-clear-search class="cursor-pointer mt-2 px-3 py-1 rounded-full text-xs font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white transition-colors">Clear search</button>
+            </div>
+         `;
+    }
+    return groups
+      .map((g) => {
+        const key = g.scope + "/" + g.name;
+        const collapsed = collapsedGroups.has(key);
+        const rows = g.items
+          .map(({ ep, cat }) => {
+            const index = indexByPath.get(ep.path);
+            const isActive = currentEndpoint && currentEndpoint.path === ep.path;
+            return `
+        <button
+            class="endpoint-item cursor-pointer block w-full text-left py-1 px-2 sm:px-3 rounded-lg font-mono text-[11px] sm:text-xs hover:bg-dark-700 ${isActive ? "active bg-dark-700 text-mint-400 border-l-2 border-mint-400" : ""} break-all transition-colors"
+            data-index="${index}" data-cat="${escapeAttribute(cat)}" role="option" aria-selected="${isActive ? "true" : "false"}"
         >
-            ${ep.path}
+            ${escapeHTML(ep.path)}
         </button>
-    `,
-    )
-    .join("");
+    `;
+          })
+          .join("");
+        return `
+            <div class="ep-group-wrap">
+                <button class="ep-group" data-group="${escapeAttribute(g.name)}" data-scope="${escapeAttribute(g.scope)}" data-collapsed="${collapsed ? "true" : "false"}" aria-expanded="${collapsed ? "false" : "true"}">
+                    <svg class="ep-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    <span>${escapeHTML(g.name)}</span>
+                    <span class="ep-count">${g.items.length}</span>
+                </button>
+                <div class="ep-group-items space-y-1" data-collapsed="${collapsed ? "true" : "false"}">${rows}</div>
+            </div>
+        `;
+      })
+      .join("");
+  };
+
+  const newHTML = renderBody();
 
   if (animationTimeout) clearTimeout(animationTimeout);
+
+  const afterPaint = () => {
+    attachEndpointListeners();
+    epActiveIndex = visibleEndpoints.findIndex((ep) => currentEndpoint && ep.path === currentEndpoint.path);
+    paintKbActive(false);
+  };
 
   if (animate && oldHTML && !oldHTML.includes("Loading...")) {
     endpointsList.classList.add("is-animating");
@@ -1819,7 +2289,7 @@ function renderEndpoints(animate = false) {
       if (newLayer) {
         endpointsList.innerHTML = newLayer.innerHTML;
         endpointsList.classList.remove("is-animating");
-        attachEndpointListeners();
+        afterPaint();
       }
       animationTimeout = null;
       endpointsList.querySelectorAll(".swipe-layer").forEach((layer) =>
@@ -1835,26 +2305,36 @@ function renderEndpoints(animate = false) {
   } else {
     endpointsList.classList.remove("is-animating");
     endpointsList.innerHTML = `<div class="space-y-1">${newHTML}</div>`;
-    attachEndpointListeners();
+    afterPaint();
   }
 }
 
 function attachEndpointListeners() {
   endpointsList.querySelectorAll(".endpoint-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (isVerifying()) return;
       const index = parseInt(btn.dataset.index);
-      if (currentEndpoint && endpoints[currentCategory][index] === currentEndpoint) return;
-      if (!confirmDiscardParams()) return;
-      currentEndpoint = endpoints[currentCategory][index];
-      urlInput.value = buildEndpointUrl(currentEndpoint);
-      adjustHeight();
-      renderEndpoints();
-      renderParams();
-
+      const ep = visibleEndpoints[index];
+      if (!ep) return;
+      selectEndpoint(ep, visibleEpCats[index] || currentCategory);
       setActiveCategoryTab();
     });
   });
+  endpointsList.querySelectorAll(".ep-group").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = (btn.dataset.scope || currentCategory) + "/" + btn.dataset.group;
+      if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+      else collapsedGroups.add(key);
+      persistPlaygroundState();
+      renderEndpoints();
+    });
+  });
+  const clearBtn = endpointsList.querySelector("[data-clear-search]");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      setEndpointSearch("");
+      if (endpointSearchInput) endpointSearchInput.focus();
+    });
+  }
 }
 
 tabBtns.forEach((btn) => {
@@ -1863,10 +2343,17 @@ tabBtns.forEach((btn) => {
     const nextCategory = btn.dataset.category;
     const wasLegalPage =
       pageFromPath(window.location.pathname) !== "playground";
+    const isAllTab = nextCategory === "all";
 
-    if (!wasLegalPage && currentCategory === nextCategory) return;
+    if (isAllTab) {
 
-    if (!confirmDiscardParams()) return;
+      if (!wasLegalPage && showAllEndpoints) return;
+    } else if (!wasLegalPage && !showAllEndpoints && currentCategory === nextCategory) {
+      return;
+    }
+
+
+    if (!isAllTab && !confirmDiscardParams()) return;
 
     const wasOpen = !wasLegalPage && paramsOpen;
 
@@ -1881,16 +2368,27 @@ tabBtns.forEach((btn) => {
 
         if (wasLegalPage) history.pushState({}, "", "/playground");
 
-        currentCategory = nextCategory;
-        setActiveCategoryTab();
-        const categoryList = endpoints[currentCategory] || [];
-        if (categoryList.length > 0) {
-          currentEndpoint = categoryList[0];
-          urlInput.value = buildEndpointUrl(currentEndpoint);
-          adjustHeight();
+
+
+        collapsedGroups.clear();
+
+        if (isAllTab) {
+          showAllEndpoints = true;
         } else {
-          currentEndpoint = null;
+          currentCategory = nextCategory;
+          showAllEndpoints = false;
+          setEndpointSearch("", { render: false });
+          const categoryList = endpoints[currentCategory] || [];
+          if (categoryList.length > 0) {
+            currentEndpoint = categoryList[0];
+            urlInput.value = buildEndpointUrl(currentEndpoint);
+            adjustHeight();
+          } else {
+            currentEndpoint = null;
+          }
         }
+        persistPlaygroundState();
+        setActiveCategoryTab();
         if (wasLegalPage) {
           renderCurrentPage();
         } else {

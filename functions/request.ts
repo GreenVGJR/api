@@ -4903,6 +4903,174 @@ export const Twitch = async function Twitch(que: string) {
 	}
 };
 
+const pickHighestKickThumbnail = (thumb: any): string | null => {
+	try {
+		if (!thumb) return null;
+		if (typeof thumb === "string") return thumb;
+		const srcset = typeof thumb?.srcset === "string" ? thumb.srcset : "";
+		let best: string | null = null;
+		let bestW = -1;
+		for (const part of srcset.split(",")) {
+			const m = part.trim().match(/^(\S+)\s+(\d+)w$/);
+			if (m && Number(m[2]) > bestW) {
+				bestW = Number(m[2]);
+				best = m[1];
+			}
+		}
+		if (best) return best;
+		return typeof thumb?.src === "string" ? thumb.src : null;
+	} catch {
+		return typeof thumb?.src === "string" ? thumb.src : null;
+	}
+};
+
+export const KickSearch = async function KickSearch(que: string, withStream: boolean = false) {
+	if (!que) return null;
+
+	try {
+		const per = await fetch(`https://search.kick.com/api/v1/search/enriched?query=${encodeURIComponent(que)}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+			},
+		});
+
+		if (per.status !== 200) return { data: null };
+		const res: any = await per.json().catch(() => null);
+		const data = res?.data || null;
+		if (data) {
+			// withStream=false keeps this to a single upstream request; the playback
+			// tokens cost one extra fetch per live stream, so they're opt-in.
+			if (withStream && (Array.isArray(data.livestreams) || Array.isArray(data.channels))) {
+				// Playback URLs are signed per-request tokens, so they need one extra
+				// fetch per live stream. Slugs are deduped across both arrays (the same
+				// streams appear in each), fetched in parallel + best-effort with one
+				// retry for transient failures: failures become null, never break the response.
+				const slugs: string[] = [];
+				const seen = new Set<string>();
+				for (const ls of data.livestreams ?? []) {
+					const slug = ls?.channel?.slug;
+					if (slug && !seen.has(slug)) {
+						seen.add(slug);
+						slugs.push(slug);
+					}
+				}
+				for (const ch of data.channels ?? []) {
+					const slug = ch?.slug;
+					if (ch?.is_live && slug && !seen.has(slug)) {
+						seen.add(slug);
+						slugs.push(slug);
+					}
+				}
+				const settled = await Promise.allSettled(
+					slugs.map(async (slug: string) => {
+						for (let attempt = 0; attempt < 2; attempt++) {
+							try {
+								const r = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`, {
+									headers: {
+										...commonHeaders,
+										Accept: "application/json",
+									},
+								});
+								if (r.status === 200) {
+									const j: any = await r.json().catch(() => null);
+									if (typeof j?.playback_url === "string") return j.playback_url;
+								}
+							} catch {}
+							if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
+						}
+						return null;
+					}),
+				);
+				const playbackBySlug = new Map<string, string | null>();
+				settled.forEach((s, i) => playbackBySlug.set(slugs[i], s.status === "fulfilled" ? (s as PromiseFulfilledResult<string | null>).value : null));
+				if (Array.isArray(data.livestreams)) {
+					data.livestreams = data.livestreams.map((ls: any) => ({
+						...ls,
+						thumbnail: pickHighestKickThumbnail(ls?.thumbnail),
+						playback_url: playbackBySlug.get(ls?.channel?.slug) ?? null,
+						channel: ls?.channel
+							? {
+									...ls.channel,
+									thumbnail_url: ls.channel?.id ? `https://web.kick.com/api/v1/channels/${ls.channel.id}/thumbnail.jpeg` : null,
+									preview_url: ls.channel?.id ? `https://web.kick.com/api/v1/channels/${ls.channel.id}/preview.mp4` : null,
+								}
+							: (ls?.channel ?? null),
+					}));
+				}
+				if (Array.isArray(data.channels)) {
+					data.channels = data.channels.map((ch: any) => ({
+						...ch,
+						thumbnail_url: ch?.is_live && ch?.id ? `https://web.kick.com/api/v1/channels/${ch.id}/thumbnail.jpeg` : null,
+						preview_url: ch?.is_live && ch?.id ? `https://web.kick.com/api/v1/channels/${ch.id}/preview.mp4` : null,
+						// Offline channels 404 on playback, so only live ones get a URL.
+						playback_url: ch?.is_live ? (playbackBySlug.get(ch?.slug) ?? null) : null,
+					}));
+				}
+			} else {
+				// withoutStream: skip the per-stream fetches, keep free media fields
+				if (Array.isArray(data.livestreams)) {
+					data.livestreams = data.livestreams.map((ls: any) => ({
+						...ls,
+						thumbnail: pickHighestKickThumbnail(ls?.thumbnail),
+						channel: ls?.channel
+							? {
+									...ls.channel,
+									thumbnail_url: ls.channel?.id ? `https://web.kick.com/api/v1/channels/${ls.channel.id}/thumbnail.jpeg` : null,
+									preview_url: ls.channel?.id ? `https://web.kick.com/api/v1/channels/${ls.channel.id}/preview.mp4` : null,
+								}
+							: (ls?.channel ?? null),
+					}));
+				}
+				if (Array.isArray(data.channels)) {
+					data.channels = data.channels.map((ch: any) => ({
+						...ch,
+						thumbnail_url: ch?.is_live && ch?.id ? `https://web.kick.com/api/v1/channels/${ch.id}/thumbnail.jpeg` : null,
+						preview_url: ch?.is_live && ch?.id ? `https://web.kick.com/api/v1/channels/${ch.id}/preview.mp4` : null,
+					}));
+				}
+			}
+		}
+		return { data };
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const KickProfile = async function KickProfile(que: string) {
+	if (!que) return null;
+	const slug = que.split(/[?#]/)[0].split("/").filter(Boolean).pop()?.trim();
+	if (!slug) return null;
+
+	try {
+		const per = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`, {
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+			},
+		});
+
+		if (per.status !== 200) return { data: null };
+		const res: any = await per.json().catch(() => null);
+		if (!res) return { data: null };
+		// Live preview media is keyed by channel id; offline channels 404, so null them.
+		if (res?.livestream && res.livestream?.thumbnail && typeof res.livestream.thumbnail === "object") {
+			res.livestream.thumbnail = pickHighestKickThumbnail(res.livestream.thumbnail);
+		}
+		return {
+			data: {
+				...res,
+				thumbnail_url: res?.livestream && res?.id ? `https://web.kick.com/api/v1/channels/${res.id}/thumbnail.jpeg` : null,
+				preview_url: res?.livestream && res?.id ? `https://web.kick.com/api/v1/channels/${res.id}/preview.mp4` : null,
+			},
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
 export const ThreadUser = async function ThreadUser(que: string) {
 	if (!que) return null;
 
@@ -14641,7 +14809,7 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 	if (!que) return null;
 	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
 	const q = encodeURIComponent(que);
-	const searchUrl = `https://www.startpage.com/do/search?query=${q}&lui=english`;
+	const searchUrl = `https://www.startpage.com/do/search?query=${q}&lui=english&segment=startpage.brave`;
 	let wafStatus = false;
 	let wafAttempt = 0;
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });

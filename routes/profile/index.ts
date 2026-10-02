@@ -3,6 +3,7 @@ import drift from "./drift.js";
 import guns from "./guns.js";
 import haunt from "./haunt.js";
 import instagram from "./instagram.js";
+import kick from "./kick.js";
 import patreon from "./patreon.js";
 import rage from "./rage.js";
 import saweria from "./saweria.js";
@@ -13,4 +14,4 @@ import tiktok from "./tiktok.js";
 import trakteer from "./trakteer.js";
 import twitter from "./twitter.js";
 
-export default [drift, guns, haunt, instagram, patreon, rage, saweria, snapchat, sociabuzz, threads, tiktok, trakteer, twitter] as any[];
+export default [drift, guns, haunt, instagram, kick, patreon, rage, saweria, snapchat, sociabuzz, threads, tiktok, trakteer, twitter] as any[];

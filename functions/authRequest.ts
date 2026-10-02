@@ -452,22 +452,26 @@ export const refreshRedditAuth = async (): Promise<any> => {
 			}
 		};
 		const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
-		const targetUrl = "https://www.reddit.com/svc/shreddit/styling-overrides";
-		for (let attempt = 0; attempt < 3; attempt++) {
-			const response = await fetch(targetUrl, {
-				headers: {
-					...commonHeaders,
-					...(jar.size ? { Cookie: jarStr() } : {}),
-					Referer: "https://www.google.com/",
-					"Sec-Fetch-Dest": "document",
-					"Sec-Fetch-Mode": "navigate",
-					"Sec-Fetch-Site": "cross-site",
-				},
-				redirect: "manual",
-			});
-			collect(response);
-			const html = await response.clone().text();
-			if (!/class=["']g-recaptcha["']/i.test(html)) break;
+		for (const targetUrl of ["https://ads.reddit.com/register", "https://www.reddit.com/svc/shreddit/styling-overrides"]) {
+			for (let attempt = 0; attempt < 3; attempt++) {
+				try {
+					const response = await fetch(targetUrl, {
+						headers: {
+							...commonHeaders,
+							...(jar.size ? { Cookie: jarStr() } : {}),
+						},
+						redirect: "manual",
+					});
+					collect(response);
+					const html = await response.clone().text();
+					if (!/class=["']g-recaptcha["']/i.test(html)) {
+						if (jar.size) return jarStr();
+						break;
+					}
+				} catch {
+					break;
+				}
+			}
 		}
 		return jarStr() || null;
 	} catch {

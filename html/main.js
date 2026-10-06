@@ -1179,21 +1179,30 @@ async function performRequest(targetUrl, retryCount = 0) {
     } catch {}
     response = await fetch(fetchUrl, fetchOptions);
     if (response.status === 412 && retryCount < 2) {
+      const vsToken = (response.headers.get("link") || "").match(/<\/?\?vs=([^>]+)>/)?.[1] ?? "";
       setStatus("yellow-400", "Verifying", "text-yellow-400");
       await new Promise((resolve) => {
         const hasXf = () => /(?:^|;\s*)xf=/.test(document.cookie);
         if (hasXf()) return resolve();
-        const iv = setInterval(() => {
+        let ticks = 0;
+        let fetched = false;
+        const iv = setInterval(async () => {
           if (hasXf()) {
             clearInterval(iv);
             clearTimeout(to);
-            resolve();
+            return resolve();
           }
-        }, 250);
+          if (!fetched && ++ticks >= 3 && vsToken) {
+            fetched = true;
+            try {
+              await fetch(new URL(`/?vs=${vsToken}`, fetchUrl).href, fetchOptions);
+            } catch {}
+          }
+        }, 400);
         const to = setTimeout(() => {
           clearInterval(iv);
           resolve();
-        }, 5000);
+        }, 3000);
       });
       return await performRequest(targetUrl, retryCount + 1);
     }

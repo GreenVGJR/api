@@ -266,9 +266,9 @@ pre {
 }
 
 .response-link {
-	color: inherit;
+	color: var(--tok-link);
 	text-decoration: underline;
-	text-decoration-color: rgba(74, 222, 128, 0.55);
+	text-decoration-color: rgba(125, 211, 252, 0.7);
 	text-underline-offset: 2px;
 }
 
@@ -554,6 +554,36 @@ body {
 	--accent: #4ade80;
 	--accent-dim: rgba(74, 222, 128, 0.12);
 	--danger: #f87171;
+	--tok-key: #a78bfa;
+	--tok-str: #4ade80;
+	--tok-num: #fbbf24;
+	--tok-bool: #a78bfa;
+	--tok-null: #6b7280;
+	--tok-punct: #6b7280;
+	--tok-link: #7dd3fc;
+}
+
+.tok-key {
+	color: var(--tok-key);
+	font-weight: 600;
+}
+.tok-str {
+	color: var(--tok-str);
+}
+.tok-num {
+	color: var(--tok-num);
+}
+.tok-bool {
+	color: var(--tok-bool);
+}
+.tok-null {
+	color: var(--tok-null);
+}
+.tok-punct {
+	color: var(--tok-punct);
+}
+.tok-link {
+	color: var(--tok-link);
 }
 
 #endpointsList .endpoint-item.active {

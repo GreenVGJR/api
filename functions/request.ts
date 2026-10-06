@@ -6171,6 +6171,278 @@ export const robloxAudio = async function robloxAudio(que: string) {
 	}
 };
 
+export const RobloxUsers = async function RobloxUsers(que: string) {
+	if (!que) return null;
+
+	try {
+		const sessionId = crypto.randomUUID();
+		const searchUrl = new URL("https://apis.roblox.com/search-api/omni-search");
+		searchUrl.searchParams.set("verticalType", "user");
+		searchUrl.searchParams.set("searchQuery", que);
+		searchUrl.searchParams.set("pageToken", "");
+		searchUrl.searchParams.set("globalSessionId", sessionId);
+		searchUrl.searchParams.set("sessionId", sessionId);
+		const pul1 = await fetch(searchUrl.toString(), {
+			headers: commonHeaders,
+		});
+
+		if (!pul1.ok) return null;
+
+		const res1: any = await pul1.json();
+		const users = (Array.isArray(res1.searchResults) ? res1.searchResults : [])
+			.flatMap((group: any) => (Array.isArray(group?.contents) ? group.contents : []))
+			.filter((user: any) => user?.contentType === "User" && user.contentId != null)
+			.slice(0, 10)
+			.map((user: any) => ({ ...user, id: user.contentId }));
+		if (!users.length) return { data: [] };
+
+		const profileComponents = ["UserProfileHeader", "ProfileBackground", "Actions", "About", "CurrentlyPlaying", "CurrentlyWearing", "Friends", "Collections", "Communities", "FavoriteExperiences", "RobloxBadges", "PlayerBadges", "Experiences", "Store"];
+		const supportedActions = ["EditProfile", "QrCode", "Chat", "JoinExperience", "Block", "Unblock", "AddFriend", "Unfriend", "AcceptFriendRequest", "PendingFriendRequest", "IgnoreFriendRequest", "CannotAddFriend", "AcceptOffNetworkFriendRequest", "AddFriendFromContacts", "AddFriendFromContactsSent", "Follow", "Unfollow", "EditAlias", "Report", "JoinCommunity", "CancelJoinCommunityRequest", "ViewCommunity", "ViewFullProfile", "CopyLink", "LeaveCommunity", "MakePrimaryCommunity", "RemovePrimaryCommunity", "ShareProfile", "ConfigureCommunity", "ClaimCommunityOwnership", "ChangeCommunityOwner", "ViewInventory", "ViewFavorites", "TradeItems", "ImpersonateUser", "EditAvatar", "AddTrustedConnection", "AddTrustedConnectionViaLink", "AddIncomingTrustedConnection", "PendingTrustedConnection", "RemoveTrustedConnection", "PendingIncomingTrustedConnection", "CurrencyTransfer"];
+		const components = profileComponents.map((component) => (component === "Actions" ? { component, supportedActions, isActionsV2Supported: false } : { component }));
+		const thumbnailRequests: any[] = users.flatMap((user: any) => [
+			{
+				requestId: `${user.id}::Avatar:720x720:webp:regular:::false:false`,
+				type: "Avatar",
+				targetId: user.id,
+				token: "",
+				format: "webp",
+				size: "720x720",
+				version: "",
+			},
+			{
+				requestId: `${user.id}::AvatarHeadshot:720x720:webp:regular:::false:true`,
+				type: "AvatarHeadShot",
+				targetId: user.id,
+				token: "",
+				format: "webp",
+				size: "720x720",
+				version: "",
+				includeProfileFrame: true,
+			},
+		]);
+		const requestedThumbnails = new Map(thumbnailRequests.map((request) => [request.requestId, request]));
+
+		const [thumbnailData, profileData, friendLists] = await Promise.all([
+			(async () => {
+				try {
+					const response = await fetch("https://thumbnails.roblox.com/v1/batch?urlLocale=en_us", {
+						method: "POST",
+						headers: { ...commonHeaders, "Content-Type": "application/json" },
+						body: JSON.stringify(thumbnailRequests),
+					});
+					if (!response.ok) return new Map<number, { headshot: string | null; full: string | null }>();
+					const result: any = await response.json();
+					const mapped = new Map<number, { headshot: string | null; full: string | null }>();
+					for (const thumbnail of result?.data || []) {
+						const request = requestedThumbnails.get(thumbnail.requestId);
+						if (!request) continue;
+						const images = mapped.get(request.targetId) || { headshot: null, full: null };
+						if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
+						else images.full = thumbnail.imageUrl || null;
+						mapped.set(request.targetId, images);
+					}
+					return mapped;
+				} catch {
+					return new Map<number, { headshot: string | null; full: string | null }>();
+				}
+			})(),
+			Promise.all(
+				users.map(async (user: any) => {
+					try {
+						const response = await fetch("https://apis.roblox.com/profile-platform-api/v1/profiles/get?urlLocale=en_us", {
+							method: "POST",
+							headers: { ...commonHeaders, "Content-Type": "application/json;charset=UTF-8" },
+							body: JSON.stringify({ profileId: String(user.id), profileType: "User", components, includeComponentOrdering: true }),
+						});
+						if (!response.ok) return [user.id, null] as const;
+						return [user.id, await response.json()] as const;
+					} catch {
+						return [user.id, null] as const;
+					}
+				}),
+			),
+			Promise.all(
+				users.map(async (user: any) => {
+					try {
+						const response = await fetch(`https://friends.roblox.com/v1/users/${user.id}/friends`, {
+							headers: commonHeaders,
+						});
+						if (!response.ok) return [user.id, []] as const;
+						const result: any = await response.json();
+						return [user.id, Array.isArray(result?.data) ? result.data : []] as const;
+					} catch {
+						return [user.id, []] as const;
+					}
+				}),
+			),
+		]);
+		const profilesById = new Map<number, any>(profileData);
+		const friendListsByUserId = new Map<string, any[]>(friendLists.map(([userId, friends]) => [String(userId), friends]));
+		const friendIds = Array.from(
+			new Set(
+				friendLists
+					.flatMap(([, friends]) => friends)
+					.map((friend: any) => Number(friend?.id ?? friend?.userId))
+					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
+			),
+		);
+		const friendIdChunks = Array.from({ length: Math.ceil(friendIds.length / 100) }, (_, index) => friendIds.slice(index * 100, index * 100 + 100));
+		const friendDetails = await Promise.all(
+			friendIdChunks.map(async (userIds) => {
+				try {
+					const response = await fetch("https://users.roblox.com/v1/users", {
+						method: "POST",
+						headers: { ...commonHeaders, "Content-Type": "application/json" },
+						body: JSON.stringify({ userIds }),
+					});
+					if (!response.ok) return [];
+					const result: any = await response.json();
+					return Array.isArray(result?.data) ? result.data : [];
+				} catch {
+					return [];
+				}
+			}),
+		);
+		const friendDetailsById = new Map<number, any>(friendDetails.flat().map((friend: any) => [friend.id, friend]));
+		const catalogItemsByKey = new Map<string, { itemType: string; id: number }>();
+		for (const profile of profilesById.values()) {
+			const wornAssets = profile?.components?.CurrentlyWearing?.assets;
+			if (!Array.isArray(wornAssets)) continue;
+			for (const asset of wornAssets) {
+				const id = Number(asset?.assetId ?? asset?.id);
+				const itemType = typeof asset?.itemType === "string" ? asset.itemType : "Asset";
+				if (Number.isSafeInteger(id) && id > 0) catalogItemsByKey.set(`${itemType}:${id}`, { itemType, id });
+			}
+		}
+		const catalogItems = Array.from(catalogItemsByKey.values());
+		const catalogChunks = Array.from({ length: Math.ceil(catalogItems.length / 10) }, (_, index) => catalogItems.slice(index * 10, index * 10 + 10));
+		const fetchCatalogBatch = async (items: { itemType: string; id: number }[], csrfToken: string | null = null) => {
+			const sendRequest = (token: string | null) =>
+				fetch("https://catalog.roblox.com/v1/catalog/items/details?urlLocale=en_us", {
+					method: "POST",
+					headers: {
+						...commonHeaders,
+						"Content-Type": "application/json",
+						...(token ? { "x-csrf-token": token } : {}),
+					},
+					body: JSON.stringify({ items }),
+				});
+			try {
+				let response = await sendRequest(csrfToken);
+				let nextCsrfToken = csrfToken;
+				if (response.status === 403) {
+					const challengeToken = response.headers.get("x-csrf-token");
+					if (challengeToken) {
+						nextCsrfToken = challengeToken;
+						response = await sendRequest(nextCsrfToken);
+					}
+				}
+				if (!response.ok) return { data: [], csrfToken: nextCsrfToken };
+				const result: any = await response.json();
+				return { data: Array.isArray(result?.data) ? result.data : [], csrfToken: nextCsrfToken };
+			} catch {
+				return { data: [], csrfToken };
+			}
+		};
+		let catalogDetails: any[] = [];
+		if (catalogChunks.length > 0) {
+			const firstBatch = await fetchCatalogBatch(catalogChunks[0]!);
+			catalogDetails = firstBatch.data;
+			if (catalogChunks.length > 1) {
+				const remainingBatches = await Promise.all(catalogChunks.slice(1).map((items) => fetchCatalogBatch(items, firstBatch.csrfToken)));
+				catalogDetails.push(...remainingBatches.flatMap((batch) => batch.data));
+			}
+		}
+		const catalogDetailsByKey = new Map<string, any>();
+		for (const detail of catalogDetails) {
+			if (detail?.id != null && detail?.itemType) catalogDetailsByKey.set(`${detail.itemType}:${detail.id}`, detail);
+		}
+		const wornAssetIds = Array.from(
+			new Set(
+				Array.from(profilesById.values())
+					.flatMap((profile) => (Array.isArray(profile?.components?.CurrentlyWearing?.assets) ? profile.components.CurrentlyWearing.assets : []))
+					.filter((asset: any) => !asset?.itemType || asset.itemType === "Asset")
+					.map((asset: any) => Number(asset?.assetId ?? asset?.id))
+					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
+			),
+		);
+		const wornAssetIdChunks = Array.from({ length: Math.ceil(wornAssetIds.length / 100) }, (_, index) => wornAssetIds.slice(index * 100, index * 100 + 100));
+		const wornAssetThumbnails = await Promise.all(
+			wornAssetIdChunks.map(async (assetIds) => {
+				try {
+					const params = new URLSearchParams({ assetIds: assetIds.join(","), size: "512x512", format: "Png" });
+					const response = await fetch(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: commonHeaders });
+					if (!response.ok) return [];
+					const result: any = await response.json();
+					return Array.isArray(result?.data) ? result.data : [];
+				} catch {
+					return [];
+				}
+			}),
+		);
+		const wornAssetThumbnailsById = new Map<number, string>(
+			wornAssetThumbnails
+				.flat()
+				.filter((thumbnail: any) => thumbnail?.targetId != null && thumbnail?.imageUrl)
+				.map((thumbnail: any) => [thumbnail.targetId, thumbnail.imageUrl]),
+		);
+
+		return {
+			data: users.map((u: any) => {
+				const images = thumbnailData.get(u.id);
+				const friends = friendListsByUserId.get(String(u.id)) || [];
+				const originalProfile = profilesById.get(u.id) || null;
+				const currentlyWearing = originalProfile?.components?.CurrentlyWearing;
+				const profile =
+					originalProfile && Array.isArray(currentlyWearing?.assets)
+						? {
+								...originalProfile,
+								components: {
+									...originalProfile.components,
+									CurrentlyWearing: {
+										...currentlyWearing,
+										assets: currentlyWearing.assets.map((asset: any) => {
+											const assetId = Number(asset?.assetId ?? asset?.id);
+											const itemType = typeof asset?.itemType === "string" ? asset.itemType : "Asset";
+											return {
+												...asset,
+												details: catalogDetailsByKey.get(`${itemType}:${assetId}`) || null,
+												thumbnail: wornAssetThumbnailsById.get(assetId) || null,
+											};
+										}),
+									},
+								},
+							}
+						: originalProfile;
+				return {
+					...u,
+					avatar: images?.headshot || null,
+					avatarFull: images?.full || null,
+					profileUrl: `https://www.roblox.com/users/${u.id}/profile`,
+					profile,
+					friends: friends.map((friend: any) => {
+						if (String(friend?.id) === "-1") return { error: "This account no longer exist" };
+						const friendId = Number(friend?.id ?? friend?.userId);
+						const details = friendDetailsById.get(friendId);
+						return {
+							...friend,
+							id: friend?.id ?? friend?.userId ?? friendId,
+							userId: friend?.userId ?? friend?.id ?? friendId,
+							name: details?.name || friend?.name || null,
+							username: details?.name || friend?.name || null,
+							displayName: details?.displayName || friend?.displayName || null,
+							hasVerifiedBadge: details?.hasVerifiedBadge ?? friend?.hasVerifiedBadge ?? false,
+							profileUrl: Number.isSafeInteger(friendId) && friendId > 0 ? `https://www.roblox.com/users/${friendId}/profile` : null,
+						};
+					}),
+				};
+			}),
+		};
+	} catch {
+		return null;
+	}
+};
+
 export const Bandcamp = async function Bandcamp(que: string) {
 	if (!que) return null;
 
@@ -14842,11 +15114,14 @@ export const Magnific = async function Magnific(que: string, buildRetried: boole
 	}
 };
 
+const STARTPAGE_BASE = "https://us.startpage.com";
+
 export const StartpageSearch = async function StartpageSearch(que: string, authRetried: boolean = false): Promise<any> {
 	if (!que) return null;
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
-	const q = encodeURIComponent(que);
-	const searchUrl = `https://www.startpage.com/do/search?query=${q}&lui=english&segment=startpage.brave`;
+	const session = new HttpcloakSession({ timeout: 30 });
+	const q = encodeURIComponent(que).replace(/%20/g, "+");
+	const searchUrl = `${STARTPAGE_BASE}/sp/search?t=device&segment=startpage&lui=english&language=english&cat=web&abd=1&abe=1&query=${q}&qadf=none`;
+
 	let wafStatus = false;
 	let wafAttempt = 0;
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
@@ -14857,7 +15132,7 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
 			const res: any = await session.get(searchUrl, {
-				headers: { ...commonHeaders, Cookie: cookie, Referer: "https://www.startpage.com/" },
+				headers: { ...commonHeaders, Cookie: cookie },
 			});
 			return typeof res?.text === "string" ? res.text : "";
 		};
@@ -14877,7 +15152,11 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		for (const el of nodes) {
 			const h2 = (el as any).querySelector("h2");
 			const titleA = (el as any).querySelector("a.result-title") || (h2?.closest?.("a") as any) || (el as any).querySelector("a[href^='http']");
-			const url = titleA?.getAttribute("href") || "";
+			let url = titleA?.getAttribute("href") || "";
+			if (url && !url.startsWith("http")) {
+				const full = (el as any).querySelector("a.wgl-display-url .default-link-text")?.textContent?.replace(/\s+/g, " ").trim() || "";
+				url = /^https?:\/\/\S+$/.test(full) ? full : "";
+			}
 			if (!url) continue;
 			const title = titleA?.querySelector("h2")?.textContent?.trim() || titleA?.textContent?.trim() || "";
 			const siteName = (el as any).querySelector("a.wgl-site-title .link-text")?.textContent?.trim() || "";
@@ -14889,9 +15168,123 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 				const st = (s as any).textContent?.trim() || "";
 				if (su) sitelinks.push({ title: st, url: su.startsWith("http") ? su : `https://www.startpage.com${su}` });
 			}
-			const anonymousViewUrl = (el as any).querySelector(".anonymous-view-link a")?.getAttribute("href") || "";
+			let anonymousViewUrl = (el as any).querySelector(".anonymous-view-link a")?.getAttribute("href") || "";
+			if (anonymousViewUrl && !anonymousViewUrl.startsWith("http")) anonymousViewUrl = "";
 			items.push({ title, url, siteName, displayUrl, snippet, sitelinks, anonymousViewUrl });
 		}
+		if (!items.length) return { _wafChallenge: waf(), data: null };
+		return { _wafChallenge: waf(), total: items.length, data: items };
+	} catch (e) {
+		console.error(e);
+		return null;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};
+
+const absolutizeStartpageUrl = (value: string) => (typeof value === "string" && value.startsWith("/") ? `${STARTPAGE_BASE}${value}` : value);
+
+const matchJsonObjectEnd = (src: string, start: number) => {
+	let depth = 0;
+	let inStr = false;
+	let esc = false;
+	for (let i = start; i < src.length; i++) {
+		const ch = src[i];
+		if (inStr) {
+			if (esc) esc = false;
+			else if (ch === "\\") esc = true;
+			else if (ch === '"') inStr = false;
+			continue;
+		}
+		if (ch === '"') {
+			inStr = true;
+			continue;
+		}
+		if (ch === "{") depth++;
+		else if (ch === "}") {
+			depth--;
+			if (depth === 0) return i;
+		}
+	}
+	return -1;
+};
+
+const extractStartpageImageResults = (html: string) => {
+	const { document } = parseHTML(html);
+	const scripts = Array.from(document.querySelectorAll("script")) as any[];
+	let blob = "";
+	for (const s of scripts) {
+		const t = s?.textContent || "";
+		if (t.includes("thumbnailUrl") && t.length > blob.length) blob = t;
+	}
+	if (!blob) return [];
+
+	const out: any[] = [];
+	let from = 0;
+	for (;;) {
+		const i = blob.indexOf('{"title":', from);
+		if (i < 0) break;
+		const end = matchJsonObjectEnd(blob, i);
+		if (end < 0) {
+			from = i + 9;
+			continue;
+		}
+		try {
+			const parsed = JSON.parse(blob.slice(i, end + 1));
+			if (parsed && parsed.clickUrl && parsed.width && parsed.thumbnailUrl) out.push(parsed);
+		} catch {}
+		from = end + 1;
+	}
+	return out;
+};
+
+const decodeProxyImage = (value: string) => {
+	const m = String(value || "").match(/[?&]piurl=([^&]+)/);
+	if (!m) return null;
+	try {
+		return decodeURIComponent(m[1]);
+	} catch {
+		return null;
+	}
+};
+
+export const StartpageImageSearch = async function StartpageImageSearch(que: string, authRetried: boolean = false): Promise<any> {
+	if (!que) return null;
+	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const q = que.replace(/\s+/g, "+");
+	const searchUrl = `${STARTPAGE_BASE}/sp/search?t=device&segment=startpage&lui=english&language=english&cat=images&abd=1&abe=1&query=${q}&qadf=none`;
+	let wafStatus = false;
+	let wafAttempt = 0;
+	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
+	try {
+		let auth = await getStartpageAuth(searchUrl);
+		if (!auth) return { error: "Anubis asking to verify you're not a bot", _wafChallenge: waf() };
+		wafStatus = true;
+		wafAttempt = auth.reused ? 0 : auth.attempts;
+		const fetchResults = async (cookie: string) => {
+			const res: any = await session.get(searchUrl, {
+				headers: { ...commonHeaders, Cookie: cookie },
+			});
+			return typeof res?.text === "string" ? res.text : "";
+		};
+		let html = await fetchResults(auth.cookie);
+		if (html.includes("anubis_challenge") && !authRetried) {
+			invalidateStartpageAuth();
+			auth = await getStartpageAuth(searchUrl);
+			if (!auth) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+			wafAttempt = auth.reused ? 0 : auth.attempts;
+			html = await fetchResults(auth.cookie);
+		}
+		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+
+		const raw = extractStartpageImageResults(html);
+		const items = raw.map((r: any) => ({
+			...r,
+			thumbnailUrl: absolutizeStartpageUrl(r.thumbnailUrl),
+			altThumbnail: decodeProxyImage(r.thumbnailUrl),
+		}));
 		if (!items.length) return { _wafChallenge: waf(), data: null };
 		return { _wafChallenge: waf(), total: items.length, data: items };
 	} catch (e) {

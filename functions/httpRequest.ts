@@ -9,6 +9,7 @@ import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
 import { maxLimitRequestsPerSec } from "../config.json";
+import { signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);
@@ -243,6 +244,36 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
+	{
+		const vsUa = c.req.header("user-agent") ?? "";
+		const vsSite = c.req.header("sec-fetch-site");
+		const vsMode = c.req.header("sec-fetch-mode");
+		const vsDest = c.req.header("sec-fetch-dest");
+		const vsMozilla = vsUa.startsWith("Mozilla/5.0");
+		const vsFullSet = vsSite !== undefined && vsMode !== undefined && vsDest !== undefined;
+		const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
+		if (!(await verifyVsCookie(c))) {
+			if (vsMode === "navigate") {
+				const challenge = await signVsChallenge(c.req.url, vsUa);
+				c.header("Content-Type", "text/plain");
+				c.header("Cache-Control", "no-store");
+				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
+				c.header("Refresh", "1");
+				return logResponse(c, c.text("Please wait...", 403));
+			}
+			if (vsPartialSet) {
+				c.header("Cache-Control", "no-store");
+				return logResponse(c, c.text("", 412));
+			}
+			if (vsMozilla && vsFullSet) {
+				const challenge = await signVsChallenge(c.req.url, vsUa);
+				c.header("Cache-Control", "no-store");
+				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
+				return logResponse(c, c.text("", 412));
+			}
+		}
+	}
+
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
@@ -267,7 +298,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
 		cacheDirectives.push("max-age=0");
 	} else {
-		cacheDirectives.push("max-age=8");
+		cacheDirectives.push("max-age=30");
 	}
 	cacheDirectives.push("must-revalidate");
 	cacheDirectives.push("no-transform");

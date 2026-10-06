@@ -1178,6 +1178,25 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = await j9ls(targetUrl, headers);
     } catch {}
     response = await fetch(fetchUrl, fetchOptions);
+    if (response.status === 412 && retryCount < 2) {
+      setStatus("yellow-400", "Verifying", "text-yellow-400");
+      await new Promise((resolve) => {
+        const hasXf = () => /(?:^|;\s*)xf=/.test(document.cookie);
+        if (hasXf()) return resolve();
+        const iv = setInterval(() => {
+          if (hasXf()) {
+            clearInterval(iv);
+            clearTimeout(to);
+            resolve();
+          }
+        }, 250);
+        const to = setTimeout(() => {
+          clearInterval(iv);
+          resolve();
+        }, 5000);
+      });
+      return await performRequest(targetUrl, retryCount + 1);
+    }
     setStatus("blue-400", "Rendering", "text-gray-400");
 
     let duration;
@@ -1358,33 +1377,51 @@ async function performRequest(targetUrl, retryCount = 0) {
         const lines = formatted.split("\n");
 
         if (formatted.length > 5000) {
-          preElement.textContent = formatted;
-
-          const CHUNK_SIZE = 200;
+          const CHUNK_SIZE = 2000;
+          const FRAME_BUDGET_MS = 12;
+          const REPORT_EVERY = 2000;
           let chunkIndex = 0;
-          let colorfulHTML = "";
+          let lastReported = 0;
+          const fragments = [];
+
+          setStatus("blue-400", `Rendering (0/${lines.length} lines)`, "text-gray-400");
 
           const buildColorfulChunk = () => {
-            const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
-            const chunkString = lines.slice(chunkIndex, end).join("\n");
-            try {
-              colorfulHTML += syntaxHighlight(chunkString) + (end < lines.length ? "\n" : "");
-            } catch {
-              colorfulHTML += escapeHTML(chunkString) + (end < lines.length ? "\n" : "");
+            const deadline = performance.now() + FRAME_BUDGET_MS;
+
+            while (chunkIndex < lines.length) {
+              const end = Math.min(chunkIndex + CHUNK_SIZE, lines.length);
+              const chunkString = lines.slice(chunkIndex, end).join("\n");
+              try {
+                fragments.push(syntaxHighlight(chunkString) + (end < lines.length ? "\n" : ""));
+              } catch {
+                fragments.push(escapeHTML(chunkString) + (end < lines.length ? "\n" : ""));
+              }
+              chunkIndex = end;
+
+              if (chunkIndex - lastReported >= REPORT_EVERY || chunkIndex >= lines.length) {
+                lastReported = chunkIndex;
+                setStatus("blue-400", `Rendering (${chunkIndex}/${lines.length} lines)`, "text-gray-400");
+              }
+
+              if (performance.now() >= deadline) break;
             }
-            chunkIndex = end;
 
             if (chunkIndex < lines.length) {
               requestAnimationFrame(buildColorfulChunk);
             } else {
-              const scrollTop = preElement.scrollTop;
-              preElement.innerHTML = colorfulHTML;
-              preElement.scrollTop = scrollTop;
-              updateStatusUI(resOk, resStatus, duration);
+              setTimeout(() => {
+                const scrollTop = preElement.scrollTop;
+                preElement.innerHTML = fragments.join("");
+                preElement.scrollTop = scrollTop;
+                updateStatusUI(resOk, resStatus, duration);
+              }, 0);
             }
           };
 
-          requestAnimationFrame(buildColorfulChunk);
+          setTimeout(() => {
+            requestAnimationFrame(buildColorfulChunk);
+          }, 240);
         } else {
           const CHUNK_SIZE = 200;
           let chunkIndex = 0;
@@ -2677,6 +2714,8 @@ function isHttpUrl(value) {
   }
 }
 
+const CLEAN_URL = /^https?:\/\/\S+$/;
+
 function responseLink(href, content) {
   return `<a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer" class="response-link">${content}</a>`;
 }
@@ -2717,32 +2756,26 @@ function syntaxHighlight(json) {
       while (j < len && json[j] === " ") j++;
       if (j < len && json[j] === ":") {
         result +=
-          '<span class="text-cyan-400">' +
+          '<span class="tok-key">' +
           json.slice(start, i) +
-          '</span><span class="text-gray-500">:</span>';
+          '</span><span class="tok-punct">:</span>';
         i = j + 1;
       } else {
         const content = json.slice(start + 1, i - 1);
         if (content.startsWith("http")) {
           const raw = unescapeHTML(content);
-          if (isHttpUrl(raw)) {
+          if (CLEAN_URL.test(raw) && isHttpUrl(raw)) {
             result += responseLink(
               raw,
-              '<span class="text-emerald-400">' +
-                json.slice(start, i) +
-                "</span>",
+              '<span class="tok-link">' + json.slice(start, i) + "</span>",
             );
           } else {
             result +=
-              '<span class="text-emerald-400">' +
-              json.slice(start, i) +
-              "</span>";
+              '<span class="tok-str">' + json.slice(start, i) + "</span>";
           }
         } else {
           result +=
-            '<span class="text-emerald-400">' +
-            json.slice(start, i) +
-            "</span>";
+            '<span class="tok-str">' + json.slice(start, i) + "</span>";
         }
       }
     } else if (ch === "-" || (ch >= "0" && ch <= "9")) {
@@ -2759,16 +2792,15 @@ function syntaxHighlight(json) {
       ) {
         i++;
       }
-      result +=
-        '<span class="text-orange-300">' + json.slice(start, i) + "</span>";
+      result += '<span class="tok-num">' + json.slice(start, i) + "</span>";
     } else if (json.startsWith("true", i)) {
-      result += '<span class="text-purple-400">true</span>';
+      result += '<span class="tok-bool">true</span>';
       i += 4;
     } else if (json.startsWith("false", i)) {
-      result += '<span class="text-purple-400">false</span>';
+      result += '<span class="tok-bool">false</span>';
       i += 5;
     } else if (json.startsWith("null", i)) {
-      result += '<span class="text-gray-500">null</span>';
+      result += '<span class="tok-null">null</span>';
       i += 4;
     } else {
       result += ch;

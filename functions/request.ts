@@ -733,6 +733,35 @@ const setTiktokWafCookie = (solved: string) => {
 	tiktokSessionKeys.cookie = (tiktokSessionKeys.cookie || "") + solved;
 };
 
+let tiktokMsToken: string = "";
+
+const setTiktokMsToken = (token: string) => {
+	tiktokMsToken = token;
+	if (!tiktokSessionKeys.cookie) return;
+	tiktokSessionKeys.cookie = tiktokSessionKeys.cookie.replace(/msToken=[^;]*; ?/, "");
+	tiktokSessionKeys.cookie = `${tiktokSessionKeys.cookie}msToken=${token}; `;
+};
+
+const harvestTiktokMsToken = (res: any): string => {
+	try {
+		const rawHeaders: any = res?.headers ?? {};
+		const scKey = Object.keys(rawHeaders).find((k) => k.toLowerCase() === "set-cookie");
+		const sc = scKey ? rawHeaders[scKey] : null;
+		const list: string[] = Array.isArray(sc) ? sc : sc ? [sc] : [];
+		for (const c of list) {
+			const s = String(c);
+			if (/^msToken=/i.test(s)) {
+				const token = s.split(";")[0].split("=").slice(1).join("=");
+				if (token) {
+					setTiktokMsToken(token);
+					return token;
+				}
+			}
+		}
+	} catch {}
+	return "";
+};
+
 type DiscordListCacheValue = { status: number; statusText: string; data: any };
 type DiscordListCacheEntry = {
 	expiresAt: number;
@@ -1961,6 +1990,152 @@ export const Deezer = async function Deezer(que: string, limits: number = 1) {
 	}
 };
 
+const ensureTiktokMsToken = async (awemeId: string): Promise<string> => {
+	if (tiktokMsToken) return tiktokMsToken;
+	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		const targetUrl = `https://www.tiktok.com/@/video/${awemeId}`;
+		const headers = { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" };
+		let res: any = await (httpcloakGet as any)(targetUrl, { httpVersion: "h2", tlsOnly: true, headers });
+		let html = await responseText(res);
+		if (!html.includes("__UNIVERSAL_DATA_FOR_REHYDRATION__")) {
+			const solved = await solveTiktokWAF(html);
+			if (solved) {
+				setTiktokWafCookie(solved);
+				res = await (httpcloakGet as any)(targetUrl, { httpVersion: "h2", tlsOnly: true, headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" } });
+				html = await responseText(res);
+			}
+		}
+		harvestTiktokMsToken(res);
+	} catch {}
+	return tiktokMsToken;
+};
+
+export const TiktokComments = async function TiktokComments(awemeId: string, count: number = 50, cursor: number = 0): Promise<any> {
+	if (!awemeId) return null;
+	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		const msToken = await ensureTiktokMsToken(awemeId);
+		const params = new URLSearchParams({
+			aid: "1988",
+			app_name: "tiktok_web",
+			aweme_id: String(awemeId),
+			count: String(count),
+			cursor: String(cursor),
+			device_id: String(tiktokSessionKeys.device_id),
+			odinId: String(tiktokSessionKeys.odin_id),
+			region: "ID",
+			referer: "https://www.tiktok.com/",
+		});
+		if (msToken) params.set("msToken", msToken);
+		const fetchOnce = async () => {
+			const currentUrl = `https://www.tiktok.com/api/comment/list/?${params.toString()}`;
+			const currentSigned = signTikTok({
+				url: currentUrl,
+				userAgent,
+				msToken: params.get("msToken") || "",
+				body: "",
+				perf: { txr: 105, tfr: 13, ixr: 15, ifr: 6 },
+				envcode: 65,
+				ubcode: 8,
+			});
+			const pul = await fetch(String(currentSigned), {
+				headers: {
+					...commonHeaders,
+					Cookie: tiktokSessionKeys?.cookie,
+					Referer: "https://www.tiktok.com/",
+					"Sec-Fetch-Dest": "empty",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Site": "same-origin",
+				},
+			});
+			const text = await pul.text();
+			try {
+				return JSON.parse(text);
+			} catch {
+				return null;
+			}
+		};
+		let json = await fetchOnce();
+		if ((!json || !Array.isArray(json?.comments)) && msToken) {
+			tiktokMsToken = "";
+			const fresh = await ensureTiktokMsToken(awemeId);
+			if (fresh && fresh !== msToken) {
+				params.set("msToken", fresh);
+				json = await fetchOnce();
+			}
+		}
+		if (!json || !Array.isArray(json?.comments)) return null;
+		return { comments: json.comments, total: json.total ?? null };
+	} catch {
+		return null;
+	}
+};
+
+export const TiktokMusicVideos = async function TiktokMusicVideos(musicId: string, count: number = 30, cursor: number = 0, refVideoId: string = ""): Promise<any> {
+	if (!musicId) return null;
+	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		if (!tiktokMsToken && refVideoId) await ensureTiktokMsToken(refVideoId);
+		const params = new URLSearchParams({
+			aid: "1988",
+			app_name: "tiktok_web",
+			musicID: String(musicId),
+			count: String(count),
+			cursor: String(cursor),
+			coverFormat: "2",
+			clientABVersions: String(tiktokSessionKeys.abVersion || ""),
+			device_id: String(tiktokSessionKeys.device_id),
+			odinId: String(tiktokSessionKeys.odin_id),
+			region: "ID",
+			language: "en",
+			from_page: "music",
+		});
+		if (tiktokMsToken) params.set("msToken", tiktokMsToken);
+		const fetchOnce = async () => {
+			const currentUrl = `https://www.tiktok.com/api/music/item_list/?${params.toString()}`;
+			const currentSigned = signTikTok({
+				url: currentUrl,
+				userAgent,
+				msToken: params.get("msToken") || "",
+				body: "",
+				perf: { txr: 105, tfr: 13, ixr: 15, ifr: 6 },
+				envcode: 65,
+				ubcode: 8,
+			});
+			const pul = await fetch(String(currentSigned), {
+				headers: {
+					...commonHeaders,
+					Cookie: tiktokSessionKeys?.cookie,
+					Referer: "https://www.tiktok.com/",
+					"Sec-Fetch-Dest": "empty",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Site": "same-origin",
+				},
+			});
+			const text = await pul.text();
+			try {
+				return JSON.parse(text);
+			} catch {
+				return null;
+			}
+		};
+		let json = await fetchOnce();
+		if ((!json || !Array.isArray(json?.itemList)) && tiktokMsToken) {
+			tiktokMsToken = "";
+			const fresh = refVideoId ? await ensureTiktokMsToken(refVideoId) : "";
+			if (fresh) {
+				params.set("msToken", fresh);
+				json = await fetchOnce();
+			}
+		}
+		if (!json || !Array.isArray(json?.itemList)) return null;
+		return { videos: json.itemList, cursor: json.cursor ?? null, hasMore: json.hasMore ?? null };
+	} catch {
+		return null;
+	}
+};
+
 export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: boolean = false) {
 	if (!url) return null;
 
@@ -2013,14 +2188,17 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		let scriptContent: string | undefined;
 		for (let i = 0; i < 15; i++) {
 			try {
-				const response = await (httpcloakGet as any)(targetUrl, {
+				const response = await (httpcloakGet as any)(targetUrl + "?_r=1&preview_pb=0&sharer_language=en&source=h5_t&u_code=0", {
 					httpVersion: "h2",
 					tlsOnly: true,
-					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" },
+					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.reddit.com", "Sec-Fetch-Dest": "empty", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors" },
 				});
 				const html = await responseText(response);
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
-				if (scriptContent) break;
+				if (scriptContent) {
+					harvestTiktokMsToken(response);
+					break;
+				}
 				if (!wafRetried) {
 					const testIfNeedSolve = await solveTiktokWAF(html);
 					if (testIfNeedSolve) {
@@ -2115,6 +2293,18 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 				original: videoDetail.music?.original,
 				private: videoDetail.music?.private,
 			};
+		}
+
+		try {
+			await ensureTiktokMsToken(videoDetail.id?.toString() || "");
+		} catch {}
+		const [commentSettled, musicSettled] = await Promise.allSettled([TiktokComments(videoDetail.id?.toString() || ""), musicId && musicId !== "undefined" ? TiktokMusicVideos(musicId.toString(), 30, 0, videoDetail.id?.toString() || "") : Promise.resolve(null)]);
+		if (commentSettled.status === "fulfilled" && commentSettled.value) {
+			responseData.comments = commentSettled.value.comments;
+			if (commentSettled.value.total !== null && commentSettled.value.total !== undefined) responseData.commentTotal = commentSettled.value.total;
+		}
+		if (musicSettled.status === "fulfilled" && musicSettled.value && responseData.music) {
+			responseData.music.videoList = musicSettled.value.videos;
 		}
 
 		return {

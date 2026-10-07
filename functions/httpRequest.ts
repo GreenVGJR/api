@@ -246,13 +246,13 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
 	{
 		const vsUa = c.req.header("user-agent") ?? "";
-		const vsSite = c.req.header("sec-fetch-site");
-		const vsMode = c.req.header("sec-fetch-mode");
-		const vsDest = c.req.header("sec-fetch-dest");
 		const vsMozilla = vsUa.startsWith("Mozilla/5.0");
-		const vsFullSet = vsSite !== undefined && vsMode !== undefined && vsDest !== undefined;
-		const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
-		if (!(await verifyVsCookie(c))) {
+		if (vsMozilla && !(await verifyVsCookie(c))) {
+			const vsSite = c.req.header("sec-fetch-site");
+			const vsMode = c.req.header("sec-fetch-mode");
+			const vsDest = c.req.header("sec-fetch-dest");
+			const vsFullSet = vsSite !== undefined && vsMode !== undefined && vsDest !== undefined;
+			const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
 			if (vsMode === "navigate") {
 				const challenge = await signVsChallenge(c.req.url, vsUa);
 				c.header("Content-Type", "text/plain");
@@ -265,7 +265,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 				c.header("Cache-Control", "no-store");
 				return logResponse(c, c.text("", 412));
 			}
-			if (vsMozilla && vsFullSet) {
+			if (vsFullSet) {
 				const challenge = await signVsChallenge(c.req.url, vsUa);
 				c.header("Cache-Control", "no-store");
 				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);

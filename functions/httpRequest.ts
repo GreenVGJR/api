@@ -9,7 +9,7 @@ import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
 import { maxLimitRequestsPerSec } from "../config.json";
-import { signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
+import { VS_COOKIE, signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
 	recordRequestLog(c, statusCode);
@@ -304,6 +304,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
 	c.header("X-Enc-Route", "v5");
+	c.header("Set-Cookie", `${VS_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`);
 
 	await rateLimit();
 

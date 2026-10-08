@@ -15487,44 +15487,81 @@ export const StartpageImageSearch = async function StartpageImageSearch(que: str
 	}
 };
 
-const canvaSlug = (title: string) =>
-	title
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+const extractBalancedJson = (html: string, idx: number): string | null => {
+	let i = idx;
+	let depth = 0;
+	let inStr = false;
+	let esc = false;
+	for (; i < html.length; i++) {
+		const ch = html[i];
+		if (inStr) {
+			if (esc) esc = false;
+			else if (ch === "\\") esc = true;
+			else if (ch === '"') inStr = false;
+		} else if (ch === '"') inStr = true;
+		else if (ch === "{") depth++;
+		else if (ch === "}") {
+			depth--;
+			if (depth === 0) return html.slice(idx, i + 1);
+		}
+	}
+	return null;
+};
 
 const CanvaSearch = async function CanvaSearch(que: string, searchType: string, withRich: boolean) {
 	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
 	try {
-		const res: any = await session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=${searchType}&query=${encodeURIComponent(que)}&locale=en`, {
-			headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
-		});
-		if (res?.statusCode === 403) return { challenged: true as const };
-		if (!res || res.statusCode < 200 || res.statusCode >= 300) return null;
-		const raw = await responseText(res);
-		const json = JSON.parse(raw.slice(raw.indexOf("{")));
-		const blocks: any[] = Array.isArray(json?.B) ? json.B : [];
-		const suggBlock = blocks.find((b) => b?.C === "LIST");
-		const itemsBlock = blocks.find((b) => Array.isArray(b?.B) && b.B.length > 0 && b.B[0]?.y);
-		const suggestions = Array.isArray(suggBlock?.B)
-			? suggBlock.B.map((s: any) => ({
+		const q = encodeURIComponent(que);
+		const [suggRes, pageRes]: any[] = await Promise.all([
+			session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=${searchType}&query=${q}&locale=en`, {
+				headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
+			}),
+			session.get(`https://www.canva.com/templates/?query=${q}`, {
+				headers: { ...commonHeaders, Referer: "https://www.canva.com/templates/" },
+			}),
+		]);
+		if (suggRes?.statusCode === 403 || pageRes?.statusCode === 403) return { challenged: true as const };
+		if (!pageRes || pageRes.statusCode < 200 || pageRes.statusCode >= 300) return null;
+		let suggestions: any[] = [];
+		try {
+			const suggRaw = await responseText(suggRes);
+			const suggJson = JSON.parse(suggRaw.slice(suggRaw.indexOf("{")));
+			const suggBlock = (Array.isArray(suggJson?.B) ? suggJson.B : []).find((b: any) => b?.C === "LIST");
+			if (Array.isArray(suggBlock?.B)) {
+				suggestions = suggBlock.B.map((s: any) => ({
 					text: String(s?.["0"] ?? "").replace(/<[^>]*>/g, ""),
 					url: s?.Bk?.A ? `https://www.canva.com${s.Bk.A}` : null,
-				})).filter((s: any) => s.text)
-			: [];
-		const items = Array.isArray(itemsBlock?.B)
-			? itemsBlock.B.map((item: any) => {
-					const title = item?.["0"] ?? "";
-					const slug = canvaSlug(String(title));
-					return {
-						id: item?.Bk?.DI ?? null,
-						title: title || null,
-						type: item?.Bk?.DP ?? null,
-						thumbnail: item?.y ? { url: item.y.C ?? null, width: item.y.D ?? null, height: item.y.E ?? null } : null,
-						url: item?.Bk?.DI && slug ? `https://www.canva.com/templates/${item.Bk.DI}-${slug}/` : null,
-					};
-				}).filter((item: any) => item.id)
-			: [];
+				})).filter((s: any) => s.text);
+			}
+		} catch {}
+		let items: any[] = [];
+		let total = 0;
+		try {
+			const html = await responseText(pageRes);
+			const idx = html.indexOf('{"A?":"H","Bm":{"A":"TEMPLATES_SEARCH_MASONRY"');
+			if (idx !== -1) {
+				const bal = extractBalancedJson(html, idx)?.replace(/\\'/g, "'");
+				const masonry = bal ? JSON.parse(bal) : null;
+				const di = masonry?.DI ?? {};
+				total = di?.K ?? 0;
+				const rawItems: any[] = Array.isArray(di?.E) ? di.E : [];
+				items = rawItems
+					.map((item: any) => {
+						const id = item?.L?.Bk ?? item?.K?.DI?.D?.Bk ?? null;
+						const thumbs = Array.isArray(item?.S?.[0]?.Bk) ? item.S[0].Bk : [];
+						const best = thumbs.length > 0 ? thumbs[thumbs.length - 1] : null;
+						const href = item?.K?.DI?.A ?? null;
+						return {
+							id,
+							title: item?.C ?? null,
+							type: null,
+							thumbnail: best ? { url: best.C ?? null, width: best.D ?? null, height: best.E ?? null } : null,
+							url: href ? `https://www.canva.com${href}` : null,
+						};
+					})
+					.filter((item: any) => item.id);
+			}
+		} catch {}
 		let results = items;
 		if (withRich && items.length > 0) {
 			results = await Promise.all(
@@ -15557,7 +15594,7 @@ const CanvaSearch = async function CanvaSearch(que: string, searchType: string, 
 		} else {
 			results = items.map((item: any) => ({ ...item, richContent: null }));
 		}
-		return { total: itemsBlock?.D ?? items.length, suggestions, data: results };
+		return { total: total || items.length, suggestions, data: results };
 	} catch (e) {
 		console.error(e);
 		return null;

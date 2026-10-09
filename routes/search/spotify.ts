@@ -13,7 +13,7 @@ app.get("/spotify", async (c) => {
 	}
 	const limitStr: any = c.req.query("limit");
 	const limit = isNaN(limitStr) ? 1 : Math.min(20, Math.max(1, parseInt(limitStr, 10)));
-	c.header("X-Route", "api-partner.spotify.com");
+	c.header("X-Route", "api-partner.spotify.com, open.spotify.com, clienttoken.spotify.com, embed.spotify.com");
 	return await dispatch(c, () => SPMusic(query, false, limit));
 });
 

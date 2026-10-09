@@ -10,7 +10,7 @@ app.get("/tidal", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "openapi.tidal.com, api.tidal.com");
+	c.header("X-Route", "openapi.tidal.com, api.tidal.com, auth.tidal.com, embed.tidal.com");
 	return await dispatch(c, () => tidalLyrics(query!));
 });
 

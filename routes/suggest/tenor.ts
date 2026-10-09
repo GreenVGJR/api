@@ -11,7 +11,7 @@ app.get("/tenor", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "tenor.com");
+	c.header("X-Route", "tenor.com, tenor.googleapis.com");
 	return await dispatch(c, () => TenorSuggest(query));
 });
 

@@ -23,7 +23,7 @@ app.get("/tenor", async (c) => {
 			202,
 		);
 	}
-	c.header("X-Route", "tenor.com");
+	c.header("X-Route", "tenor.com, tenor.googleapis.com");
 	return await dispatch(c, () => Tenor(query, type));
 });
 

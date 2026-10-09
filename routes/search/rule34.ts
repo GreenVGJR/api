@@ -1,18 +1,18 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { Unsplash } from "../../functions/request.js";
+import { Rule34 } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
-app.get("/unsplash", async (c) => {
+app.get("/rule34", async (c) => {
 	const query = c.req.query("q");
 	if (query === undefined) {
 		return c.json({ error: "Missing parameter required" }, 202);
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "www.unsplash.com, unsplash.com");
-	return await dispatch(c, () => Unsplash(query));
+	c.header("X-Route", "ac.rule34.xxx, rule34.xxx");
+	return await dispatch(c, () => Rule34(query));
 });
 
 export default app;

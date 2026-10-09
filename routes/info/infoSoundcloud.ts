@@ -11,7 +11,7 @@ app.get("/soundcloud", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api-v2.soundcloud.com");
+	c.header("X-Route", "api-v2.soundcloud.com, soundcloud.com, mobi.soundcloud.com, m.soundcloud.com");
 	return await dispatch(c, () => infoSoundcloud(query));
 });
 

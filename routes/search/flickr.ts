@@ -11,7 +11,7 @@ app.get("/flickr", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api.flickr.com");
+	c.header("X-Route", "api.flickr.com, flickr.com");
 	return await dispatch(c, () => Flickr(query));
 });
 

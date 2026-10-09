@@ -18,7 +18,7 @@ app.get("/facebook/video", async (c) => {
 		return c.json({ error: result?.error || "Video not found" }, 404);
 	}
 	const target = result.video_url;
-	c.header("X-Route", "www.facebook.com");
+	c.header("X-Route", "www.facebook.com, www.instagram.com");
 	if (c.req.query("json") === "true" || !c.req.header("user-agent")?.startsWith("Mozilla/5.0")) {
 		recordRequestLog(c, 200);
 		return c.json({ url: target, type: "video" });

@@ -11,7 +11,7 @@ app.get("/magnific", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "www.magnific.com");
+	c.header("X-Route", "www.magnific.com, magnific.com");
 	return await dispatch(c, () => Magnific(query));
 });
 

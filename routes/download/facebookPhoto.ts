@@ -17,7 +17,7 @@ app.get("/facebook/photo", async (c) => {
 		recordRequestLog(c, 404);
 		return c.json({ error: result?.error || "Photos not found" }, 404);
 	}
-	c.header("X-Route", "www.facebook.com");
+	c.header("X-Route", "www.facebook.com, www.instagram.com");
 	recordRequestLog(c, 200);
 	return c.json({ urls: result.urls, type: "image" });
 });

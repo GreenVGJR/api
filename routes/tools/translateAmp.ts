@@ -13,7 +13,7 @@ app.get("/translate", async (c) => {
 	}
 	const from = c.req.query("from");
 	const to = c.req.query("to");
-	c.header("X-Route", "translate.google.com");
+	c.header("X-Route", "translate.google.com, translate.googleapis.com");
 	return await dispatch(c, () => Translate(query, from, to));
 });
 

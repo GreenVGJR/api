@@ -88,15 +88,25 @@ export const giphyKey = async function giphyKey() {
 			},
 		});
 		const text = await res.text();
-		const extractHash = text?.split("app/layout-")?.[1]?.split('"')?.[0];
-		if (!extractHash) return undefined;
-		const res2 = await fetch(`https://giphy.com/_next/static/chunks/app/layout-${extractHash}`, {
-			headers: {
-				...commonHeaders,
-			},
-		});
-		const text2 = await res2.text();
-		return text2.split('mobileApiKey:"')[1].split('"')[0];
+		const chunks = [...new Set([...text.matchAll(/src="(\/_next\/static\/chunks\/[^"]+\.js)"/g)].map((m) => m[1]))];
+		if (!chunks.length) return undefined;
+		const hits = await Promise.allSettled(
+			chunks.map(async (c) => {
+				const r = await fetch(`https://giphy.com${c}`, {
+					headers: {
+						...commonHeaders,
+						Referer: "https://giphy.com/",
+					},
+				});
+				return await r.text();
+			}),
+		);
+		for (const h of hits) {
+			if (h.status !== "fulfilled") continue;
+			const m = h.value.match(/mobileApiKey:"([^"]+)"/) || h.value.match(/(?<![A-Za-z])apiKey:"([^"]+)"/);
+			if (m) return m[1];
+		}
+		return undefined;
 	} catch {
 		return undefined;
 	}
@@ -452,13 +462,14 @@ export const refreshRedditAuth = async (): Promise<any> => {
 			}
 		};
 		const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
-		for (const targetUrl of ["https://ads.reddit.com/register", "https://www.reddit.com/svc/shreddit/styling-overrides"]) {
+		for (const targetUrl of ["https://www.reddit.com/svc/shreddit/styling-overrides", "https://ads.reddit.com/register"]) {
 			for (let attempt = 0; attempt < 3; attempt++) {
 				try {
 					const response = await fetch(targetUrl, {
 						headers: {
 							...commonHeaders,
 							...(jar.size ? { Cookie: jarStr() } : {}),
+							Referer: "https://www.google.com/",
 						},
 						redirect: "manual",
 					});

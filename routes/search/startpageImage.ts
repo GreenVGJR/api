@@ -11,7 +11,7 @@ app.get("/startpage/image", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "us.startpage.com");
+	c.header("X-Route", "us.startpage.com, www.startpage.com");
 	return await dispatch(c, () => StartpageImageSearch(query));
 });
 

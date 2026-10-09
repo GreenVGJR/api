@@ -13,7 +13,7 @@ app.get("/tiktok/music", async (c) => {
 	}
 	const limitStr: any = c.req.query("limit");
 	const limit = isNaN(limitStr) ? 1 : Math.min(10, Math.max(1, parseInt(limitStr, 10)));
-	c.header("X-Route", "api-boot.tiktokv.com");
+	c.header("X-Route", "api-boot.tiktokv.com, www.tiktok.com");
 	return await dispatch(c, () => TiktokMusic(query, limit));
 });
 

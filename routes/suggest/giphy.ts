@@ -11,7 +11,7 @@ app.get("/giphy", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api.giphy.com");
+	c.header("X-Route", "api.giphy.com, giphy.com");
 	return await dispatch(c, () => GiphySuggest(query));
 });
 

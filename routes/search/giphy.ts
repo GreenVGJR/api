@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 const app = new Hono();
 
-import { Giphy } from "../../functions/request.js";
+import { GiphyAPI } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
 app.get("/giphy", async (c) => {
@@ -23,8 +23,8 @@ app.get("/giphy", async (c) => {
 			202,
 		);
 	}
-	c.header("X-Route", "giphy.com");
-	return await dispatch(c, () => Giphy(query, type));
+	c.header("X-Route", "api.giphy.com, giphy.com");
+	return await dispatch(c, () => GiphyAPI(query, type));
 });
 
 export default app;

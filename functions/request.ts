@@ -2148,7 +2148,7 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 
 	let htmlaweme: any;
 
-	if (url.includes("vm.tiktok.com") || url.includes("vt.tiktok.com")) {
+	if (/v[mt]\.tiktok\.com|tiktok\.com\/t\//.test(url)) {
 		try {
 			const response = await (httpcloakGet as any)(url, {
 				httpVersion: "h2",
@@ -6376,7 +6376,11 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			headers: commonHeaders,
 		});
 
-		if (!pul1.ok) return null;
+		if (pul1.status === 429) {
+			return {
+				error: "Rate-limited",
+			};
+		}
 
 		const res1: any = await pul1.json();
 		const users = (Array.isArray(res1.searchResults) ? res1.searchResults : [])
@@ -6453,21 +6457,30 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			),
 			Promise.all(
 				users.map(async (user: any) => {
-					try {
-						const response = await fetch(`https://friends.roblox.com/v1/users/${user.id}/friends`, {
-							headers: commonHeaders,
-						});
-						if (!response.ok) return [user.id, []] as const;
-						const result: any = await response.json();
-						return [user.id, Array.isArray(result?.data) ? result.data : []] as const;
-					} catch {
-						return [user.id, []] as const;
+					let privateList = false;
+					for (let attempt = 0; attempt < 6; attempt++) {
+						try {
+							const response = await fetch(`https://friends.roblox.com/v1/users/${user.id}/friends`, {
+								headers: commonHeaders,
+							});
+							if (response.ok) {
+								const result: any = await response.json();
+								return [user.id, Array.isArray(result?.data) ? result.data : [], false] as const;
+							}
+							if (response.status === 403) {
+								privateList = true;
+								break;
+							}
+							if (response.status !== 429 && response.status < 500) break;
+						} catch {}
 					}
+					return [user.id, [], privateList] as const;
 				}),
 			),
 		]);
 		const profilesById = new Map<number, any>(profileData);
 		const friendListsByUserId = new Map<string, any[]>(friendLists.map(([userId, friends]) => [String(userId), friends]));
+		const friendListPrivateByUserId = new Map<string, boolean>(friendLists.map(([userId, , isPrivate]) => [String(userId), !!isPrivate]));
 		const friendIds = Array.from(
 			new Set(
 				friendLists
@@ -6477,23 +6490,98 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			),
 		);
 		const friendIdChunks = Array.from({ length: Math.ceil(friendIds.length / 100) }, (_, index) => friendIds.slice(index * 100, index * 100 + 100));
-		const friendDetails = await Promise.all(
-			friendIdChunks.map(async (userIds) => {
+		const fetchFriendNameHtml = async (id: number): Promise<{ name: string; displayName: string | null } | null> => {
+			try {
+				const r = await fetch(`https://www.roblox.com/users/${id}/profile`, { headers: commonHeaders });
+				if (!r.ok) return null;
+				const html = await r.text();
+				const name = (html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "").replace(/\s*-\s*Roblox\s*$/i, "").trim();
+				if (!name || /\s/.test(name)) return null;
+				const desc = html.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/i)?.[1] ?? "";
+				const displayName = desc.split(" is one of the millions")[0]?.trim() || null;
+				return { name, displayName };
+			} catch {
+				return null;
+			}
+		};
+		const friendDetails: any[][] = [];
+		for (const userIds of friendIdChunks) {
+			let data: any[] = [];
+			for (let attempt = 0; attempt < 6; attempt++) {
 				try {
 					const response = await fetch("https://users.roblox.com/v1/users", {
 						method: "POST",
 						headers: { ...commonHeaders, "Content-Type": "application/json" },
 						body: JSON.stringify({ userIds }),
 					});
-					if (!response.ok) return [];
-					const result: any = await response.json();
-					return Array.isArray(result?.data) ? result.data : [];
+					if (response.ok) {
+						const result: any = await response.json();
+						data = Array.isArray(result?.data) ? result.data : [];
+						break;
+					}
+					if (response.status !== 429 && response.status < 500) break;
 				} catch {
-					return [];
+					// ignore and retry
 				}
-			}),
-		);
+			}
+			friendDetails.push(data);
+		}
 		const friendDetailsById = new Map<number, any>(friendDetails.flat().map((friend: any) => [friend.id, friend]));
+		const allFriendIds = Array.from(
+			new Set(
+				friendLists
+					.flatMap(([, friends]) => friends)
+					.map((f: any) => Number(f?.id ?? f?.userId))
+					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
+			),
+		);
+		let missingIds = allFriendIds.filter((id) => !friendDetailsById.has(id));
+		if (missingIds.length > 0) {
+			const missingChunks = Array.from({ length: Math.ceil(missingIds.length / 100) }, (_, index) => missingIds.slice(index * 100, index * 100 + 100));
+			const refilled = await Promise.allSettled(
+				missingChunks.map(async (chunk) => {
+					let pending = chunk.slice();
+					for (let a = 0; a < 5 && pending.length > 0; a++) {
+						try {
+							const response = await fetch("https://users.roblox.com/v1/users", {
+								method: "POST",
+								headers: { ...commonHeaders, "Content-Type": "application/json" },
+								body: JSON.stringify({ userIds: pending }),
+							});
+							if (response.ok) {
+								const result: any = await response.json();
+								for (const d of Array.isArray(result?.data) ? result.data : []) {
+									if (d?.id != null) friendDetailsById.set(Number(d.id), d);
+								}
+								pending = pending.filter((id) => !friendDetailsById.has(id));
+							} else if (response.status !== 429 && response.status < 500) {
+								break;
+							}
+						} catch {}
+					}
+					return pending;
+				}),
+			);
+			const stillMissing = new Set<number>();
+			refilled.forEach((r) => {
+				if (r.status === "fulfilled") for (const id of r.value) stillMissing.add(id);
+			});
+			missingIds = missingIds.filter((id) => stillMissing.has(id));
+		}
+		if (missingIds.length > 0) {
+			const htmlSettled = await Promise.allSettled(
+				missingIds.map(async (id) => {
+					for (let a = 0; a < 5; a++) {
+						const scraped = await fetchFriendNameHtml(id);
+						if (scraped) return { id, name: scraped.name, displayName: scraped.displayName };
+					}
+					return null;
+				}),
+			);
+			htmlSettled.forEach((r) => {
+				if (r.status === "fulfilled" && r.value) friendDetailsById.set(Number((r.value as any).id), r.value);
+			});
+		}
 		const catalogItemsByKey = new Map<string, { itemType: string; id: number }>();
 		for (const profile of profilesById.values()) {
 			const wornAssets = profile?.components?.CurrentlyWearing?.assets;
@@ -6581,6 +6669,7 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			data: users.map((u: any) => {
 				const images = thumbnailData.get(u.id);
 				const friends = friendListsByUserId.get(String(u.id)) || [];
+				const friendsPrivate = friendListPrivateByUserId.get(String(u.id)) || false;
 				const originalProfile = profilesById.get(u.id) || null;
 				const currentlyWearing = originalProfile?.components?.CurrentlyWearing;
 				const profile =
@@ -6610,21 +6699,20 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 					avatarFull: images?.full || null,
 					profileUrl: `https://www.roblox.com/users/${u.id}/profile`,
 					profile,
-					friends: friends.map((friend: any) => {
-						if (String(friend?.id) === "-1") return { error: "This account no longer exist" };
-						const friendId = Number(friend?.id ?? friend?.userId);
-						const details = friendDetailsById.get(friendId);
-						return {
-							...friend,
-							id: friend?.id ?? friend?.userId ?? friendId,
-							userId: friend?.userId ?? friend?.id ?? friendId,
-							name: details?.name || friend?.name || null,
-							username: details?.name || friend?.name || null,
-							displayName: details?.displayName || friend?.displayName || null,
-							hasVerifiedBadge: details?.hasVerifiedBadge ?? friend?.hasVerifiedBadge ?? false,
-							profileUrl: Number.isSafeInteger(friendId) && friendId > 0 ? `https://www.roblox.com/users/${friendId}/profile` : null,
-						};
-					}),
+					friends: friendsPrivate
+						? { error: "This account was set this to private" }
+						: friends
+								.map((friend: any) => {
+									if (String(friend?.id) === "-1") return { error: "This account no longer exist" };
+									const friendId = Number(friend?.id ?? friend?.userId);
+									const details = friendDetailsById.get(friendId);
+									return {
+										id: friend?.id ?? friend?.userId ?? friendId,
+										username: details?.name || friend?.name || null,
+										displayName: details?.displayName || friend?.displayName || null,
+									};
+								})
+								.filter((f: any) => f.error || f.username),
 				};
 			}),
 		};
@@ -8145,62 +8233,6 @@ export const infoGiphy = async function infoGiphy(url: string) {
 	}
 };
 
-export const Giphy = async function Giphy(que: string, type?: string) {
-	if (!que) return null;
-
-	const getTypeQuery = (t?: string) => {
-		if (t === "sticker") return "-stickers";
-		if (t === "clip") return "-clips";
-		return "";
-	};
-
-	try {
-		const res = await fetch(`https://www.giphy.com/search/${encodeURIComponent(que)}${getTypeQuery(type)}`, {
-			headers: commonHeaders,
-		});
-
-		if (res.status !== 200) {
-			return { error: `${res.status} - Can't process this` };
-		}
-
-		const html = await res.text();
-		const chunks = html.split("self.__next_f.push(");
-		chunks.shift();
-
-		for (const chunk of chunks) {
-			if (!chunk.includes("initialGifs")) continue;
-
-			try {
-				let end = chunk.indexOf(")</script>");
-				if (end === -1) end = chunk.indexOf(")\n");
-				if (end === -1) end = chunk.lastIndexOf(")");
-
-				const parsed = JSON.parse(chunk.substring(0, end));
-
-				let innerData: unknown = parsed[1];
-				if (typeof innerData === "string") {
-					const colonIdx = innerData.indexOf(":");
-					if (colonIdx !== -1) {
-						try {
-							innerData = JSON.parse(innerData.substring(colonIdx + 1));
-						} catch {}
-					}
-				}
-
-				const gifs = deepFind(innerData, "initialGifs");
-				if (gifs) return { data: gifs };
-			} catch {
-				continue;
-			}
-		}
-
-		return { data: null };
-	} catch (e) {
-		console.error(e);
-		return null;
-	}
-};
-
 export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
@@ -8225,8 +8257,12 @@ export const GiphyAPI = async function GiphyAPI(que: string, type?: string, refr
 			}),
 		]);
 
-		if (res.status === 401) {
+		if (res.status === 401 && !refresh_auth) {
 			return await GiphyAPI(que, type, true);
+		}
+
+		if (res.status === 401) {
+			return { error: `${res.status} - Can't process this` };
 		}
 
 		let jl: any = {};
@@ -12466,8 +12502,10 @@ export const CrunchySearch = async function CrunchySearch(que: string, refresh_a
 export const SafeBooru = async function SafeBooru(que: string) {
 	if (!que) return null;
 
+	const query = que.trim().replace(/\s+/g, "_");
+
 	try {
-		const per = await fetch(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(que)}`, {
+		const per = await fetch(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query)}`, {
 			headers: commonHeaders,
 		});
 
@@ -12558,6 +12596,202 @@ export const Konachan = async function Konachan(que: string) {
 		return {
 			data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
 		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const Rule34 = async function Rule34(que: string) {
+	if (!que) return null;
+
+	const query = que.trim().replace(/\s+/g, "_");
+
+	const ajaxHeaders = {
+		Origin: "https://rule34.xxx",
+		Referer: "https://rule34.xxx/",
+		"Sec-Fetch-Dest": "empty",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Site": "same-site",
+	};
+
+	try {
+		const per = await fetch(`https://ac.rule34.xxx/autocomplete.php?q=${encodeURIComponent(query)}`, {
+			headers: { ...commonHeaders, ...ajaxHeaders },
+		});
+
+		if (per.status === 403) {
+			return {
+				error: "Cloudflare Turnstile asking to verify you're not a bot",
+			};
+		}
+
+		const res: any = await per.text();
+		let parseres: any = {};
+		try {
+			parseres = JSON.parse(res);
+		} catch {}
+
+		const tags: any[] = (Array.isArray(parseres) ? parseres : [])
+			.map((e: any) => {
+				const totalMatch = String(e?.label ?? "").match(/\((\d+)\)/);
+				return { tag: e?.value ?? null, total: totalMatch ? Number(totalMatch[1]) : 0 };
+			})
+			.filter((t: any) => t.tag)
+			.slice(0, 5);
+
+		if (tags.length === 0) {
+			return {
+				data: null,
+			};
+		}
+
+		const total = tags.reduce((sum: number, t: any) => sum + (t.total || 0), 0);
+
+		const session = new HttpcloakSession({ timeout: 30 });
+		try {
+			const finalres = await Promise.allSettled(
+				tags.map(async (t: any) => {
+					let lastPosts: any[] = [];
+					for (let attempt = 0; attempt < 20; attempt++) {
+						const listRes: any = await session.get(`https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(t.tag)}`, {
+							headers: { ...commonHeaders, "Sec-Fetch-Site": "same-origin" },
+						});
+						const html = typeof listRes?.text === "string" ? listRes.text : "";
+						const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "";
+						if (/captcha|just a moment|attention required/i.test(pageTitle)) throw new Error("captcha");
+						const posts: any[] = [];
+						const blocks = html.split(/<span[^>]*class="thumb"[^>]*>/);
+						for (const b of blocks.slice(1)) {
+							const id = b.match(/page=post(?:&amp;|&)s=view(?:&amp;|&)id=(\d+)/)?.[1] ?? null;
+							const src = b.match(/<img[^>]+src="(https?:\/\/[^"]+)"/)?.[1] ?? null;
+							const alt = b.match(/<img[^>]+alt="([^"]*)"/)?.[1] ?? null;
+							const tagList = alt
+								? alt
+										.replace(/&amp;#039;/g, "'")
+										.replace(/&quot;/g, '"')
+										.replace(/&amp;/g, "&")
+										.trim()
+										.split(/\s+/)
+								: [];
+							if (!id || posts.some((p: any) => p.id === id)) continue;
+							posts.push({
+								id,
+								preview_url: src,
+								file_url: src
+									? src
+											.replace(/\/thumbnails\//, "//images/")
+											.replace(/\/thumbnail_/, "/")
+											.replace(/\.jpg(\?|$)/, ".jpeg$1")
+									: null,
+								tags: tagList,
+								ai: tagList.includes("ai_generated") || tagList.includes("ai_assisted"),
+								post_url: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
+							});
+							if (posts.length >= 20) break;
+						}
+						lastPosts = posts;
+						if (posts.length > 0) break;
+					}
+					return {
+						title: t.tag,
+						posts: lastPosts,
+					};
+				}),
+			);
+
+			return {
+				total,
+				tags,
+				data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
+			};
+		} finally {
+			try {
+				session.close();
+			} catch {}
+		}
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const Danbooru = async function Danbooru(que: string) {
+	if (!que) return null;
+
+	const ajaxHeaders = {
+		Accept: "application/json",
+		Referer: "https://danbooru.donmai.us/",
+		"Sec-Fetch-Dest": "empty",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Site": "same-origin",
+		"User-Agent": userAgent,
+		"X-Requested-With": "XMLHttpRequest",
+	};
+
+	try {
+		const session = new HttpcloakSession({ timeout: 30 });
+		try {
+			const tagQuery = que.trim().replace(/\s+/g, "_");
+			const acRes: any = await session.get(`https://danbooru.donmai.us/tags.json?search[name_matches]=${encodeURIComponent(tagQuery.endsWith("*") ? tagQuery : tagQuery + "*")}&search[order]=count&limit=10`, {
+				headers: ajaxHeaders,
+			});
+
+			if (acRes?.statusCode === 403) {
+				return {
+					error: "Cloudflare Turnstile asking to verify you're not a bot",
+				};
+			}
+
+			const res: any = typeof acRes?.text === "string" ? acRes.text : "";
+			let parseres: any = {};
+			try {
+				parseres = JSON.parse(res);
+			} catch {}
+
+			const tags: any[] = (Array.isArray(parseres) ? parseres : [])
+				.map((e: any) => ({ tag: e?.name ?? null, total: Number(e?.post_count) || 0, deprecated: !!e?.is_deprecated }))
+				.filter((t: any) => t.tag && !t.deprecated)
+				.slice(0, 5)
+				.map(({ tag, total }: any) => ({ tag, total }));
+
+			if (tags.length === 0) {
+				return {
+					data: null,
+				};
+			}
+
+			const total = tags.reduce((sum: number, t: any) => sum + (t.total || 0), 0);
+
+			const finalres = await Promise.allSettled(
+				tags.map(async (t: any) => {
+					const tagQuery = encodeURIComponent(t.tag).replace(/\(/g, "%28").replace(/\)/g, "%29");
+					const req2: any = await session.get(`https://danbooru.donmai.us/posts.json?tags=${tagQuery}&limit=20`, {
+						headers: ajaxHeaders,
+					});
+
+					let res2: any = [];
+					try {
+						res2 = JSON.parse(typeof req2?.text === "string" ? req2.text : "[]");
+					} catch {}
+
+					return {
+						title: t.tag,
+						posts: Array.isArray(res2) ? res2 : [],
+					};
+				}),
+			);
+
+			return {
+				total,
+				tags,
+				data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
+			};
+		} finally {
+			try {
+				session.close();
+			} catch {}
+		}
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -15024,18 +15258,20 @@ export const TenorSuggest = async function TenorSuggest(que: string) {
 	}
 };
 
-export const GiphySuggest = async function GiphySuggest(que: string) {
+export const GiphySuggest = async function GiphySuggest(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 	try {
-		if (!keygiphy) {
+		if (refresh_auth || !keygiphy) {
 			keygiphy = await giphyKey();
 		}
 		const res2 = await fetch(`https://api.giphy.com/v1/gifs/search/tags?api_key=${keygiphy}&q=${encodeURIComponent(que)}&limit=25`, {
 			headers: commonHeaders,
 		});
+		if (res2.status === 401 && !refresh_auth) {
+			return await GiphySuggest(que, true);
+		}
 		if (res2.status === 401) {
-			keygiphy = await giphyKey();
-			return await GiphySuggest(que);
+			return { suggestion: [] };
 		}
 		const jl2: any = await res2.json();
 		return {

@@ -11,7 +11,7 @@ app.get("/imgur/posts", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api.imgur.com");
+	c.header("X-Route", "api.imgur.com, imgur.com");
 	return await dispatch(c, () => ImgurPost(query));
 });
 

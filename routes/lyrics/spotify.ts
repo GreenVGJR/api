@@ -10,7 +10,7 @@ app.get("/spotify", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "spclient.wg.spotify.com");
+	c.header("X-Route", "spclient.wg.spotify.com, api-partner.spotify.com, open.spotify.com, clienttoken.spotify.com, embed.spotify.com");
 
 	return await dispatch(c, () => SPLyrics(query!));
 });

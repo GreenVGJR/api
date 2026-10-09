@@ -10,7 +10,7 @@ app.get("/youtube", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "m.youtube.com");
+	c.header("X-Route", "m.youtube.com, www.youtube.com");
 
 	const task = async () => {
 		let q = query;

@@ -15,7 +15,7 @@ app.get("/twitter", async (c) => {
 	// Extract only the username
 	query = query.split("/")[0];
 
-	c.header("X-Route", "x.com");
+	c.header("X-Route", "x.com, syndication.twitter.com");
 	return await dispatch(c, () => infoTwitterUser(query));
 });
 

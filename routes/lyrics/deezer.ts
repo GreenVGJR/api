@@ -10,7 +10,7 @@ app.get("/deezer", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "pipe.deezer.com");
+	c.header("X-Route", "pipe.deezer.com, auth.deezer.com");
 	return await dispatch(c, () => deezerLyrics(query!));
 });
 

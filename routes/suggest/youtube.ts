@@ -11,7 +11,7 @@ app.get("/youtube", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "suggestqueries.google.com");
+	c.header("X-Route", "suggestqueries.google.com, suggestqueries-clients6.youtube.com");
 	return await dispatch(c, () => YTSuggest(query));
 });
 

@@ -12,7 +12,7 @@ app.get("/youtube/music", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "m.youtube.com");
+	c.header("X-Route", "m.youtube.com, www.youtube.com");
 	return await dispatch(c, () => YTMusic(query, mix));
 });
 

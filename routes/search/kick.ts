@@ -12,7 +12,7 @@ app.get("/kick", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "search.kick.com");
+	c.header("X-Route", "search.kick.com, kick.com");
 	return await dispatch(c, () => KickSearch(query, withStream));
 });
 

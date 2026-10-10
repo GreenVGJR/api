@@ -423,7 +423,7 @@ export const instagramKey = async function instagramKey(): Promise<string | null
 
 export const twitterKey = async function twitterKey(typeName: string) {
 	try {
-		const response = await fetch("https://x.com/i/premium_sign_up", {
+		const response = await fetch("https://x.com/go/f/i/web", {
 			headers: commonHeaders,
 		});
 		const html = await response.text();

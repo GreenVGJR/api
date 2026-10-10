@@ -1239,8 +1239,8 @@ async function performRequest(targetUrl, retryCount = 0) {
 
             responseArea.classList.add("empty-state");
             const mediaTag = isVideo
-              ? `<video src="${encodeURI(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`
-              : `<img src="${encodeURI(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
+              ? `<video src="${escapeAttribute(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`
+              : `<img src="${escapeAttribute(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
             responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${mediaTag}</div>`;
             return null;
           }
@@ -1531,12 +1531,7 @@ function buildQueryString(params) {
   return (
     "?" +
     nonEmpty
-      .map((p) => {
-        let raw = p.value;
-        try { raw = decodeURIComponent(raw); } catch {}
-        const encodedValue = encodeURIComponent(raw);
-        return `${encodeURIComponent(p.key)}=${encodedValue}`;
-      })
+      .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
       .join("&")
   );
 }

@@ -11,7 +11,7 @@ app.get("/rule34", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "ac.rule34.xxx, rule34.xxx");
+	c.header("X-Route", "rule34.xxx");
 	return await dispatch(c, () => Rule34(query));
 });
 

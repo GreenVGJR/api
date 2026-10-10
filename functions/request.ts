@@ -776,24 +776,6 @@ let konaSummary: any;
 
 let googleImgSpAuth: any = {};
 
-function deepFind(obj: unknown, key: string): unknown | null {
-	if (!obj || typeof obj !== "object") return null;
-	if (Array.isArray(obj)) {
-		for (const item of obj) {
-			const result = deepFind(item, key);
-			if (result != null) return result;
-		}
-		return null;
-	}
-	const record = obj as Record<string, unknown>;
-	if (key in record) return record[key];
-	for (const val of Object.values(record)) {
-		const result = deepFind(val, key);
-		if (result != null) return result;
-	}
-	return null;
-}
-
 export const Flickr = async function Flickr(que: string, refresh_auth?: boolean, limit_number: number = 10): Promise<any> {
 	if (!que) return null;
 
@@ -7298,10 +7280,10 @@ const tiktokFetchItemStruct = async function tiktokFetchItemStruct(url: string, 
 		let scriptContent: string | undefined;
 		for (let i = 0; i < 15; i++) {
 			try {
-				const response = await (httpcloakGet as any)(targetUrl, {
+				const response = await (httpcloakGet as any)(targetUrl + "?_r=1&preview_pb=0&sharer_language=en&source=h5_t&u_code=0", {
 					httpVersion: "h2",
 					tlsOnly: true,
-					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404", "Sec-Fetch-Site": "same-origin" },
+					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.reddit.com", "Sec-Fetch-Dest": "empty", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors" },
 				});
 				const html = await responseText(response);
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
@@ -7332,8 +7314,15 @@ const tiktokFetchItemStruct = async function tiktokFetchItemStruct(url: string, 
 
 const tiktokCollectImages = function tiktokCollectImages(videoDetail: any): string[] {
 	const urls: string[] = [];
+	const seen = new Set<string>();
 	const push = (u: any) => {
-		if (typeof u === "string" && u.startsWith("http") && !urls.includes(u)) urls.push(u);
+		if (typeof u !== "string" || !u.startsWith("http")) return;
+		const path = u.split("?")[0];
+		const last = path.split("/").pop() || "";
+		const key = last.includes("~") ? last.split("~")[0] : path;
+		if (!key || seen.has(key)) return;
+		seen.add(key);
+		urls.push(u);
 	};
 	const images = videoDetail?.imagePost?.images;
 	if (Array.isArray(images)) {
@@ -7543,9 +7532,33 @@ export const InstagramPhoto = async function InstagramPhoto(que: string) {
 	}
 };
 
+const resolveThreadsShare = async function resolveThreadsShare(url: string): Promise<string> {
+	const session = new HttpcloakSession({ timeout: 30 });
+	try {
+		const res: any = await session.get(url, {
+			headers: {
+				...commonHeaders,
+				Referer: "https://www.google.com/",
+				"Sec-Fetch-Site": "cross-site",
+			},
+		});
+		const finalUrl = res?.finalUrl || res?.url || url;
+		return typeof finalUrl === "string" && finalUrl ? finalUrl : url;
+	} catch {
+		return url;
+	} finally {
+		try {
+			session.close();
+		} catch {}
+	}
+};
+
 const threadsResolveCode = async function threadsResolveCode(que: string): Promise<string | null> {
 	let url = que;
-	if (/\/share\//.test(que)) url = await resolveShareUrl(que);
+	if (/\/share\//.test(que)) {
+		url = await resolveThreadsShare(que);
+		if (url === que) url = await resolveShareUrl(que);
+	}
 	try {
 		const u = new URL(url);
 		if (!/(^|\.)threads\.com$/.test(u.hostname) && !/(^|\.)threads\.net$/.test(u.hostname)) return null;
@@ -7592,7 +7605,8 @@ export const ThreadsVideo = async function ThreadsVideo(que: string) {
 		if (!embed) return null;
 		if (embed.error) return embed;
 		if (!embed.video) return { error: "This post is a photo, use the photo endpoint" };
-		return { video_url: embed.video };
+		const finalUrl = await fetch(embed.video, { headers: commonHeaders });
+		return { video_url: finalUrl.url || embed.video };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -8153,7 +8167,7 @@ export const infoTenor = async function infoTenor(url: string) {
 	}
 };
 
-export const infoGiphy = async function infoGiphy(url: string) {
+export const infoGiphy = async function infoGiphy(url: string, refresh_auth: boolean = false) {
 	if (!url) return null;
 
 	try {
@@ -8162,68 +8176,50 @@ export const infoGiphy = async function infoGiphy(url: string) {
 			return { error: "Invalid Giphy URL" };
 		}
 
-		const res = await fetch(url, {
-			headers: commonHeaders,
-		});
+		const segments = urlObj.pathname.split("/").filter(Boolean);
+		const gifId = (segments[segments.length - 1] || "").split("-").pop() || "";
+		if (!gifId) {
+			return { error: "Invalid Giphy URL" };
+		}
 
-		if (res.status !== 200) {
+		if (refresh_auth || !keygiphy) {
+			keygiphy = await giphyKey();
+		}
+
+		const [res, resRelated] = await Promise.all([
+			fetch(`https://api.giphy.com/v1/gifs/${gifId}?api_key=${keygiphy}`, {
+				headers: commonHeaders,
+			}),
+			fetch(`https://api.giphy.com/v1/gifs/related?gif_id=${gifId}&limit=25&api_key=${keygiphy}`, {
+				headers: commonHeaders,
+			}),
+		]);
+
+		if (res.status === 401 && !refresh_auth) {
+			return await infoGiphy(url, true);
+		}
+
+		if (!res.ok) {
 			return { error: `${res.status} - Can't process this` };
 		}
 
-		const html = await res.text();
-
-		const keywordsMatch = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i);
-		const keywords =
-			keywordsMatch?.[1]
-				?.split(",")
-				.map((k: string) => k.trim())
-				.filter(Boolean) || null;
-
-		const chunks = html.split("self.__next_f.push(");
-		chunks.shift();
-
-		let gifData: unknown = null;
-		let userData: unknown = null;
-		let relatedData: unknown = null;
-
-		for (const chunk of chunks) {
-			if (!chunk.includes("gif")) continue;
-
-			try {
-				let end = chunk.indexOf(")</script>");
-				if (end === -1) end = chunk.indexOf(")\n");
-				if (end === -1) end = chunk.lastIndexOf(")");
-
-				const parsed = JSON.parse(chunk.substring(0, end));
-
-				let innerData: unknown = parsed[1];
-				if (typeof innerData === "string") {
-					const colonIdx = innerData.indexOf(":");
-					if (colonIdx !== -1) {
-						try {
-							innerData = JSON.parse(innerData.substring(colonIdx + 1));
-						} catch {}
-					}
-				}
-
-				if (!gifData) gifData = deepFind(innerData, "gif");
-				if (!relatedData) relatedData = deepFind(innerData, "initialGifs");
-				if (!userData) {
-					const found = deepFind(innerData, "user");
-					if (found && typeof found === "object") userData = found;
-				}
-
-				if (gifData) break;
-			} catch {
-				continue;
-			}
+		const json: any = await res.json();
+		const gifData = json?.data ?? null;
+		if (!gifData) {
+			return { error: "GIF not found" };
 		}
+
+		let relatedData: any = null;
+		try {
+			const relatedJson: any = await resRelated.json();
+			relatedData = Array.isArray(relatedJson?.data) ? relatedJson.data : null;
+		} catch {}
 
 		return {
 			data: {
-				suggestion: keywords,
+				suggestion: Array.isArray(gifData?.tags) && gifData.tags.length ? gifData.tags : null,
 				data: gifData,
-				user: userData,
+				user: gifData?.user ?? null,
 				related: relatedData,
 			},
 		};
@@ -12502,9 +12498,37 @@ export const CrunchySearch = async function CrunchySearch(que: string, refresh_a
 export const SafeBooru = async function SafeBooru(que: string) {
 	if (!que) return null;
 
-	const query = que.trim().replace(/\s+/g, "_");
+	const query = que.trim().replace(/\s+/g, " ");
 
 	try {
+		const terms = query.split(/\s+/).filter(Boolean);
+
+		if (terms.length > 1) {
+			const req2 = await fetch(`https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(terms.join(" "))}&limit=100`, {
+				headers: commonHeaders,
+			});
+			if (req2.status === 403) {
+				return {
+					error: "Cloudflare Turnstile asking to verify you're not a bot",
+				};
+			}
+			const res2: any = await req2.json();
+			if (!Array.isArray(res2) || res2.length === 0) {
+				return {
+					data: null,
+				};
+			}
+			return {
+				data: [
+					{
+						title: query,
+						total: String(res2.length),
+						data: res2,
+					},
+				],
+			};
+		}
+
 		const per = await fetch(`https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query)}`, {
 			headers: commonHeaders,
 		});
@@ -12605,111 +12629,68 @@ export const Konachan = async function Konachan(que: string) {
 export const Rule34 = async function Rule34(que: string) {
 	if (!que) return null;
 
-	const query = que.trim().replace(/\s+/g, "_");
-
-	const ajaxHeaders = {
-		Origin: "https://rule34.xxx",
-		Referer: "https://rule34.xxx/",
-		"Sec-Fetch-Dest": "empty",
-		"Sec-Fetch-Mode": "cors",
-		"Sec-Fetch-Site": "same-site",
-	};
+	const query = que.trim().replace(/\s+/g, " ");
 
 	try {
-		const per = await fetch(`https://ac.rule34.xxx/autocomplete.php?q=${encodeURIComponent(query)}`, {
-			headers: { ...commonHeaders, ...ajaxHeaders },
-		});
-
-		if (per.status === 403) {
-			return {
-				error: "Cloudflare Turnstile asking to verify you're not a bot",
-			};
+		let lastPosts: any[] = [];
+		let thumbCount = 0;
+		let total = 0;
+		for (let attempt = 0; attempt < 20; attempt++) {
+			const listRes = await fetch(`https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(query)}`, {
+				headers: { ...commonHeaders, "Sec-Fetch-Site": "same-origin" },
+				signal: AbortSignal.timeout(20000),
+			});
+			const html = await listRes.text();
+			const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "";
+			if (/captcha|just a moment|attention required/i.test(pageTitle)) throw new Error("captcha");
+			const posts: any[] = [];
+			const blocks = html.split(/<span[^>]*class="thumb"[^>]*>/);
+			thumbCount = blocks.length - 1;
+			for (const b of blocks.slice(1)) {
+				const id = b.match(/page=post(?:&amp;|&)s=view(?:&amp;|&)id=(\d+)/)?.[1] ?? null;
+				const src = b.match(/<img[^>]+src="(https?:\/\/[^"]+)"/)?.[1] ?? null;
+				const alt = b.match(/<img[^>]+alt="([^"]*)"/)?.[1] ?? null;
+				const tagList = alt
+					? alt
+							.replace(/&amp;#039;/g, "'")
+							.replace(/&quot;/g, '"')
+							.replace(/&amp;/g, "&")
+							.trim()
+							.split(/\s+/)
+					: [];
+				if (!id || posts.some((p: any) => p.id === id)) continue;
+				posts.push({
+					id,
+					preview_url: src,
+					file_url: src
+						? src
+								.replace(/\/thumbnails\//, "//images/")
+								.replace(/\/thumbnail_/, "/")
+								.replace(/\.jpg(\?|$)/, ".jpeg$1")
+						: null,
+					tags: tagList,
+					ai: tagList.includes("ai_generated") || tagList.includes("ai_assisted"),
+					post_url: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
+				});
+				if (posts.length >= 20) break;
+			}
+			lastPosts = posts;
+			const lastPagePid = Number(html.match(/<a[^>]*&amp;pid=(\d+)[^>]*alt="last page"/)?.[1] ?? html.match(/&amp;pid=(\d+)" alt="last page"/)?.[1] ?? 0);
+			const perPage = thumbCount || posts.length;
+			total = perPage > 0 ? (lastPagePid > 0 ? Math.ceil((lastPagePid + 1) / perPage) * perPage : perPage) : 0;
+			if (posts.length > 0) break;
 		}
 
-		const res: any = await per.text();
-		let parseres: any = {};
-		try {
-			parseres = JSON.parse(res);
-		} catch {}
+		const tags = query
+			.split(/\s+/)
+			.filter((t) => t && !t.startsWith("-"))
+			.map((t) => t.replace(/_/g, " "));
 
-		const tags: any[] = (Array.isArray(parseres) ? parseres : [])
-			.map((e: any) => {
-				const totalMatch = String(e?.label ?? "").match(/\((\d+)\)/);
-				return { tag: e?.value ?? null, total: totalMatch ? Number(totalMatch[1]) : 0 };
-			})
-			.filter((t: any) => t.tag)
-			.slice(0, 5);
-
-		if (tags.length === 0) {
-			return {
-				data: null,
-			};
-		}
-
-		const total = tags.reduce((sum: number, t: any) => sum + (t.total || 0), 0);
-
-		const session = new HttpcloakSession({ timeout: 30 });
-		try {
-			const finalres = await Promise.allSettled(
-				tags.map(async (t: any) => {
-					let lastPosts: any[] = [];
-					for (let attempt = 0; attempt < 20; attempt++) {
-						const listRes: any = await session.get(`https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(t.tag)}`, {
-							headers: { ...commonHeaders, "Sec-Fetch-Site": "same-origin" },
-						});
-						const html = typeof listRes?.text === "string" ? listRes.text : "";
-						const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "";
-						if (/captcha|just a moment|attention required/i.test(pageTitle)) throw new Error("captcha");
-						const posts: any[] = [];
-						const blocks = html.split(/<span[^>]*class="thumb"[^>]*>/);
-						for (const b of blocks.slice(1)) {
-							const id = b.match(/page=post(?:&amp;|&)s=view(?:&amp;|&)id=(\d+)/)?.[1] ?? null;
-							const src = b.match(/<img[^>]+src="(https?:\/\/[^"]+)"/)?.[1] ?? null;
-							const alt = b.match(/<img[^>]+alt="([^"]*)"/)?.[1] ?? null;
-							const tagList = alt
-								? alt
-										.replace(/&amp;#039;/g, "'")
-										.replace(/&quot;/g, '"')
-										.replace(/&amp;/g, "&")
-										.trim()
-										.split(/\s+/)
-								: [];
-							if (!id || posts.some((p: any) => p.id === id)) continue;
-							posts.push({
-								id,
-								preview_url: src,
-								file_url: src
-									? src
-											.replace(/\/thumbnails\//, "//images/")
-											.replace(/\/thumbnail_/, "/")
-											.replace(/\.jpg(\?|$)/, ".jpeg$1")
-									: null,
-								tags: tagList,
-								ai: tagList.includes("ai_generated") || tagList.includes("ai_assisted"),
-								post_url: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
-							});
-							if (posts.length >= 20) break;
-						}
-						lastPosts = posts;
-						if (posts.length > 0) break;
-					}
-					return {
-						title: t.tag,
-						posts: lastPosts,
-					};
-				}),
-			);
-
-			return {
-				total,
-				tags,
-				data: finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean),
-			};
-		} finally {
-			try {
-				session.close();
-			} catch {}
-		}
+		return {
+			total,
+			tags,
+			data: [{ title: query, posts: lastPosts }],
+		};
 	} catch (e) {
 		console.error(e);
 		return null;

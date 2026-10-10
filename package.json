@@ -31,7 +31,7 @@
 		"soft-update": "git fetch origin && git reset --hard origin/main && git clean -fd && bun run gen; npm run pm2-check; npm update -g"
 	},
 	"devDependencies": {
-		"@types/node": "^26.6.4",
+		"@types/node": "^26.6.5",
 		"bun-types": "^1.4.2",
 		"tsx": "^4.23.15",
 		"typescript": "^7.0.2"

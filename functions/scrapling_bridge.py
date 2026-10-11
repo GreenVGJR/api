@@ -41,6 +41,35 @@ def main():
                 continue
 
             fetcher_type = input_data.get("fetcher_type", "stealthy").lower()
+            if input_data.get("warmup"):
+                try:
+                    _headless = input_data.get("headless", True)
+                    _retries = input_data.get("retries", 3)
+                    if fetcher_type == "dynamic":
+                        if not dynamic_session:
+                            from scrapling.fetchers import DynamicSession
+                            dynamic_session = DynamicSession(headless=_headless, cookies=None, retries=_retries)
+                            dynamic_session.start()
+                            dynamic_retries = _retries
+                    else:
+                        if not stealthy_session:
+                            from scrapling.fetchers import StealthySession
+                            stealthy_session = StealthySession(headless=_headless, cookies=None, retries=_retries)
+                            stealthy_session.start()
+                            stealthy_retries = _retries
+                    print(json.dumps({
+                        "request_id": request_id,
+                        "success": True,
+                        "warmed": True
+                    }))
+                except Exception as e:
+                    print(json.dumps({
+                        "request_id": request_id,
+                        "success": False,
+                        "error": str(e)
+                    }))
+                sys.stdout.flush()
+                continue
             method = input_data.get("method", "GET").upper()
             headers = input_data.get("headers")
             cookies = input_data.get("cookies")

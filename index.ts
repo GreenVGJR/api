@@ -15,6 +15,7 @@ if (!g.__vgjr_initialized) {
 	g.__vgjr_refresh_count = 0;
 	setTimeout(() => {
 		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
+		import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {});
 	}, 0);
 
 	if (!g.__vgjr_shutdown_handlers) {

@@ -1,5 +1,5 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, solveMagnificPow, fetchMagnificChallenge, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
@@ -423,19 +423,24 @@ const parseYoutubeSuggestResponse = async (response: Response): Promise<any> => 
 
 async function fetchYoutubeWithRetry<T>(request: () => Promise<Response>, parse: (response: Response) => Promise<T>, label: string): Promise<YoutubeFetchResult<T>> {
 	for (let attempt = 0; attempt <= YOUTUBE_JSON_MAX_RETRIES; attempt++) {
+		let status = 0;
 		try {
 			const response = await request();
-			const status = responseStatus(response);
-			if (status === 403 || status === 429) {
-				throw new Error(`YouTube returned ${status}`);
+			status = responseStatus(response);
+			if (status !== 403 && status !== 429) {
+				return { ok: true, data: await parse(response) };
 			}
-			return { ok: true, data: await parse(response) };
+			throw new Error(`YouTube returned ${status}`);
 		} catch (error) {
+			if (status !== 403 && status !== 429) {
+				console.error(`${label} failed with non-retryable status ${status}`, error);
+				return { ok: false };
+			}
 			if (attempt === YOUTUBE_JSON_MAX_RETRIES) {
 				console.error(`${label} failed after ${YOUTUBE_JSON_MAX_RETRIES + 1} attempts`, error);
 				return { ok: false };
 			}
-			console.warn(`${label} attempt ${attempt + 1} failed; retrying in ${YOUTUBE_JSON_RETRY_DELAY_MS}ms`, error);
+			console.warn(`${label} attempt ${attempt + 1} failed with ${status}; retrying in ${YOUTUBE_JSON_RETRY_DELAY_MS}ms`, error);
 			keyYoutubeVisitor = null;
 			await sleepYoutubeRetry(YOUTUBE_JSON_RETRY_DELAY_MS);
 		}
@@ -724,6 +729,43 @@ let unsplashWafCookie: string = "";
 let shazamCfCookie: string | null = "";
 let magnificBuildId: string | null = "";
 let magnificCookies: string = "";
+
+// Akamai rate-limits magnific on bursts ("multiple requests at short time"
+// → PoW challenge). Pace upstream hits, dedupe concurrent identical queries,
+// cache results briefly, and single-flight key refreshes so one burst costs
+// one upstream hit instead of N.
+const MAGNIFIC_MIN_GAP_MS = 1000;
+const MAGNIFIC_CACHE_TTL_MS = 60_000;
+const magnificCache = new Map<string, { exp: number; data: any }>();
+const magnificInflight = new Map<string, Promise<any>>();
+let magnificGate: Promise<void> = Promise.resolve();
+let magnificLastHit = 0;
+let magnificKeyInflight: Promise<{ buildId: string; cookies: string } | null> | null = null;
+
+const magnificPace = async (): Promise<void> => {
+	let release!: () => void;
+	const prev = magnificGate;
+	magnificGate = new Promise<void>((r) => {
+		release = r;
+	});
+	await prev;
+	try {
+		const wait = MAGNIFIC_MIN_GAP_MS - (Date.now() - magnificLastHit);
+		if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+	} finally {
+		magnificLastHit = Date.now();
+		release();
+	}
+};
+
+const refreshMagnificKey = (): Promise<{ buildId: string; cookies: string } | null> => {
+	if (!magnificKeyInflight) {
+		magnificKeyInflight = magnificKey().finally(() => {
+			magnificKeyInflight = null;
+		});
+	}
+	return magnificKeyInflight;
+};
 
 const setTiktokWafCookie = (solved: string) => {
 	if (tiktokWafCookie && tiktokSessionKeys.cookie?.includes(tiktokWafCookie)) {
@@ -9020,7 +9062,10 @@ export async function RageProfile(query: string): Promise<any> {
 
 	let res: any;
 
-	for (let attempts = 0; attempts < 3; attempts++) {
+	// Earned clearance is usually either valid (first try passes) or stale
+	// (instant re-challenge), so don't burn extra httpcloak roundtrips on it.
+	const rageMaxAttempts = rageCookies ? 2 : 3;
+	for (let attempts = 0; attempts < rageMaxAttempts; attempts++) {
 		try {
 			res = await (httpcloakGet as any)(`https://rage.wtf/${username}`, {
 				httpVersion: "h2",
@@ -9035,7 +9080,7 @@ export async function RageProfile(query: string): Promise<any> {
 				break;
 			}
 
-			if (attempts === 2) {
+			if (attempts === rageMaxAttempts - 1) {
 				// Cloudflare interstitial - a real browser can solve it, the cookies it
 				// earns are then replayed on subsequent httpcloak requests.
 				let browserRes: any;
@@ -9043,12 +9088,21 @@ export async function RageProfile(query: string): Promise<any> {
 					browserRes = await browserRequest({
 						url: `https://rage.wtf/${username}`,
 						fetcherType: "stealthy",
-						headers: commonHeaders,
+						// No custom headers: the stealthy session sends its own
+						// browser-consistent set; overriding the UA breaks the
+						// TLS/UA pairing and the managed challenge never clears.
+						cookies: rageCookies
+							? rageCookies.split(";").map((c) => {
+									const idx = c.indexOf("=");
+									return { name: c.slice(0, idx).trim(), value: c.slice(idx + 1) };
+								})
+							: undefined,
 						extractHtml: true,
-						// Scrapling burns up to 3 fetch retries x 3 CF solve attempts on a
-						// stubborn challenge, so cap the wait instead of hanging the request.
-						timeoutMs: 45000,
-						retries: 1,
+						// Managed Turnstile can take a minute+; Scrapling burns up to
+						// `retries` fetch retries x 3 CF solve attempts per fetch, so
+						// cap the total instead of hanging the request.
+						timeoutMs: 120000,
+						retries: 2,
 					});
 				} catch (e) {
 					console.error("RageProfile browser fallback error:", e);
@@ -9073,7 +9127,7 @@ export async function RageProfile(query: string): Promise<any> {
 				};
 			}
 		} catch (e) {
-			if (attempts === 2) throw e;
+			if (attempts === rageMaxAttempts - 1) throw e;
 		}
 	}
 
@@ -12631,66 +12685,136 @@ export const Rule34 = async function Rule34(que: string) {
 
 	const query = que.trim().replace(/\s+/g, " ");
 
+	const ajaxHeaders = {
+		Origin: "https://rule34.xxx",
+		Referer: "https://rule34.xxx/",
+		"Sec-Fetch-Dest": "empty",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Site": "same-site",
+	};
+
 	try {
-		let lastPosts: any[] = [];
-		let thumbCount = 0;
-		let total = 0;
-		for (let attempt = 0; attempt < 20; attempt++) {
-			const listRes = await fetch(`https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(query)}`, {
-				headers: { ...commonHeaders, "Sec-Fetch-Site": "same-origin" },
+		const resolveTerm = async (term: string): Promise<string[]> => {
+			const per = await fetch(`https://ac.rule34.xxx/autocomplete.php?q=${encodeURIComponent(term)}`, {
+				headers: { ...commonHeaders, ...ajaxHeaders },
 				signal: AbortSignal.timeout(20000),
 			});
-			const html = await listRes.text();
-			const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "";
-			if (/captcha|just a moment|attention required/i.test(pageTitle)) throw new Error("captcha");
-			const posts: any[] = [];
-			const blocks = html.split(/<span[^>]*class="thumb"[^>]*>/);
-			thumbCount = blocks.length - 1;
-			for (const b of blocks.slice(1)) {
-				const id = b.match(/page=post(?:&amp;|&)s=view(?:&amp;|&)id=(\d+)/)?.[1] ?? null;
-				const src = b.match(/<img[^>]+src="(https?:\/\/[^"]+)"/)?.[1] ?? null;
-				const alt = b.match(/<img[^>]+alt="([^"]*)"/)?.[1] ?? null;
-				const tagList = alt
-					? alt
-							.replace(/&amp;#039;/g, "'")
-							.replace(/&quot;/g, '"')
-							.replace(/&amp;/g, "&")
-							.trim()
-							.split(/\s+/)
-					: [];
-				if (!id || posts.some((p: any) => p.id === id)) continue;
-				posts.push({
-					id,
-					preview_url: src,
-					file_url: src
-						? src
-								.replace(/\/thumbnails\//, "//images/")
-								.replace(/\/thumbnail_/, "/")
-								.replace(/\.jpg(\?|$)/, ".jpeg$1")
-						: null,
-					tags: tagList,
-					ai: tagList.includes("ai_generated") || tagList.includes("ai_assisted"),
-					post_url: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
-				});
-				if (posts.length >= 20) break;
+
+			if (per.status === 403) {
+				throw new Error("turnstile");
 			}
-			lastPosts = posts;
-			const lastPagePid = Number(html.match(/<a[^>]*&amp;pid=(\d+)[^>]*alt="last page"/)?.[1] ?? html.match(/&amp;pid=(\d+)" alt="last page"/)?.[1] ?? 0);
-			const perPage = thumbCount || posts.length;
-			total = perPage > 0 ? (lastPagePid > 0 ? Math.ceil((lastPagePid + 1) / perPage) * perPage : perPage) : 0;
-			if (posts.length > 0) break;
+
+			const res: any = await per.text();
+			let parseres: any = {};
+			try {
+				parseres = JSON.parse(res);
+			} catch {}
+			if (!Array.isArray(parseres) || parseres.length === 0) return [];
+			const values = parseres.map((e: any) => e?.value).filter((v: any) => typeof v === "string" && v);
+			const exact = values.filter((v: string) => v === term);
+			const rest = values.filter((v: string) => v !== term);
+			return [...exact, ...rest].slice(0, 5);
+		};
+
+		const terms = query.split(/\s+/).filter(Boolean);
+		const resolved: string[] = [];
+		try {
+			for (const term of terms) {
+				for (const tag of await resolveTerm(term)) {
+					if (!resolved.includes(tag)) resolved.push(tag);
+					if (resolved.length >= 10) break;
+				}
+				if (resolved.length >= 10) break;
+			}
+		} catch (e) {
+			if (String((e as Error)?.message) === "turnstile") {
+				return {
+					error: "Cloudflare Turnstile asking to verify you're not a bot",
+				};
+			}
+			throw e;
 		}
 
-		const tags = query
-			.split(/\s+/)
-			.filter((t) => t && !t.startsWith("-"))
-			.map((t) => t.replace(/_/g, " "));
+		if (resolved.length === 0) {
+			return {
+				data: null,
+			};
+		}
 
-		return {
-			total,
-			tags,
-			data: [{ title: query, posts: lastPosts }],
+		const session = new HttpcloakSession({ timeout: 15 });
+		const searchTag = async (tag: string) => {
+			let lastPosts: any[] = [];
+			let thumbCount = 0;
+			let total = 0;
+			let captchaHits = 0;
+			for (let attempt = 0; attempt < 20; attempt++) {
+				let html = "";
+				try {
+					const listRes: any = await session.get(`https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(tag)}`, {
+						headers: { ...commonHeaders, "Sec-Fetch-Site": "same-origin" },
+					});
+					html = typeof listRes?.text === "string" ? listRes.text : "";
+				} catch {
+					continue;
+				}
+				const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "";
+				if (/captcha|just a moment|attention required/i.test(pageTitle)) {
+					if (++captchaHits >= 3) throw new Error("captcha");
+					continue;
+				}
+				const posts: any[] = [];
+				const blocks = html.split(/<span[^>]*class="thumb"[^>]*>/);
+				thumbCount = blocks.length - 1;
+				for (const b of blocks.slice(1)) {
+					const id = b.match(/page=post(?:&amp;|&)s=view(?:&amp;|&)id=(\d+)/)?.[1] ?? null;
+					const src = b.match(/<img[^>]+src="(https?:\/\/[^"]+)"/)?.[1] ?? null;
+					const alt = b.match(/<img[^>]+alt="([^"]*)"/)?.[1] ?? null;
+					const tagList = alt
+						? alt
+								.replace(/&amp;#039;/g, "'")
+								.replace(/&quot;/g, '"')
+								.replace(/&amp;/g, "&")
+								.trim()
+								.split(/\s+/)
+						: [];
+					if (!id || posts.some((p: any) => p.id === id)) continue;
+					posts.push({
+						id,
+						preview_url: src,
+						file_url: src
+							? src
+									.replace(/\/thumbnails\//, "//images/")
+									.replace(/\/thumbnail_/, "/")
+									.replace(/\.jpg(\?|$)/, ".jpeg$1")
+							: null,
+						tags: tagList,
+						ai: tagList.includes("ai_generated") || tagList.includes("ai_assisted"),
+						post_url: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
+					});
+					if (posts.length >= 20) break;
+				}
+				lastPosts = posts;
+				const lastPagePid = Number(html.match(/<a[^>]*&amp;pid=(\d+)[^>]*alt="last page"/)?.[1] ?? html.match(/&amp;pid=(\d+)" alt="last page"/)?.[1] ?? 0);
+				const perPage = thumbCount || posts.length;
+				total = perPage > 0 ? (lastPagePid > 0 ? Math.ceil((lastPagePid + 1) / perPage) * perPage : perPage) : 0;
+				if (posts.length > 0) break;
+			}
+			return { title: tag, posts: lastPosts, total };
 		};
+		try {
+			const finalres = await Promise.allSettled(resolved.map((tag) => searchTag(tag)));
+			const groups = finalres.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean) as any[];
+
+			return {
+				total: groups.reduce((sum: number, g: any) => sum + (g.total || 0), 0),
+				tags: groups.map((g: any) => ({ tag: g.title, total: g.total || 0 })),
+				data: groups.map((g: any) => ({ title: g.title, posts: g.posts })),
+			};
+		} finally {
+			try {
+				session.close();
+			} catch {}
+		}
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -12986,6 +13110,242 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 					}) || [],
 			},
 		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+let googleWebCookies: Record<string, string> = {};
+
+const googleWebUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+
+const googleWebJar = (): string =>
+	Object.entries(googleWebCookies)
+		.map(([k, v]) => `${k}=${v}`)
+		.join("; ");
+
+const mergeGoogleWebCookies = (res: Response): void => {
+	try {
+		const raw: string[] = typeof (res.headers as any).getSetCookie === "function" ? (res.headers as any).getSetCookie() : [];
+		for (const c of raw) {
+			const m = /^([^=]+)=([^;]*)/.exec(c);
+			if (m && m[1]) googleWebCookies[m[1].trim()] = m[2];
+		}
+	} catch {}
+};
+
+const parseGoogleWebItems = (html: string): any[] => {
+	const { document } = parseHTML(html);
+	const raw: any[] = [];
+	const usedSnippets = new Set<any>();
+	for (const box of Array.from(document.querySelectorAll("div.yuRUbf")) as any[]) {
+		const a = (box as any).querySelector("a[href]");
+		let href: string = a?.getAttribute("href") ?? "";
+		if (!href) continue;
+		if (href.startsWith("/url?")) {
+			try {
+				const params = new URLSearchParams(href.split("?")[1] ?? "");
+				href = params.get("q") || params.get("url") || href;
+			} catch {}
+		}
+		const title = ((box as any).querySelector("h3")?.textContent ?? a?.textContent ?? "").replace(/\s+/g, " ").trim();
+		if (!title) continue;
+		const site = ((box as any).querySelector("span.VuuXrf")?.textContent ?? "").replace(/\s+/g, " ").trim();
+		let snippet = "";
+		let ancestor: any = box;
+		for (let depth = 0; depth < 4 && ancestor; depth++) {
+			const candidate = ancestor.querySelector?.("div.VwiC3b");
+			if (candidate && !usedSnippets.has(candidate)) {
+				snippet = (candidate.textContent ?? "").replace(/\s+/g, " ").trim();
+				if (snippet) {
+					usedSnippets.add(candidate);
+					break;
+				}
+			}
+			ancestor = ancestor.parentNode;
+		}
+		raw.push({ title, href, ...(site ? { siteName: site } : {}), ...(snippet ? { snippet } : {}) });
+	}
+	return raw;
+};
+
+const resolveGoogleWebUrls = async (raw: any[]): Promise<any[]> => {
+	const jar = googleWebJar();
+	const resolved = await Promise.allSettled(
+		raw.slice(0, 10).map(async (item) => {
+			if (item.href.startsWith("http")) return item.href;
+			if (!item.href.startsWith("/goto?")) return null;
+			try {
+				const r = await fetch(`https://www.google.com${item.href}`, {
+					headers: {
+						Accept: "*/*",
+						"User-Agent": googleWebUA,
+						...(jar ? { Cookie: jar } : {}),
+					},
+					redirect: "manual",
+					signal: AbortSignal.timeout(15000),
+				});
+				await r.text().catch(() => {});
+				const loc = r.headers.get("location") ?? "";
+				return loc.startsWith("http") ? loc : null;
+			} catch {
+				return null;
+			}
+		}),
+	);
+	const items: any[] = [];
+	const seen = new Set<string>();
+	raw.slice(0, 10).forEach((item, idx) => {
+		const r = resolved[idx];
+		const url = item.href.startsWith("http") ? item.href : r.status === "fulfilled" ? r.value : null;
+		if (!url || seen.has(url)) return;
+		seen.add(url);
+		const { href: _href, ...rest } = item;
+		let iconUrl = "";
+		try {
+			iconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
+		} catch {}
+		items.push({ ...rest, url, ...(iconUrl ? { iconUrl } : {}), ...(item.href.startsWith("/goto?") ? { trackingUrl: `https://www.google.com${item.href}` } : {}) });
+	});
+	return items;
+};
+
+const isGoogleWebChallenged = (html: string, finalUrl = ""): boolean => finalUrl.includes("/sorry/") || html.includes("detected unusual traffic") || (html.includes("enablejs") && !html.includes("yuRUbf"));
+
+const isGoogleSafeSearchHidden = (html: string): boolean => /hidden by safesearch|disembunyikan oleh safesearch/i.test(html);
+
+// Flips safeui=off for the current jar using the page's own signed setprefs
+// link. Best-effort: silently skips when the page carries no signature.
+const ensureSafeSearchOff = async (html: string): Promise<boolean> => {
+	const sig = html.match(/\/setprefs\?sig=([A-Za-z0-9\-_%]+)/)?.[1];
+	if (!sig) return false;
+	try {
+		const jar = googleWebJar();
+		const sp = await fetch(`https://www.google.com/setprefs?sig=${sig}&authuser=0&gl=SG&safeui=off&noredirect=1`, {
+			headers: {
+				Accept: "*/*",
+				"User-Agent": googleWebUA,
+				Referer: "https://www.google.com/",
+				...(jar ? { Cookie: jar } : {}),
+			},
+			redirect: "manual",
+			signal: AbortSignal.timeout(15000),
+		});
+		await sp.text().catch(() => {});
+		mergeGoogleWebCookies(sp);
+		console.warn("googleWebSearch: SafeSearch pref flipped off for session");
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+// SafeSearch hides results server-side; the page carries a signed setprefs
+// link that flips safeui=off for this jar. Returns items when the bypass
+// worked, [] when prefs flipped but results stay hidden (network-enforced),
+// null when the page isn't a SafeSearch wall or has no usable signature.
+const bypassGoogleSafeSearch = async (html: string, searchUrl: string): Promise<any[] | null> => {
+	if (!isGoogleSafeSearchHidden(html)) return null;
+	const sig = html.match(/\/setprefs\?sig=([A-Za-z0-9\-_%]+)/)?.[1];
+	if (!sig) return null;
+	try {
+		const jar = googleWebJar();
+		const sp = await fetch(`https://www.google.com/setprefs?sig=${sig}&authuser=0&gl=SG&safeui=off&noredirect=1`, {
+			headers: {
+				Accept: "*/*",
+				"User-Agent": googleWebUA,
+				Referer: "https://www.google.com/",
+				...(jar ? { Cookie: jar } : {}),
+			},
+			redirect: "manual",
+			signal: AbortSignal.timeout(15000),
+		});
+		await sp.text().catch(() => {});
+		mergeGoogleWebCookies(sp);
+		const retry = await fetch(searchUrl, {
+			headers: {
+				Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+				"Accept-Language": "en-US,en;q=0.9",
+				"User-Agent": googleWebUA,
+				Referer: "https://www.google.com/",
+				Cookie: googleWebJar(),
+			},
+			redirect: "manual",
+			signal: AbortSignal.timeout(20000),
+		});
+		mergeGoogleWebCookies(retry);
+		if (retry.status !== 200) return [];
+		return await resolveGoogleWebUrls(parseGoogleWebItems(await retry.text()));
+	} catch {
+		return [];
+	}
+};
+
+export const googleWebSearch = async (query: string): Promise<any> => {
+	if (!query) return null;
+
+	try {
+		const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=web`;
+		// Fast path: once the browser has solved the challenge and earned trust
+		// cookies, plain fetch serves results without another browser trip.
+		if (googleWebCookies.NID) {
+			try {
+				const native = await fetch(url, {
+					headers: {
+						Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+						"Accept-Language": "en-US,en;q=0.9",
+						"User-Agent": googleWebUA,
+						Referer: "https://www.google.com/",
+						Cookie: googleWebJar(),
+					},
+					redirect: "manual",
+					signal: AbortSignal.timeout(20000),
+				});
+				mergeGoogleWebCookies(native);
+				if (native.status === 200) {
+					const html = await native.text();
+					const items = await resolveGoogleWebUrls(parseGoogleWebItems(html));
+					if (items.length) return { total: items.length, data: items };
+					const bypassed = await bypassGoogleSafeSearch(html, url);
+					if (bypassed) {
+						if (bypassed.length) return { total: bypassed.length, data: bypassed };
+						return { error: "Google SafeSearch hid the results for this query" };
+					}
+					if (!isGoogleWebChallenged(html)) return { data: null };
+				}
+			} catch {}
+		}
+		const res = await browserRequest({
+			url,
+			fetcherType: "stealthy",
+			cookies: Object.keys(googleWebCookies).length ? Object.entries(googleWebCookies).map(([name, value]) => ({ name, value })) : undefined,
+			extractHtml: true,
+			timeoutMs: 90000,
+		});
+		if (res?.cookies) googleWebCookies = { ...googleWebCookies, ...res.cookies };
+		const html: string = res?.html ?? "";
+		if (!res?.success || !html) {
+			if (res && !res.success) console.warn(`googleWebSearch: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
+			return null;
+		}
+		// First request chain: challenge solved above -> flip SafeSearch off now
+		// so this jar stays unfiltered; the definitive parse below then runs on
+		// the full results (wall pages fall through to the bypass retry).
+		await ensureSafeSearchOff(html);
+		const items = await resolveGoogleWebUrls(parseGoogleWebItems(html));
+		if (!items.length) {
+			const bypassed = await bypassGoogleSafeSearch(html, url);
+			if (bypassed?.length) return { total: bypassed.length, data: bypassed };
+			if (bypassed || isGoogleSafeSearchHidden(html)) {
+				return { error: "Google SafeSearch hid the results for this query" };
+			}
+			if (isGoogleWebChallenged(html, res?.url)) {
+				return { error: "Google asking to verify you're not a bot" };
+			}
+			return { data: null };
+		}
+		return { total: items.length, data: items };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -15464,61 +15824,120 @@ export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRe
 	}
 };
 
-export const Magnific = async function Magnific(que: string, buildRetried: boolean = false) {
+export const Magnific = async function Magnific(que: string): Promise<any> {
 	if (!que) return null;
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 }); // Handling TLS Handshake for fingerprint
-	const q = encodeURIComponent(que);
-	const pullJson = async (build: string) => {
-		const dataRes: any = await session.get(`https://www.magnific.com/_next/data/${build}/en/search.json?format=search&last_filter=query&last_value=${q}&query=${q}`, {
-			headers: { ...commonHeaders, ...(magnificCookies ? { Cookie: magnificCookies } : {}), Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
-		});
-		if (dataRes?.statusCode === 403) return { challenged: true };
-		if (dataRes?.statusCode !== 200) return null;
-		try {
-			return await dataRes.json();
-		} catch {
-			const text = await responseText(dataRes);
-			if (text.includes("_sec/verify") || text.includes("bm-verify") || text.includes("challenge.magnific")) return { challenged: true };
-			return JSON.parse(text);
-		}
-	};
-	try {
-		if (!magnificBuildId) {
-			const fresh = await magnificKey();
-			if (fresh) {
-				magnificBuildId = fresh.buildId;
-				magnificCookies = fresh.cookies;
+	const cacheKey = que.trim().toLowerCase();
+	const cached = magnificCache.get(cacheKey);
+	if (cached && cached.exp > Date.now()) return cached.data;
+	const running = magnificInflight.get(cacheKey);
+	if (running) return await running;
+	const job = (async () => {
+		await magnificPace();
+		const session = new HttpcloakSession({ preset: HttpcloakPreset.CHROME_LATEST_WINDOWS, timeout: 30 }); // Same JA3 as magnificKey; mixed fingerprints raise the bot score
+		const q = encodeURIComponent(que);
+		const pullJson = async (build: string) => {
+			const dataRes: any = await session.get(`https://www.magnific.com/_next/data/${build}/en/search.json?format=search&last_filter=query&last_value=${q}&query=${q}`, {
+				headers: { ...commonHeaders, ...(magnificCookies ? { Cookie: magnificCookies } : {}), Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
+			});
+			if (dataRes?.statusCode === 403) {
+				let html = "";
+				try {
+					html = await responseText(dataRes);
+				} catch {}
+				return { challenged: true, marker: "http-403", html };
 			}
-		}
-		let json: any = magnificBuildId ? await pullJson(magnificBuildId) : null;
-		if (!json?.pageProps?.regularList?.items?.length && !json?.challenged && !buildRetried) {
-			const fresh = await magnificKey();
-			if (fresh) {
-				magnificBuildId = fresh.buildId;
-				magnificCookies = fresh.cookies;
+			if (dataRes?.statusCode !== 200) return null;
+			try {
+				return await dataRes.json();
+			} catch {
+				const text = await responseText(dataRes);
+				const marker = text.includes("_sec/verify") ? "_sec/verify" : text.includes("bm-verify") ? "bm-verify" : text.includes("challenge.magnific") ? "challenge.magnific" : null;
+				if (marker) return { challenged: true, marker, html: text };
+				return JSON.parse(text);
 			}
-			return await Magnific(que, true);
-		}
-		if (!json || json?.challenged) return { error: "Akamai asking to verify you're not a bot" };
-		const list = json?.pageProps?.regularList;
-		if (!list?.items?.length) return { data: null };
-		return {
-			data: {
-				page: list?.pagination?.currentPage || 1,
-				perPage: list?.pagination?.perPage || list.items.length,
-				lastPage: list?.pagination?.lastPage || 1,
-				total: list?.pagination?.total || list.items.length,
-				items: list.items || [],
-			},
 		};
-	} catch (e) {
-		console.error(e);
-		return null;
-	} finally {
+		const shape = (json: any) => {
+			const list = json?.pageProps?.regularList;
+			if (!list?.items?.length) return { data: null };
+			return {
+				data: {
+					page: list?.pagination?.currentPage || 1,
+					perPage: list?.pagination?.perPage || list.items.length,
+					lastPage: list?.pagination?.lastPage || 1,
+					total: list?.pagination?.total || list.items.length,
+					items: list.items || [],
+				},
+			};
+		};
 		try {
-			session.close();
-		} catch {}
-	}
+			if (!magnificBuildId) {
+				const fresh = await refreshMagnificKey();
+				if (fresh) {
+					magnificBuildId = fresh.buildId;
+					magnificCookies = fresh.cookies;
+				}
+			}
+			for (let attempt = 0; attempt < 3; attempt++) {
+				if (!magnificBuildId) break;
+				const json: any = await pullJson(magnificBuildId);
+				if (json?.challenged) {
+					let html: string = typeof json.html === "string" ? json.html : "";
+					if (!html.includes("var i")) {
+						const ch = await fetchMagnificChallenge(magnificCookies);
+						if (ch) {
+							html = ch.html;
+							magnificCookies = ch.cookies;
+						}
+					}
+					const solved = html ? await solveMagnificPow(html, magnificCookies, "https://www.magnific.com") : null;
+					if (solved) {
+						console.warn(`Magnific PoW challenge (${json.marker}) for q=${cacheKey}; solved, retrying`);
+						magnificCookies = solved;
+						continue;
+					}
+					console.warn(`Magnific PoW challenge (${json.marker}) for q=${cacheKey}; unsolved, invalidating key and backing off`);
+					magnificBuildId = null;
+					magnificCookies = "";
+					await new Promise((r) => setTimeout(r, 2500));
+					const fresh = await refreshMagnificKey();
+					if (fresh) {
+						magnificBuildId = fresh.buildId;
+						magnificCookies = fresh.cookies;
+					}
+					continue;
+				}
+				if (!json?.pageProps?.regularList?.items?.length && attempt === 0) {
+					const fresh = await refreshMagnificKey();
+					if (fresh) {
+						magnificBuildId = fresh.buildId;
+						magnificCookies = fresh.cookies;
+					}
+					continue;
+				}
+				if (!json) return null;
+				const out = shape(json);
+				if (out?.data) {
+					if (magnificCache.size > 200) {
+						const now = Date.now();
+						for (const [k, v] of magnificCache) if (v.exp <= now) magnificCache.delete(k);
+					}
+					magnificCache.set(cacheKey, { exp: Date.now() + MAGNIFIC_CACHE_TTL_MS, data: out });
+				}
+				return out;
+			}
+			return { error: "Akamai asking to verify you're not a bot" };
+		} catch (e) {
+			console.error(e);
+			return null;
+		} finally {
+			try {
+				session.close();
+			} catch {}
+			magnificInflight.delete(cacheKey);
+		}
+	})();
+	magnificInflight.set(cacheKey, job);
+	return await job;
 };
 
 const STARTPAGE_BASE = "https://us.startpage.com";

@@ -594,10 +594,79 @@ export const devianKey = async function devianKey(): Promise<{
 	}
 };
 
+const magnificChromeUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+
+const mergeCookieJar = (base: string, setCookies: string[]): string => {
+	const jar = new Map<string, string>();
+	for (const c of base.split(";")) {
+		const m = /^([^=]+)=([\s\S]*)$/.exec(c.trim());
+		if (m && m[1]) jar.set(m[1].trim(), m[2]);
+	}
+	for (const c of setCookies) {
+		const m = /^([^=]+)=([^;]*)/.exec(c);
+		if (m && m[1]) jar.set(m[1].trim(), m[2]);
+	}
+	return [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+};
+
+// Akamai interstitial PoW: page carries `var i = N; var j = i + Number("A"+"B")`
+// and expects POST /_sec/verify?provider=interstitial {"bm-verify": token, pow: j}.
+// Answers {"reload": true} and rotates ak_bmsc. Returns the merged cookie jar,
+// or null when the html isn't a solvable challenge.
+export const solveMagnificPow = async (challengeHtml: string, cookies: string, verifyOrigin: string): Promise<string | null> => {
+	try {
+		const i = Number(challengeHtml.match(/var i\s*=\s*(\d+)/)?.[1]);
+		const parts = challengeHtml.match(/Number\("(\d+)"\s*\+\s*"(\d+)"\)/);
+		const token = challengeHtml.match(/"bm-verify":\s*"([^"]+)"/)?.[1] ?? challengeHtml.match(/[?&]bm-verify=([^'"&\s]+)/)?.[1];
+		if (!Number.isFinite(i) || !parts || !token) return null;
+		const pow = i + Number(parts[1] + parts[2]);
+		const res = await fetch(`${verifyOrigin}/_sec/verify?provider=interstitial`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Origin: verifyOrigin,
+				Referer: `${verifyOrigin}/search`,
+				"User-Agent": magnificChromeUA,
+				...(cookies ? { Cookie: cookies } : {}),
+			},
+			body: JSON.stringify({ "bm-verify": token, pow }),
+			signal: AbortSignal.timeout(20000),
+		});
+		const text = await res.text();
+		if (!text.includes('"reload"')) return null;
+		const raw: string[] = typeof (res.headers as any).getSetCookie === "function" ? (res.headers as any).getSetCookie() : [];
+		return mergeCookieJar(cookies, raw);
+	} catch {
+		return null;
+	}
+};
+
+// Fetches the challenge content itself (per upstream behavior this URL reliably
+// serves the interstitial instead of a hard block) and returns its html plus
+// the cookies it sets, merged over the passed jar.
+export const fetchMagnificChallenge = async (cookies: string): Promise<{ html: string; cookies: string } | null> => {
+	try {
+		const res = await fetch("https://magnific.com/search", {
+			headers: {
+				...commonHeaders,
+				"User-Agent": magnificChromeUA,
+				...(cookies ? { Cookie: cookies } : {}),
+			},
+			redirect: "manual",
+			signal: AbortSignal.timeout(20000),
+		});
+		const html = await res.text();
+		const raw: string[] = typeof (res.headers as any).getSetCookie === "function" ? (res.headers as any).getSetCookie() : [];
+		return { html, cookies: mergeCookieJar(cookies, raw) };
+	} catch {
+		return null;
+	}
+};
+
 export const magnificKey = async function magnificKey(): Promise<{ buildId: string; cookies: string } | null> {
 	const chromeHeaders = {
 		...commonHeaders,
-		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+		"User-Agent": magnificChromeUA,
 	};
 	const jar = new Map<string, string>();
 	const collect = (res: any) => {
@@ -617,10 +686,53 @@ export const magnificKey = async function magnificKey(): Promise<{ buildId: stri
 					headers: { ...chromeHeaders, ...(attempt > 1 ? { "Cache-Control": "max-age=0" } : {}), ...(jar.size ? { Cookie: jarStr() } : {}) },
 				});
 				collect(res);
-				if (res?.statusCode === 403) continue;
+				if (res?.statusCode === 403) {
+					const ch = await fetchMagnificChallenge(jarStr());
+					if (ch) {
+						for (const c of ch.cookies.split(";")) {
+							const m = /^([^=]+)=([\s\S]*)$/.exec(c.trim());
+							if (m && m[1]) jar.set(m[1].trim(), m[2]);
+						}
+						const solved = await solveMagnificPow(ch.html, jarStr(), "https://magnific.com");
+						if (solved) {
+							for (const c of solved.split(";")) {
+								const m = /^([^=]+)=([\s\S]*)$/.exec(c.trim());
+								if (m && m[1]) jar.set(m[1].trim(), m[2]);
+							}
+							const res3: any = await session.get(`https://magnific.com/en/search`, {
+								headers: { ...chromeHeaders, ...(jar.size ? { Cookie: jarStr() } : {}) },
+							});
+							collect(res3);
+							const html3: string = typeof res3?.text === "string" ? res3.text : "";
+							if (html3 && !html3.includes("_sec/verify") && !html3.includes("bm-verify") && !html3.includes("challenge.magnific") && !html3.includes("security filter")) {
+								const buildId3 = html3.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
+								if (buildId3) return { buildId: buildId3, cookies: jarStr() };
+							}
+						}
+					}
+					continue;
+				}
 				const html: string = typeof res?.text === "string" ? res.text : "";
 				if (!html) continue;
-				if (html.includes("_sec/verify") || html.includes("bm-verify") || html.includes("challenge.magnific") || html.includes("security filter")) continue;
+				if (html.includes("_sec/verify") || html.includes("bm-verify") || html.includes("challenge.magnific") || html.includes("security filter")) {
+					const solved = await solveMagnificPow(html, jarStr(), "https://magnific.com");
+					if (solved) {
+						for (const c of solved.split(";")) {
+							const m = /^([^=]+)=([\s\S]*)$/.exec(c.trim());
+							if (m && m[1]) jar.set(m[1].trim(), m[2]);
+						}
+						const res2: any = await session.get(`https://magnific.com/en/search`, {
+							headers: { ...chromeHeaders, ...(jar.size ? { Cookie: jarStr() } : {}) },
+						});
+						collect(res2);
+						const html2: string = typeof res2?.text === "string" ? res2.text : "";
+						if (html2 && !html2.includes("_sec/verify") && !html2.includes("bm-verify") && !html2.includes("challenge.magnific") && !html2.includes("security filter")) {
+							const buildId2 = html2.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
+							if (buildId2) return { buildId: buildId2, cookies: jarStr() };
+						}
+					}
+					continue;
+				}
 				const buildId = html.match(/"buildId":"([^"]+)"/)?.[1] ?? null;
 				if (buildId) return { buildId, cookies: jarStr() };
 			} finally {

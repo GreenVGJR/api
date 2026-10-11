@@ -13,9 +13,10 @@ export interface SelectorConfig {
 export interface ScraplingOptions {
 	url: string;
 	fetcherType?: "basic" | "stealthy" | "dynamic";
+	warmup?: boolean;
 	method?: "GET" | "POST" | "PUT" | "DELETE";
 	headers?: Record<string, string>;
-	cookies?: Record<string, string>;
+	cookies?: Record<string, string> | Array<{ name: string; value: string }>;
 	proxy?: string | { server: string; username?: string; password?: string };
 	headless?: boolean;
 	networkIdle?: boolean;
@@ -144,6 +145,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		request_id: requestId,
 		url: options.url,
 		fetcher_type: options.fetcherType || "stealthy",
+		warmup: options.warmup === true,
 		method: options.method || "GET",
 		headers: options.headers,
 		cookies: options.cookies,
@@ -196,6 +198,19 @@ export async function browserRequest<T = Record<string, any>>(options: Scrapling
 			}
 		});
 	});
+}
+
+// Pre-launches the browser window so the first real browserRequest skips
+// Chromium startup and goes straight to navigating. Fire-and-forget at boot.
+export async function warmBrowser(fetcherType: "stealthy" | "dynamic" = "stealthy"): Promise<boolean> {
+	try {
+		const res = await executeRequest({ url: "about:blank", fetcherType, warmup: true });
+		if (res?.success) console.log("[warmBrowser] Chromium ready");
+		return res?.success === true;
+	} catch (e) {
+		console.warn("[warmBrowser] failed:", String(e).slice(0, 120));
+		return false;
+	}
 }
 
 export function closeBrowser() {

@@ -1,12 +1,40 @@
+import os
 import sys
 import json
 from typing import Dict, Any
+
+
+def _default_chromium_flags():
+	"""Launch flags that keep Chromium from spinning on headless Linux VPS boxes.
+
+	Ubuntu servers typically run as root (needs --no-sandbox), have a tiny
+	/dev/shm (renderer crash loops without --disable-dev-shm-usage) and no GPU
+	(GPU process spin without --disable-gpu). No-ops on other platforms.
+	"""
+	flags = []
+	if sys.platform.startswith("linux"):
+		flags += ["--disable-dev-shm-usage", "--disable-gpu", "--disable-software-rasterizer"]
+		try:
+			if os.geteuid() == 0:
+				flags.append("--no-sandbox")
+		except Exception:
+			pass
+	return flags
+
+
+def _session_flags(input_data):
+	extra = input_data.get("extra_flags") or []
+	if not isinstance(extra, (list, tuple)):
+		extra = []
+	return list(dict.fromkeys(_default_chromium_flags() + list(extra)))
 
 def main():
     stealthy_session = None
     dynamic_session = None
     stealthy_retries = None
     dynamic_retries = None
+    stealthy_flags = None
+    dynamic_flags = None
 
     try:
         while True:
@@ -45,18 +73,21 @@ def main():
                 try:
                     _headless = input_data.get("headless", True)
                     _retries = input_data.get("retries", 3)
+                    _flags = _session_flags(input_data)
                     if fetcher_type == "dynamic":
                         if not dynamic_session:
                             from scrapling.fetchers import DynamicSession
-                            dynamic_session = DynamicSession(headless=_headless, cookies=None, retries=_retries)
+                            dynamic_session = DynamicSession(headless=_headless, cookies=None, retries=_retries, extra_flags=_flags)
                             dynamic_session.start()
                             dynamic_retries = _retries
+                            dynamic_flags = _flags
                     else:
                         if not stealthy_session:
                             from scrapling.fetchers import StealthySession
-                            stealthy_session = StealthySession(headless=_headless, cookies=None, retries=_retries)
+                            stealthy_session = StealthySession(headless=_headless, cookies=None, retries=_retries, extra_flags=_flags)
                             stealthy_session.start()
                             stealthy_retries = _retries
+                            stealthy_flags = _flags
                     print(json.dumps({
                         "request_id": request_id,
                         "success": True,
@@ -129,26 +160,28 @@ def main():
                         kwargs["proxy"] = proxy
 
                     if fetcher_type == "dynamic":
-                        if not dynamic_session or dynamic_retries != retries:
+                        if not dynamic_session or dynamic_retries != retries or dynamic_flags != _session_flags(input_data):
                             if dynamic_session:
                                 try:
                                     dynamic_session.close()
                                 except:
                                     pass
                             from scrapling.fetchers import DynamicSession
-                            dynamic_session = DynamicSession(headless=headless, cookies=cookies, retries=retries)
+                            dynamic_flags = _session_flags(input_data)
+                            dynamic_session = DynamicSession(headless=headless, cookies=cookies, retries=retries, extra_flags=dynamic_flags)
                             dynamic_session.start()
                             dynamic_retries = retries
                         response = dynamic_session.fetch(url, **kwargs)
                     else:
-                        if not stealthy_session or stealthy_retries != retries:
+                        if not stealthy_session or stealthy_retries != retries or stealthy_flags != _session_flags(input_data):
                             if stealthy_session:
                                 try:
                                     stealthy_session.close()
                                 except:
                                     pass
                             from scrapling.fetchers import StealthySession
-                            stealthy_session = StealthySession(headless=headless, cookies=cookies, retries=retries)
+                            stealthy_flags = _session_flags(input_data)
+                            stealthy_session = StealthySession(headless=headless, cookies=cookies, retries=retries, extra_flags=stealthy_flags)
                             stealthy_session.start()
                             stealthy_retries = retries
                         response = stealthy_session.fetch(url, **kwargs)

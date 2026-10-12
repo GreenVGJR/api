@@ -51,6 +51,8 @@ bun run win-browser-install
 ```
 
 Installs a local `.venv` with `scrapling[ai]` + Playwright chromium.
+On Linux `--with-deps` also installs the Chromium system libraries (needs sudo);
+without them the browser process spins/fails at boot.
 
 ## Reference
 

@@ -14,6 +14,7 @@ export interface ScraplingOptions {
 	url: string;
 	fetcherType?: "basic" | "stealthy" | "dynamic";
 	warmup?: boolean;
+	chromiumFlags?: string[];
 	method?: "GET" | "POST" | "PUT" | "DELETE";
 	headers?: Record<string, string>;
 	cookies?: Record<string, string> | Array<{ name: string; value: string }>;
@@ -146,6 +147,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		url: options.url,
 		fetcher_type: options.fetcherType || "stealthy",
 		warmup: options.warmup === true,
+		extra_flags: options.chromiumFlags,
 		method: options.method || "GET",
 		headers: options.headers,
 		cookies: options.cookies,
@@ -202,15 +204,34 @@ export async function browserRequest<T = Record<string, any>>(options: Scrapling
 
 // Pre-launches the browser window so the first real browserRequest skips
 // Chromium startup and goes straight to navigating. Fire-and-forget at boot.
+// Single-flight: hot-reloads must never spawn a second Chromium (each one is
+// hundreds of MB + a pegged vCPU on small boxes). DISABLE_BROWSER_WARMUP=1
+// skips it entirely for tiny VPS - the first real request just starts cold.
+let warmupDone = false;
+let warmupInflight: Promise<boolean> | null = null;
+
 export async function warmBrowser(fetcherType: "stealthy" | "dynamic" = "stealthy"): Promise<boolean> {
-	try {
-		const res = await executeRequest({ url: "about:blank", fetcherType, warmup: true });
-		if (res?.success) console.log("[warmBrowser] Chromium ready");
-		return res?.success === true;
-	} catch (e) {
-		console.warn("[warmBrowser] failed:", String(e).slice(0, 120));
-		return false;
-	}
+	if (process.env.DISABLE_BROWSER_WARMUP === "1") return false;
+	if (warmupDone) return true;
+	if (warmupInflight) return warmupInflight;
+	warmupInflight = (async () => {
+		try {
+			const res = await executeRequest({ url: "about:blank", fetcherType, warmup: true, timeoutMs: 120000 });
+			if (res?.success) {
+				console.log("[warmBrowser] Chromium ready");
+				warmupDone = true;
+			} else {
+				console.warn("[warmBrowser] Chromium did not start:", String(res?.error ?? "unknown").slice(0, 200));
+			}
+			return res?.success === true;
+		} catch (e) {
+			console.warn("[warmBrowser] failed:", String(e).slice(0, 200));
+			return false;
+		} finally {
+			warmupInflight = null;
+		}
+	})();
+	return warmupInflight;
 }
 
 export function closeBrowser() {

@@ -13,6 +13,9 @@
 
 #### Requirements
 
+> [!WARNING]
+> AVOID using Bun v1.4.3 as it's causing runtime errors (sob)
+
 - Git - clone the repo and `git pull` updates
 - Bun - install deps, generate routes, run the server
 - Node.js + npm - provides PM2 (`pm2-check` auto-installs it)
@@ -51,8 +54,6 @@ bun run win-browser-install
 ```
 
 Installs a local `.venv` with `scrapling[ai]` + Playwright chromium.
-On Linux `--with-deps` also installs the Chromium system libraries (needs sudo);
-without them the browser process spins/fails at boot.
 
 ## Reference
 

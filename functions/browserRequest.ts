@@ -214,6 +214,18 @@ export async function warmBrowser(fetcherType: "stealthy" | "dynamic" = "stealth
 	if (process.env.DISABLE_BROWSER_WARMUP === "1") return false;
 	if (warmupDone) return true;
 	if (warmupInflight) return warmupInflight;
+	// A pre-launched Chromium costs ~300-500MB resident. On small boxes (the
+	// README minimum is 2GB) that alone pegs CPU/swap at boot, so skip unless
+	// there is headroom. FORCE_BROWSER_WARMUP=1 overrides this check.
+	if (process.env.FORCE_BROWSER_WARMUP !== "1") {
+		try {
+			const totalGB = (await import("os")).totalmem() / 1024 ** 3;
+			if (totalGB < 3) {
+				console.log(`[warmBrowser] skipped (only ${totalGB.toFixed(1)}GB RAM, need 3GB+ to pre-launch)`);
+				return false;
+			}
+		} catch {}
+	}
 	warmupInflight = (async () => {
 		try {
 			const res = await executeRequest({ url: "about:blank", fetcherType, warmup: true, timeoutMs: 120000 });

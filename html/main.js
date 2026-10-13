@@ -2078,21 +2078,6 @@ function showTurnstileChallenge() {
       </div>
     </div>`;
 
-  const loadScript = () =>
-    new Promise((resolve) => {
-      if (window.turnstile) return resolve(true);
-      let attempts = 0;
-      const interval = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(interval);
-          resolve(true);
-        } else if (attempts++ > 50) {
-          clearInterval(interval);
-          resolve(false);
-        }
-      }, 100);
-    });
-
   const renderWidget = () => {
     const el = document.getElementById("turnstileWidget");
     if (!el || !window.turnstile) return;
@@ -2119,17 +2104,15 @@ function showTurnstileChallenge() {
     });
   };
 
-  loadScript().then((ok) => {
-    if (!ok) {
-      const errEl = document.getElementById("turnstileError");
-      if (errEl) {
-        errEl.textContent = "Could not load Turnstile. Refresh to retry.";
-        errEl.classList.remove("hidden");
-      }
-      return;
+  if (!window.turnstile) {
+    const errEl = document.getElementById("turnstileError");
+    if (errEl) {
+      errEl.textContent = "Could not load Turnstile. Refresh to retry.";
+      errEl.classList.remove("hidden");
     }
-    renderWidget();
-  });
+    return;
+  }
+  renderWidget();
 }
 
 async function loadStats() {

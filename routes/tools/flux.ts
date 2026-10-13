@@ -78,7 +78,7 @@ app.get("/ai-image/flux_schnell", async (c) => {
 			method: "GET",
 			headers: {
 				...commonHeaders,
-				Accept: "application/json, text/plain, */*",
+				Accept: "*/*",
 				"Sec-Fetch-Dest": "empty",
 				"Sec-Fetch-Mode": "cors",
 				"Sec-Fetch-Site": "same-site",
@@ -94,6 +94,7 @@ app.get("/ai-image/flux_schnell", async (c) => {
 	}
 });
 
+// Cloudflare seems a/b implement TLS Fingerprinting
 app.get("/ai-image/flux_klein", async (c) => {
 	const gate = await aiImageHandshake(c);
 	if (gate) return gate;
@@ -117,8 +118,10 @@ app.get("/ai-image/flux_klein", async (c) => {
 			body: formData,
 			method: "POST",
 			headers: {
+				...commonHeaders,
+				Accept: "*/*",
 				Origin: "https://multi-modal.ai.cloudflare.com",
-				Referer: "https://multi-modal.ai.cloudflare.com",
+				Referer: "https://multi-modal.ai.cloudflare.com/",
 				"Sec-Fetch-Dest": "empty",
 				"Sec-Fetch-Mode": "cors",
 				"Sec-Fetch-Site": "same-origin",

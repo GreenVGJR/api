@@ -2103,7 +2103,7 @@ function showTurnstileChallenge() {
         turnstileRendered = false;
         responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
         restoreSendButtonState();
-        await refreshEndpointsFromJson();
+        await refreshEndpointsFromJson(true);
       },
       "expired-callback": () => {
         const el = document.getElementById("turnstileWidget");
@@ -2132,22 +2132,24 @@ function showTurnstileChallenge() {
   });
 }
 
-let initialStatsPromise = (async () => {
+async function loadStats() {
   try {
     await r2kn();
   } catch {}
   return n8sj();
-})();
+}
 
-async function refreshEndpointsFromJson() {
+let initialStatsPromise = loadStats();
+
+async function refreshEndpointsFromJson(forceFresh = false) {
   try {
     setStatus("blue-400", "Connecting", "text-gray-400");
 
     let statsRes = null;
     try {
-      const statsPromise = initialStatsPromise;
+      const statsPromise = forceFresh ? null : initialStatsPromise;
       initialStatsPromise = null;
-      statsRes = await (statsPromise || n8sj());
+      statsRes = await (statsPromise || loadStats());
       if (statsRes.status === 403) {
         if (pageFromPath(window.location.pathname) === "playground") showTurnstileChallenge();
         return false;

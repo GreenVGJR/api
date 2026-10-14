@@ -6,6 +6,7 @@
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
 	"endpointChallenge": false,
+	"wafChallenge": true,
 	"turnstile": {
 		"enabled": true,
 		"siteKey": "0x4AAAAAAEE1E-kNdZdp_W7x",

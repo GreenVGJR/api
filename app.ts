@@ -230,7 +230,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain, turnstile: turnstileConfig, maintenance: maintenanceConfig } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, wafChallenge, targetDomain, turnstile: turnstileConfig, maintenance: maintenanceConfig } = config;
 
 const turnstileLocalKeys = {
 	siteKey: turnstileConfig.localSiteKeyForTest,
@@ -746,6 +746,7 @@ app.get("/", async (c: Context) => {
 		return createVfTokenResponse(c);
 	}
 	if (c.req.query("vs") !== undefined) {
+		if (!wafChallenge) return c.json({ ok: true });
 		try {
 			const payload: any = await verify(c.req.query("vs") ?? "", getBackChallengeJwtKey(), "HS256");
 			const ua = c.req.header("user-agent") ?? "";

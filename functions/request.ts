@@ -3,6 +3,7 @@ import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
+import { googleTrustJar, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
@@ -7752,6 +7753,336 @@ export async function googleImageReverse(url: string) {
 	}
 }
 
+// ── Google Lens (web) reverse image search ───────────────────────────────────
+
+const LENS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0";
+const LENS_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const LENS_DOWNLOAD_TIMEOUT = 20000;
+
+const lensJar = googleTrustJar;
+
+const mergeLensCookies = (res: Response): void => mergeGoogleTrust(res);
+
+const lensBrowserHeaders = (extra?: Record<string, string>): Record<string, string> => ({
+	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+	"Accept-Language": "en-US,en;q=0.9",
+	"Accept-Encoding": "gzip, deflate, br, zstd",
+	"User-Agent": LENS_UA,
+	Referer: "https://www.google.com/",
+	...(extra ?? {}),
+});
+
+const warmLensCookies = async (): Promise<void> => {
+	const jar = lensJar();
+	for (const url of ["https://www.google.com/", "https://lens.google.com/"]) {
+		try {
+			const res = await fetch(url, {
+				headers: lensBrowserHeaders(jar ? { Cookie: jar } : {}),
+				redirect: "manual",
+				signal: AbortSignal.timeout(15000),
+			});
+			mergeLensCookies(res);
+			await res.text().catch(() => {});
+		} catch {}
+	}
+};
+
+// a challenge from a result page. Note: never match "/sorry/" on the body —
+const isLensBlocked = (html: string): boolean => {
+	if (!html) return true;
+	if (html.includes("unusual traffic") || html.includes("Our systems have detected")) return true;
+	return html.length < 20000;
+};
+
+const downloadLensImage = async (url: string): Promise<{ bytes: Buffer; mime: string; ext: string; width: number; height: number } | null> => {
+	try {
+		const res = await fetch(url, {
+			headers: {
+				Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+				"Accept-Language": "en-US,en;q=0.9",
+				"User-Agent": LENS_UA,
+				Referer: new URL(url).origin + "/",
+			},
+			redirect: "follow",
+			signal: AbortSignal.timeout(LENS_DOWNLOAD_TIMEOUT),
+		});
+		if (!res.ok) return null;
+
+		const declared = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+		if (declared && !declared.startsWith("image/")) return null;
+
+		const buf = Buffer.from(await res.arrayBuffer());
+		if (!buf.length || buf.length > LENS_MAX_IMAGE_BYTES) return null;
+
+		let mime = "";
+		let ext = "";
+		if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+			mime = "image/jpeg";
+			ext = "jpg";
+		} else if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+			mime = "image/png";
+			ext = "png";
+		} else if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+			mime = "image/webp";
+			ext = "webp";
+		} else if (buf.length > 12 && buf.toString("latin1", 8, 12) === "ftyp") {
+			const brand = buf.toString("latin1", 8, 12).slice(4);
+			mime = brand.startsWith("avif") ? "image/avif" : "image/heic";
+			ext = brand.startsWith("avif") ? "avif" : "heic";
+		} else if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+			mime = "image/gif";
+			ext = "gif";
+		} else if (declared.startsWith("image/")) {
+			mime = declared;
+			ext = (declared.split("/")[1] || "jpg").replace("+xml", "").replace(/[^a-z0-9]/g, "") || "jpg";
+		}
+		if (!mime) return null;
+
+		let width = 0;
+		let height = 0;
+		try {
+			const sharp = (await import("sharp")).default;
+			const meta = await sharp(buf).metadata();
+			width = Number(meta.width) || 0;
+			height = Number(meta.height) || 0;
+		} catch {}
+		if (!width || !height) {
+			width = 1024;
+			height = 1024;
+		}
+
+		return { bytes: buf, mime, ext, width, height };
+	} catch {
+		return null;
+	}
+};
+
+const buildLensMultipart = (image: { bytes: Buffer; mime: string; ext: string; width: number; height: number }, filename: string): { body: Buffer; contentType: string } => {
+	const boundary = `----geckoformboundary${crypto.randomBytes(16).toString("hex")}`;
+	const crlf = "\r\n";
+	const safeName = (filename || `image.${image.ext}`).replace(/["\\\r\n]/g, "");
+
+	const head = Buffer.from(`--${boundary}${crlf}` + `Content-Disposition: form-data; name="encoded_image"; filename="${safeName}"${crlf}` + `Content-Type: ${image.mime}${crlf}${crlf}`, "utf8");
+	const dims = Buffer.from(`${crlf}--${boundary}${crlf}` + `Content-Disposition: form-data; name="processed_image_dimensions"${crlf}${crlf}` + `${image.width},${image.height}${crlf}`, "utf8");
+	const tail = Buffer.from(`--${boundary}--${crlf}`, "utf8");
+
+	return {
+		body: Buffer.concat([head, image.bytes, dims, tail]),
+		contentType: `multipart/form-data; boundary=${boundary}`,
+	};
+};
+
+const parseLensDimensions = (): { w: number; h: number } => {
+	return { w: 1168, h: 709 };
+};
+
+const lensPostHeaders = (contentType: string): Record<string, string> => {
+	const jar = lensJar();
+	return {
+		Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "en-US,en;q=0.9",
+		"Accept-Encoding": "gzip, deflate, br, zstd",
+		"User-Agent": LENS_UA,
+		Referer: "https://www.google.com/",
+		Origin: "https://www.google.com",
+		"Content-Type": contentType,
+		"Upgrade-Insecure-Requests": "1",
+		"Sec-Fetch-Dest": "document",
+		"Sec-Fetch-Mode": "navigate",
+		"Sec-Fetch-Site": "same-site",
+		"Sec-Fetch-User": "?1",
+		Priority: "u=0, i",
+		"Sec-GPC": "1",
+		...(jar ? { Cookie: jar } : {}),
+	};
+};
+
+const lensUploadUrl = (): string => {
+	const vp = parseLensDimensions();
+	return `https://lens.google.com/v3/upload?ep=gsbubb&st=${Date.now()}&authuser=0&hl=id&vpw=${vp.w}&vph=${vp.h}`;
+};
+
+const postLensUpload = async (image: { bytes: Buffer; mime: string; ext: string; width: number; height: number }, filename: string): Promise<{ location: string; challenged: boolean }> => {
+	const { body, contentType } = buildLensMultipart(image, filename);
+	const res = await fetch(lensUploadUrl(), {
+		method: "POST",
+		headers: lensPostHeaders(contentType),
+		body,
+		redirect: "manual",
+		signal: AbortSignal.timeout(25000),
+	});
+	mergeLensCookies(res);
+	const html = await res.text().catch(() => "");
+
+	if (res.status >= 300 && res.status < 400) {
+		const location = res.headers.get("location") || "";
+		if (location) return { location, challenged: false };
+	}
+
+	if (res.status === 429) return { location: "", challenged: true };
+	return { location: "", challenged: isLensBlocked(html) };
+};
+
+const renderLensResults = async (location: string): Promise<{ html: string; ok: boolean }> => {
+	try {
+		const res = await browserRequest({
+			url: location,
+			fetcherType: "stealthy",
+			headers: lensBrowserHeaders({ Referer: "https://lens.google.com/", ...(lensJar() ? { Cookie: lensJar() } : {}) }),
+			extractHtml: true,
+			waitMs: 2500,
+			timeoutMs: 120000,
+		});
+		mergeGoogleTrustCookies(res?.cookies);
+		const html: string = res?.html ?? "";
+		const ok = !!res?.success && !isLensBlocked(html);
+		if (res && !res.success) console.warn(`googleLensReverse: render failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
+		return { html, ok };
+	} catch (e) {
+		console.warn("googleLensReverse: render threw:", String(e).slice(0, 160));
+		return { html: "", ok: false };
+	}
+};
+
+// ── Lens result extraction ───────────────────────────────────────────────────
+// Both are JSON.parsed — no regex scraping of URLs/titles.
+
+const lensUnescapeJs = (s: string): string => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\\//g, "/");
+
+const normLensPage = (u: string): string => u.replace(/\/$/, "");
+const normLensText = (s: string): string => s.replace(/\s+/g, " ").trim();
+
+// whose text is the site name glued to the card title — the same pair the
+const extractLensTracking = (html: string): Map<string, string> => {
+	const map = new Map<string, string>();
+	try {
+		const { document } = parseHTML(html);
+		for (const a of Array.from(document.querySelectorAll("a")) as any[]) {
+			const token = (a.getAttribute("href") || "").match(/\/goto\?url=([A-Za-z0-9_-]+)/)?.[1];
+			if (!token) continue;
+			const text = normLensText(a.textContent || "");
+			if (text.length < 10) continue;
+			if (!map.has(text)) map.set(text, `https://www.google.com/goto?url=${token}`);
+		}
+	} catch {}
+	return map;
+};
+
+const extractLensEntries = (html: string): any[][] => {
+	const js = lensUnescapeJs(html);
+	const out: any[][] = [];
+	for (const m of js.matchAll(/"[A-Za-z0-9_-]{10,}":\[0,/g)) {
+		const start = m.index! + m[0].length - 3; // at the '['
+		let depth = 0;
+		let inStr = false;
+		let esc = false;
+		let end = -1;
+		for (let i = start; i < js.length; i++) {
+			const ch = js[i];
+			if (inStr) {
+				if (esc) esc = false;
+				else if (ch === "\\") esc = true;
+				else if (ch === '"') inStr = false;
+			} else if (ch === '"') inStr = true;
+			else if (ch === "[") depth++;
+			else if (ch === "]" && --depth === 0) {
+				end = i + 1;
+				break;
+			}
+			if (i - start > 20000) break;
+		}
+		if (end < 0) continue;
+		try {
+			const entry = JSON.parse(js.slice(start, end));
+			if (Array.isArray(entry)) out.push(entry);
+		} catch {}
+	}
+	return out;
+};
+
+const parseLensResults = (html: string): any[] => {
+	const tracking = extractLensTracking(html);
+	const data: any[] = [];
+	const seen = new Set<string>();
+	const usedTracking = new Set<string>();
+
+	for (const entry of extractLensEntries(html)) {
+		try {
+			const compressed = Array.isArray(entry[2]) ? entry[2] : [];
+			const original = Array.isArray(entry[3]) ? entry[3] : [];
+			const meta = entry[6]?.["2003"];
+			if (!Array.isArray(meta)) continue;
+
+			const imageUrl = typeof compressed[0] === "string" ? compressed[0] : "";
+			if (!imageUrl.startsWith("http")) continue;
+
+			const originalImageUrl = typeof original[0] === "string" && original[0].startsWith("http") ? original[0] : imageUrl;
+			const width = Number(original[1]) || Number(compressed[1]) || 0;
+			const height = Number(original[2]) || Number(compressed[2]) || 0;
+			const pageUrl = typeof meta[2] === "string" ? meta[2] : "";
+			const title = typeof meta[3] === "string" ? normLensText(meta[3]) : "";
+			const tail = meta.filter((x: any) => typeof x === "string");
+			const siteName = tail.length >= 2 ? normLensText(tail[tail.length - 2]) : "";
+
+			const key = normLensPage(pageUrl || imageUrl);
+			if (seen.has(key)) continue;
+			seen.add(key);
+
+			const item: any = { imageUrl, originalImageUrl, width, height };
+			if (pageUrl) item.pageUrl = pageUrl;
+			const goto = tracking.get(siteName + title);
+			if (goto && !usedTracking.has(goto)) {
+				usedTracking.add(goto);
+				item.trackingUrl = goto;
+			}
+			if (title) item.title = title;
+			if (siteName && !siteName.startsWith("http")) item.siteName = siteName;
+			data.push(item);
+		} catch {}
+	}
+
+	return data;
+};
+
+export async function googleLensReverseUpload(url: string) {
+	if (!url || !url.startsWith("http")) return null;
+
+	try {
+		const image = await downloadLensImage(url);
+		if (!image) return { error: "Could not download a valid image from that url" };
+
+		let filename = "image";
+		try {
+			filename = new URL(url).pathname.split("/").pop() || `image.${image.ext}`;
+		} catch {}
+
+		if (!googleTrustIsFresh()) await warmLensCookies();
+
+		let attempt = await postLensUpload(image, filename);
+		if (attempt.challenged) {
+			await refreshGoogleTrust();
+			await warmLensCookies();
+			attempt = await postLensUpload(image, filename);
+			if (attempt.challenged || !attempt.location) {
+				return { error: "Google Lens challenge could not be solved" };
+			}
+		}
+
+		if (!attempt.location) return { error: "Google Lens did not return a result session" };
+
+		const rendered = await renderLensResults(attempt.location);
+		if (!rendered.ok) {
+			return { error: "Google blocked the result page for this server", resultsUrl: attempt.location };
+		}
+
+		const data = parseLensResults(rendered.html);
+		return { total: data.length, resultsUrl: attempt.location, data };
+	} catch (e) {
+		console.error("googleLensReverseUpload error:", e);
+		return null;
+	}
+}
+
 export const infoThreadUser = async function infoThreadUser(que: string) {
 	if (!que) return null;
 
@@ -12922,24 +13253,11 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 	}
 };
 
-let googleWebCookies: Record<string, string> = {};
-
 const googleWebUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
 
-const googleWebJar = (): string =>
-	Object.entries(googleWebCookies)
-		.map(([k, v]) => `${k}=${v}`)
-		.join("; ");
+const googleWebJar = googleTrustJar;
 
-const mergeGoogleWebCookies = (res: Response): void => {
-	try {
-		const raw: string[] = typeof (res.headers as any).getSetCookie === "function" ? (res.headers as any).getSetCookie() : [];
-		for (const c of raw) {
-			const m = /^([^=]+)=([^;]*)/.exec(c);
-			if (m && m[1]) googleWebCookies[m[1].trim()] = m[2];
-		}
-	} catch {}
-};
+const mergeGoogleWebCookies = (res: Response): void => mergeGoogleTrust(res);
 
 const parseGoogleWebItems = (html: string): any[] => {
 	const { document } = parseHTML(html);
@@ -13095,7 +13413,7 @@ export const googleWebSearch = async (query: string): Promise<any> => {
 		const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=web`;
 		// Fast path: once the browser has solved the challenge and earned trust
 		// cookies, plain fetch serves results without another browser trip.
-		if (googleWebCookies.NID) {
+		if (googleTrustIsFresh()) {
 			try {
 				const native = await fetch(url, {
 					headers: {
@@ -13125,11 +13443,11 @@ export const googleWebSearch = async (query: string): Promise<any> => {
 		const res = await browserRequest({
 			url,
 			fetcherType: "stealthy",
-			cookies: Object.keys(googleWebCookies).length ? Object.entries(googleWebCookies).map(([name, value]) => ({ name, value })) : undefined,
+			headers: googleWebJar() ? { Cookie: googleWebJar() } : undefined,
 			extractHtml: true,
 			timeoutMs: 90000,
 		});
-		if (res?.cookies) googleWebCookies = { ...googleWebCookies, ...res.cookies };
+		mergeGoogleTrustCookies(res?.cookies);
 		const html: string = res?.html ?? "";
 		if (!res?.success || !html) {
 			if (res && !res.success) console.warn(`googleWebSearch: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);

@@ -2,6 +2,7 @@
 import googleWeather from "./googleWeather.js";
 import infoGiphy from "./infoGiphy.js";
 import infoGoogleImage from "./infoGoogleImage.js";
+import infoGoogleLens from "./infoGoogleLens.js";
 import infoITunes from "./infoITunes.js";
 import infoKlipy from "./infoKlipy.js";
 import infoPinterest from "./infoPinterest.js";
@@ -14,4 +15,4 @@ import infoYoutube from "./infoYoutube.js";
 import redditPost from "./redditPost.js";
 import redditSubreddit from "./redditSubreddit.js";
 
-export default [googleWeather, infoGiphy, infoGoogleImage, infoITunes, infoKlipy, infoPinterest, infoSoundcloud, infoSpotify, infoTenor, infoTiktokVideo, infoTwitterTweet, infoYoutube, redditPost, redditSubreddit] as any[];
+export default [googleWeather, infoGiphy, infoGoogleImage, infoGoogleLens, infoITunes, infoKlipy, infoPinterest, infoSoundcloud, infoSpotify, infoTenor, infoTiktokVideo, infoTwitterTweet, infoYoutube, redditPost, redditSubreddit] as any[];

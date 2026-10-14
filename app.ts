@@ -186,6 +186,7 @@ const API_ROUTES = {
 		["/info/klipy?url=", "url"],
 		["/info/pinterest?url=", "url"],
 		["/info/googleImage/reverse?url=", "url"],
+		["/info/googleLens/reverse?url=", "url"],
 	],
 	download: [
 		["/download/tiktok/video?url=&json=", "url", "boolean"],

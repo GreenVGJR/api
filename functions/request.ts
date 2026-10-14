@@ -267,8 +267,8 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 	};
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0";
-export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/153.0.0.0 Mobile/15E148 Safari/604.1";
+export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/159.0";
+export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/156.0.0.0 Mobile/15E148 Safari/604.1";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
 
 export const commonHeaders = {
@@ -7755,7 +7755,6 @@ export async function googleImageReverse(url: string) {
 
 // ── Google Lens (web) reverse image search ───────────────────────────────────
 
-const LENS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0";
 const LENS_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const LENS_DOWNLOAD_TIMEOUT = 20000;
 
@@ -7764,12 +7763,9 @@ const lensJar = googleTrustJar;
 const mergeLensCookies = (res: Response): void => mergeGoogleTrust(res);
 
 const lensBrowserHeaders = (extra?: Record<string, string>): Record<string, string> => ({
-	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-	"Accept-Language": "en-US,en;q=0.9",
-	"Accept-Encoding": "gzip, deflate, br, zstd",
-	"User-Agent": LENS_UA,
+	...commonHeaders,
 	Referer: "https://www.google.com/",
-	...(extra ?? {}),
+	...extra,
 });
 
 const warmLensCookies = async (): Promise<void> => {
@@ -7798,9 +7794,8 @@ const downloadLensImage = async (url: string): Promise<{ bytes: Buffer; mime: st
 	try {
 		const res = await fetch(url, {
 			headers: {
+				...commonHeaders,
 				Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				"Accept-Language": "en-US,en;q=0.9",
-				"User-Agent": LENS_UA,
 				Referer: new URL(url).origin + "/",
 			},
 			redirect: "follow",
@@ -7879,27 +7874,18 @@ const parseLensDimensions = (): { w: number; h: number } => {
 const lensPostHeaders = (contentType: string): Record<string, string> => {
 	const jar = lensJar();
 	return {
-		Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		"Accept-Language": "en-US,en;q=0.9",
-		"Accept-Encoding": "gzip, deflate, br, zstd",
-		"User-Agent": LENS_UA,
+		...commonHeaders,
 		Referer: "https://www.google.com/",
 		Origin: "https://www.google.com",
 		"Content-Type": contentType,
-		"Upgrade-Insecure-Requests": "1",
-		"Sec-Fetch-Dest": "document",
-		"Sec-Fetch-Mode": "navigate",
 		"Sec-Fetch-Site": "same-site",
-		"Sec-Fetch-User": "?1",
-		Priority: "u=0, i",
-		"Sec-GPC": "1",
 		...(jar ? { Cookie: jar } : {}),
 	};
 };
 
 const lensUploadUrl = (): string => {
 	const vp = parseLensDimensions();
-	return `https://lens.google.com/v3/upload?ep=gsbubb&st=${Date.now()}&authuser=0&hl=id&vpw=${vp.w}&vph=${vp.h}`;
+	return `https://lens.google.com/v3/upload?ep=gsbubb&st=${Date.now()}&authuser=0&hl=us&vpw=${vp.w}&vph=${vp.h}`;
 };
 
 const postLensUpload = async (image: { bytes: Buffer; mime: string; ext: string; width: number; height: number }, filename: string): Promise<{ location: string; challenged: boolean }> => {
@@ -7950,6 +7936,17 @@ const renderLensResults = async (location: string): Promise<{ html: string; ok: 
 const lensUnescapeJs = (s: string): string => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\\//g, "/");
 
 const normLensPage = (u: string): string => u.replace(/\/$/, "");
+
+const extractLensQueryImage = (html: string): string => {
+	try {
+		const { document } = parseHTML(html);
+		for (const img of Array.from(document.querySelectorAll("img")) as any[]) {
+			const src = (img.getAttribute("src") || "").replace(/&amp;/g, "&");
+			if (src.startsWith("https://lens.usercontent.google.com/image?")) return src;
+		}
+	} catch {}
+	return "";
+};
 const normLensText = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 // whose text is the site name glued to the card title — the same pair the
@@ -8076,7 +8073,8 @@ export async function googleLensReverseUpload(url: string) {
 		}
 
 		const data = parseLensResults(rendered.html);
-		return { total: data.length, resultsUrl: attempt.location, data };
+		const imageUrl = extractLensQueryImage(rendered.html);
+		return { total: data.length, imageUrl, resultsUrl: attempt.location, data };
 	} catch (e) {
 		console.error("googleLensReverseUpload error:", e);
 		return null;

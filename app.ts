@@ -41,6 +41,7 @@ const API_ROUTES = {
 		["/profile/haunt?q=", "string"],
 		["/profile/rage?q=", "string"],
 		["/profile/kick?q=", "string"],
+		["/profile/twitch?q=", "string"],
 		["/profile/snapchat?q=", "string"],
 		["/profile/twitter?q=", "string"],
 		["/profile/tiktok?q=", "string"],

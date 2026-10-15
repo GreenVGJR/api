@@ -12,6 +12,7 @@ import sociabuzz from "./sociabuzz.js";
 import threads from "./threads.js";
 import tiktok from "./tiktok.js";
 import trakteer from "./trakteer.js";
+import twitch from "./twitch.js";
 import twitter from "./twitter.js";
 
-export default [drift, guns, haunt, instagram, kick, patreon, rage, saweria, snapchat, sociabuzz, threads, tiktok, trakteer, twitter] as any[];
+export default [drift, guns, haunt, instagram, kick, patreon, rage, saweria, snapchat, sociabuzz, threads, tiktok, trakteer, twitch, twitter] as any[];

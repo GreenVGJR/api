@@ -4961,6 +4961,132 @@ export const Twitch = async function Twitch(que: string) {
 	}
 };
 
+const getTwitchStreaming = async (masterUrl: string): Promise<any> => {
+	try {
+		const res = await fetch(masterUrl, { headers: { ...commonHeaders } });
+		if (!res.ok) return null;
+		const text = await res.text();
+		if (!text.startsWith("#EXTM3U")) return null;
+		const lines = text.split("\n").map((l) => l.trim());
+		let video: string | null = null;
+		let audio: string | null = null;
+		let bestBw = -1;
+		for (let i = 0; i < lines.length; i++) {
+			const inf = lines[i].match(/^#EXT-X-STREAM-INF:(.+)/)?.[1];
+			if (!inf) continue;
+			const uri = lines.slice(i + 1).find((l) => l && !l.startsWith("#"));
+			if (!uri) continue;
+			const abs = new URL(uri, masterUrl).toString();
+			if (/VIDEO="audio_only"/.test(inf)) {
+				if (!audio) audio = abs;
+				continue;
+			}
+			const bw = Number(inf.match(/BANDWIDTH=(\d+)/)?.[1]);
+			if (bw > bestBw) {
+				bestBw = bw;
+				video = abs;
+			}
+		}
+		if (!video) return null;
+		const info: Record<string, string> = {};
+		const tag = lines.find((l) => l.startsWith("#EXT-X-TWITCH-INFO:"));
+		if (tag) for (const m of tag.matchAll(/([A-Z-]+)="([^"]*)"/g)) info[m[1]] = m[2];
+		const streamTime = Number(info["STREAM-TIME"]);
+		return {
+			nodeLocation: info["NODE"] || null,
+			nodeCluster: info["MANIFEST-NODE"] || null,
+			serverCluster: info["CLUSTER"] || null,
+			sessionId: info["VIDEO-SESSION-ID"] || null,
+			broadcastId: info["BROADCAST-ID"] || null,
+			startsAt: Number.isFinite(streamTime) ? Math.floor(Date.now() / 1000 - streamTime) : null,
+			urls: { video, audio },
+		};
+	} catch {
+		return null;
+	}
+};
+
+export const TwitchProfile = async function TwitchProfile(que: string) {
+	if (!que) return null;
+	const segs = que.split(/[?#]/)[0].split("/").filter(Boolean);
+	let slug = segs.pop()?.trim().toLowerCase() || "";
+	if (/^(about|videos|clips|collections|schedule|events|subscribers|mods|community|chat|directory|search)$/.test(slug)) slug = segs.pop()?.trim().toLowerCase() || "";
+	const login = slug;
+	if (!login || !/^[a-z0-9_]{3,25}$/.test(login)) return { data: null };
+
+	try {
+		const bodyhttp = [
+			{
+				operationName: "TwitchProfile_Main",
+				variables: { login },
+				query: 'query TwitchProfile_Main($login:String!){user(login:$login){id login displayName description avatar70:profileImageURL(width:70) avatar150:profileImageURL(width:150) avatar300:profileImageURL(width:300) createdAt followers{totalCount} roles{isAffiliate isPartner} primaryTeam{name displayName} channel{socialMedias{name url}} lastBroadcast{startedAt title} broadcastSettings{language title game{displayName}} stream{title language viewersCount previewImageURL(height:720) game{displayName} createdAt playbackAccessToken(params:{platform:"web" playerBackend:"mediaplayer" playerType:"site"}){value signature}} chatSettings{chatDelayMs slowModeDurationSeconds followersOnlyDurationMinutes isSubscribersOnlyModeEnabled isEmoteOnlyModeEnabled}}}',
+			},
+			{
+				operationName: "TwitchProfile_Extra",
+				variables: { login },
+				query: "query TwitchProfile_Extra($login:String!){user(login:$login){videos(first:5 sort:TIME){totalCount edges{node{id title viewCount createdAt lengthSeconds previewThumbnailURL(width:320)}}} topClips:clips(first:5){edges{node{id title viewCount createdAt thumbnailURL}}} subscriptionProducts{name price emotes{id token}}}}",
+			},
+			{
+				operationName: "ChannelShell",
+				variables: { login },
+				extensions: { persistedQuery: { version: 1, sha256Hash: "22a9e108f0a729c3c0f9fbc87bc03891b4f54c7da2aa4a97f228002ba3257e4f" } },
+			},
+			{
+				operationName: "StreamTagsTrackingChannel",
+				variables: { channel: login },
+				extensions: { persistedQuery: { version: 1, sha256Hash: "6aa3851aaaf88c320d514eb173563d430b28ed70fdaaf7eeef6ed4b812f48608" } },
+			},
+			{
+				operationName: "ContentClassificationContext",
+				variables: { clipSlug: "", isStream: true, isClip: false, isVOD: false, login },
+				extensions: { persistedQuery: { version: 1, sha256Hash: "57bb6c1aca3631b2b3e74b1c3c8adbecbbcc3becb70ec52d7c5ef0f90d7c3b02" } },
+			},
+		];
+		const per = await fetch(`https://gql.twitch.tv/gql`, {
+			method: "POST",
+			body: JSON.stringify(bodyhttp),
+			headers: {
+				...commonHeaders,
+				"Client-Id": "kimne78kx3ncx6brgo4mv6wki5h1ko",
+				"Content-Type": "application/json",
+			},
+		});
+
+		const pres: any = await per.json().catch(() => null);
+		const main = pres?.[0]?.data?.user;
+		const extra = pres?.[1]?.data?.user;
+		if (!main) return { data: null };
+		const shell = pres?.[2]?.data?.userOrError;
+		const tags = pres?.[3]?.data?.user?.stream?.freeformTags;
+		const cls = pres?.[4]?.data?.user?.stream;
+		const { playbackAccessToken: _pat, ...streamRest } = main?.stream || {};
+		const bareThumb = (u: any): any => (typeof u === "string" ? u.replace(/-(\d+|{width})x(\d+|{height})(\.\w+)([?#]|$)/, "$3$4") : u);
+		let streaming: any = null;
+		if (_pat?.value && _pat?.signature) {
+			const master = `https://usher.ttvnw.net/api/channel/hls/${login}.m3u8?allow_source=true&allow_audio_only=true&allow_spectre=true&p=${Math.floor(Math.random() * 9000000 + 1000000)}&platform=web&player=twitchweb&supported_codecs=av1,h265,h264&playlist_include_framerate=true&sig=${_pat.signature}&token=${encodeURIComponent(_pat.value)}`;
+			streaming = await getTwitchStreaming(master);
+		}
+
+		return {
+			data: {
+				...main,
+				bannerImageURL: shell?.bannerImageURL || null,
+				primaryColorHex: shell?.primaryColorHex || null,
+				socials: main?.channel?.socialMedias || null,
+				freeformTags: Array.isArray(tags) ? tags.map((t: any) => t?.name).filter(Boolean) : null,
+				contentClassificationLabels: cls?.contentClassificationLabels || null,
+				stream: main?.stream ? { ...streamRest, previewImageURL: bareThumb(streamRest?.previewImageURL), id: cls?.id || null, gameId: cls?.game?.id || null, streaming } : null,
+				videos: extra?.videos?.edges ? { totalCount: extra.videos.totalCount, edges: extra.videos.edges.map((e: any) => ({ node: { ...e?.node, previewThumbnailURL: typeof e?.node?.previewThumbnailURL === "string" ? e.node.previewThumbnailURL.replace("{width}", "320").replace("{height}", "180") : e?.node?.previewThumbnailURL } })) } : extra?.videos || null,
+				topClips: extra?.topClips?.edges ? extra.topClips.edges.map((e: any) => e?.node) : null,
+				subscriptionProducts: extra?.subscriptionProducts || null,
+			},
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
 const pickHighestKickThumbnail = (thumb: any): string | null => {
 	try {
 		if (!thumb) return null;

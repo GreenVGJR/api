@@ -461,7 +461,10 @@ export const refreshRedditAuth = async (): Promise<any> => {
 				if (m) jar.set(m[1].trim(), m[2]);
 			}
 		};
-		const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+		const jarStr = () => {
+			if (process.env.REDDIT_SESSION) jar.set("reddit_session", process.env.REDDIT_SESSION);
+			return [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+		};
 		for (const targetUrl of ["https://www.reddit.com/svc/shreddit/styling-overrides", "https://ads.reddit.com/register"]) {
 			for (let attempt = 0; attempt < 3; attempt++) {
 				try {

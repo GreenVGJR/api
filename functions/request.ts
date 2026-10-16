@@ -5358,7 +5358,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 			};
 		}
 		return {
-			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
+			_warning: "This endpoint may stop working in future as tiktok keep updating anti-bot protect",
 			data: testres?.aweme_list || null,
 		};
 	} catch {
@@ -5393,7 +5393,7 @@ export const TiktokMusic = async function TiktokMusic(que: string, limit: number
 			if (!testres?.music && !refresh_auth) return await TiktokMusic(que, limit, true);
 		} catch {}
 		return {
-			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
+			_warning: "This endpoint may stop working in future as tiktok keep updating anti-bot protect",
 			data: [testres?.music || null, testres?.music_info_list || null],
 		};
 	} catch {
@@ -5428,7 +5428,7 @@ export const TiktokUser = async function TiktokUser(que: string, limit: number =
 			if (!testres?.user_list?.[0] && !refresh_auth) return await TiktokUser(que, limit, true);
 		} catch {}
 		return {
-			_warning: "Tiktok updating security protection for accessing api. This endpoint may stop working in future",
+			_warning: "This endpoint may stop working in future as tiktok keep updating anti-bot protect",
 			data: testres?.user_list?.map((a: any) => a.user_info) || null,
 		};
 	} catch {
@@ -5576,6 +5576,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 			);
 
 			return {
+				_warning: "This endpoint may stop working in future as tiktok keep updating anti-bot protect",
 				data: data?.[0] || null,
 				altData: testres?.itemList?.[0] || null,
 			};
@@ -6707,6 +6708,7 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 		const finalres: any = res?.data?.children?.map((a: any) => a?.data);
 		return {
 			_wafChallenge: redditCookies !== "",
+			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
 			data: JSON.parse(decodeHTML(JSON.stringify(finalres?.[0] ? finalres : null))),
 		};
 	} catch {
@@ -6749,6 +6751,7 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 		const finalres: any = collectListingData(res);
 		return {
 			_wafChallenge: redditCookies !== "",
+			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
 			data: JSON.parse(decodeHTML(JSON.stringify(finalres.length ? finalres : null))),
 		};
 	} catch (e: any) {
@@ -6791,6 +6794,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 		const res: any = await req.json();
 		return {
 			_wafChallenge: redditCookies !== "",
+			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
 			data: JSON.parse(decodeHTML(JSON.stringify(res?.data?.children?.map((a: any) => a?.data) || null))),
 		};
 	} catch (e) {

@@ -6320,6 +6320,29 @@ export const robloxAudio = async function robloxAudio(que: string) {
 
 export const RobloxUsers = async function RobloxUsers(que: string) {
 	if (!que) return null;
+	const hcSession = new HttpcloakSession({ timeout: 30 });
+	const hcOk = (r: any) => {
+		const s = responseStatus(r);
+		return s >= 200 && s < 300;
+	};
+	const hcJson = (r: any): any => {
+		try {
+			if (typeof r?.json === "function") return r.json();
+		} catch {}
+		try {
+			return JSON.parse(typeof r?.text === "string" ? r.text : "");
+		} catch {
+			return null;
+		}
+	};
+	const hcHeader = (r: any, name: string): string | null => {
+		const h = r?.headers || {};
+		const k = Object.keys(h).find((x) => x.toLowerCase() === name.toLowerCase());
+		if (!k) return null;
+		const v = h[k];
+		if (Array.isArray(v)) return v[0] ? String(v[0]) : null;
+		return v ? String(v) : null;
+	};
 
 	try {
 		const sessionId = crypto.randomUUID();
@@ -6329,17 +6352,17 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 		searchUrl.searchParams.set("pageToken", "");
 		searchUrl.searchParams.set("globalSessionId", sessionId);
 		searchUrl.searchParams.set("sessionId", sessionId);
-		const pul1 = await fetch(searchUrl.toString(), {
-			headers: commonHeaders,
+		const pul1: any = await hcSession.get(searchUrl.toString(), {
+			headers: { ...commonHeaders },
 		});
 
-		if (pul1.status === 429) {
+		if (responseStatus(pul1) === 429) {
 			return {
 				error: "Rate-limited",
 			};
 		}
 
-		const res1: any = await pul1.json();
+		const res1: any = hcJson(pul1) || {};
 		const users = (Array.isArray(res1.searchResults) ? res1.searchResults : [])
 			.flatMap((group: any) => (Array.isArray(group?.contents) ? group.contents : []))
 			.filter((user: any) => user?.contentType === "User" && user.contentId != null)
@@ -6373,172 +6396,66 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 		]);
 		const requestedThumbnails = new Map(thumbnailRequests.map((request) => [request.requestId, request]));
 
-		const [thumbnailData, profileData, friendLists] = await Promise.all([
+		const [thumbnailData, profileData, userDetailsById] = await Promise.all([
 			(async () => {
+				const mapped = new Map<number, { headshot: string | null; full: string | null }>();
 				try {
-					const response = await fetch("https://thumbnails.roblox.com/v1/batch?urlLocale=en_us", {
-						method: "POST",
+					const thumbRes: any = await hcSession.post("https://thumbnails.roblox.com/v1/batch?urlLocale=en_us", {
 						headers: { ...commonHeaders, "Content-Type": "application/json" },
 						body: JSON.stringify(thumbnailRequests),
 					});
-					if (!response.ok) return new Map<number, { headshot: string | null; full: string | null }>();
-					const result: any = await response.json();
-					const mapped = new Map<number, { headshot: string | null; full: string | null }>();
-					for (const thumbnail of result?.data || []) {
-						const request = requestedThumbnails.get(thumbnail.requestId);
-						if (!request) continue;
-						const images = mapped.get(request.targetId) || { headshot: null, full: null };
-						if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
-						else images.full = thumbnail.imageUrl || null;
-						mapped.set(request.targetId, images);
+					if (hcOk(thumbRes)) {
+						const thumbJson: any = hcJson(thumbRes) || {};
+						for (const thumbnail of thumbJson?.data || []) {
+							const request = requestedThumbnails.get(thumbnail.requestId);
+							if (!request) continue;
+							const images = mapped.get(request.targetId) || { headshot: null, full: null };
+							if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
+							else images.full = thumbnail.imageUrl || null;
+							mapped.set(request.targetId, images);
+						}
 					}
-					return mapped;
-				} catch {
-					return new Map<number, { headshot: string | null; full: string | null }>();
-				}
+				} catch {}
+				return mapped;
 			})(),
 			Promise.all(
 				users.map(async (user: any) => {
 					try {
-						const response = await fetch("https://apis.roblox.com/profile-platform-api/v1/profiles/get?urlLocale=en_us", {
-							method: "POST",
+						const response: any = await hcSession.post("https://apis.roblox.com/profile-platform-api/v1/profiles/get?urlLocale=en_us", {
 							headers: { ...commonHeaders, "Content-Type": "application/json;charset=UTF-8" },
 							body: JSON.stringify({ profileId: String(user.id), profileType: "User", components, includeComponentOrdering: true }),
 						});
-						if (!response.ok) return [user.id, null] as const;
-						return [user.id, await response.json()] as const;
+						if (!hcOk(response)) return [user.id, null] as const;
+						return [user.id, hcJson(response)] as const;
 					} catch {
 						return [user.id, null] as const;
 					}
 				}),
 			),
-			Promise.all(
-				users.map(async (user: any) => {
-					let privateList = false;
-					for (let attempt = 0; attempt < 6; attempt++) {
-						try {
-							const response = await fetch(`https://friends.roblox.com/v1/users/${user.id}/friends`, {
-								headers: commonHeaders,
-							});
-							if (response.ok) {
-								const result: any = await response.json();
-								return [user.id, Array.isArray(result?.data) ? result.data : [], false] as const;
+			(async () => {
+				const mapped = new Map<number, any>();
+				const userIds = users.map((u: any) => Number(u.id)).filter((id: number) => Number.isSafeInteger(id) && id > 0);
+				for (let attempt = 0; attempt < 3; attempt++) {
+					try {
+						const response: any = await hcSession.post("https://users.roblox.com/v1/users", {
+							headers: { ...commonHeaders, "Content-Type": "application/json" },
+							body: JSON.stringify({ userIds }),
+						});
+						if (hcOk(response)) {
+							const result: any = hcJson(response) || {};
+							for (const d of Array.isArray(result?.data) ? result.data : []) {
+								if (d?.id != null) mapped.set(Number(d.id), d);
 							}
-							if (response.status === 403) {
-								privateList = true;
-								break;
-							}
-							if (response.status !== 429 && response.status < 500) break;
-						} catch {}
-					}
-					return [user.id, [], privateList] as const;
-				}),
-			),
+							break;
+						}
+						const ustatus = responseStatus(response);
+						if (ustatus === 429 || ustatus < 500) break;
+					} catch {}
+				}
+				return mapped;
+			})(),
 		]);
 		const profilesById = new Map<number, any>(profileData);
-		const friendListsByUserId = new Map<string, any[]>(friendLists.map(([userId, friends]) => [String(userId), friends]));
-		const friendListPrivateByUserId = new Map<string, boolean>(friendLists.map(([userId, , isPrivate]) => [String(userId), !!isPrivate]));
-		const friendIds = Array.from(
-			new Set(
-				friendLists
-					.flatMap(([, friends]) => friends)
-					.map((friend: any) => Number(friend?.id ?? friend?.userId))
-					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
-			),
-		);
-		const friendIdChunks = Array.from({ length: Math.ceil(friendIds.length / 100) }, (_, index) => friendIds.slice(index * 100, index * 100 + 100));
-		const fetchFriendNameHtml = async (id: number): Promise<{ name: string; displayName: string | null } | null> => {
-			try {
-				const r = await fetch(`https://www.roblox.com/users/${id}/profile`, { headers: commonHeaders });
-				if (!r.ok) return null;
-				const html = await r.text();
-				const name = (html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "").replace(/\s*-\s*Roblox\s*$/i, "").trim();
-				if (!name || /\s/.test(name)) return null;
-				const desc = html.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/i)?.[1] ?? "";
-				const displayName = desc.split(" is one of the millions")[0]?.trim() || null;
-				return { name, displayName };
-			} catch {
-				return null;
-			}
-		};
-		const friendDetails: any[][] = [];
-		for (const userIds of friendIdChunks) {
-			let data: any[] = [];
-			for (let attempt = 0; attempt < 6; attempt++) {
-				try {
-					const response = await fetch("https://users.roblox.com/v1/users", {
-						method: "POST",
-						headers: { ...commonHeaders, "Content-Type": "application/json" },
-						body: JSON.stringify({ userIds }),
-					});
-					if (response.ok) {
-						const result: any = await response.json();
-						data = Array.isArray(result?.data) ? result.data : [];
-						break;
-					}
-					if (response.status !== 429 && response.status < 500) break;
-				} catch {
-					// ignore and retry
-				}
-			}
-			friendDetails.push(data);
-		}
-		const friendDetailsById = new Map<number, any>(friendDetails.flat().map((friend: any) => [friend.id, friend]));
-		const allFriendIds = Array.from(
-			new Set(
-				friendLists
-					.flatMap(([, friends]) => friends)
-					.map((f: any) => Number(f?.id ?? f?.userId))
-					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
-			),
-		);
-		let missingIds = allFriendIds.filter((id) => !friendDetailsById.has(id));
-		if (missingIds.length > 0) {
-			const missingChunks = Array.from({ length: Math.ceil(missingIds.length / 100) }, (_, index) => missingIds.slice(index * 100, index * 100 + 100));
-			const refilled = await Promise.allSettled(
-				missingChunks.map(async (chunk) => {
-					let pending = chunk.slice();
-					for (let a = 0; a < 5 && pending.length > 0; a++) {
-						try {
-							const response = await fetch("https://users.roblox.com/v1/users", {
-								method: "POST",
-								headers: { ...commonHeaders, "Content-Type": "application/json" },
-								body: JSON.stringify({ userIds: pending }),
-							});
-							if (response.ok) {
-								const result: any = await response.json();
-								for (const d of Array.isArray(result?.data) ? result.data : []) {
-									if (d?.id != null) friendDetailsById.set(Number(d.id), d);
-								}
-								pending = pending.filter((id) => !friendDetailsById.has(id));
-							} else if (response.status !== 429 && response.status < 500) {
-								break;
-							}
-						} catch {}
-					}
-					return pending;
-				}),
-			);
-			const stillMissing = new Set<number>();
-			refilled.forEach((r) => {
-				if (r.status === "fulfilled") for (const id of r.value) stillMissing.add(id);
-			});
-			missingIds = missingIds.filter((id) => stillMissing.has(id));
-		}
-		if (missingIds.length > 0) {
-			const htmlSettled = await Promise.allSettled(
-				missingIds.map(async (id) => {
-					for (let a = 0; a < 5; a++) {
-						const scraped = await fetchFriendNameHtml(id);
-						if (scraped) return { id, name: scraped.name, displayName: scraped.displayName };
-					}
-					return null;
-				}),
-			);
-			htmlSettled.forEach((r) => {
-				if (r.status === "fulfilled" && r.value) friendDetailsById.set(Number((r.value as any).id), r.value);
-			});
-		}
 		const catalogItemsByKey = new Map<string, { itemType: string; id: number }>();
 		for (const profile of profilesById.values()) {
 			const wornAssets = profile?.components?.CurrentlyWearing?.assets;
@@ -6553,8 +6470,7 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 		const catalogChunks = Array.from({ length: Math.ceil(catalogItems.length / 10) }, (_, index) => catalogItems.slice(index * 10, index * 10 + 10));
 		const fetchCatalogBatch = async (items: { itemType: string; id: number }[], csrfToken: string | null = null) => {
 			const sendRequest = (token: string | null) =>
-				fetch("https://catalog.roblox.com/v1/catalog/items/details?urlLocale=en_us", {
-					method: "POST",
+				hcSession.post("https://catalog.roblox.com/v1/catalog/items/details?urlLocale=en_us", {
 					headers: {
 						...commonHeaders,
 						"Content-Type": "application/json",
@@ -6563,35 +6479,22 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 					body: JSON.stringify({ items }),
 				});
 			try {
-				let response = await sendRequest(csrfToken);
+				let response: any = await sendRequest(csrfToken);
 				let nextCsrfToken = csrfToken;
-				if (response.status === 403) {
-					const challengeToken = response.headers.get("x-csrf-token");
+				if (responseStatus(response) === 403) {
+					const challengeToken = hcHeader(response, "x-csrf-token");
 					if (challengeToken) {
 						nextCsrfToken = challengeToken;
 						response = await sendRequest(nextCsrfToken);
 					}
 				}
-				if (!response.ok) return { data: [], csrfToken: nextCsrfToken };
-				const result: any = await response.json();
+				if (!hcOk(response)) return { data: [], csrfToken: nextCsrfToken };
+				const result: any = hcJson(response) || {};
 				return { data: Array.isArray(result?.data) ? result.data : [], csrfToken: nextCsrfToken };
 			} catch {
 				return { data: [], csrfToken };
 			}
 		};
-		let catalogDetails: any[] = [];
-		if (catalogChunks.length > 0) {
-			const firstBatch = await fetchCatalogBatch(catalogChunks[0]!);
-			catalogDetails = firstBatch.data;
-			if (catalogChunks.length > 1) {
-				const remainingBatches = await Promise.all(catalogChunks.slice(1).map((items) => fetchCatalogBatch(items, firstBatch.csrfToken)));
-				catalogDetails.push(...remainingBatches.flatMap((batch) => batch.data));
-			}
-		}
-		const catalogDetailsByKey = new Map<string, any>();
-		for (const detail of catalogDetails) {
-			if (detail?.id != null && detail?.itemType) catalogDetailsByKey.set(`${detail.itemType}:${detail.id}`, detail);
-		}
 		const wornAssetIds = Array.from(
 			new Set(
 				Array.from(profilesById.values())
@@ -6602,19 +6505,35 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			),
 		);
 		const wornAssetIdChunks = Array.from({ length: Math.ceil(wornAssetIds.length / 100) }, (_, index) => wornAssetIds.slice(index * 100, index * 100 + 100));
-		const wornAssetThumbnails = await Promise.all(
-			wornAssetIdChunks.map(async (assetIds) => {
-				try {
-					const params = new URLSearchParams({ assetIds: assetIds.join(","), size: "512x512", format: "Png" });
-					const response = await fetch(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: commonHeaders });
-					if (!response.ok) return [];
-					const result: any = await response.json();
-					return Array.isArray(result?.data) ? result.data : [];
-				} catch {
-					return [];
+		const [catalogDetails, wornAssetThumbnails] = await Promise.all([
+			(async () => {
+				if (catalogChunks.length === 0) return [];
+				const firstBatch = await fetchCatalogBatch(catalogChunks[0]!);
+				const details = firstBatch.data;
+				if (catalogChunks.length > 1) {
+					const remainingBatches = await Promise.all(catalogChunks.slice(1).map((items) => fetchCatalogBatch(items, firstBatch.csrfToken)));
+					details.push(...remainingBatches.flatMap((batch) => batch.data));
 				}
-			}),
-		);
+				return details;
+			})(),
+			Promise.all(
+				wornAssetIdChunks.map(async (assetIds) => {
+					try {
+						const params = new URLSearchParams({ assetIds: assetIds.join(","), size: "512x512", format: "Png" });
+						const response: any = await hcSession.get(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: { ...commonHeaders } });
+						if (!hcOk(response)) return [];
+						const result: any = hcJson(response) || {};
+						return Array.isArray(result?.data) ? result.data : [];
+					} catch {
+						return [];
+					}
+				}),
+			),
+		]);
+		const catalogDetailsByKey = new Map<string, any>();
+		for (const detail of catalogDetails) {
+			if (detail?.id != null && detail?.itemType) catalogDetailsByKey.set(`${detail.itemType}:${detail.id}`, detail);
+		}
 		const wornAssetThumbnailsById = new Map<number, string>(
 			wornAssetThumbnails
 				.flat()
@@ -6625,8 +6544,7 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 		return {
 			data: users.map((u: any) => {
 				const images = thumbnailData.get(u.id);
-				const friends = friendListsByUserId.get(String(u.id)) || [];
-				const friendsPrivate = friendListPrivateByUserId.get(String(u.id)) || false;
+				const details = userDetailsById.get(Number(u.id));
 				const originalProfile = profilesById.get(u.id) || null;
 				const currentlyWearing = originalProfile?.components?.CurrentlyWearing;
 				const profile =
@@ -6652,29 +6570,21 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 						: originalProfile;
 				return {
 					...u,
+					username: details?.name || null,
+					displayName: details?.displayName || null,
 					avatar: images?.headshot || null,
 					avatarFull: images?.full || null,
 					profileUrl: `https://www.roblox.com/users/${u.id}/profile`,
 					profile,
-					friends: friendsPrivate
-						? { error: "This account was set this to private" }
-						: friends
-								.map((friend: any) => {
-									if (String(friend?.id) === "-1") return { error: "This account no longer exist" };
-									const friendId = Number(friend?.id ?? friend?.userId);
-									const details = friendDetailsById.get(friendId);
-									return {
-										id: friend?.id ?? friend?.userId ?? friendId,
-										username: details?.name || friend?.name || null,
-										displayName: details?.displayName || friend?.displayName || null,
-									};
-								})
-								.filter((f: any) => f.error || f.username),
 				};
 			}),
 		};
 	} catch {
 		return null;
+	} finally {
+		try {
+			hcSession.close();
+		} catch {}
 	}
 };
 

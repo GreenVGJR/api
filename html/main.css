@@ -120,6 +120,29 @@
 	animation: shine 1.5s infinite ease-out;
 }
 
+.ai-image-skeleton-wrap {
+	container-type: size;
+}
+.ai-image-skeleton {
+	width: min(100%, 70vh);
+	aspect-ratio: 1 / 1;
+	border-radius: 0.5rem;
+	border: 1px solid var(--border);
+	background: linear-gradient(100deg, #141414 40%, #262626 50%, #141414 60%);
+	background-size: 200% 100%;
+	animation: ai-skeleton-shimmer 1.4s infinite linear;
+}
+@supports (width: 1cqw) {
+	.ai-image-skeleton {
+		width: min(100cqw, 100cqh);
+	}
+}
+@keyframes ai-skeleton-shimmer {
+	to {
+		background-position: -200% 0;
+	}
+}
+
 #sendBtn {
 	position: relative;
 	border-radius: 0.5rem;
@@ -566,6 +589,11 @@ body {
 .tok-key {
 	color: var(--tok-key);
 	font-weight: 600;
+	cursor: pointer;
+}
+.tok-key:hover {
+	background: rgba(167, 139, 250, 0.14);
+	border-radius: 3px;
 }
 .tok-str {
 	color: var(--tok-str);

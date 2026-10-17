@@ -668,11 +668,12 @@ function slideStatusText(text, className) {
   }, 200);
 }
 
-function setStatus(dotColor, text, textClass) {
+function setStatus(dotColor, text, textClass, shimmer = false) {
+  const shimmerClass = shimmer ? " waiting-loading" : "";
   setStatusDotColor(dotColor);
   statusText.textContent = text;
-  statusText.className = textClass;
-  slideStatusText(text, "font-semibold " + textClass);
+  statusText.className = textClass + shimmerClass;
+  slideStatusText(text, "font-semibold " + textClass + shimmerClass);
 }
 
 const sendRow = document.getElementById("sendRow");
@@ -877,6 +878,7 @@ function hasLoadedEndpoints() {
 }
 
 function renderCurrentPage() {
+  hideKeyPathPopover();
   const page = pageFromPath(window.location.pathname);
   const isLegalPage = page === "terms" || page === "privacy";
   const prevPage = lastRenderedPage;
@@ -1158,6 +1160,15 @@ async function performRequest(targetUrl, retryCount = 0) {
     sendBtn.classList.add("opacity-70");
     responseArea.classList.add("empty-state");
     responseArea.innerHTML = "";
+    hideKeyPathPopover();
+
+    let requestPath = "";
+    try {
+      requestPath = new URL(targetUrl).pathname;
+    } catch {}
+    if (requestPath.startsWith("/tools/ai-image/") || requestPath.startsWith("/download/")) {
+      responseArea.innerHTML = `<div class="ai-image-skeleton-wrap w-full h-full flex items-center justify-center p-4"><div class="ai-image-skeleton"></div></div>`;
+    }
 
     setStatus("yellow-400", "Fetching", "text-yellow-400");
   }
@@ -1206,7 +1217,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       });
       return await performRequest(targetUrl, retryCount + 1);
     }
-    setStatus("blue-400", "Rendering", "text-gray-400");
+    setStatus("blue-400", "Rendering", "text-gray-400", true);
 
     let duration;
     let preParsedJson = null;
@@ -1241,7 +1252,20 @@ async function performRequest(targetUrl, retryCount = 0) {
             const mediaTag = isVideo
               ? `<video src="${escapeAttribute(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`
               : `<img src="${escapeAttribute(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
-            responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${mediaTag}</div>`;
+
+            const mediaProbe = document.createElement(isVideo ? "video" : "img");
+            if (isVideo) mediaProbe.preload = "auto";
+            let mediaSettled = false;
+            const showDownloadMedia = () => {
+              if (mediaSettled) return;
+              if (!responseArea.querySelector(".ai-image-skeleton")) return;
+              mediaSettled = true;
+              responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${mediaTag}</div>`;
+            };
+            mediaProbe.addEventListener(isVideo ? "loadeddata" : "load", showDownloadMedia, { once: true });
+            mediaProbe.addEventListener("error", showDownloadMedia, { once: true });
+            setTimeout(showDownloadMedia, 60000);
+            mediaProbe.src = mediaUrl;
             return null;
           }
         } catch (e) {}
@@ -1393,7 +1417,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           let lastReported = 0;
           const fragments = [];
 
-          setStatus("blue-400", `Rendering (0/${lines.length} lines)`, "text-gray-400");
+          setStatus("blue-400", `Rendering (0/${lines.length} lines)`, "text-gray-400", true);
 
           const buildColorfulChunk = () => {
             const deadline = performance.now() + FRAME_BUDGET_MS;
@@ -1410,7 +1434,7 @@ async function performRequest(targetUrl, retryCount = 0) {
 
               if (chunkIndex - lastReported >= REPORT_EVERY || chunkIndex >= lines.length) {
                 lastReported = chunkIndex;
-                setStatus("blue-400", `Rendering (${chunkIndex}/${lines.length} lines)`, "text-gray-400");
+                setStatus("blue-400", `Rendering (${chunkIndex}/${lines.length} lines)`, "text-gray-400", true);
               }
 
               if (performance.now() >= deadline) break;
@@ -2661,6 +2685,7 @@ clearResponseBtn.addEventListener("click", () => {
   hasMediaResponse = false;
   responseArea.classList.add("empty-state");
   responseArea.innerHTML = DEFAULT_RESPONSE_HTML;
+  hideKeyPathPopover();
   setStatus("gray-500", "Idle", "text-gray-500");
   updateConnectionUI();
 });
@@ -2798,6 +2823,209 @@ function syntaxHighlight(json) {
   }
   return result;
 }
+
+// ----- Key path popover: click a JSON key in the response to see retrieve paths -----
+
+const keyPathPopover = document.createElement("div");
+keyPathPopover.style.display = "none";
+keyPathPopover.className = "fixed z-50 select-none";
+keyPathPopover.innerHTML = `
+  <div class="rounded-lg border border-dark-500 bg-dark-700 shadow-xl overflow-hidden" style="min-width:250px;max-width:min(460px,90vw)">
+    <button type="button" data-path-row class="w-full flex items-start gap-2 px-3 py-2 text-left transition-colors cursor-pointer hover:bg-dark-600">
+      <span class="text-[10px] font-semibold text-gray-500 shrink-0" style="width:108px;line-height:15px;margin-top:2px">Dot notation</span>
+      <span class="font-mono text-xs text-gray-200 flex-1 min-w-0" style="word-break:break-all" data-path-value></span>
+      <span class="text-[10px] font-semibold text-mint-400 opacity-0 transition-opacity shrink-0" style="margin-top:2px" data-path-copied>Copied!</span>
+    </button>
+    <button type="button" data-path-row class="w-full flex items-start gap-2 px-3 py-2 text-left transition-colors cursor-pointer border-t border-dark-600 hover:bg-dark-600">
+      <span class="text-[10px] font-semibold text-gray-500 shrink-0" style="width:108px;line-height:15px;margin-top:2px">Semicolon notation</span>
+      <span class="font-mono text-xs text-gray-200 flex-1 min-w-0" style="word-break:break-all" data-path-value></span>
+      <span class="text-[10px] font-semibold text-mint-400 opacity-0 transition-opacity shrink-0" style="margin-top:2px" data-path-copied>Copied!</span>
+    </button>
+  </div>
+`;
+document.body.appendChild(keyPathPopover);
+
+let keyPathAnchor = null;
+
+function hideKeyPathPopover() {
+  if (keyPathPopover.style.display === "none") return;
+  keyPathPopover.style.display = "none";
+  keyPathAnchor = null;
+}
+
+function textOffsetOfSpan(pre, span) {
+  const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (span.contains(node)) return offset;
+    offset += node.nodeValue.length;
+  }
+  return -1;
+}
+
+function buildKeyPathIndex(text) {
+  const index = new Map();
+  const stack = [];
+  let pendingKey = null;
+  const n = text.length;
+  let i = 0;
+
+  const partsFor = (key) => {
+    const parts = [];
+    for (const frame of stack) {
+      if (frame.segment !== null) parts.push(frame.segment);
+    }
+    parts.push(key);
+    return parts;
+  };
+
+  while (i < n) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < n) {
+        if (text[j] === "\\") j += 2;
+        else if (text[j] === '"') {
+          j++;
+          break;
+        } else j++;
+      }
+      let k = j;
+      while (k < n && (text[k] === " " || text[k] === "\n" || text[k] === "\t" || text[k] === "\r")) k++;
+      if (text[k] === ":") {
+        let value;
+        try {
+          value = JSON.parse(text.slice(i, j));
+        } catch {
+          value = text.slice(i + 1, j - 1);
+        }
+        index.set(i, partsFor(value));
+        pendingKey = value;
+        i = k + 1;
+      } else {
+        i = j;
+      }
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      const parent = stack[stack.length - 1] || null;
+      const segment = parent ? (parent.type === "arr" ? parent.idx : pendingKey) : null;
+      stack.push({ type: ch === "{" ? "obj" : "arr", segment: segment === undefined ? null : segment, idx: 0 });
+      pendingKey = null;
+      i++;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      stack.pop();
+      i++;
+      continue;
+    }
+    if (ch === ",") {
+      const top = stack[stack.length - 1];
+      if (top && top.type === "arr") top.idx++;
+      i++;
+      continue;
+    }
+    i++;
+  }
+  return index;
+}
+
+const JS_IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function formatJsPath(parts) {
+  let out = "";
+  for (const part of parts) {
+    if (typeof part === "number") out += `[${part}]`;
+    else if (JS_IDENT_RE.test(part)) out += out ? `.${part}` : part;
+    else out += `[${JSON.stringify(part)}]`;
+  }
+  return out;
+}
+
+function formatSemiPath(parts) {
+  return parts.map((part) => String(part)).join(";");
+}
+
+function setKeyPathRowValue(row, text) {
+  const value = row.querySelector("[data-path-value]");
+  value.dataset.path = text;
+  value.textContent = text;
+  row.querySelector("[data-path-copied]").classList.add("opacity-0");
+  if (row._copyTimer) {
+    clearTimeout(row._copyTimer);
+    row._copyTimer = null;
+  }
+}
+
+function showKeyPathPopover(anchor, x, y, parts) {
+  const rows = keyPathPopover.querySelectorAll("[data-path-row]");
+  setKeyPathRowValue(rows[0], formatJsPath(parts));
+  setKeyPathRowValue(rows[1], formatSemiPath(parts));
+
+  keyPathAnchor = anchor;
+  keyPathPopover.style.visibility = "hidden";
+  keyPathPopover.style.display = "block";
+
+  const rect = keyPathPopover.getBoundingClientRect();
+  const pad = 8;
+  let left = x + 12;
+  let top = y + 16;
+  if (left + rect.width > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - rect.width - pad);
+  if (top + rect.height > window.innerHeight - pad) top = Math.max(pad, y - rect.height - 12);
+  keyPathPopover.style.left = `${left}px`;
+  keyPathPopover.style.top = `${top}px`;
+  keyPathPopover.style.visibility = "";
+}
+
+keyPathPopover.querySelectorAll("[data-path-row]").forEach((row) => {
+  row.addEventListener("click", async () => {
+    const value = row.querySelector("[data-path-value]");
+    const pathText = value.dataset.path;
+    if (!pathText) return;
+    try {
+      await copyToClipboard(pathText);
+    } catch {
+      return;
+    }
+    const tag = row.querySelector("[data-path-copied]");
+    tag.classList.remove("opacity-0");
+    if (row._copyTimer) clearTimeout(row._copyTimer);
+    row._copyTimer = setTimeout(() => tag.classList.add("opacity-0"), 1200);
+  });
+});
+
+responseArea.addEventListener("click", (event) => {
+  if (event.detail > 1) return;
+  const target = event.target instanceof Element ? event.target : null;
+  const keySpan = target ? target.closest(".tok-key") : null;
+  if (!keySpan || !responseArea.contains(keySpan)) return;
+  const pre = responseArea.querySelector("pre");
+  if (!pre || !pre.contains(keySpan)) return;
+  if (keyPathAnchor === keySpan) {
+    hideKeyPathPopover();
+    return;
+  }
+  const offset = textOffsetOfSpan(pre, keySpan);
+  if (offset < 0) return;
+  const parts = buildKeyPathIndex(pre.textContent).get(offset);
+  if (!parts || !parts.length) return;
+  showKeyPathPopover(keySpan, event.clientX, event.clientY, parts);
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target && keyPathPopover.contains(target)) return;
+  if (target && target.closest(".tok-key") && responseArea.contains(target)) return;
+  hideKeyPathPopover();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideKeyPathPopover();
+});
+
+responseArea.addEventListener("scroll", hideKeyPathPopover, { passive: true });
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {

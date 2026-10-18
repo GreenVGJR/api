@@ -40,6 +40,7 @@ export const getYoutubeVisitorKey = async () => {
 	return keyYoutubeVisitor;
 };
 let poTokenCache: { po_token: string; visitor_data: string } | null = null;
+let poTokenInFlight: Promise<{ po_token: string; visitor_data: string }> | null = null;
 
 const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || "";
 const YOUTUBE_API_KEY = process.env.YTAPI_KEY || "";
@@ -178,8 +179,10 @@ async function generateCbPotFall(videoId: string) {
 	const integrityTokenJson = (await integrityTokenResponse.json()) as [string, number, number, string];
 	const integrityToken = integrityTokenJson[0];
 	const estimatedTtlSecs = integrityTokenJson[1];
-	if (estimatedTtlSecs) bgIntegrityExp = estimatedTtlSecs * 1000;
-	else bgIntegrityExp = CAPTION_POT_TTL_FALLBACK;
+	// The TTL is a duration, but the caption cache compares against Date.now(), so it
+	// needs an absolute deadline. Storing the raw duration made every lookup miss,
+	// forcing a fresh BotGuard mint on every single caption request.
+	bgIntegrityExp = estimatedTtlSecs ? Date.now() + estimatedTtlSecs * 1000 : Date.now() + CAPTION_POT_TTL_FALLBACK;
 	if (!integrityToken) throw new Error("BotGuard integrity token unavailable");
 	const minter = await WebPoMinter.create({ integrityToken }, webPoSignalOutput as any);
 	const token = await minter.mintAsWebsafeString(videoId);
@@ -214,13 +217,38 @@ async function getYoutubeCaptionPoToken(videoId: string) {
 
 export async function getPoToken() {
 	if (poTokenCache) return poTokenCache;
-	try {
-		poTokenCache = await generateYoutubePoToken();
-	} catch (e) {
-		console.error("Failed to generate YouTube PO token:", e);
-		poTokenCache = getFallbackPoToken();
+	if (!poTokenInFlight) {
+		poTokenInFlight = (async () => {
+			try {
+				return await generateYoutubePoToken();
+			} catch (e) {
+				console.error("Failed to generate YouTube PO token:", e);
+				return getFallbackPoToken();
+			}
+		})().finally(() => {
+			poTokenInFlight = null;
+		});
 	}
+	poTokenCache = await poTokenInFlight;
 	return poTokenCache;
+}
+
+// Every YouTube route reads poTokenCache for its visitorData/serviceIntegrityDimensions,
+// so it has to be primed before the request is built - otherwise those fields are
+// silently omitted. Single-flight so a burst of requests mints one token, not one each.
+// Cheap when already cached (the usual case, since warmPoToken primes at boot); it only
+// blocks on a BotGuard mint if the warmup failed or the token expired.
+export async function ensurePoToken() {
+	return await getPoToken();
+}
+
+// Called from index.ts on startup alongside the music/browser warmups so the first real
+// YouTube request doesn't pay for the BotGuard mint. Never rejects - a failed warmup just
+// leaves ensurePoToken() to mint lazily on first use.
+export async function warmPoToken() {
+	const existing = await getPoToken();
+	if (existing?.po_token) console.log("[Botguard] Initialized");
+	return existing;
 }
 
 function withYoutubePoToken(baseUrl: any, poToken: string) {
@@ -231,7 +259,10 @@ function withYoutubePoToken(baseUrl: any, poToken: string) {
 		const url = new URL(String(baseUrl));
 		url.searchParams.set("fmt", "json3");
 		url.searchParams.set("potc", "1");
-		url.searchParams.set("pot", encodeURIComponent(poToken));
+		// searchParams serialises the value itself, so the token must NOT be
+		// pre-encoded: encodeURIComponent here would double-encode it (e.g. the
+		// "=" padding became "%253D" in the URL, corrupting the pot server-side).
+		url.searchParams.set("pot", poToken);
 		url.searchParams.set("xorb", "2");
 		url.searchParams.set("xobt", "3");
 		url.searchParams.set("xovt", "3");
@@ -892,6 +923,7 @@ export const Flickr = async function Flickr(que: string, refresh_auth?: boolean,
 export const YTVideo = async function YTVideo(que: string, deepSearch: boolean = false) {
 	if (!que) return null;
 	try {
+		await ensurePoToken();
 		const jsonResult = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();
@@ -1116,6 +1148,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 			if (!playlistId) return null;
 			return playlistId.match(/^RDAMVM([A-Za-z0-9_-]{11})/)?.[1] || playlistId.match(/^RD(?:AM)?([A-Za-z0-9_-]{11})/)?.[1] || null;
 		};
+		await ensurePoToken();
 		const jsonResult = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();
@@ -1377,6 +1410,7 @@ export const DuckDuckGoSuggest = async function DuckDuckGoSuggest(que: string) {
 export const YTPlaylist = async function YTPlaylist(que: string) {
 	if (!que) return null;
 	try {
+		await ensurePoToken();
 		const jsonResult = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();
@@ -1613,7 +1647,7 @@ export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	videoId = videoId || undefined;
 	if (!videoId) return null;
 
-	await getYoutubeVisitorKey();
+	await ensurePoToken();
 	try {
 		const responseBody: any = {
 			data: null,
@@ -3235,6 +3269,11 @@ export const infoYoutube = async function infoYoutube(que: string) {
 	if (!videoId) return null;
 
 	try {
+		// Prime the session-bound poToken cache so `_challenge` carries a real
+		// visitorData/sessionPoToken instead of nulls, and so the content token
+		// minted below is bound to this session's visitor data (matches the
+		// official BotGuard flow). Process-wide cached and single-flight.
+		await ensurePoToken();
 		const page = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();
@@ -3309,6 +3348,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 	const requestUrl = `https://www.youtube.com/${prefix}${identifier}`;
 
 	try {
+		await ensurePoToken();
 		const pageResult = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();
@@ -6196,6 +6236,7 @@ export const robloxGames = async function robloxGames(que: string) {
 export const YTChannel = async function YTChannel(que: string) {
 	if (!que) return null;
 	try {
+		await ensurePoToken();
 		const jsonResult = await fetchYoutubeWithRetry(
 			async () => {
 				await getYoutubeVisitorKey();

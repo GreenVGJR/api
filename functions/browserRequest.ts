@@ -235,13 +235,30 @@ export async function warmBrowser(fetcherType: "stealthy" | "dynamic" = "stealth
 }
 
 export function closeBrowser() {
-	if (persistentProc) {
+	const proc = persistentProc;
+	if (!proc) return;
+
+	persistentProc = null;
+	try {
+		rl?.close();
+	} catch {}
+	rl = null;
+	warmupDone = false;
+	rejectAllPending(new Error("Browser session closed"));
+
+	// Closing stdin lets the bridge hit EOF and shut its Chromium down properly; a hard
+	// kill skips that and orphans the process tree.
+	try {
+		proc.stdin.end();
+	} catch {}
+
+	const hard = setTimeout(() => {
 		try {
-			persistentProc.kill();
+			proc.kill();
 		} catch {}
-		persistentProc = null;
-		rl = null;
-	}
+	}, 10_000);
+	hard.unref?.();
+	proc.exited?.then(() => clearTimeout(hard))?.catch?.(() => {});
 }
 
 process.on("exit", closeBrowser);

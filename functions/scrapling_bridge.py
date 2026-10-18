@@ -28,6 +28,26 @@ def _session_flags(input_data):
 		extra = []
 	return list(dict.fromkeys(_default_chromium_flags() + list(extra)))
 
+
+def _close_pooled_pages(session):
+	"""Close the tabs the session parks after a successful fetch.
+
+	Only the failure path closes a page; on success it goes back to the pool still
+	loaded, so every solved site keeps a live renderer running in the background.
+	Cookies and the fingerprint live on the context, so the browser stays warm.
+	"""
+	try:
+		pool = getattr(session, "page_pool", None)
+		if pool is None:
+			return
+		for info in pool.clear():
+			try:
+				info.page.close()
+			except Exception:
+				pass
+	except Exception:
+		pass
+
 def main():
     stealthy_session = None
     dynamic_session = None
@@ -124,6 +144,7 @@ def main():
             extract_text = input_data.get("extract_text", False)
             extract_html = input_data.get("extract_html", False)
 
+            active_session = None
             try:
                 if fetcher_type == "basic":
                     from scrapling import Fetcher
@@ -178,6 +199,7 @@ def main():
                             dynamic_session = DynamicSession(headless=headless, cookies=cookies, retries=SESSION_RETRIES, extra_flags=dynamic_flags)
                             dynamic_session.start()
                         response = dynamic_session.fetch(url, **kwargs)
+                        active_session = dynamic_session
                     else:
                         if not stealthy_session or stealthy_flags != _session_flags(input_data) or stealthy_headless != headless:
                             if stealthy_session:
@@ -191,6 +213,7 @@ def main():
                             stealthy_session = StealthySession(headless=headless, cookies=cookies, retries=SESSION_RETRIES, extra_flags=stealthy_flags)
                             stealthy_session.start()
                         response = stealthy_session.fetch(url, **kwargs)
+                        active_session = stealthy_session
 
                 # Extract values using selectors
                 extracted_data = {}
@@ -274,10 +297,12 @@ def main():
                 if extract_html:
                     result["html"] = response.body.decode("utf-8", errors="ignore") if hasattr(response, "body") and response.body else ""
 
+                _close_pooled_pages(active_session)
                 print(json.dumps(result))
                 sys.stdout.flush()
 
             except Exception as e:
+                _close_pooled_pages(active_session)
                 print(json.dumps({
                     "request_id": request_id,
                     "success": False,

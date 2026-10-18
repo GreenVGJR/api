@@ -16,6 +16,8 @@ if (!g.__vgjr_initialized) {
 	setTimeout(() => {
 		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
 		import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {});
+		// Prime the BotGuard session token so YouTube routes don't stall on the first mint.
+		import("./functions/request.js").then(({ warmPoToken }) => warmPoToken()).catch(() => {});
 	}, 0);
 
 	if (!g.__vgjr_shutdown_handlers) {

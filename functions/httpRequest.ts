@@ -135,6 +135,16 @@ export const getFailingImage = async (): Promise<Buffer> => {
 	return _failingImage;
 };
 
+// The navigate-phase VS wait page. The wallpaper is inlined as a data URI because the
+// response is `no-store` and lives for ~1s, so a second request would never be cached.
+let _vsWaitPage: string | null = null;
+const getVsWaitPage = async (): Promise<string> => {
+	if (_vsWaitPage) return _vsWaitPage;
+	const [template, wallpaper] = await Promise.all([readFile(path.join(__dirname, "..", "html", "vsWait.html"), "utf-8"), readFile(path.join(__dirname, "..", "public", "wf.webp"))]);
+	_vsWaitPage = template.replace("{{BG}}", wallpaper.toString("base64"));
+	return _vsWaitPage;
+};
+
 // Returns the "generation failed" image with the error reason in X-Message.
 export const aiImageFailure = async (c: Context, message: string): Promise<Response> => {
 	const buf = await getFailingImage();
@@ -255,21 +265,20 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 			const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
 			if (vsMode === "navigate") {
 				const challenge = await signVsChallenge(c.req.url, vsUa);
-				c.header("Content-Type", "text/plain");
 				c.header("Cache-Control", "no-store");
 				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
 				c.header("Refresh", "1");
-				return logResponse(c, c.text("Please wait...", 403));
+				return c.html(await getVsWaitPage(), 403);
 			}
 			if (vsPartialSet) {
 				c.header("Cache-Control", "no-store");
-				return logResponse(c, c.text("", 412));
+				return c.text("", 412);
 			}
 			if (vsFullSet) {
 				const challenge = await signVsChallenge(c.req.url, vsUa);
 				c.header("Cache-Control", "no-store");
 				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-				return logResponse(c, c.text("", 412));
+				return c.text("", 412);
 			}
 		}
 	}

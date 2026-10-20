@@ -660,23 +660,13 @@ app.get("/logs", async (c: Context) => {
 			resolvedTimezone = "UTC";
 		}
 
-		const requested = getLastRequestedLogs().map((entry) => ({
-			localTimestamp: new Date(entry.timestamp).toLocaleString("en-US", { timeZone: resolvedTimezone }),
-			...entry,
-		}));
+		const ipHash = crypto
+			.createHash("md5")
+			.update(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "")
+			.digest("hex")
+			.slice(0, 8);
 
-		await s.write(
-			JSON.stringify(
-				{
-					_message: "Refreshing every 5 seconds.",
-					limit: 30,
-					timezone: resolvedTimezone,
-					requested,
-				},
-				null,
-				1,
-			),
-		);
+		await s.write(JSON.stringify([[resolvedTimezone, ipHash], 5000, 30, getLastRequestedLogs()], null, 1));
 	});
 });
 

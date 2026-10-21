@@ -304,7 +304,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		}
 	} else if (useGzip) c.header("Content-Encoding", "gzip");
 	const cacheDirectives = ["public"];
-	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/")) {
+	if (requrl.pathname?.startsWith("/tools/discord/") || requrl.pathname?.startsWith("/tools/db/") || requrl.pathname?.startsWith("/tools/chat/")) {
 		cacheDirectives.push("max-age=0");
 	} else {
 		cacheDirectives.push("max-age=30");

@@ -12,41 +12,50 @@ if (!fs.existsSync(dataDir)) {
 
 const db = new Database(dbPath);
 const DB_KEY = process.env.DB_KEY;
+const CHAT_CONVERSATION_TTL_MS = 7 * 24 * 3600 * 1000;
 
 function checkKey(): boolean {
 	return !!DB_KEY && DB_KEY.length > 0;
 }
 
+function encryptStrict(text: string): string {
+	const key = crypto
+		.createHash("sha256")
+		.update(DB_KEY as string)
+		.digest();
+	const iv = crypto.randomBytes(12);
+	const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+	const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+	const tag = cipher.getAuthTag();
+	return Buffer.concat([iv, encrypted, tag]).toString("base64url");
+}
+
 function encrypt(text: string): string {
 	try {
-		const key = crypto
-			.createHash("sha256")
-			.update(DB_KEY as string)
-			.digest();
-		const iv = crypto.randomBytes(12);
-		const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-		const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
-		const tag = cipher.getAuthTag();
-		return Buffer.concat([iv, encrypted, tag]).toString("base64url");
+		return encryptStrict(text);
 	} catch {
 		return text;
 	}
 }
 
+function decryptStrict(payload: string): string {
+	const data = Buffer.from(payload, "base64url");
+	if (data.length < 28) throw new Error("Invalid encrypted payload");
+	const key = crypto
+		.createHash("sha256")
+		.update(DB_KEY as string)
+		.digest();
+	const iv = data.subarray(0, 12);
+	const tag = data.subarray(data.length - 16);
+	const encrypted = data.subarray(12, data.length - 16);
+	const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+	decipher.setAuthTag(tag);
+	return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+}
+
 function decrypt(payload: string): string {
 	try {
-		const data = Buffer.from(payload, "base64url");
-		if (data.length < 28) return payload;
-		const key = crypto
-			.createHash("sha256")
-			.update(DB_KEY as string)
-			.digest();
-		const iv = data.subarray(0, 12);
-		const tag = data.subarray(data.length - 16);
-		const encrypted = data.subarray(12, data.length - 16);
-		const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-		decipher.setAuthTag(tag);
-		return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+		return decryptStrict(payload);
 	} catch {
 		return payload;
 	}
@@ -60,6 +69,68 @@ db.run(`
         PRIMARY KEY (name, hash)
     )
 `);
+
+db.run(`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+        id TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    )
+`);
+
+db.prepare("DELETE FROM chat_conversations WHERE updated_at < ?").run(Date.now() - CHAT_CONVERSATION_TTL_MS);
+
+let chatConversationWrites = 0;
+
+type ChatConversationRow = { value: string; updatedAt: number };
+type DatabaseError = { error: string };
+
+export const chatConversations = {
+	ready(): boolean {
+		return checkKey();
+	},
+	get(id: string): ChatConversationRow | DatabaseError | null {
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
+		const row = db.prepare("SELECT value, updated_at FROM chat_conversations WHERE id = ?").get(id) as {
+			value: string;
+			updated_at: number;
+		} | null;
+		if (!row) return null;
+		if (row.updated_at < Date.now() - CHAT_CONVERSATION_TTL_MS) {
+			db.prepare("DELETE FROM chat_conversations WHERE id = ?").run(id);
+			return null;
+		}
+		try {
+			return { value: decryptStrict(row.value), updatedAt: row.updated_at };
+		} catch {
+			return { error: "Failed to decrypt conversation" };
+		}
+	},
+	set(id: string, value: string): { success: true; updatedAt: number } | DatabaseError {
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
+		if (value.length > 65536) {
+			return { error: "Value exceeds limit of 64k characters" };
+		}
+		let encryptedValue: string;
+		try {
+			encryptedValue = encryptStrict(value);
+		} catch {
+			return { error: "Failed to encrypt conversation" };
+		}
+		const now = Date.now();
+		db.prepare("INSERT OR REPLACE INTO chat_conversations (id, value, updated_at) VALUES (?, ?, ?)").run(id, encryptedValue, now);
+		chatConversationWrites++;
+		if (chatConversationWrites % 200 === 0) {
+			db.prepare("DELETE FROM chat_conversations WHERE updated_at < ?").run(Date.now() - CHAT_CONVERSATION_TTL_MS);
+		}
+		return { success: true, updatedAt: now };
+	},
+	delete(id: string): { success: boolean } | DatabaseError {
+		if (!checkKey()) return { error: "Database key (DB_KEY) is not set in environment" };
+		const info = db.prepare("DELETE FROM chat_conversations WHERE id = ?").run(id);
+		return { success: info.changes > 0 };
+	},
+};
 
 export default {
 	get(name: string, hash: string) {

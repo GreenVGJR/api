@@ -62,6 +62,13 @@ const API_ROUTES = {
 	],
 	tools: {
 		ai: {
+			chat: [
+				["/tools/chat/zai?prompt=&conversation=", "string", "string"],
+				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
+				["/tools/chat/gemma?prompt=&conversation=", "string", "string"],
+				["/tools/chat/nemotron?prompt=&conversation=", "string", "string"],
+				["/tools/chat/qwen?prompt=&conversation=", "string", "string"],
+			],
 			image_generation: [
 				["/tools/ai-image/flux_schnell?prompt=", "string"],
 				["/tools/ai-image/magicstudio?prompt=", "string"],

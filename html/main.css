@@ -284,8 +284,25 @@ pre {
 	font-size: 12px;
 }
 
-#responseArea pre {
-	overflow: visible;
+@media (max-width: 639px) {
+	#responseArea {
+		font-size: 11px;
+		padding: 8px;
+	}
+	#responseArea pre {
+		font-size: 11px;
+	}
+	#responseArea .text-xs {
+		font-size: 10px;
+	}
+	#responseHeader,
+	#responseHeader span,
+	#paramsPanel,
+	#paramsToggle,
+	#paramsContainer,
+	#paramsContainer span {
+		font-size: 10px;
+	}
 }
 
 .response-link {
@@ -628,9 +645,12 @@ body {
 }
 
 #endpointSearchWrap {
-	position: relative;
+	position: sticky;
+	top: 0;
+	z-index: 20;
 	flex-shrink: 0;
 	margin-bottom: 6px;
+	background: #000;
 }
 #endpointSearch {
 	width: 100%;

@@ -16,7 +16,13 @@ const logResponse = <T extends Response>(c: Context, response: T, statusCode = r
 	return response;
 };
 
-type AiImageEntry = { prompt: Buffer; image?: Buffer; contentType?: string; ts?: string; expire: number };
+type AiImageEntry = {
+	prompt: Buffer;
+	image?: Buffer;
+	contentType?: string;
+	ts?: string;
+	expire: number;
+};
 
 const aiImageRegistry = new Map<string, AiImageEntry>();
 const AI_IMAGE_TTL = 7 * 24 * 3600 * 1000;
@@ -103,7 +109,11 @@ export const aiImageHandshake = async (c: Context): Promise<Response | null> => 
 	}
 
 	const newTs = String(Date.now());
-	aiImageRegistry.set(hash, { prompt: Buffer.from(prompt, "utf8"), ts: newTs, expire: Date.now() + AI_IMAGE_TTL });
+	aiImageRegistry.set(hash, {
+		prompt: Buffer.from(prompt, "utf8"),
+		ts: newTs,
+		expire: Date.now() + AI_IMAGE_TTL,
+	});
 	url.searchParams.set("hs", hash);
 	url.searchParams.set("ts", newTs);
 	return c.redirect(url.toString(), 302);
@@ -245,6 +255,36 @@ export async function rateLimit(): Promise<void> {
 	requestCount++;
 }
 
+export const applyVsChallenge = async (c: Context): Promise<Response | null> => {
+	const vsUa = c.req.header("user-agent") ?? "";
+	const vsMozilla = vsUa.startsWith("Mozilla/5.0");
+	if (!wafChallenge || !vsMozilla || (await verifyVsCookie(c))) return null;
+
+	const vsSite = c.req.header("sec-fetch-site");
+	const vsMode = c.req.header("sec-fetch-mode");
+	const vsDest = c.req.header("sec-fetch-dest");
+	const vsFullSet = vsSite !== undefined && vsMode !== undefined && vsDest !== undefined;
+	const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
+
+	if (vsMode === "navigate") {
+		const challenge = await signVsChallenge(c.req.url, vsUa);
+		c.header("Cache-Control", "no-store");
+		c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
+		c.header("Refresh", "1");
+		return c.html(await getVsWaitPage(), 403);
+	}
+	if (vsPartialSet) {
+		c.header("Cache-Control", "no-store");
+		return c.text("", 412);
+	}
+	if (vsFullSet) {
+		const challenge = await signVsChallenge(c.req.url, vsUa);
+		c.header("Cache-Control", "no-store");
+		c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
+		return c.text("", 412);
+	}
+	return null;
+};
 export const dispatch = async (c: Context, promiseFactory: any) => {
 	const ua = c.req.header("user-agent") || "";
 	const fetchmode = c.req.header("sec-fetch-mode") || "";
@@ -254,34 +294,8 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
-	{
-		const vsUa = c.req.header("user-agent") ?? "";
-		const vsMozilla = vsUa.startsWith("Mozilla/5.0");
-		if (wafChallenge && vsMozilla && !(await verifyVsCookie(c))) {
-			const vsSite = c.req.header("sec-fetch-site");
-			const vsMode = c.req.header("sec-fetch-mode");
-			const vsDest = c.req.header("sec-fetch-dest");
-			const vsFullSet = vsSite !== undefined && vsMode !== undefined && vsDest !== undefined;
-			const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
-			if (vsMode === "navigate") {
-				const challenge = await signVsChallenge(c.req.url, vsUa);
-				c.header("Cache-Control", "no-store");
-				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-				c.header("Refresh", "1");
-				return c.html(await getVsWaitPage(), 403);
-			}
-			if (vsPartialSet) {
-				c.header("Cache-Control", "no-store");
-				return c.text("", 412);
-			}
-			if (vsFullSet) {
-				const challenge = await signVsChallenge(c.req.url, vsUa);
-				c.header("Cache-Control", "no-store");
-				c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-				return c.text("", 412);
-			}
-		}
-	}
+	const vsRes = await applyVsChallenge(c);
+	if (vsRes) return logResponse(c, vsRes);
 
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));

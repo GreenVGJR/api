@@ -140,10 +140,20 @@ app.get("/discord/modifyAllChannels", async (c) => {
 	if (!guildId) return c.json({ error: "Missing valid parameter: guildId" }, 202);
 	if (!permissionParam) return c.json({ error: "Missing valid parameter: permission" }, 202);
 	if (!modeParam || (modeParam !== "allow" && modeParam !== "deny" && modeParam !== "reset")) {
-		return c.json({ error: "Missing valid parameter: mode (must be 'allow', 'deny', or 'reset')" }, 202);
+		return c.json(
+			{
+				error: "Missing valid parameter: mode (must be 'allow', 'deny', or 'reset')",
+			},
+			202,
+		);
 	}
 	if (typeParam !== "all" && typeParam !== "text" && typeParam !== "voice") {
-		return c.json({ error: "Missing valid parameter: type (must be 'all', 'text', or 'voice')" }, 202);
+		return c.json(
+			{
+				error: "Missing valid parameter: type (must be 'all', 'text', or 'voice')",
+			},
+			202,
+		);
 	}
 
 	// Check if this guild is already processing a request

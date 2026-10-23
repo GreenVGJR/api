@@ -464,7 +464,11 @@ function switchSocketModel(model: ChatModel): Promise<boolean> {
 			ws.send(
 				JSON.stringify({
 					type: "cf_agent_state",
-					state: { ...latestState, model: nextModel, system: DEFAULT_CHAT_SYSTEM },
+					state: {
+						...latestState,
+						model: nextModel,
+						system: DEFAULT_CHAT_SYSTEM,
+					},
 				}),
 			);
 		} catch {
@@ -502,7 +506,13 @@ async function runOnce(model: ChatModel, conversationId: string, prompt: string,
 	lastRequestAt = Date.now();
 
 	const id = `chat_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-	const wireMessages = [{ id: userMessageId, role: "user", parts: [{ type: "text", text: content }] }];
+	const wireMessages = [
+		{
+			id: userMessageId,
+			role: "user",
+			parts: [{ type: "text", text: content }],
+		},
+	];
 
 	usageBaseline = lastUsage;
 
@@ -510,7 +520,17 @@ async function runOnce(model: ChatModel, conversationId: string, prompt: string,
 		const timer = setTimeout(() => {
 			failPending(new Error("Upstream timed out"));
 		}, REQUEST_TIMEOUT_MS);
-		pending = { id, model, text: "", reasoning: "", finishReason: "", usage: null, timer, resolve, reject };
+		pending = {
+			id,
+			model,
+			text: "",
+			reasoning: "",
+			finishReason: "",
+			usage: null,
+			timer,
+			resolve,
+			reject,
+		};
 
 		try {
 			ws.send(
@@ -519,7 +539,10 @@ async function runOnce(model: ChatModel, conversationId: string, prompt: string,
 					id,
 					init: {
 						method: "POST",
-						body: JSON.stringify({ messages: wireMessages, trigger: "submit-message" }),
+						body: JSON.stringify({
+							messages: wireMessages,
+							trigger: "submit-message",
+						}),
 					},
 				}),
 			);
@@ -568,7 +591,12 @@ export function loadChatConversation(raw?: string): { conversation: LoadedConver
 	if (!chatConversations.ready()) return { error: "Database key (DB_KEY) is not set in environment" };
 
 	if (raw === undefined || raw === "") {
-		return { conversation: { id: crypto.randomBytes(18).toString("base64url"), turns: [] } };
+		return {
+			conversation: {
+				id: crypto.randomBytes(18).toString("base64url"),
+				turns: [],
+			},
+		};
 	}
 	if (!CONVERSATION_ID_RE.test(raw)) return { error: "Invalid conversation id" };
 
@@ -619,14 +647,19 @@ export async function cfChat(model: ChatModel, prompt: string, conversationId: s
 		try {
 			const completion = await enqueue(() => runOnce(model, conversationId, prompt, turns, userMessageId));
 			if (!completion.response) {
-				return { error: "Upstream failed, Cloudflare might block this request" };
+				return {
+					error: "Upstream failed, Cloudflare might block this request",
+				};
 			}
 
 			const completedTurns: ChatTurn[] = [...messages, { role: "assistant", content: completion.response }];
 			const saved = saveChatConversation(conversationId, completedTurns);
 			if ("error" in saved) return { error: `Failed to save conversation: ${saved.error}` };
 
-			const result: ChatResult = { ...completion, conversation: conversationId };
+			const result: ChatResult = {
+				...completion,
+				conversation: conversationId,
+			};
 			cacheSet(cacheKey, result);
 			return result;
 		} catch (error) {

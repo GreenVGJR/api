@@ -2,7 +2,7 @@ import { Context } from "hono";
 
 type RequestLogEntry = [number, string, [string, number]];
 
-const MAX_REQUEST_LOGS = 30;
+const MAX_REQUEST_LOGS = 100;
 
 const globalStore = globalThis as typeof globalThis & {
 	__vgjr_logs?: RequestLogEntry[];

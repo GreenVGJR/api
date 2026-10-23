@@ -27,7 +27,16 @@ export const signVsChallenge = async (vs: string, ua: string): Promise<string> =
 
 export const signVsCookie = async (ua: string): Promise<string> => {
 	const now = Math.floor(Date.now() / 1000);
-	return sign({ sub: "vs", ua, iat: now, exp: now + VS_COOKIE_MAX_AGE, n: crypto.randomBytes(8).toString("base64url") }, vsJwtKey());
+	return sign(
+		{
+			sub: "vs",
+			ua,
+			iat: now,
+			exp: now + VS_COOKIE_MAX_AGE,
+			n: crypto.randomBytes(8).toString("base64url"),
+		},
+		vsJwtKey(),
+	);
 };
 
 export const verifyVsCookie = async (c: Context): Promise<boolean> => {

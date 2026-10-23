@@ -54,7 +54,10 @@ app.get("/messageStatus", async (c) => {
 							{ name: "Volume", value: "{volume}%", inline: true },
 						],
 						thumbnail: { url: "{thumbnail}" },
-						footer: { text: "{requester.globalName}", icon_url: "{requester.avatar}" },
+						footer: {
+							text: "{requester.globalName}",
+							icon_url: "{requester.avatar}",
+						},
 						timestamp: "{currentTimestamp}",
 					},
 				],

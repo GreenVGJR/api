@@ -92,7 +92,7 @@ const initSPA = () => {
                                 </div>
                             </div>
                             <div id="responseAreaWrap" class="relative flex-1 min-h-0">
-                                <div id="responseArea" class="response-area rounded-b-lg sm:rounded-b-xl font-mono text-sm text-gray-300 p-3 sm:p-4 absolute inset-0 overflow-auto empty-state">
+                                <div id="responseArea" class="response-area rounded-b-lg sm:rounded-b-xl font-mono text-[11px] sm:text-sm text-gray-300 p-2 sm:p-3 md:p-4 absolute inset-0 overflow-auto empty-state">
                                     ${DEFAULT_RESPONSE_HTML}
                                 </div>
                                 <div id="customScrollTrack" class="custom-scrollbar-track" aria-hidden="true">

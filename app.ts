@@ -11,6 +11,7 @@ import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/telemetry.js";
+import { applyVsChallenge } from "./functions/httpRequest.js";
 import { commonHeaders } from "./functions/request.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
 import { VS_COOKIE, VS_COOKIE_MAX_AGE, signVsCookie } from "./functions/vsChallenge.js";
@@ -34,7 +35,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/googleImage/web?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgflip?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -246,7 +247,10 @@ const turnstileLocalKeys = {
 	secretKey: turnstileConfig.localSecKeyForTest,
 };
 
-function getTurnstileKeys(host: string | undefined): { siteKey: string; secretKey: string } {
+function getTurnstileKeys(host: string | undefined): {
+	siteKey: string;
+	secretKey: string;
+} {
 	const isLocal = isLocalRequest(host);
 	if (isLocal) return turnstileLocalKeys;
 	return {
@@ -652,9 +656,14 @@ if (maintenanceConfig?.enabled) {
 }
 
 app.get("/logs", async (c: Context) => {
+	if (!c.req.header("cache-control")?.startsWith("max-age=0")) {
+		const vsRes = await applyVsChallenge(c);
+		if (vsRes) return vsRes;
+	}
+
 	c.header("Cache-Control", "public, max-age=0, no-transform, must-revalidate");
 	c.header("Content-Type", "text/plain");
-	c.header("Refresh", "5");
+	c.header("Refresh", "3");
 
 	return stream(c, async (s) => {
 		await s.write(""); // Initial flush
@@ -667,13 +676,15 @@ app.get("/logs", async (c: Context) => {
 			resolvedTimezone = "UTC";
 		}
 
+		const requested = getLastRequestedLogs().map((entry) => [new Date(entry[0] * 1000).toLocaleString("en-US", { timeZone: resolvedTimezone }), ...entry.slice(1)]);
+
 		const ipHash = crypto
 			.createHash("md5")
 			.update(c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "")
 			.digest("hex")
 			.slice(0, 8);
 
-		await s.write(JSON.stringify([[resolvedTimezone, ipHash], 5000, 30, getLastRequestedLogs()], null, 1));
+		await s.write(JSON.stringify([[resolvedTimezone, ipHash], 3000, 100, requested], null, 1));
 	});
 });
 

@@ -156,7 +156,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		network_idle: options.networkIdle || false,
 		timeout: options.timeout || 30000,
 		retries: options.retries ?? 3,
-		solve_cloudflare: options.solveCloudflare !== false,
+		solve_cloudflare: options.solveCloudflare === true,
 		wait_selector: options.waitSelector,
 		wait_selector_state: options.waitSelectorState,
 		wait_ms: options.waitMs,
@@ -216,7 +216,12 @@ export async function warmBrowser(fetcherType: "stealthy" | "dynamic" = "stealth
 	if (warmupInflight) return warmupInflight;
 	warmupInflight = (async () => {
 		try {
-			const res = await executeRequest({ url: "about:blank", fetcherType, warmup: true, timeoutMs: 120000 });
+			const res = await executeRequest({
+				url: "about:blank",
+				fetcherType,
+				warmup: true,
+				timeoutMs: 120000,
+			});
 			if (res?.success) {
 				console.log("[warmBrowser] Chromium ready");
 				warmupDone = true;

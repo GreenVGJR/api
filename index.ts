@@ -8,17 +8,19 @@ g.__vgjr_refresh_count = (g.__vgjr_refresh_count || 0) + 1;
 g.__vgjr_last_reload = Date.now();
 
 if (!g.__vgjr_initialized) {
+	(async () => {
+		await Promise.all([
+			import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {}),
+			import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {}),
+			import("./functions/request.js").then(({ warmPoToken }) => warmPoToken()).catch(() => {}), // Prime poToken cache.
+		]);
+	})();
+
 	console.log(`\n🚀 Bun Server is running!`);
 	console.log(`🏠 Local:    http://localhost:${port}/playground`);
 	g.__vgjr_initialized = true;
 	g.__vgjr_starttime = Date.now();
 	g.__vgjr_refresh_count = 0;
-	setTimeout(() => {
-		import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {});
-		import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {});
-		// Prime the BotGuard session token so YouTube routes don't stall on the first mint.
-		import("./functions/request.js").then(({ warmPoToken }) => warmPoToken()).catch(() => {});
-	}, 0);
 
 	if (!g.__vgjr_shutdown_handlers) {
 		g.__vgjr_shutdown_handlers = true;

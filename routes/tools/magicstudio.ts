@@ -40,11 +40,17 @@ app.get("/ai-image/magicstudio", async (c) => {
 			});
 			if (!r.ok) {
 				c.header("X-Message", `Upstream returned ${r.status}`);
-				return new Response(await getFailingImage(), { status: 200, headers: { "Content-Type": "image/png" } });
+				return new Response(await getFailingImage(), {
+					status: 200,
+					headers: { "Content-Type": "image/png" },
+				});
 			}
 			const buf = await r.arrayBuffer();
 			cacheAiImage(c, buf, "image/png");
-			return new Response(buf, { status: r.status, headers: { "Content-Type": "image/png" } });
+			return new Response(buf, {
+				status: r.status,
+				headers: { "Content-Type": "image/png" },
+			});
 		},
 		{ "content-type": "image/png" },
 	);

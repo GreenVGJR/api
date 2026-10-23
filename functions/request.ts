@@ -3,7 +3,7 @@ import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
-import { googleTrustJar, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
+import { googleTrustJar, googleTrustHas, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
@@ -40,7 +40,10 @@ export const getYoutubeVisitorKey = async () => {
 	return keyYoutubeVisitor;
 };
 let poTokenCache: { po_token: string; visitor_data: string } | null = null;
-let poTokenInFlight: Promise<{ po_token: string; visitor_data: string }> | null = null;
+let poTokenInFlight: Promise<{
+	po_token: string;
+	visitor_data: string;
+}> | null = null;
 
 const YOUTUBE_PO_TOKEN_REQUEST_KEY = process.env.YTREQUEST_KEY || "";
 const YOUTUBE_API_KEY = process.env.YTAPI_KEY || "";
@@ -772,7 +775,10 @@ const magnificCache = new Map<string, { exp: number; data: any }>();
 const magnificInflight = new Map<string, Promise<any>>();
 let magnificGate: Promise<void> = Promise.resolve();
 let magnificLastHit = 0;
-let magnificKeyInflight: Promise<{ buildId: string; cookies: string } | null> | null = null;
+let magnificKeyInflight: Promise<{
+	buildId: string;
+	cookies: string;
+} | null> | null = null;
 
 const magnificPace = async (): Promise<void> => {
 	let release!: () => void;
@@ -790,7 +796,10 @@ const magnificPace = async (): Promise<void> => {
 	}
 };
 
-const refreshMagnificKey = (): Promise<{ buildId: string; cookies: string } | null> => {
+const refreshMagnificKey = (): Promise<{
+	buildId: string;
+	cookies: string;
+} | null> => {
 	if (!magnificKeyInflight) {
 		magnificKeyInflight = magnificKey().finally(() => {
 			magnificKeyInflight = null;
@@ -2037,7 +2046,11 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 			const response = await (httpcloakGet as any)(url, {
 				httpVersion: "h2",
 				tlsOnly: true,
-				headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+				headers: {
+					...commonHeaders,
+					Cookie: tiktokSessionKeys?.cookie,
+					"User-Agent": userAgent_mobile,
+				},
 			});
 			finalUrl = response.url;
 			const html = await responseText(response);
@@ -2048,7 +2061,14 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 			const findMeta = htmlaweme.shareMeta;
 			const typeSharePlatform = findQuery.share_app_id == 1233 ? "IOS" : findQuery.share_app_id == 1180 || findQuery.share_app_id == 1340 ? "ANDROID" : "";
 			const typeShareConv = findQuery.share_app_id == 1233 || findQuery.share_app_id == 1180 ? "Tiktok" : findQuery.share_app_id == 1340 ? "Tiktok Lite" : "";
-			responseData.shareInfo = { ...findShare, shareMeta: findMeta, shareItemCreated: findQuery.timestamp || 0, shareItemId: findQuery.share_item_id || 0, shareAppFrom: typeSharePlatform, shareAppType: typeShareConv };
+			responseData.shareInfo = {
+				...findShare,
+				shareMeta: findMeta,
+				shareItemCreated: findQuery.timestamp || 0,
+				shareItemId: findQuery.share_item_id || 0,
+				shareAppFrom: typeSharePlatform,
+				shareAppType: typeShareConv,
+			};
 		} catch {
 			responseData.shareInfo = { error: "Failed to resolve this info" };
 		}
@@ -2074,7 +2094,13 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 			const response = await (httpcloakGet as any)(targetUrl, {
 				httpVersion: "h2",
 				tlsOnly: true,
-				headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404?fromUrl=/a", "Sec-Fetch-Site": "same-origin", "User-Agent": "undici" },
+				headers: {
+					...commonHeaders,
+					Cookie: tiktokSessionKeys?.cookie,
+					Referer: "https://www.tiktok.com/404?fromUrl=/a",
+					"Sec-Fetch-Site": "same-origin",
+					"User-Agent": "undici",
+				},
 			});
 			const html = await responseText(response);
 			scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
@@ -2092,7 +2118,10 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		const checkVideo = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"];
 		const videoDetail = checkVideo?.itemInfo?.itemStruct;
 
-		if (!videoDetail?.video) return { ...(checkVideo ? { url: finalUrl, error: checkVideo } : { data: null }) };
+		if (!videoDetail?.video)
+			return {
+				...(checkVideo ? { url: finalUrl, error: checkVideo } : { data: null }),
+			};
 
 		responseData.aweme_id = videoDetail.id?.toString();
 
@@ -2766,7 +2795,12 @@ function decryptConvo(encoded: string): string {
 	return decipher.update(encrypted) + decipher.final("utf-8");
 }
 
-let geminiWiz: { fSid: string; bl: string; at: string | null; expire: number } | null = null;
+let geminiWiz: {
+	fSid: string;
+	bl: string;
+	at: string | null;
+	expire: number;
+} | null = null;
 let geminiCookies: string | null = null;
 const geminiClientUuid = crypto.randomUUID().toUpperCase();
 
@@ -3165,7 +3199,12 @@ const formatYoutubePublishDate = (value: any) => {
 	if (!value || typeof value !== "string") return null;
 	const parsed = new Date(value);
 	if (isNaN(parsed.getTime())) return null;
-	return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+	return parsed.toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
 };
 
 const buildYoutubeOwnerUrls = (paths: any): string[] | null => {
@@ -3269,10 +3308,7 @@ export const infoYoutube = async function infoYoutube(que: string) {
 	if (!videoId) return null;
 
 	try {
-		// Prime the session-bound poToken cache so `_challenge` carries a real
-		// visitorData/sessionPoToken instead of nulls, and so the content token
-		// minted below is bound to this session's visitor data (matches the
-		// official BotGuard flow). Process-wide cached and single-flight.
+		// Prime poToken cache so content token binds to this session's visitor data.
 		await ensurePoToken();
 		const page = await fetchYoutubeWithRetry(
 			async () => {
@@ -3290,7 +3326,10 @@ export const infoYoutube = async function infoYoutube(que: string) {
 				if (!ytInitialPlayerResponse || typeof ytInitialPlayerResponse !== "object") {
 					throw new Error("YouTube returned no player response");
 				}
-				return { ytInitialPlayerResponse, ytInitialData: extractYoutubePageJson(res, "ytInitialData") };
+				return {
+					ytInitialPlayerResponse,
+					ytInitialData: extractYoutubePageJson(res, "ytInitialData"),
+				};
 			},
 			"infoYoutube",
 		);
@@ -3300,7 +3339,9 @@ export const infoYoutube = async function infoYoutube(que: string) {
 
 		const playability = ytInitialPlayerResponse.playabilityStatus || {};
 		if (playability.status && playability.status !== "OK") {
-			return { error: playability.reason || playability.subreason || playability.status };
+			return {
+				error: playability.reason || playability.subreason || playability.status,
+			};
 		}
 		if (!ytInitialPlayerResponse.videoDetails?.videoId) {
 			return { error: "YouTube returned an invalid info response" };
@@ -4106,7 +4147,9 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 
 		const buildResults = (res: any) => {
 			if (res?.resource_response?.http_status != 200) {
-				return { error: `Can't process this: ${res?.resource_response?.message}` };
+				return {
+					error: `Can't process this: ${res?.resource_response?.message}`,
+				};
 			}
 			const rawResults = res.resource_response?.data?.results;
 			if (rawResults?.[0]) {
@@ -4121,7 +4164,10 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 						finalResults = results;
 					}
 					if (!finalResults?.[0] && fallbackCount <= 2) return null;
-					return { isFallback: fallbackCount !== 0, ...(finalResults?.[0] ? { data: finalResults } : { error: "Pins not found" }) };
+					return {
+						isFallback: fallbackCount !== 0,
+						...(finalResults?.[0] ? { data: finalResults } : { error: "Pins not found" }),
+					};
 				}
 			}
 			// Check Sensitive Content (Regional based usually)
@@ -4131,7 +4177,16 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 		};
 
 		const search = async (query: string, sourceUrl: string, forceShow: boolean) => {
-			const feat = { options: { query: query + (type === "gif" && !forceShow ? " gif" : ""), scope: isVideo ? "videos" : "pins", rs: "typed", page_size: 50, gated: null }, context: {} };
+			const feat = {
+				options: {
+					query: query + (type === "gif" && !forceShow ? " gif" : ""),
+					scope: isVideo ? "videos" : "pins",
+					rs: "typed",
+					page_size: 50,
+					gated: null,
+				},
+				context: {},
+			};
 			const req = await fetch(`https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=${encodeURIComponent(sourceUrl)}&data=${encodeURIComponent(JSON.stringify(feat))}`, { headers });
 			return buildResults(await req.json());
 		};
@@ -4145,7 +4200,15 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 			try {
 				const words = que.trim().split(/\s+/);
 				const termQue = words.length > 1 ? words.slice(0, -1).join(" ") : que;
-				const acData = { options: { pin_scope: "pins", autocomplete_request_surface: 0, count: null, term: termQue }, context: {} };
+				const acData = {
+					options: {
+						pin_scope: "pins",
+						autocomplete_request_surface: 0,
+						count: null,
+						term: termQue,
+					},
+					context: {},
+				};
 				const acReq = await fetch(`https://www.pinterest.com/resource/AdvancedTypeaheadResource/get/?source_url=/&data=${encodeURIComponent(JSON.stringify(acData))}`, { headers });
 				const acRes: any = await acReq.json();
 				const items = acRes?.resource_response?.data?.items || [];
@@ -4164,7 +4227,10 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 		}
 
 		if (!result) {
-			return { isFallback: fallbackCount !== 0, error: "Pins not found. Your query may violate terms of service" };
+			return {
+				isFallback: fallbackCount !== 0,
+				error: "Pins not found. Your query may violate terms of service",
+			};
 		}
 		if ("data" in result && Array.isArray(result.data)) result.data = result.data.slice(0, limit_number);
 		return result;
@@ -4204,7 +4270,9 @@ export const pinterestExplore = async function pinterestExplore(que: string, rat
 
 		const buildResults = (res: any) => {
 			if (res?.resource_response?.http_status != 200) {
-				return { error: `Can't process this: ${res?.resource_response?.message}` };
+				return {
+					error: `Can't process this: ${res?.resource_response?.message}`,
+				};
 			}
 			const rawResults = res.resource_response?.data?.results;
 			if (rawResults?.[0]) {
@@ -4243,7 +4311,15 @@ export const pinterestExplore = async function pinterestExplore(que: string, rat
 			try {
 				const words = que.trim().split(/\s+/);
 				const termQue = words.length > 1 ? words.slice(0, -1).join(" ") : que;
-				const acData = { options: { pin_scope: "pins", autocomplete_request_surface: 0, count: null, term: termQue }, context: {} };
+				const acData = {
+					options: {
+						pin_scope: "pins",
+						autocomplete_request_surface: 0,
+						count: null,
+						term: termQue,
+					},
+					context: {},
+				};
 				const acReq = await fetch(`https://id.pinterest.com/resource/AdvancedTypeaheadResource/get/?source_url=/&data=${encodeURIComponent(JSON.stringify(acData))}`, { headers });
 				const acRes: any = await acReq.json();
 				const items = acRes?.resource_response?.data?.items || [];
@@ -4256,7 +4332,10 @@ export const pinterestExplore = async function pinterestExplore(que: string, rat
 		}
 
 		if (!result) {
-			return { isFallback: fallbackCount !== 0, error: "Boards not found. Your query may violate terms of service" };
+			return {
+				isFallback: fallbackCount !== 0,
+				error: "Boards not found. Your query may violate terms of service",
+			};
 		}
 		return result;
 	} catch (e) {
@@ -5069,17 +5148,38 @@ export const TwitchProfile = async function TwitchProfile(que: string) {
 			{
 				operationName: "ChannelShell",
 				variables: { login },
-				extensions: { persistedQuery: { version: 1, sha256Hash: "22a9e108f0a729c3c0f9fbc87bc03891b4f54c7da2aa4a97f228002ba3257e4f" } },
+				extensions: {
+					persistedQuery: {
+						version: 1,
+						sha256Hash: "22a9e108f0a729c3c0f9fbc87bc03891b4f54c7da2aa4a97f228002ba3257e4f",
+					},
+				},
 			},
 			{
 				operationName: "StreamTagsTrackingChannel",
 				variables: { channel: login },
-				extensions: { persistedQuery: { version: 1, sha256Hash: "6aa3851aaaf88c320d514eb173563d430b28ed70fdaaf7eeef6ed4b812f48608" } },
+				extensions: {
+					persistedQuery: {
+						version: 1,
+						sha256Hash: "6aa3851aaaf88c320d514eb173563d430b28ed70fdaaf7eeef6ed4b812f48608",
+					},
+				},
 			},
 			{
 				operationName: "ContentClassificationContext",
-				variables: { clipSlug: "", isStream: true, isClip: false, isVOD: false, login },
-				extensions: { persistedQuery: { version: 1, sha256Hash: "57bb6c1aca3631b2b3e74b1c3c8adbecbbcc3becb70ec52d7c5ef0f90d7c3b02" } },
+				variables: {
+					clipSlug: "",
+					isStream: true,
+					isClip: false,
+					isVOD: false,
+					login,
+				},
+				extensions: {
+					persistedQuery: {
+						version: 1,
+						sha256Hash: "57bb6c1aca3631b2b3e74b1c3c8adbecbbcc3becb70ec52d7c5ef0f90d7c3b02",
+					},
+				},
 			},
 		];
 		const per = await fetch(`https://gql.twitch.tv/gql`, {
@@ -5115,8 +5215,26 @@ export const TwitchProfile = async function TwitchProfile(que: string) {
 				socials: main?.channel?.socialMedias || null,
 				freeformTags: Array.isArray(tags) ? tags.map((t: any) => t?.name).filter(Boolean) : null,
 				contentClassificationLabels: cls?.contentClassificationLabels || null,
-				stream: main?.stream ? { ...streamRest, previewImageURL: bareThumb(streamRest?.previewImageURL), id: cls?.id || null, gameId: cls?.game?.id || null, streaming } : null,
-				videos: extra?.videos?.edges ? { totalCount: extra.videos.totalCount, edges: extra.videos.edges.map((e: any) => ({ node: { ...e?.node, previewThumbnailURL: typeof e?.node?.previewThumbnailURL === "string" ? e.node.previewThumbnailURL.replace("{width}", "320").replace("{height}", "180") : e?.node?.previewThumbnailURL } })) } : extra?.videos || null,
+				stream: main?.stream
+					? {
+							...streamRest,
+							previewImageURL: bareThumb(streamRest?.previewImageURL),
+							id: cls?.id || null,
+							gameId: cls?.game?.id || null,
+							streaming,
+						}
+					: null,
+				videos: extra?.videos?.edges
+					? {
+							totalCount: extra.videos.totalCount,
+							edges: extra.videos.edges.map((e: any) => ({
+								node: {
+									...e?.node,
+									previewThumbnailURL: typeof e?.node?.previewThumbnailURL === "string" ? e.node.previewThumbnailURL.replace("{width}", "320").replace("{height}", "180") : e?.node?.previewThumbnailURL,
+								},
+							})),
+						}
+					: extra?.videos || null,
 				topClips: extra?.topClips?.edges ? extra.topClips.edges.map((e: any) => e?.node) : null,
 				subscriptionProducts: extra?.subscriptionProducts || null,
 			},
@@ -6451,7 +6569,10 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 						for (const thumbnail of thumbJson?.data || []) {
 							const request = requestedThumbnails.get(thumbnail.requestId);
 							if (!request) continue;
-							const images = mapped.get(request.targetId) || { headshot: null, full: null };
+							const images = mapped.get(request.targetId) || {
+								headshot: null,
+								full: null,
+							};
 							if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
 							else images.full = thumbnail.imageUrl || null;
 							mapped.set(request.targetId, images);
@@ -6464,8 +6585,16 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				users.map(async (user: any) => {
 					try {
 						const response: any = await hcSession.post("https://apis.roblox.com/profile-platform-api/v1/profiles/get?urlLocale=en_us", {
-							headers: { ...commonHeaders, "Content-Type": "application/json;charset=UTF-8" },
-							body: JSON.stringify({ profileId: String(user.id), profileType: "User", components, includeComponentOrdering: true }),
+							headers: {
+								...commonHeaders,
+								"Content-Type": "application/json;charset=UTF-8",
+							},
+							body: JSON.stringify({
+								profileId: String(user.id),
+								profileType: "User",
+								components,
+								includeComponentOrdering: true,
+							}),
 						});
 						if (!hcOk(response)) return [user.id, null] as const;
 						return [user.id, hcJson(response)] as const;
@@ -6480,7 +6609,10 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				for (let attempt = 0; attempt < 3; attempt++) {
 					try {
 						const response: any = await hcSession.post("https://users.roblox.com/v1/users", {
-							headers: { ...commonHeaders, "Content-Type": "application/json" },
+							headers: {
+								...commonHeaders,
+								"Content-Type": "application/json",
+							},
 							body: JSON.stringify({ userIds }),
 						});
 						if (hcOk(response)) {
@@ -6532,7 +6664,10 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				}
 				if (!hcOk(response)) return { data: [], csrfToken: nextCsrfToken };
 				const result: any = hcJson(response) || {};
-				return { data: Array.isArray(result?.data) ? result.data : [], csrfToken: nextCsrfToken };
+				return {
+					data: Array.isArray(result?.data) ? result.data : [],
+					csrfToken: nextCsrfToken,
+				};
 			} catch {
 				return { data: [], csrfToken };
 			}
@@ -6561,7 +6696,11 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 			Promise.all(
 				wornAssetIdChunks.map(async (assetIds) => {
 					try {
-						const params = new URLSearchParams({ assetIds: assetIds.join(","), size: "512x512", format: "Png" });
+						const params = new URLSearchParams({
+							assetIds: assetIds.join(","),
+							size: "512x512",
+							format: "Png",
+						});
 						const response: any = await hcSession.get(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: { ...commonHeaders } });
 						if (!hcOk(response)) return [];
 						const result: any = hcJson(response) || {};
@@ -6763,7 +6902,10 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 	try {
 		let urlObj: URL;
 		try {
-			const urlRedirect = await fetch(url, { method: "HEAD", headers: commonHeaders });
+			const urlRedirect = await fetch(url, {
+				method: "HEAD",
+				headers: commonHeaders,
+			});
 			const location = urlRedirect.url;
 			urlObj = new URL(location);
 		} catch {
@@ -7187,7 +7329,11 @@ const tiktokFetchItemStruct = async function tiktokFetchItemStruct(url: string, 
 			const response = await (httpcloakGet as any)(url, {
 				httpVersion: "h2",
 				tlsOnly: true,
-				headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+				headers: {
+					...commonHeaders,
+					Cookie: tiktokSessionKeys?.cookie,
+					"User-Agent": userAgent_mobile,
+				},
 			});
 			if (response?.url) finalUrl = response.url;
 		} catch {}
@@ -7213,7 +7359,13 @@ const tiktokFetchItemStruct = async function tiktokFetchItemStruct(url: string, 
 				const response = await (httpcloakGet as any)(targetUrl, {
 					httpVersion: "h2",
 					tlsOnly: true,
-					headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, Referer: "https://www.tiktok.com/404?fromUrl=/a", "Sec-Fetch-Site": "same-origin", "User-Agent": "undici" },
+					headers: {
+						...commonHeaders,
+						Cookie: tiktokSessionKeys?.cookie,
+						Referer: "https://www.tiktok.com/404?fromUrl=/a",
+						"Sec-Fetch-Site": "same-origin",
+						"User-Agent": "undici",
+					},
 				});
 				const html = await responseText(response);
 				scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
@@ -7551,7 +7703,10 @@ export const ThreadsPhoto = async function ThreadsPhoto(que: string) {
 		const embed: any = await threadsFetchEmbed(code);
 		if (!embed) return null;
 		if (embed.error) return embed;
-		if (!embed.images?.length) return { error: embed.video ? "This post is a video, use the video endpoint" : "Photos not found" };
+		if (!embed.images?.length)
+			return {
+				error: embed.video ? "This post is a video, use the video endpoint" : "Photos not found",
+			};
 		return { urls: embed.images };
 	} catch (e) {
 		console.error(e);
@@ -7762,9 +7917,15 @@ export const FacebookVideo = async function FacebookVideo(que: string) {
 		const media: any = await facebookFetchMedia(nodeId);
 		if (!media) return { error: "Facebook lookup failed, try again later" };
 		if (media.error) return media;
-		if (!media || media.is_live_streaming) return { error: "This video may no longer exist, or you don't have permission to view it" };
+		if (!media || media.is_live_streaming)
+			return {
+				error: "This video may no longer exist, or you don't have permission to view it",
+			};
 		if (media.__typename === "Video") {
-			if (media.is_playable === false) return { error: "This video may no longer exist, or you don't have permission to view it" };
+			if (media.is_playable === false)
+				return {
+					error: "This video may no longer exist, or you don't have permission to view it",
+				};
 			const videoUrl = media.videoDeliveryLegacyFields?.browser_native_hd_url || media.videoDeliveryLegacyFields?.browser_native_sd_url || null;
 			if (!videoUrl) return null;
 			return { video_url: videoUrl };
@@ -7810,7 +7971,14 @@ export async function googleImageReverse(url: string) {
 				Referer: process.env.GOOG_RX || "",
 				"X-Goog-Api-Key": process.env.GOOG_EX || "",
 			},
-			body: JSON.stringify({ requests: [{ image: { source: { imageUri: url } }, features: [{ type: "WEB_DETECTION", maxResults: 10 }] }] }),
+			body: JSON.stringify({
+				requests: [
+					{
+						image: { source: { imageUri: url } },
+						features: [{ type: "WEB_DETECTION", maxResults: 10 }],
+					},
+				],
+			}),
 			signal: AbortSignal.timeout(20000),
 		});
 		if (v.status === 429) {
@@ -7865,13 +8033,22 @@ const warmLensCookies = async (): Promise<void> => {
 };
 
 // a challenge from a result page. Note: never match "/sorry/" on the body —
-const isLensBlocked = (html: string): boolean => {
+const isLensBlocked = (html: string, finalUrl = ""): boolean => {
 	if (!html) return true;
+	if (finalUrl.includes("/sorry/")) return true;
 	if (html.includes("unusual traffic") || html.includes("Our systems have detected")) return true;
-	return html.length < 20000;
+	return false;
 };
 
-const downloadLensImage = async (url: string): Promise<{ bytes: Buffer; mime: string; ext: string; width: number; height: number } | null> => {
+const downloadLensImage = async (
+	url: string,
+): Promise<{
+	bytes: Buffer;
+	mime: string;
+	ext: string;
+	width: number;
+	height: number;
+} | null> => {
 	try {
 		const res = await fetch(url, {
 			headers: {
@@ -7933,7 +8110,16 @@ const downloadLensImage = async (url: string): Promise<{ bytes: Buffer; mime: st
 	}
 };
 
-const buildLensMultipart = (image: { bytes: Buffer; mime: string; ext: string; width: number; height: number }, filename: string): { body: Buffer; contentType: string } => {
+const buildLensMultipart = (
+	image: {
+		bytes: Buffer;
+		mime: string;
+		ext: string;
+		width: number;
+		height: number;
+	},
+	filename: string,
+): { body: Buffer; contentType: string } => {
 	const boundary = `----geckoformboundary${crypto.randomBytes(16).toString("hex")}`;
 	const crlf = "\r\n";
 	const safeName = (filename || `image.${image.ext}`).replace(/["\\\r\n]/g, "");
@@ -7952,57 +8138,81 @@ const parseLensDimensions = (): { w: number; h: number } => {
 	return { w: 1168, h: 709 };
 };
 
-const lensPostHeaders = (contentType: string): Record<string, string> => {
-	const jar = lensJar();
-	return {
-		...commonHeaders,
-		Referer: "https://www.google.com/",
-		Origin: "https://www.google.com",
-		"Content-Type": contentType,
-		"Sec-Fetch-Site": "same-site",
-		...(jar ? { Cookie: jar } : {}),
-	};
-};
-
 const lensUploadUrl = (): string => {
 	const vp = parseLensDimensions();
 	return `https://lens.google.com/v3/upload?ep=gsbubb&st=${Date.now()}&authuser=0&hl=us&vpw=${vp.w}&vph=${vp.h}`;
 };
 
-const postLensUpload = async (image: { bytes: Buffer; mime: string; ext: string; width: number; height: number }, filename: string): Promise<{ location: string; challenged: boolean }> => {
+const postLensUpload = async (
+	image: {
+		bytes: Buffer;
+		mime: string;
+		ext: string;
+		width: number;
+		height: number;
+	},
+	filename: string,
+): Promise<{ location: string; html: string; challenged: boolean }> => {
 	const { body, contentType } = buildLensMultipart(image, filename);
 	const res = await fetch(lensUploadUrl(), {
 		method: "POST",
-		headers: lensPostHeaders(contentType),
+		headers: {
+			...commonHeaders,
+			Referer: "https://www.google.com/",
+			Origin: "https://www.google.com",
+			"Content-Type": contentType,
+			"Sec-Fetch-Site": "same-site",
+			...(lensJar() ? { Cookie: lensJar() } : {}),
+		},
 		body,
 		redirect: "manual",
 		signal: AbortSignal.timeout(25000),
 	});
-	mergeLensCookies(res);
+	mergeGoogleTrust(res);
 	const html = await res.text().catch(() => "");
 
 	if (res.status >= 300 && res.status < 400) {
 		const location = res.headers.get("location") || "";
-		if (location) return { location, challenged: false };
+		if (location) return { location, html: "", challenged: false };
 	}
 
-	if (res.status === 429) return { location: "", challenged: true };
-	return { location: "", challenged: isLensBlocked(html) };
+	if (res.status === 429) return { location: "", html: "", challenged: true };
+	if (res.status >= 400) return { location: "", html: "", challenged: true };
+	const challenged = isLensBlocked(html);
+	return { location: "", html: challenged ? "" : html, challenged };
 };
 
 const renderLensResults = async (location: string): Promise<{ html: string; ok: boolean }> => {
 	try {
+		const native = await fetch(location, {
+			headers: lensBrowserHeaders({
+				...(lensJar() ? { Cookie: lensJar() } : {}),
+			}),
+			redirect: "follow",
+			signal: AbortSignal.timeout(20000),
+		});
+		mergeLensCookies(native);
+		if (native.ok) {
+			const html = await native.text();
+			if (!isLensBlocked(html, native.url)) return { html, ok: true };
+		}
+	} catch {}
+
+	try {
 		const res = await browserRequest({
 			url: location,
 			fetcherType: "stealthy",
-			headers: lensBrowserHeaders({ Referer: "https://lens.google.com/", ...(lensJar() ? { Cookie: lensJar() } : {}) }),
+			headers: lensBrowserHeaders({
+				Referer: "https://lens.google.com/",
+				...(lensJar() ? { Cookie: lensJar() } : {}),
+			}),
 			extractHtml: true,
 			waitMs: 2500,
 			timeoutMs: 120000,
 		});
 		mergeGoogleTrustCookies(res?.cookies);
 		const html: string = res?.html ?? "";
-		const ok = !!res?.success && !isLensBlocked(html);
+		const ok = !!res?.success && !isLensBlocked(html, res?.url);
 		if (res && !res.success) console.warn(`googleLensReverse: render failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
 		return { html, ok };
 	} catch (e) {
@@ -8134,28 +8344,38 @@ export async function googleLensReverseUpload(url: string) {
 			filename = new URL(url).pathname.split("/").pop() || `image.${image.ext}`;
 		} catch {}
 
-		if (!googleTrustIsFresh()) await warmLensCookies();
+		if (!googleTrustIsFresh()) {
+			await refreshGoogleTrust();
+			await warmLensCookies();
+		}
 
 		let attempt = await postLensUpload(image, filename);
 		if (attempt.challenged) {
 			await refreshGoogleTrust();
 			await warmLensCookies();
 			attempt = await postLensUpload(image, filename);
-			if (attempt.challenged || !attempt.location) {
+			if (attempt.challenged || (!attempt.location && !attempt.html)) {
 				return { error: "Google Lens challenge could not be solved" };
 			}
 		}
 
-		if (!attempt.location) return { error: "Google Lens did not return a result session" };
-
-		const rendered = await renderLensResults(attempt.location);
-		if (!rendered.ok) {
-			return { error: "Google blocked the result page for this server", resultsUrl: attempt.location };
+		let renderedHtml = attempt.html;
+		let resultsUrl = attempt.location;
+		if (!renderedHtml && attempt.location) {
+			const rendered = await renderLensResults(attempt.location);
+			if (!rendered.ok) {
+				return {
+					error: "Google blocked the result page for this server",
+					resultsUrl: attempt.location,
+				};
+			}
+			renderedHtml = rendered.html;
 		}
+		if (!renderedHtml) return { error: "Google Lens did not return a result session" };
 
-		const data = parseLensResults(rendered.html);
-		const imageUrl = extractLensQueryImage(rendered.html);
-		return { total: data.length, imageUrl, resultsUrl: attempt.location, data };
+		const data = parseLensResults(renderedHtml);
+		const imageUrl = extractLensQueryImage(renderedHtml);
+		return { total: data.length, imageUrl, resultsUrl, data };
 	} catch (e) {
 		console.error("googleLensReverseUpload error:", e);
 		return null;
@@ -8635,10 +8855,10 @@ export async function DriftProfile(query: string): Promise<any> {
 				const browserRes = await browserRequest({
 					url: filterurl.toString(),
 					fetcherType: "stealthy",
+					solveCloudflare: true,
 					headers: commonHeaders,
 					extractHtml: true,
-					// Scrapling re-solves the challenge on every retry, which multiplies
-					// the wait, so cap the total instead of hanging the request.
+					// Cap total; Scrapling re-solves per retry.
 					timeoutMs: 45000,
 					retries: 1,
 				});
@@ -9140,10 +9360,10 @@ export async function GunsProfile(query: string): Promise<any> {
 						const browserRes = await browserRequest({
 							url: `https://guns.lol/${username}`,
 							fetcherType: "stealthy",
+							solveCloudflare: true,
 							headers: commonHeaders,
 							extractHtml: true,
-							// Scrapling re-solves the challenge on every retry, which multiplies
-							// the wait, so cap the total instead of hanging the request.
+							// Cap total; Scrapling re-solves per retry.
 							timeoutMs: 45000,
 							retries: 1,
 						});
@@ -9297,26 +9517,27 @@ export async function RageProfile(query: string): Promise<any> {
 			}
 
 			if (attempts === rageMaxAttempts - 1) {
-				// Cloudflare interstitial - a real browser can solve it, the cookies it
-				// earns are then replayed on subsequent httpcloak requests.
+				// Cloudflare interstitial - browser solves, cookies replayed later.
 				let browserRes: any;
 				try {
 					browserRes = await browserRequest({
 						url: `https://rage.wtf/${username}`,
 						fetcherType: "stealthy",
+						solveCloudflare: true,
 						// No custom headers: the stealthy session sends its own
 						// browser-consistent set; overriding the UA breaks the
 						// TLS/UA pairing and the managed challenge never clears.
 						cookies: rageCookies
 							? rageCookies.split(";").map((c) => {
 									const idx = c.indexOf("=");
-									return { name: c.slice(0, idx).trim(), value: c.slice(idx + 1) };
+									return {
+										name: c.slice(0, idx).trim(),
+										value: c.slice(idx + 1),
+									};
 								})
 							: undefined,
 						extractHtml: true,
-						// Managed Turnstile can take a minute+; Scrapling burns up to
-						// `retries` fetch retries x 3 CF solve attempts per fetch, so
-						// cap the total instead of hanging the request.
+						// Cap total; Turnstile + retries can hang.
 						timeoutMs: 120000,
 						retries: 2,
 					});
@@ -9363,7 +9584,13 @@ export async function RageProfile(query: string): Promise<any> {
 				const svelteData = parseLooseJsValue(svelteObjStr);
 				const profile = svelteData?.profile;
 				if (profile && typeof profile === "object") {
-					return { data: { profile, meta: svelteData?.meta ?? null, view: svelteData?.view ?? null } };
+					return {
+						data: {
+							profile,
+							meta: svelteData?.meta ?? null,
+							view: svelteData?.view ?? null,
+						},
+					};
 				}
 			} catch (e) {
 				console.error("RageProfile SvelteKit parse error:", e);
@@ -10472,7 +10699,11 @@ export const DiscordListMember = async (token: string, guildId: string, limit: n
 			};
 		}
 
-		return { cachedMembersCount, data, membersData: Array.isArray(data) ? (data as any[]).map((member: any) => member?.user?.id || member?.id).filter(Boolean) : [] };
+		return {
+			cachedMembersCount,
+			data,
+			membersData: Array.isArray(data) ? (data as any[]).map((member: any) => member?.user?.id || member?.id).filter(Boolean) : [],
+		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -10705,7 +10936,11 @@ export const DiscordListRole = async (token: string, guildId: string, limit: num
 			};
 		}
 
-		return { cachedRolesCount, data: rolesData, rolesData: Array.isArray(rolesData) ? rolesData.map((role: any) => role?.id).filter(Boolean) : [] };
+		return {
+			cachedRolesCount,
+			data: rolesData,
+			rolesData: Array.isArray(rolesData) ? rolesData.map((role: any) => role?.id).filter(Boolean) : [],
+		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -11631,7 +11866,10 @@ export const DiscordListInvite = async (token: string, guildId: string, limit: n
 			};
 		}
 
-		return { data, invitesData: Array.isArray(data) ? data.map((invite: any) => invite?.code).filter(Boolean) : [] };
+		return {
+			data,
+			invitesData: Array.isArray(data) ? data.map((invite: any) => invite?.code).filter(Boolean) : [],
+		};
 	} catch (e: any) {
 		return { error: e.message || "Something just happened" };
 	}
@@ -13071,7 +13309,11 @@ export const Danbooru = async function Danbooru(que: string) {
 			} catch {}
 
 			const tags: any[] = (Array.isArray(parseres) ? parseres : [])
-				.map((e: any) => ({ tag: e?.name ?? null, total: Number(e?.post_count) || 0, deprecated: !!e?.is_deprecated }))
+				.map((e: any) => ({
+					tag: e?.name ?? null,
+					total: Number(e?.post_count) || 0,
+					deprecated: !!e?.is_deprecated,
+				}))
 				.filter((t: any) => t.tag && !t.deprecated)
 				.slice(0, 5)
 				.map(({ tag, total }: any) => ({ tag, total }));
@@ -13368,15 +13610,256 @@ const parseGoogleWebItems = (html: string): any[] => {
 			}
 			ancestor = ancestor.parentNode;
 		}
-		raw.push({ title, href, ...(site ? { siteName: site } : {}), ...(snippet ? { snippet } : {}) });
+		raw.push({
+			title,
+			href,
+			...(site ? { siteName: site } : {}),
+			...(snippet ? { snippet } : {}),
+		});
 	}
 	return raw;
 };
 
-const resolveGoogleWebUrls = async (raw: any[]): Promise<any[]> => {
+// Pulls result rows out of Google's inline `var m = {...}` wiz payload.
+// The wiz format stores each result as a nested array where one element is
+// ["/goto?url=...", title, snippet, 1, id, lang, ..., siteName], so we walk
+// the object and collect those rows instead of relying on DOM class names.
+const extractGoogleWebM = (html: string): any | null => {
+	try {
+		const mStart = html.indexOf("var m={");
+		if (mStart < 0) return null;
+		const mEnd = html.indexOf("};", mStart);
+		if (mEnd < 0) return null;
+		const mStr = html.slice(mStart + "var m=".length, mEnd + 1);
+		return JSON.parse(mStr);
+	} catch {
+		return null;
+	}
+};
+
+const parseGoogleWebItemsFromJson = (html: string): any[] => {
+	const m = extractGoogleWebM(html);
+	if (!m) return [];
+	const raw: any[] = [];
+	const seen = new Set<string>();
+	const walk = (node: any): void => {
+		if (!Array.isArray(node)) return;
+		if (node.length >= 4 && typeof node[0] === "string" && node[0].startsWith("/goto?url=") && typeof node[1] === "string" && node[1].length > 2 && typeof node[2] === "string" && node[2].length > 10) {
+			const gotoUrl = node[0];
+			if (!seen.has(gotoUrl)) {
+				seen.add(gotoUrl);
+				raw.push({
+					title: node[1],
+					snippet: node[2],
+					...(typeof node[9] === "string" && node[9] ? { siteName: node[9] } : {}),
+					href: gotoUrl,
+				});
+			}
+		}
+		for (const child of node) walk(child);
+	};
+	for (const key of Object.keys(m)) walk(m[key]);
+	return raw;
+};
+
+const parseGoogleWebItemsSmart = (html: string): any[] => {
+	const domItems = parseGoogleWebItems(html);
+	const jsonItems = parseGoogleWebItemsFromJson(html);
+	if (!jsonItems.length) return domItems;
+	// Merge JSON enrichment (richer snippet, siteName) into DOM items by goto URL.
+	const byHref = new Map<string, any>();
+	for (const j of jsonItems) byHref.set(j.href, j);
+	return domItems.map((d) => {
+		const j = byHref.get(d.href);
+		if (!j) return d;
+		return {
+			...d,
+			...(j.snippet && j.snippet.length > (d.snippet?.length ?? 0) ? { snippet: j.snippet } : {}),
+			...(j.siteName && !d.siteName ? { siteName: j.siteName } : {}),
+		};
+	});
+};
+
+type GoogleImageMeta = {
+	originalUrl?: string;
+	pageTitle?: string;
+	siteName?: string;
+	domain?: string;
+	pageUrl?: string;
+	language?: string;
+	aboutImageUrl?: string;
+	imageSize?: string;
+};
+
+// Google embeds image data in inline scripts as [...,{"2000":[..]}] with escaped chars.
+const unescapeGoogleImageData = (text: string): string =>
+	text
+		.replace(/\\u003d/g, "=")
+		.replace(/\\u0026/g, "&")
+		.replace(/\\u003f/g, "?")
+		.replace(/\\\//g, "/");
+
+const extractJsonArrayAt = (text: string, start: number): string | null => {
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < text.length; i++) {
+		const char = text[i];
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (char === "\\") escaped = true;
+			else if (char === '"') inString = false;
+			continue;
+		}
+		if (char === '"') inString = true;
+		else if (char === "[") depth++;
+		else if (char === "]") {
+			depth--;
+			if (depth === 0) return text.slice(start, i + 1);
+		}
+	}
+	return null;
+};
+
+const parseGoogleImageMeta = (html: string): { byToken: Map<string, GoogleImageMeta>; containers: string[] } => {
+	const meta = new Map<string, GoogleImageMeta>();
+	const containers = new Set<string>();
+	const containerPattern = /"([A-Za-z0-9_-]{16,})":\[/g;
+	let container: RegExpExecArray | null;
+	while ((container = containerPattern.exec(html))) {
+		containers.add(container[1]);
+	}
+	const pattern = /\[\s*"https:\/\/encrypted-tbn\d+\.gstatic\.com\/images\?q(?:=|\\u003d)tbn:([A-Za-z0-9_\-]+)[^"]*"\s*,\s*\d+\s*,\s*\d+\s*\]\s*,\s*\[\s*"([^"]*)"\s*(?:,\s*\d+\s*,\s*\d+\s*)?\]/g;
+	const entries: Array<{
+		token: string;
+		originalUrl: string;
+		start: number;
+		end: number;
+	}> = [];
+	let match: RegExpExecArray | null;
+	while ((match = pattern.exec(html))) {
+		entries.push({
+			token: match[1],
+			originalUrl: unescapeGoogleImageData(match[2]),
+			start: match.index,
+			end: match.index + match[0].length,
+		});
+	}
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i];
+		const bound = i + 1 < entries.length ? entries[i + 1].start : html.length;
+		const tail = html.slice(entry.end, bound);
+		const info: GoogleImageMeta = { originalUrl: entry.originalUrl };
+		const size = tail.match(/"2000":\[\s*null\s*,\s*"[^"]*"\s*,\s*"([^"]*)"/);
+		if (size) info.imageSize = size[1];
+		const keyIndex = tail.indexOf('"2003":[');
+		if (keyIndex !== -1) {
+			const arrayStart = tail.indexOf("[", keyIndex + '"2003":'.length);
+			const arrayText = extractJsonArrayAt(tail, arrayStart);
+			if (arrayText) {
+				try {
+					const fields = JSON.parse(arrayText);
+					if (typeof fields[3] === "string") info.pageTitle = fields[3];
+					for (const value of fields) {
+						if (typeof value === "string") {
+							if (value.includes("about-this-image")) {
+								info.aboutImageUrl ??= value;
+							} else if (/^https?:\/\//i.test(value)) {
+								if (!value.includes("/translate?")) info.pageUrl ??= value;
+							} else if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(value)) {
+								info.domain ??= value;
+							} else if (value.includes(" - ") && value !== info.pageTitle) {
+								info.siteName ??= value;
+							}
+							continue;
+						}
+						if (Array.isArray(value) && typeof value[0] === "string" && /^https?:\/\//i.test(value[0])) {
+							info.pageUrl ??= value[0];
+							if (typeof value[1] === "string" && !/^https?:\/\//i.test(value[1])) info.language ??= value[1];
+						}
+					}
+				} catch {
+					// malformed payload, keep the original image url only
+				}
+			}
+		}
+		meta.set(entry.token, info);
+	}
+	return { byToken: meta, containers: [...containers] };
+};
+
+// Walk up to find the /goto tracking anchor.
+const findGoogleTrackingUrl = (element: any): string => {
+	let node: any = element;
+	while (node) {
+		const anchor = node.querySelector?.('a[href^="/goto?"]');
+		const href = anchor?.getAttribute?.("href") ?? "";
+		if (typeof href === "string" && href.startsWith("/goto?")) return `https://www.google.com${href}`;
+		node = node.parentElement;
+	}
+	return "";
+};
+
+// Deferred thumbnails: real cdn url lives in bootstrap payload, keyed by jsdata blob id.
+const findGoogleDeferredImage = (html: string, card: any): string => {
+	let key = "";
+	let node: any = card;
+	while (node && !key) {
+		const jsdata: string = node.getAttribute?.("jsdata") ?? "";
+		const candidate = (jsdata.split(";")[2] ?? "").split(" ")[0] ?? "";
+		if (candidate && html.includes(`"${candidate}":`)) key = candidate;
+		node = node.parentElement;
+	}
+	if (!key) return "";
+	const at = html.indexOf(`"${key}":`);
+	const match = html.slice(at, at + 800).match(/https:\/\/encrypted-tbn\d+\.gstatic\.com\/images\?q(?:=|\\u003d)tbn:[^"]+/);
+	return match ? unescapeGoogleImageData(match[0]) : "";
+};
+
+const parseGoogleImageItems = (html: string): any[] => {
+	const { document } = parseHTML(html);
+	const { byToken } = parseGoogleImageMeta(html);
+	const raw: any[] = [];
+	const seen = new Set<string>();
+	for (const card of Array.from(document.querySelectorAll('div[jsname="PNoEC"]')) as any[]) {
+		const img = card.querySelector("img") as any;
+		const imgId = img?.getAttribute("id") ?? "";
+		let src: string = img?.getAttribute("src") ?? "";
+		if (!src.startsWith("http")) src = findGoogleDeferredImage(html, card);
+		const title = ((img?.getAttribute("alt") ?? "") || "").replace(/\s+/g, " ").trim();
+		if (!src.startsWith("http") || !title) continue;
+		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
+		if (token) {
+			if (seen.has(token)) continue;
+			seen.add(token);
+		}
+		const info = token ? byToken.get(token) : undefined;
+		const trackingUrl = findGoogleTrackingUrl(card);
+		const hash = imgId.replace(/^dimg_/, "").replace(/_\d+$/, "");
+		raw.push({
+			title,
+			href: src,
+			...(imgId ? { id: imgId } : {}),
+			...(hash ? { hash } : {}),
+			...(info?.originalUrl ? { originalImageUrl: info.originalUrl } : {}),
+			...(info?.pageTitle ? { pageTitle: info.pageTitle } : {}),
+			...(info?.siteName ? { siteName: info.siteName } : {}),
+			...(info?.domain ? { domain: info.domain } : {}),
+			...(info?.pageUrl ? { pageUrl: info.pageUrl } : {}),
+			...(info?.language ? { language: info.language } : {}),
+			...(info?.aboutImageUrl ? { aboutImageUrl: info.aboutImageUrl } : {}),
+			...(info?.imageSize ? { imageSize: info.imageSize } : {}),
+			...(info?.domain ? { iconDomain: info.domain } : {}),
+			...(trackingUrl ? { trackingUrl } : {}),
+		});
+	}
+	return raw;
+};
+
+const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Promise<any[]> => {
 	const jar = googleWebJar();
 	const resolved = await Promise.allSettled(
-		raw.slice(0, 10).map(async (item) => {
+		raw.slice(0, limit).map(async (item) => {
 			if (item.href.startsWith("http")) return item.href;
 			if (!item.href.startsWith("/goto?")) return null;
 			try {
@@ -13399,62 +13882,43 @@ const resolveGoogleWebUrls = async (raw: any[]): Promise<any[]> => {
 	);
 	const items: any[] = [];
 	const seen = new Set<string>();
-	raw.slice(0, 10).forEach((item, idx) => {
+	raw.slice(0, limit).forEach((item, idx) => {
 		const r = resolved[idx];
 		const url = item.href.startsWith("http") ? item.href : r.status === "fulfilled" ? r.value : null;
 		if (!url || seen.has(url)) return;
 		seen.add(url);
-		const { href: _href, ...rest } = item;
+		const { href: _href, iconDomain: _iconDomain, ...rest } = item;
 		let iconUrl = "";
 		try {
-			iconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
+			const host = typeof item.iconDomain === "string" && item.iconDomain ? item.iconDomain : new URL(url).hostname;
+			iconUrl = `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
 		} catch {}
-		items.push({ ...rest, url, ...(iconUrl ? { iconUrl } : {}), ...(item.href.startsWith("/goto?") ? { trackingUrl: `https://www.google.com${item.href}` } : {}) });
+		items.push({
+			...rest,
+			[urlKey]: url,
+			...(iconUrl ? { iconUrl } : {}),
+			...(item.href.startsWith("/goto?") ? { trackingUrl: `https://www.google.com${item.href}` } : {}),
+		});
 	});
 	return items;
 };
 
-const isGoogleWebChallenged = (html: string, finalUrl = ""): boolean => finalUrl.includes("/sorry/") || html.includes("detected unusual traffic") || (html.includes("enablejs") && !html.includes("yuRUbf"));
+const isGoogleWebChallenged = (html: string, finalUrl = "", imageSearch = false): boolean => finalUrl.includes("/sorry/") || html.includes("detected unusual traffic") || (html.includes("enablejs") && (imageSearch ? !html.includes('jsname="PNoEC"') : !html.includes("yuRUbf")));
 
 const isGoogleSafeSearchHidden = (html: string): boolean => /hidden by safesearch|disembunyikan oleh safesearch/i.test(html);
-
-// Flips safeui=off for the current jar using the page's own signed setprefs
-// link. Best-effort: silently skips when the page carries no signature.
-const ensureSafeSearchOff = async (html: string): Promise<boolean> => {
-	const sig = html.match(/\/setprefs\?sig=([A-Za-z0-9\-_%]+)/)?.[1];
-	if (!sig) return false;
-	try {
-		const jar = googleWebJar();
-		const sp = await fetch(`https://www.google.com/setprefs?sig=${sig}&authuser=0&gl=SG&safeui=off&noredirect=1`, {
-			headers: {
-				Accept: "*/*",
-				"User-Agent": googleWebUA,
-				Referer: "https://www.google.com/",
-				...(jar ? { Cookie: jar } : {}),
-			},
-			redirect: "manual",
-			signal: AbortSignal.timeout(15000),
-		});
-		await sp.text().catch(() => {});
-		mergeGoogleWebCookies(sp);
-		console.warn("googleWebSearch: SafeSearch pref flipped off for session");
-		return true;
-	} catch {
-		return false;
-	}
-};
+const parGoogle = "&authuser=0&hl=en&gl=SG&safeui=off&noredirect=1";
 
 // SafeSearch hides results server-side; the page carries a signed setprefs
 // link that flips safeui=off for this jar. Returns items when the bypass
 // worked, [] when prefs flipped but results stay hidden (network-enforced),
 // null when the page isn't a SafeSearch wall or has no usable signature.
-const bypassGoogleSafeSearch = async (html: string, searchUrl: string): Promise<any[] | null> => {
+const bypassGoogleSafeSearch = async (html: string, searchUrl: string, parse: (html: string) => any[] = parseGoogleWebItems, limit = 10, urlKey = "url"): Promise<any[] | null> => {
 	if (!isGoogleSafeSearchHidden(html)) return null;
 	const sig = html.match(/\/setprefs\?sig=([A-Za-z0-9\-_%]+)/)?.[1];
 	if (!sig) return null;
 	try {
 		const jar = googleWebJar();
-		const sp = await fetch(`https://www.google.com/setprefs?sig=${sig}&authuser=0&gl=SG&safeui=off&noredirect=1`, {
+		const sp = await fetch(`https://www.google.com/setprefs?sig=${sig}${parGoogle}`, {
 			headers: {
 				Accept: "*/*",
 				"User-Agent": googleWebUA,
@@ -13479,81 +13943,148 @@ const bypassGoogleSafeSearch = async (html: string, searchUrl: string): Promise<
 		});
 		mergeGoogleWebCookies(retry);
 		if (retry.status !== 200) return [];
-		return await resolveGoogleWebUrls(parseGoogleWebItems(await retry.text()));
+		return await resolveGoogleWebUrls(parse(await retry.text()), limit, urlKey);
 	} catch {
 		return [];
 	}
 };
 
-export const googleWebSearch = async (query: string): Promise<any> => {
-	if (!query) return null;
+// Chrome-fingerprint client: queries Google with solved cookies after bridge.
+const googleWebCloak = new HttpcloakSession({
+	preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+	timeout: 30,
+});
 
-	try {
-		const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=web`;
-		// Fast path: once the browser has solved the challenge and earned trust
-		// cookies, plain fetch serves results without another browser trip.
-		if (googleTrustIsFresh()) {
+const googleWebCloakSyncCookies = (): void => {
+	const jar = googleWebJar();
+	for (const part of jar.split("; ")) {
+		const at = part.indexOf("=");
+		if (at > 0) {
+			const name = part.slice(0, at);
+			const value = part.slice(at + 1);
 			try {
-				const native = await fetch(url, {
-					headers: {
-						Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-						"Accept-Language": "en-US,en;q=0.9",
-						"User-Agent": googleWebUA,
-						Referer: "https://www.google.com/",
-						Cookie: googleWebJar(),
-					},
-					redirect: "manual",
-					signal: AbortSignal.timeout(20000),
+				googleWebCloak.setCookie(name, value, {
+					domain: ".google.com",
+					path: "/",
+					secure: true,
+					httpOnly: true,
+					sameSite: "Lax",
 				});
-				mergeGoogleWebCookies(native);
-				if (native.status === 200) {
-					const html = await native.text();
-					const items = await resolveGoogleWebUrls(parseGoogleWebItems(html));
-					if (items.length) return { total: items.length, data: items };
-					const bypassed = await bypassGoogleSafeSearch(html, url);
-					if (bypassed) {
-						if (bypassed.length) return { total: bypassed.length, data: bypassed };
-						return { error: "Google SafeSearch hid the results for this query" };
-					}
-					if (!isGoogleWebChallenged(html)) return { data: null };
-				}
 			} catch {}
 		}
-		const res = await browserRequest({
-			url,
-			fetcherType: "stealthy",
-			headers: googleWebJar() ? { Cookie: googleWebJar() } : undefined,
-			extractHtml: true,
-			timeoutMs: 90000,
-		});
-		mergeGoogleTrustCookies(res?.cookies);
-		const html: string = res?.html ?? "";
-		if (!res?.success || !html) {
-			if (res && !res.success) console.warn(`googleWebSearch: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
-			return null;
+	}
+};
+
+const mergeGoogleCloakCookies = (cookies: any[] | undefined): void => {
+	if (!cookies?.length) return;
+	const record: Record<string, string> = {};
+	for (const cookie of cookies) {
+		if (cookie?.name) {
+			record[cookie.name] = String(cookie.value ?? "");
+			try {
+				googleWebCloak.setCookie(cookie.name, String(cookie.value ?? ""), {
+					domain: cookie.domain || ".google.com",
+					path: cookie.path || "/",
+					secure: !!cookie.secure,
+					httpOnly: !!cookie.httpOnly,
+					sameSite: cookie.sameSite || "Lax",
+				});
+			} catch {}
 		}
-		// First request chain: challenge solved above -> flip SafeSearch off now
-		// so this jar stays unfiltered; the definitive parse below then runs on
-		// the full results (wall pages fall through to the bypass retry).
-		await ensureSafeSearchOff(html);
-		const items = await resolveGoogleWebUrls(parseGoogleWebItems(html));
-		if (!items.length) {
-			const bypassed = await bypassGoogleSafeSearch(html, url);
-			if (bypassed?.length) return { total: bypassed.length, data: bypassed };
-			if (bypassed || isGoogleSafeSearchHidden(html)) {
-				return { error: "Google SafeSearch hid the results for this query" };
-			}
-			if (isGoogleWebChallenged(html, res?.url)) {
-				return { error: "Google asking to verify you're not a bot" };
-			}
-			return { data: null };
+	}
+	mergeGoogleTrustCookies(record);
+};
+
+const googleWebCloakFetch = async (url: string): Promise<{ html: string; finalUrl: string } | null> => {
+	for (let attempt = 0; attempt <= 2; attempt++) {
+		if (attempt) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+		try {
+			googleWebCloakSyncCookies();
+			const res: any = await googleWebCloak.get(url, {
+				headers: { Referer: "https://www.google.com/" },
+				fetchMode: "navigate",
+			});
+			mergeGoogleCloakCookies(res?.cookies);
+			const status = Number(res?.statusCode ?? 0);
+			if (status === 429 && attempt < 2) continue;
+			if (status !== 200) return null;
+			return {
+				html: String(res.text ?? ""),
+				finalUrl: String(res.finalUrl ?? url),
+			};
+		} catch {}
+	}
+	return null;
+};
+
+// Drives the bridge once to collect challenge cookies.
+const googleWebSolve = async (url: string): Promise<any | null> => {
+	const res = await browserRequest({
+		url,
+		fetcherType: "stealthy",
+		headers: googleWebJar() ? { Cookie: googleWebJar() } : undefined,
+		extractHtml: true,
+		timeoutMs: 90000,
+	});
+	mergeGoogleTrustCookies(res?.cookies);
+	if (!res?.success || !res.html) {
+		if (res && !res.success) console.warn(`googleWebSearch: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
+		return null;
+	}
+	return res;
+};
+
+const googleWebSearchFor = async (query: string, url: string, parse: (html: string) => any[] = parseGoogleWebItemsSmart, limit = 10, urlKey = "url"): Promise<any> => {
+	if (!query) return null;
+
+	const imageSearch = parse === parseGoogleImageItems;
+	const finish = async (html: string, finalUrl = ""): Promise<any | null> => {
+		const items = await resolveGoogleWebUrls(parse(html), limit, urlKey);
+		if (items.length) return { total: items.length, data: items };
+		const bypassed = await bypassGoogleSafeSearch(html, url, parse, limit, urlKey);
+		if (bypassed) {
+			const data = bypassed.slice(0, limit);
+			if (data.length) return { total: data.length, data };
+			return { error: "Google SafeSearch hid the results for this query" };
 		}
-		return { total: items.length, data: items };
+		if (isGoogleWebChallenged(html, finalUrl, imageSearch)) return null;
+		return { data: null };
+	};
+
+	try {
+		// 1. Cold jar: bridge solves, then fetch below.
+		let solved: any = googleTrustHas("DV") ? null : await googleWebSolve(url);
+
+		// 2. Solved jar: httpcloak fetch.
+		let cloak = await googleWebCloakFetch(url);
+		if (cloak) {
+			const out = await finish(cloak.html, cloak.finalUrl);
+			if (out) return out;
+		}
+
+		// 3. Re-challenged: solve again, retry; else bridge payload.
+		solved ??= await googleWebSolve(url);
+		cloak = await googleWebCloakFetch(url);
+		if (cloak) {
+			const out = await finish(cloak.html, cloak.finalUrl);
+			if (out) return out;
+		}
+		const html: string = solved?.html ?? "";
+		if (!html) return null;
+		return (
+			(await finish(html, solved?.url ?? "")) ?? {
+				error: "Google asking to verify you're not a bot",
+			}
+		);
 	} catch (e) {
 		console.error(e);
 		return null;
 	}
 };
+
+export const googleWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=web`);
+
+export const googleImgWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=2&tbm=isch`, parseGoogleImageItems, 20, "imageUrl");
 
 export const duckSearch = async (query: string): Promise<any> => {
 	if (!query) return null;
@@ -14916,12 +15447,19 @@ const cleanDescription = (html: any): string | null => {
 		.trim();
 };
 
-let playStoreBootstrap: { fSid: string; bl: string; x: string; expire: number } | null = null;
+let playStoreBootstrap: {
+	fSid: string;
+	bl: string;
+	x: string;
+	expire: number;
+} | null = null;
 
 const getPlayStoreBootstrap = async () => {
 	if (playStoreBootstrap && playStoreBootstrap.expire > Date.now()) return playStoreBootstrap;
 	try {
-		const boot = await fetch("https://play.google.com/store/games", { headers: commonHeaders });
+		const boot = await fetch("https://play.google.com/store/games", {
+			headers: commonHeaders,
+		});
 		const html = await boot.text();
 		const fSid = html.match(/"FdrFJe":"(.*?)"/)?.[1];
 		const bl = html.match(/"cfb2h":"(.*?)"/)?.[1];
@@ -16001,7 +16539,11 @@ export const TiktokInfoUser = async function TiktokInfoUser(query: string, wafRe
 		const response = await (httpcloakGet as any)(`https://www.tiktok.com/@${query.toLowerCase()}`, {
 			httpVersion: "h2",
 			tlsOnly: true,
-			headers: { ...commonHeaders, Cookie: tiktokSessionKeys?.cookie, "User-Agent": userAgent_mobile },
+			headers: {
+				...commonHeaders,
+				Cookie: tiktokSessionKeys?.cookie,
+				"User-Agent": userAgent_mobile,
+			},
 		});
 		const html = await responseText(response);
 		let scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
@@ -16036,11 +16578,22 @@ export const Magnific = async function Magnific(que: string): Promise<any> {
 	if (running) return await running;
 	const job = (async () => {
 		await magnificPace();
-		const session = new HttpcloakSession({ preset: HttpcloakPreset.CHROME_LATEST_WINDOWS, timeout: 30 }); // Same JA3 as magnificKey; mixed fingerprints raise the bot score
+		const session = new HttpcloakSession({
+			preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+			timeout: 30,
+		}); // Same JA3 as magnificKey; mixed fingerprints raise the bot score
 		const q = encodeURIComponent(que);
 		const pullJson = async (build: string) => {
 			const dataRes: any = await session.get(`https://www.magnific.com/_next/data/${build}/en/search.json?format=search&last_filter=query&last_value=${q}&query=${q}`, {
-				headers: { ...commonHeaders, ...(magnificCookies ? { Cookie: magnificCookies } : {}), Accept: "*/*", Referer: `https://www.magnific.com/en/search?query=${q}`, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" },
+				headers: {
+					...commonHeaders,
+					...(magnificCookies ? { Cookie: magnificCookies } : {}),
+					Accept: "*/*",
+					Referer: `https://www.magnific.com/en/search?query=${q}`,
+					"Sec-Fetch-Dest": "empty",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Site": "same-origin",
+				},
 			});
 			if (dataRes?.statusCode === 403) {
 				let html = "";
@@ -16124,7 +16677,10 @@ export const Magnific = async function Magnific(que: string): Promise<any> {
 						const now = Date.now();
 						for (const [k, v] of magnificCache) if (v.exp <= now) magnificCache.delete(k);
 					}
-					magnificCache.set(cacheKey, { exp: Date.now() + MAGNIFIC_CACHE_TTL_MS, data: out });
+					magnificCache.set(cacheKey, {
+						exp: Date.now() + MAGNIFIC_CACHE_TTL_MS,
+						data: out,
+					});
 				}
 				return out;
 			}
@@ -16156,7 +16712,11 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
 	try {
 		let auth = await getStartpageAuth(searchUrl);
-		if (!auth) return { error: "Anubis asking to verify you're not a bot", _wafChallenge: waf() };
+		if (!auth)
+			return {
+				error: "Anubis asking to verify you're not a bot",
+				_wafChallenge: waf(),
+			};
 		wafStatus = true;
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
@@ -16169,11 +16729,19 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		if (html.includes("anubis_challenge") && !authRetried) {
 			invalidateStartpageAuth();
 			auth = await getStartpageAuth(searchUrl);
-			if (!auth) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+			if (!auth)
+				return {
+					error: "Startpage asking to verify you're not a bot",
+					_wafChallenge: waf(),
+				};
 			wafAttempt = auth.reused ? 0 : auth.attempts;
 			html = await fetchResults(auth.cookie);
 		}
-		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+		if (!html || html.includes("anubis_challenge"))
+			return {
+				error: "Startpage asking to verify you're not a bot",
+				_wafChallenge: waf(),
+			};
 		const { document } = parseHTML(html);
 		const items: any[] = [];
 		let nodes = Array.from(document.querySelectorAll(".w-gl .result"));
@@ -16195,11 +16763,23 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 			for (const s of Array.from((el as any).querySelectorAll(".wgl-sitelinks a"))) {
 				const su = (s as any).getAttribute("href") || "";
 				const st = (s as any).textContent?.trim() || "";
-				if (su) sitelinks.push({ title: st, url: su.startsWith("http") ? su : `https://www.startpage.com${su}` });
+				if (su)
+					sitelinks.push({
+						title: st,
+						url: su.startsWith("http") ? su : `https://www.startpage.com${su}`,
+					});
 			}
 			let anonymousViewUrl = (el as any).querySelector(".anonymous-view-link a")?.getAttribute("href") || "";
 			if (anonymousViewUrl && !anonymousViewUrl.startsWith("http")) anonymousViewUrl = "";
-			items.push({ title, url, siteName, displayUrl, snippet, sitelinks, anonymousViewUrl });
+			items.push({
+				title,
+				url,
+				siteName,
+				displayUrl,
+				snippet,
+				sitelinks,
+				anonymousViewUrl,
+			});
 		}
 		if (!items.length) return { _wafChallenge: waf(), data: null };
 		return { _wafChallenge: waf(), total: items.length, data: items };
@@ -16281,7 +16861,10 @@ const decodeProxyImage = (value: string) => {
 
 export const StartpageImageSearch = async function StartpageImageSearch(que: string, authRetried: boolean = false): Promise<any> {
 	if (!que) return null;
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const session = new HttpcloakSession({
+		preset: HttpcloakPreset.FIREFOX_LATEST_LINUX,
+		timeout: 30,
+	});
 	const q = que.replace(/\s+/g, "+");
 	const searchUrl = `${STARTPAGE_BASE}/sp/search?t=device&segment=startpage&lui=english&language=english&cat=images&abd=1&abe=1&query=${q}&qadf=none`;
 	let wafStatus = false;
@@ -16289,7 +16872,11 @@ export const StartpageImageSearch = async function StartpageImageSearch(que: str
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
 	try {
 		let auth = await getStartpageAuth(searchUrl);
-		if (!auth) return { error: "Anubis asking to verify you're not a bot", _wafChallenge: waf() };
+		if (!auth)
+			return {
+				error: "Anubis asking to verify you're not a bot",
+				_wafChallenge: waf(),
+			};
 		wafStatus = true;
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
@@ -16302,11 +16889,19 @@ export const StartpageImageSearch = async function StartpageImageSearch(que: str
 		if (html.includes("anubis_challenge") && !authRetried) {
 			invalidateStartpageAuth();
 			auth = await getStartpageAuth(searchUrl);
-			if (!auth) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+			if (!auth)
+				return {
+					error: "Startpage asking to verify you're not a bot",
+					_wafChallenge: waf(),
+				};
 			wafAttempt = auth.reused ? 0 : auth.attempts;
 			html = await fetchResults(auth.cookie);
 		}
-		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot", _wafChallenge: waf() };
+		if (!html || html.includes("anubis_challenge"))
+			return {
+				error: "Startpage asking to verify you're not a bot",
+				_wafChallenge: waf(),
+			};
 
 		const raw = extractStartpageImageResults(html);
 		const items = raw.map((r: any) => ({
@@ -16348,15 +16943,25 @@ const extractBalancedJson = (html: string, idx: number): string | null => {
 };
 
 const CanvaSearch = async function CanvaSearch(que: string, searchType: string, withRich: boolean) {
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const session = new HttpcloakSession({
+		preset: HttpcloakPreset.FIREFOX_LATEST_LINUX,
+		timeout: 30,
+	});
 	try {
 		const q = encodeURIComponent(que);
 		const [suggRes, pageRes]: any[] = await Promise.all([
 			session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=${searchType}&query=${q}&locale=en`, {
-				headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
+				headers: {
+					...commonHeaders,
+					Accept: "*/*",
+					Referer: "https://www.canva.com/templates/",
+				},
 			}),
 			session.get(`https://www.canva.com/templates/?query=${q}`, {
-				headers: { ...commonHeaders, Referer: "https://www.canva.com/templates/" },
+				headers: {
+					...commonHeaders,
+					Referer: "https://www.canva.com/templates/",
+				},
 			}),
 		]);
 		if (suggRes?.statusCode === 403 || pageRes?.statusCode === 403) return { challenged: true as const };
@@ -16394,7 +16999,13 @@ const CanvaSearch = async function CanvaSearch(que: string, searchType: string, 
 							id,
 							title: item?.C ?? null,
 							type: null,
-							thumbnail: best ? { url: best.C ?? null, width: best.D ?? null, height: best.E ?? null } : null,
+							thumbnail: best
+								? {
+										url: best.C ?? null,
+										width: best.D ?? null,
+										height: best.E ?? null,
+									}
+								: null,
 							url: href ? `https://www.canva.com${href}` : null,
 						};
 					})
@@ -16407,7 +17018,11 @@ const CanvaSearch = async function CanvaSearch(que: string, searchType: string, 
 				items.map(async (item: any) => {
 					try {
 						const prevRes: any = await session.get(`https://www.canva.com/_ajax/seopage/previews?type=GET_TEMPLATE_PREVIEWS_REQUEST&locale=en&offset=1&limit=100&templateId=${item.id}`, {
-							headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/templates/" },
+							headers: {
+								...commonHeaders,
+								Accept: "*/*",
+								Referer: "https://www.canva.com/templates/",
+							},
 						});
 						if (!prevRes || prevRes.statusCode !== 200) return { ...item, richContent: null };
 						const prevRaw = await responseText(prevRes);
@@ -16420,8 +17035,20 @@ const CanvaSearch = async function CanvaSearch(que: string, searchType: string, 
 								pages: pages.map((p: any) => ({
 									background: p?.y ?? null,
 									title: p?.z ?? null,
-									images: Array.isArray(p?.Bk) ? p.Bk.map((v: any) => ({ url: v?.C ?? null, width: v?.D ?? null, height: v?.E ?? null })) : [],
-									transparent: Array.isArray(p?.Bl) ? p.Bl.map((v: any) => ({ url: v?.C ?? null, width: v?.D ?? null, height: v?.E ?? null })) : [],
+									images: Array.isArray(p?.Bk)
+										? p.Bk.map((v: any) => ({
+												url: v?.C ?? null,
+												width: v?.D ?? null,
+												height: v?.E ?? null,
+											}))
+										: [],
+									transparent: Array.isArray(p?.Bl)
+										? p.Bl.map((v: any) => ({
+												url: v?.C ?? null,
+												width: v?.D ?? null,
+												height: v?.E ?? null,
+											}))
+										: [],
 								})),
 							},
 						};
@@ -16448,7 +17075,10 @@ export const CanvaTemplates = async function CanvaTemplates(que: string) {
 	if (!que) return null;
 	try {
 		const out: any = await CanvaSearch(que, "B", true);
-		if (!out || out?.challenged) return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+		if (!out || out?.challenged)
+			return {
+				error: "Cloudflare Turnstile asking to verify you're not a bot",
+			};
 		return out;
 	} catch (e) {
 		console.error(e);
@@ -16458,18 +17088,28 @@ export const CanvaTemplates = async function CanvaTemplates(que: string) {
 
 export const CanvaGraphics = async function CanvaGraphics(que: string) {
 	if (!que) return null;
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const session = new HttpcloakSession({
+		preset: HttpcloakPreset.FIREFOX_LATEST_LINUX,
+		timeout: 30,
+	});
 	try {
 		const q = encodeURIComponent(que);
 		const [suggRes, pageRes]: any[] = await Promise.all([
 			session.get(`https://www.canva.com/_ajax/seopage/search/suggestions?searchType=C&query=${q}&locale=en`, {
-				headers: { ...commonHeaders, Accept: "*/*", Referer: "https://www.canva.com/graphics/" },
+				headers: {
+					...commonHeaders,
+					Accept: "*/*",
+					Referer: "https://www.canva.com/graphics/",
+				},
 			}),
 			session.get(`https://www.canva.com/graphics/?query=${q}`, {
 				headers: { ...commonHeaders },
 			}),
 		]);
-		if (suggRes?.statusCode === 403 || pageRes?.statusCode === 403) return { error: "Cloudflare Turnstile asking to verify you're not a bot" };
+		if (suggRes?.statusCode === 403 || pageRes?.statusCode === 403)
+			return {
+				error: "Cloudflare Turnstile asking to verify you're not a bot",
+			};
 		let suggestions: any[] = [];
 		try {
 			const raw = await responseText(suggRes);
@@ -16521,7 +17161,13 @@ export const CanvaGraphics = async function CanvaGraphics(que: string) {
 						title: obj?.M?.A ?? null,
 						type: obj?.I?.type ?? null,
 						badge: obj?.M?.C ?? null,
-						thumbnail: thumb ? { url: thumb.B ?? null, width: thumb.C ?? null, height: thumb.D ?? null } : null,
+						thumbnail: thumb
+							? {
+									url: thumb.B ?? null,
+									width: thumb.C ?? null,
+									height: thumb.D ?? null,
+								}
+							: null,
 						url: `https://www.canva.com${href}`,
 					});
 				}
@@ -16534,7 +17180,14 @@ export const CanvaGraphics = async function CanvaGraphics(que: string) {
 		while ((m = colRe.exec(html)) !== null) {
 			try {
 				const col = JSON.parse(m[0]);
-				collections.push({ id: col.A, title: col.B, covers: col.C, url: `https://www.canva.com${col.D}`, count: col.E, label: col.F });
+				collections.push({
+					id: col.A,
+					title: col.B,
+					covers: col.C,
+					url: `https://www.canva.com${col.D}`,
+					count: col.E,
+					label: col.F,
+				});
 			} catch {}
 		}
 		return { total, suggestions, data: { items: results, collections } };

@@ -58,7 +58,10 @@ async function fromHackertarget(domain: string, base: string): Promise<string[]>
 		const url = `https://api.hackertarget.com/hostsearch/?q=${domain}`;
 		const ctrl = new AbortController();
 		const t = setTimeout(() => ctrl.abort(), 8000);
-		const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: ctrl.signal });
+		const res = await fetch(url, {
+			headers: { "User-Agent": "Mozilla/5.0" },
+			signal: ctrl.signal,
+		});
 		clearTimeout(t);
 		if (!res.ok) return [];
 		const text = await res.text();
@@ -135,7 +138,10 @@ async function queryDoH(host: string, typeName: string): Promise<{ status: numbe
 		const url = `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=${typeName}`;
 		const ctrl = new AbortController();
 		const t = setTimeout(() => ctrl.abort(), 8000);
-		const res = await fetch(url, { headers: { Accept: "application/dns-json" }, signal: ctrl.signal });
+		const res = await fetch(url, {
+			headers: { Accept: "application/dns-json" },
+			signal: ctrl.signal,
+		});
 		clearTimeout(t);
 		if (!res.ok) return { status: -1, records: [] };
 		const json = (await res.json()) as any;

@@ -75,7 +75,12 @@ app.get("/discord/modifyAllRoles", async (c) => {
 		return c.json({ error: "Missing valid parameter: mode (must be 'add' or 'remove')" }, 202);
 	}
 	if (typeParam !== "all" && typeParam !== "user" && typeParam !== "bot") {
-		return c.json({ error: "Missing valid parameter: type (must be 'all', 'user', or 'bot')" }, 202);
+		return c.json(
+			{
+				error: "Missing valid parameter: type (must be 'all', 'user', or 'bot')",
+			},
+			202,
+		);
 	}
 
 	// Check if this guild is already processing a request
@@ -140,7 +145,9 @@ app.get("/discord/modifyAllRoles", async (c) => {
 			}
 
 			if (invalidRoles.length > 0) {
-				return { error: `Roles not found in guild: ${invalidRoles.join(", ")}` };
+				return {
+					error: `Roles not found in guild: ${invalidRoles.join(", ")}`,
+				};
 			}
 
 			// Also verify bot role hierarchy (bot highest role must be higher than target roles)

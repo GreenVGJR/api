@@ -525,7 +525,9 @@ export const devianKey = async function devianKey(): Promise<{
 	csrfToken: string;
 } | null> {
 	try {
-		const res = await fetch("https://www.deviantart.com", { headers: commonHeaders });
+		const res = await fetch("https://www.deviantart.com", {
+			headers: commonHeaders,
+		});
 		let cookie: string;
 
 		if (res.headers.getSetCookie) {
@@ -666,7 +668,10 @@ export const fetchMagnificChallenge = async (cookies: string): Promise<{ html: s
 	}
 };
 
-export const magnificKey = async function magnificKey(): Promise<{ buildId: string; cookies: string } | null> {
+export const magnificKey = async function magnificKey(): Promise<{
+	buildId: string;
+	cookies: string;
+} | null> {
 	const chromeHeaders = {
 		...commonHeaders,
 		"User-Agent": magnificChromeUA,
@@ -682,11 +687,18 @@ export const magnificKey = async function magnificKey(): Promise<{ buildId: stri
 	const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
 	try {
 		for (let attempt = 0; attempt < 5; attempt++) {
-			const session = new HttpcloakSession({ preset: HttpcloakPreset.CHROME_LATEST_WINDOWS, timeout: 30 });
+			const session = new HttpcloakSession({
+				preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+				timeout: 30,
+			});
 			try {
 				if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
 				const res: any = await session.get(`https://magnific.com/en/search`, {
-					headers: { ...chromeHeaders, ...(attempt > 1 ? { "Cache-Control": "max-age=0" } : {}), ...(jar.size ? { Cookie: jarStr() } : {}) },
+					headers: {
+						...chromeHeaders,
+						...(attempt > 1 ? { "Cache-Control": "max-age=0" } : {}),
+						...(jar.size ? { Cookie: jarStr() } : {}),
+					},
 				});
 				collect(res);
 				if (res?.statusCode === 403) {
@@ -703,7 +715,10 @@ export const magnificKey = async function magnificKey(): Promise<{ buildId: stri
 								if (m && m[1]) jar.set(m[1].trim(), m[2]);
 							}
 							const res3: any = await session.get(`https://magnific.com/en/search`, {
-								headers: { ...chromeHeaders, ...(jar.size ? { Cookie: jarStr() } : {}) },
+								headers: {
+									...chromeHeaders,
+									...(jar.size ? { Cookie: jarStr() } : {}),
+								},
 							});
 							collect(res3);
 							const html3: string = typeof res3?.text === "string" ? res3.text : "";
@@ -725,7 +740,10 @@ export const magnificKey = async function magnificKey(): Promise<{ buildId: stri
 							if (m && m[1]) jar.set(m[1].trim(), m[2]);
 						}
 						const res2: any = await session.get(`https://magnific.com/en/search`, {
-							headers: { ...chromeHeaders, ...(jar.size ? { Cookie: jarStr() } : {}) },
+							headers: {
+								...chromeHeaders,
+								...(jar.size ? { Cookie: jarStr() } : {}),
+							},
 						});
 						collect(res2);
 						const html2: string = typeof res2?.text === "string" ? res2.text : "";
@@ -812,7 +830,11 @@ export const qcq_6uj = async (): Promise<string | null> => {
 // ---- Startpage Anubis (parallel fast-PoW solver) ----
 let spc_1qw: string | null = null;
 let spe_5qw = 0;
-let spi_9qw: Promise<{ cookie: string; reused: boolean; attempts: number } | null> | null = null;
+let spi_9qw: Promise<{
+	cookie: string;
+	reused: boolean;
+	attempts: number;
+} | null> | null = null;
 
 const SP_NONCE_CAP = 50_000_000;
 
@@ -912,7 +934,16 @@ const powRunSolve = (randomData: string, difficulty: number, retried: boolean): 
 		const stop = new Int32Array(new SharedArrayBuffer(4));
 		const full = Math.floor(difficulty / 2);
 		const half = difficulty % 2;
-		const state = { resolve, finish: (_v: { nonce: number; hash: string } | null) => {}, stop, remaining: 0, done: false, randomData, difficulty, retried };
+		const state = {
+			resolve,
+			finish: (_v: { nonce: number; hash: string } | null) => {},
+			stop,
+			remaining: 0,
+			done: false,
+			randomData,
+			difficulty,
+			retried,
+		};
 		state.finish = (v) => {
 			if (state.done) return;
 			state.done = true;
@@ -929,7 +960,16 @@ const powRunSolve = (randomData: string, difficulty: number, retried: boolean): 
 			const w = powPool[i];
 			(w as any).powSolve = solveId;
 			try {
-				w.postMessage({ solveId, randomData, full, half, index: i, stride: count, cap: SP_NONCE_CAP, stop: stop.buffer });
+				w.postMessage({
+					solveId,
+					randomData,
+					full,
+					half,
+					index: i,
+					stride: count,
+					cap: SP_NONCE_CAP,
+					stop: stop.buffer,
+				});
 				assigned++;
 			} catch {
 				(w as any).powSolve = 0;
@@ -977,7 +1017,10 @@ const yop_8zm = async (searchUrl: string): Promise<{ cookie: string; attempts: n
 		}
 	};
 	const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
-	const session = new HttpcloakSession({ preset: HttpcloakPreset.FIREFOX_LATEST_LINUX, timeout: 30 });
+	const session = new HttpcloakSession({
+		preset: HttpcloakPreset.FIREFOX_LATEST_LINUX,
+		timeout: 30,
+	});
 	try {
 		const base: any = await session.get(searchUrl, { headers });
 		collect(base);
@@ -1223,7 +1266,10 @@ function hla_5gn(): any {
 	};
 	sandbox.document.addEventListener = sjv_2fs;
 	sandbox.document.removeEventListener = sjv_2fs;
-	sandbox.navigator = { userAgent: commonHeaders["User-Agent"], language: "en-US" };
+	sandbox.navigator = {
+		userAgent: commonHeaders["User-Agent"],
+		language: "en-US",
+	};
 	sandbox.location = { href: "https://gemini.google.com/app" };
 	vm.createContext(sandbox);
 	sandbox.eval = (code: string) => vm.runInContext(code, sandbox);
@@ -1240,13 +1286,23 @@ let nfr_4qx: tdw_9uf | null = null;
 let uom_7gs: Promise<tdw_9uf | null> | null = null;
 
 const bgFetchAdapter: any = async (url: string, init: any) => {
-	const r: any = await (httpcloakPost as any)(url, { headers: init?.headers ?? {}, body: init?.body });
+	const r: any = await (httpcloakPost as any)(url, {
+		headers: init?.headers ?? {},
+		body: init?.body,
+	});
 	const text = typeof r?.text === "function" ? await r.text() : typeof r?.text === "string" ? r.text : JSON.stringify(r);
-	return { ok: r?.statusCode >= 200 && r?.statusCode < 300, status: r?.statusCode, json: async () => JSON.parse(text) };
+	return {
+		ok: r?.statusCode >= 200 && r?.statusCode < 300,
+		status: r?.statusCode,
+		json: async () => JSON.parse(text),
+	};
 };
 
 async function egl_1yt(): Promise<tdw_9uf | null> {
-	const ch: any = await getChallenge({ requestKey: ncd_3qy, fetchFunction: bgFetchAdapter });
+	const ch: any = await getChallenge({
+		requestKey: ncd_3qy,
+		fetchFunction: bgFetchAdapter,
+	});
 	const interpUrl: string | undefined = ch?.interpreterUrl?.privateDoNotAccessOrElseTrustedResourceUrlWrappedValue;
 	if (!ch?.program || !ch?.globalName || !interpUrl) return null;
 	const key: string = ch?.interpreterHash ?? crypto.createHash("sha256").update(ch.program).digest("hex");
@@ -1256,7 +1312,11 @@ async function egl_1yt(): Promise<tdw_9uf | null> {
 	const progJs = await progRes.text();
 	const sandbox = hla_5gn();
 	vm.runInContext(progJs, sandbox, { filename: "gemini-bg.js" });
-	const bg = await BotGuardClient.create({ program: ch.program, globalName: ch.globalName, globalObject: sandbox });
+	const bg = await BotGuardClient.create({
+		program: ch.program,
+		globalName: ch.globalName,
+		globalObject: sandbox,
+	});
 	nfr_4qx = { key, bg, expire: Date.now() + kjx_2ge };
 	return nfr_4qx;
 }

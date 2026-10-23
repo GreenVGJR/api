@@ -280,7 +280,10 @@ app.get("/radio", async (c) => {
 				`],"data":${JSON.stringify({
 					status: false,
 					message: isBlocked ? "This radio stream is blocked on public Lavalink nodes." : "Lavalink failed to load the radio stream URL",
-					type: { primary: "error", alt: isBlocked ? "blocked" : "invalid_query" },
+					type: {
+						primary: "error",
+						alt: isBlocked ? "blocked" : "invalid_query",
+					},
 				})}}`,
 			);
 			return;

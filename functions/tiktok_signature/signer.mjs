@@ -361,7 +361,9 @@ function boot(userAgent) {
 	win.frames = win;
 
 	vm.createContext(win);
-	vm.runInContext(fs.readFileSync(join(__dirname, "sdk.js"), "utf8"), win, { filename: "sandbox.js" });
+	vm.runInContext(fs.readFileSync(join(__dirname, "sdk.js"), "utf8"), win, {
+		filename: "sandbox.js",
+	});
 	return win;
 }
 

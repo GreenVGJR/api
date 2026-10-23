@@ -276,7 +276,16 @@ function parseLavalinkHostEntry(entry: string): any | null {
 	const authorization = parts.length >= 4 ? parts.slice(3, parts[parts.length - 1] === "true" || parts[parts.length - 1] === "false" ? -1 : undefined).join(":") : "";
 	const secure = parts[parts.length - 1] === "true";
 
-	return { id, host, port, authorization, secure, retryAmount: 1, retryDelay: 300000, requestSignalTimeoutMS: 30000 };
+	return {
+		id,
+		host,
+		port,
+		authorization,
+		secure,
+		retryAmount: 1,
+		retryDelay: 300000,
+		requestSignalTimeoutMS: 30000,
+	};
 }
 
 function parseLavalinkNodesFromEnv(): any[] {
@@ -296,7 +305,13 @@ function parseLavalinkNodesFromEnv(): any[] {
 		.filter((n: any) => n !== null);
 }
 
-export const localNode: { id: string | null; host: string; port: number; authorization: string; secure: boolean } = {
+export const localNode: {
+	id: string | null;
+	host: string;
+	port: number;
+	authorization: string;
+	secure: boolean;
+} = {
 	id: null,
 	host: "",
 	port: 2333,

@@ -277,12 +277,6 @@ export const applyVsChallenge = async (c: Context): Promise<Response | null> => 
 		c.header("Cache-Control", "no-store");
 		return c.text("", 412);
 	}
-	if (vsFullSet) {
-		const challenge = await signVsChallenge(c.req.url, vsUa);
-		c.header("Cache-Control", "no-store");
-		c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-		return c.text("", 412);
-	}
 	return null;
 };
 export const dispatch = async (c: Context, promiseFactory: any) => {

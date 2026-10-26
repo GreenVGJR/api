@@ -5012,7 +5012,7 @@ export const Pixiv = async function Pixiv(que: string) {
 	if (!que) return null;
 
 	try {
-		const per = await fetch(`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=safe&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
+		const per = await fetch(`https://www.pixiv.net/ajax/search/artworks/${encodeURIComponent(que)}?word=${encodeURIComponent(que)}&order=date_d&mode=all&p=1&csw=0&s_mode=s_tag&type=all&ai_type=0&lang=en`, {
 			headers: commonHeaders,
 		});
 

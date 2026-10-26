@@ -286,7 +286,7 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 		return logResponse(c, c.text("", 403));
 	}
 
-	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden. Please refresh this page", 403));
 
 	const vsRes = await applyVsChallenge(c);
 	if (vsRes) return logResponse(c, vsRes);

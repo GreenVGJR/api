@@ -1651,6 +1651,146 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
 	}
 };
 
+export const SPMixSearch = async function SPMixSearch(query: string, refresh_auth: boolean = false, limit_number: number = 1): Promise<any> {
+	if (!query) return null;
+
+	if (refresh_auth || !keysp || !keysptoken) {
+		const [a, b] = await Promise.all([spotifyKeyToken(), spotifyKey()]);
+		keysptoken = a;
+		keysp = b;
+	}
+
+	let tracksData: any = [];
+
+	try {
+		const searchBody = {
+			variables: {
+				includePreReleases: false,
+				includeAlbumPreReleases: false,
+				numberOfTopResults: 1,
+				searchTerm: query,
+				offset: 0,
+				limit: 1,
+				includeAudiobooks: true,
+				includeAuthors: false,
+				includeEpisodeContentRatingsV2: true,
+			},
+			operationName: "searchTracks",
+			extensions: { persistedQuery: { version: 1, sha256Hash: "b02683192a98dde7966b5e6655a79eeb62713eab703eda9902c932818dd52751" } },
+		};
+
+		const searchRes = await fetch(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+			method: "POST",
+			body: JSON.stringify(searchBody),
+			headers: {
+				...commonHeaders,
+				Authorization: "Bearer " + (keysp || ""),
+				"Client-Token": keysptoken || "",
+				"App-Platform": "WebPlayer",
+				Origin: "https://open.spotify.com",
+				Referer: "https://open.spotify.com/",
+				Accept: "application/json",
+				"Content-Type": "application/json",
+			},
+		});
+
+		if (searchRes.status === 401 && !refresh_auth) {
+			return await SPMixSearch(query, true, limit_number);
+		}
+		if (searchRes.status === 403) {
+			return { error: "IP Blocked" };
+		}
+		if (searchRes.status === 429) {
+			return { error: "Rate-limited" };
+		}
+
+		const searchData: any = await searchRes.json();
+		const firstTrack = searchData?.data?.searchV2?.tracksV2?.items?.[0]?.item?.data;
+		const trackId = firstTrack?.id || (firstTrack?.uri ? String(firstTrack.uri).split(":").pop() : null);
+		if (!trackId) {
+			return { data: [] };
+		}
+
+		const mixRes = await fetch(`https://spclient.wg.spotify.com/inspiredby-mix/v2/seed_to_playlist/spotify:track:${trackId}?response-format=json`, {
+			headers: {
+				...commonHeaders,
+				Authorization: "Bearer " + (keysp || ""),
+				"Client-Token": keysptoken || "",
+				"App-Platform": "WebPlayer",
+				Origin: "https://open.spotify.com",
+				Referer: "https://open.spotify.com/",
+				Accept: "application/json",
+			},
+		});
+
+		if (mixRes.status === 401 && !refresh_auth) {
+			return await SPMixSearch(query, true, limit_number);
+		}
+		if (mixRes.status === 403) {
+			return { error: "IP Blocked" };
+		}
+		if (mixRes.status === 429) {
+			return { error: "Rate-limited" };
+		}
+
+		const rawMix: any = await mixRes.json();
+
+		const playlistUri: string = rawMix?.mediaItems?.[0]?.uri || "";
+		const playlistId = playlistUri.split("playlist:")[1] || "";
+
+		if (playlistId) {
+			const hash = "21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf";
+			const tracksRes = await fetch(`https://api-partner.spotify.com/pathfinder/v2/query`, {
+				method: "POST",
+				body: JSON.stringify({
+					variables: {
+						uri: playlistUri,
+						offset: 0,
+						limit: 100,
+						enableWatchFeedEntrypoint: true,
+					},
+					operationName: "fetchPlaylistContents",
+					extensions: { persistedQuery: { version: 1, sha256Hash: hash } },
+				}),
+				headers: {
+					...commonHeaders,
+					Authorization: "Bearer " + (keysp || ""),
+					"Client-Token": keysptoken || "",
+					"App-Platform": "WebPlayer",
+					Origin: "https://open.spotify.com",
+					Referer: "https://open.spotify.com/",
+					Accept: "application/json",
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (tracksRes.status === 401 && !refresh_auth) {
+				return await SPMixSearch(query, true, limit_number);
+			}
+
+			const rawTracksData: any = await tracksRes.json();
+			tracksData =
+				rawTracksData?.data?.playlistV2?.content?.items
+					?.map((item: any) => ({
+						decision_id: item?.attributes?.[0]?.value || null,
+						uid: item?.uid || null,
+						...item?.itemV2?.data,
+						...item?.itemV3?.data,
+					}))
+					.filter(Boolean) || [];
+		}
+
+		return {
+			playlistUri,
+			playlistId,
+			data: tracksData ?? null,
+		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
 export const YTLyrics = async function YTLyrics(url: string, container?: any) {
 	let videoId = url.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
 	videoId = videoId || undefined;

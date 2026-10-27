@@ -1,4 +1,4 @@
-import { Context } from "hono";
+﻿import { Context } from "hono";
 import { Buffer } from "buffer";
 import { stream } from "hono/streaming";
 import zlib from "zlib";
@@ -8,7 +8,7 @@ import path from "path";
 import { commonHeaders } from "./request.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
-import { maxLimitRequestsPerSec, wafChallenge } from "../config.json";
+import { maxLimitRequestsPerSec, wafChallenge, buildId } from "../config.json";
 import { VS_COOKIE, signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
@@ -61,7 +61,7 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 		if (matches(`GET\n${url.pathname}${url.search}\n${tStr}.${n}`)) return true;
 		// aiImageHandshake() 302-redirects (appending the hs/ts registry cache key)
 		// after the client signed the URL, and fetch follows it transparently with
-		// the old header — so also accept the signature over the pre-redirect URL.
+		// the old header ΓÇö so also accept the signature over the pre-redirect URL.
 		const stripped = new URL(c.req.url);
 		stripped.searchParams.delete("hs");
 		stripped.searchParams.delete("ts");
@@ -137,6 +137,77 @@ export const aiImageDispatch = async (c: Context, buffer: Buffer | ArrayBuffer, 
 	return await blobDispatch(c, buffer, { "content-type": contentType });
 };
 
+// --- Shared Resource Infrastructure -----------------------------------------
+
+const SHARE_DENY_PREFIXES = ["/music", "/tools/db", "/tools/chat", "/tools/discord"];
+const SHARE_KEY_IGNORE = new Set(["_", "nocache", "cb"]);
+
+type ShareEntry = { key: string; promise: Promise<any>; resolve?: (v: any) => void; reject?: (e: any) => void };
+const shareInflight = new Map<string, ShareEntry>();
+
+const sharePathAllowed = (pathname: string): boolean => {
+	const routeBase = buildId ? `/${buildId}` : "";
+	const p = routeBase && pathname.startsWith(routeBase + "/") ? pathname.slice(routeBase.length) : pathname;
+	return !SHARE_DENY_PREFIXES.some((pre) => p === pre || p.startsWith(pre + "/") || p.startsWith(pre + "?"));
+};
+
+const dispatchShareKey = (c: Context, useGzip: boolean): string => {
+	const url = new URL(c.req.url);
+	const params: string[] = [];
+	url.searchParams.forEach((v, k) => {
+		if (v !== "" && !SHARE_KEY_IGNORE.has(k)) params.push(`${k}=${v}`);
+	});
+	params.sort();
+	const routeBase = buildId ? `/${buildId}` : "";
+	const pathname = routeBase && url.pathname.startsWith(routeBase + "/") ? url.pathname.slice(routeBase.length) : url.pathname;
+	return `${pathname}?${params.join("&")}|${useGzip ? "gz" : "raw"}`;
+};
+
+type BlobShareEntry = {
+	key: string;
+	chunks: Uint8Array[];
+	bytes: number;
+	done: boolean;
+	failed: boolean;
+	refs: number;
+	waiters: Array<() => void>;
+};
+
+const BLOB_SHARE_MAX_BYTES = 32 * 1024 * 1024;
+const blobShares = new Map<string, BlobShareEntry>();
+
+const blobShareNotify = (e: BlobShareEntry) => {
+	const waiters = e.waiters;
+	e.waiters = [];
+	for (const w of waiters) w();
+};
+
+const blobShareAppend = (e: BlobShareEntry, chunk: Uint8Array) => {
+	if (e.failed || e.done) return;
+	if (e.bytes + chunk.byteLength > BLOB_SHARE_MAX_BYTES) {
+		e.failed = true;
+		e.chunks.length = 0;
+		e.bytes = 0;
+		blobShareNotify(e);
+		return;
+	}
+	e.chunks.push(chunk);
+	e.bytes += chunk.byteLength;
+	blobShareNotify(e);
+};
+
+const blobShareFinish = (e: BlobShareEntry, failed: boolean) => {
+	e.done = true;
+	if (failed) e.failed = true;
+	blobShareNotify(e);
+	if (e.refs <= 0) blobShares.delete(e.key);
+};
+
+const blobShareRelease = (e: BlobShareEntry) => {
+	e.refs--;
+	if (e.done && e.refs <= 0) blobShares.delete(e.key);
+};
+
 let _failingImage: Buffer | null = null;
 export const getFailingImage = async (): Promise<Buffer> => {
 	if (!_failingImage) {
@@ -164,7 +235,7 @@ export const aiImageFailure = async (c: Context, message: string): Promise<Respo
 	});
 };
 
-export const blobDispatch = async (c: Context, body: any, headers?: any) => {
+export const blobDispatch = async (c: Context, body: any, headers?: any, options?: { share?: boolean | string }) => {
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
@@ -173,7 +244,7 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
 
-	c.header("X-Enc-Route", "v4");
+	c.header("X-Enc-Route", "v5");
 
 	const type = headers?.get ? headers.get("content-type") : headers?.["content-type"];
 	const filtype1 = type?.split("/")?.[0];
@@ -191,6 +262,39 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 	c.header("Content-Type", contentType);
 	c.header("Cache-Control", "public, max-age=3600, s-maxage=3600, must-revalidate, no-transform");
 
+	let shareKey: string | null = null;
+	if (options?.share !== false) {
+		if (typeof options?.share === "string") shareKey = options.share;
+		else if (sharePathAllowed(new URL(c.req.url).pathname)) {
+			const url = new URL(c.req.url);
+			const params: string[] = [];
+			url.searchParams.forEach((v, k) => {
+				if (v !== "" && !SHARE_KEY_IGNORE.has(k)) params.push(`${k}=${v}`);
+			});
+			params.sort();
+			const routeBase = buildId ? `/${buildId}` : "";
+			const pathname = routeBase && url.pathname.startsWith(routeBase + "/") ? url.pathname.slice(routeBase.length) : url.pathname;
+			shareKey = `${pathname}?${params.join("&")}|blob`;
+		}
+	}
+
+	let blobEntry: BlobShareEntry | null = null;
+	let blobIsFollower = false;
+	if (shareKey) {
+		const existing = blobShares.get(shareKey);
+		if (existing) {
+			blobEntry = existing;
+			existing.refs++;
+			blobIsFollower = true;
+			c.header("X-Share", "follower");
+		} else {
+			blobEntry = { key: shareKey, chunks: [], bytes: 0, done: false, failed: false, refs: 0, waiters: [] };
+			blobShares.set(shareKey, blobEntry);
+			blobIsFollower = false;
+			c.header("X-Share", "leader");
+		}
+	}
+
 	return logResponse(
 		c,
 		stream(c, async (s) => {
@@ -198,38 +302,165 @@ export const blobDispatch = async (c: Context, body: any, headers?: any) => {
 				return;
 			});
 
-			await s.write(new Uint8Array());
-
 			if (c.req.raw.signal.aborted) return;
 
-			try {
-				let resolvedBody = typeof body === "function" ? body() : body;
-				if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+			const entry = blobEntry;
+			const isFollower = blobIsFollower;
 
-				if (c.req.raw.signal.aborted) return;
+			await s.write(new Uint8Array());
 
-				if (resolvedBody?.ok === false) {
-					console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
-					return;
+			if (c.req.raw.signal.aborted) {
+				if (entry) {
+					if (isFollower) blobShareRelease(entry);
+					else blobShareFinish(entry, true);
 				}
+				return;
+			}
 
-				const dataToPipe = resolvedBody?.body || resolvedBody;
-				if (dataToPipe) {
-					if (dataToPipe.getReader || dataToPipe.pipeTo) {
-						await s.pipe(dataToPipe);
-					} else if (dataToPipe.pipe) {
-						const { Readable } = await import("stream");
+			try {
+				if (isFollower && entry) {
+					let cursor = 0;
+					let fallback = false;
+					while (true) {
+						while (cursor < entry.chunks.length) {
+							if (c.req.raw.signal.aborted) break;
+							await s.write(entry.chunks[cursor++]);
+						}
+						if (c.req.raw.signal.aborted) break;
+						if (entry.failed) {
+							fallback = cursor === 0;
+							break;
+						}
+						if (entry.done) break;
+						await new Promise<void>((resolve) => entry!.waiters.push(resolve));
+					}
 
-						await s.pipe(Readable.toWeb(dataToPipe));
-					} else {
-						await s.write(dataToPipe);
+					if (c.req.raw.signal.aborted) return;
+
+					if (fallback) {
+						let resolvedBody = typeof body === "function" ? body() : body;
+						if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+						if (c.req.raw.signal.aborted) return;
+						if (resolvedBody?.ok === false) {
+							console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
+							return;
+						}
+						const dataToPipe = resolvedBody?.body || resolvedBody;
+						if (dataToPipe) {
+							if (dataToPipe.getReader || dataToPipe.pipeTo) {
+								await s.pipe(dataToPipe);
+							} else if (dataToPipe.pipe) {
+								const { Readable } = await import("stream");
+								await s.pipe(Readable.toWeb(dataToPipe));
+							} else {
+								await s.write(dataToPipe);
+							}
+						}
+					}
+				} else if (entry) {
+					let resolvedBody = typeof body === "function" ? body() : body;
+					if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+
+					if (c.req.raw.signal.aborted) {
+						blobShareFinish(entry, false);
+						return;
+					}
+
+					if (resolvedBody?.ok === false) {
+						console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
+						blobShareFinish(entry, true);
+						return;
+					}
+
+					const dataToPipe = resolvedBody?.body || resolvedBody;
+					if (dataToPipe) {
+						if (dataToPipe.getReader || dataToPipe.pipeTo) {
+							const reader = dataToPipe.getReader();
+							while (true) {
+								const { done, value } = await reader.read();
+								if (done) break;
+								if (!value) continue;
+								const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+								blobShareAppend(entry, chunk);
+								if (!c.req.raw.signal.aborted) {
+									try {
+										await s.write(chunk);
+									} catch {}
+								}
+								if (c.req.raw.signal.aborted && entry.refs <= 0) {
+									try {
+										await reader.cancel();
+									} catch {}
+									break;
+								}
+							}
+						} else if (dataToPipe.pipe) {
+							const { Readable } = await import("stream");
+							const webStream = Readable.toWeb(dataToPipe);
+							const reader = webStream.getReader();
+							while (true) {
+								const { done, value } = await reader.read();
+								if (done) break;
+								if (!value) continue;
+								const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+								blobShareAppend(entry, chunk);
+								if (!c.req.raw.signal.aborted) {
+									try {
+										await s.write(chunk);
+									} catch {}
+								}
+								if (c.req.raw.signal.aborted && entry.refs <= 0) {
+									try {
+										await reader.cancel();
+									} catch {}
+									break;
+								}
+							}
+						} else {
+							const chunk = dataToPipe instanceof Uint8Array ? dataToPipe : new Uint8Array(dataToPipe);
+							blobShareAppend(entry, chunk);
+							if (!c.req.raw.signal.aborted) {
+								try {
+									await s.write(chunk);
+								} catch {}
+							}
+						}
+					}
+					blobShareFinish(entry, false);
+				} else {
+					let resolvedBody = typeof body === "function" ? body() : body;
+					if (resolvedBody instanceof Promise) resolvedBody = await resolvedBody;
+
+					if (c.req.raw.signal.aborted) return;
+
+					if (resolvedBody?.ok === false) {
+						console.error(`blobDispatch: Upstream returned status ${resolvedBody.status}`);
+						return;
+					}
+
+					const dataToPipe = resolvedBody?.body || resolvedBody;
+					if (dataToPipe) {
+						if (dataToPipe.getReader || dataToPipe.pipeTo) {
+							await s.pipe(dataToPipe);
+						} else if (dataToPipe.pipe) {
+							const { Readable } = await import("stream");
+							await s.pipe(Readable.toWeb(dataToPipe));
+						} else {
+							await s.write(dataToPipe);
+						}
 					}
 				}
-			} catch (err) {}
+			} catch (err) {
+				if (entry && !isFollower) blobShareFinish(entry, true);
+			} finally {
+				if (entry) {
+					if (isFollower) blobShareRelease(entry);
+					else if (!entry.done) blobShareFinish(entry, true);
+				}
+			}
 		}),
 	);
 };
-
 // Rate limiting config and state
 const MAX_REQUESTS_PER_SECOND = maxLimitRequestsPerSec;
 let requestCount = 0;
@@ -279,7 +510,8 @@ export const applyVsChallenge = async (c: Context): Promise<Response | null> => 
 	}
 	return null;
 };
-export const dispatch = async (c: Context, promiseFactory: any) => {
+
+export const dispatch = async (c: Context, promiseFactory: any, options?: { share?: boolean | string }) => {
 	const ua = c.req.header("user-agent") || "";
 	const fetchmode = c.req.header("sec-fetch-mode") || "";
 	if (ua.toLowerCase().includes("bot")) {
@@ -320,10 +552,37 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 	cacheDirectives.push("must-revalidate");
 	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
-	c.header("X-Enc-Route", "v5");
+	c.header("X-Enc-Route", "v6");
 	if (wafChallenge) c.header("Set-Cookie", `${VS_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`);
 
+	let shareKey: string | null = null;
+	if (options?.share !== false) {
+		if (typeof options?.share === "string") shareKey = options.share;
+		else if (sharePathAllowed(requrl.pathname)) shareKey = dispatchShareKey(c, useGzip);
+	}
+
 	await rateLimit();
+
+	// Synchronous shared-entry creation (atomic across concurrent requests)
+	let shareEntry: ShareEntry | null = null;
+	let shareRole: "leader" | "follower" | null = null;
+	if (shareKey) {
+		const existing = shareInflight.get(shareKey);
+		if (existing) {
+			shareEntry = existing;
+			shareRole = "follower";
+		} else {
+			shareRole = "leader";
+			const deferred: ShareEntry = { key: shareKey, promise: null as any, resolve: undefined, reject: undefined };
+			deferred.promise = new Promise<any>((res, rej) => {
+				deferred.resolve = res;
+				deferred.reject = rej;
+			});
+			shareInflight.set(shareKey, deferred);
+			shareEntry = deferred;
+		}
+	}
+	if (shareRole) c.header("X-Share", shareRole);
 
 	return logResponse(
 		c,
@@ -332,52 +591,115 @@ export const dispatch = async (c: Context, promiseFactory: any) => {
 				return;
 			});
 
-			if (c.req.raw.signal.aborted) return;
-
-			let gzip: zlib.Gzip | null = null;
+			// Followers with an already-aborted client skip; leaders still run to serve followers.
+			if (c.req.raw.signal.aborted && shareRole !== "leader") return;
 
 			if (useGzip) {
-				gzip = zlib.createGzip({ level: 9 });
-				const headerChunk: Buffer = await new Promise((resolve) => {
-					gzip!.once("data", resolve);
-					gzip!.flush(zlib.constants.Z_SYNC_FLUSH);
-				});
-				await stream.write(headerChunk);
+				if (shareRole === "follower") {
+					await stream.write("");
+				}
 			} else {
 				await stream.write("");
 			}
 
-			if (c.req.raw.signal.aborted) return;
+			if (c.req.raw.signal.aborted && shareRole !== "leader") return;
 
-			const data = await Promise.resolve()
-				.then(() => (typeof promiseFactory === "function" ? promiseFactory() : promiseFactory))
-				.catch((err) => {
-					console.error("Promise error:", err);
-					return null;
-				});
+			const produce = async (): Promise<Buffer | string> => {
+				if (useGzip) {
+					const gzip = zlib.createGzip({ level: 9 });
+					const chunks: Buffer[] = [];
+					const headerChunk: Buffer = await new Promise((resolve) => {
+						gzip.once("data", resolve);
+						gzip.flush(zlib.constants.Z_SYNC_FLUSH);
+					});
+					chunks.push(headerChunk);
+					if (!c.req.raw.signal.aborted) {
+						try {
+							await stream.write(headerChunk);
+						} catch {}
+					}
+					const data = await Promise.resolve()
+						.then(() => (typeof promiseFactory === "function" ? promiseFactory() : promiseFactory))
+						.catch((err) => {
+							console.error("Promise error:", err);
+							return null;
+						});
+					let payload: string;
+					if (!data) {
+						payload = "null";
+					} else if (typeof data === "object") {
+						payload = JSON.stringify(data);
+					} else {
+						payload = String(data);
+					}
+					await new Promise<void>((resolve, reject) => {
+						gzip.on("data", (chunk: Buffer) => {
+							chunks.push(chunk);
+							if (!c.req.raw.signal.aborted) {
+								stream.write(chunk).catch(() => {});
+							}
+						});
+						gzip.on("end", resolve);
+						gzip.on("error", reject);
+						gzip.end(Buffer.from(payload));
+					});
+					return Buffer.concat(chunks);
+				}
+				const data = await Promise.resolve()
+					.then(() => (typeof promiseFactory === "function" ? promiseFactory() : promiseFactory))
+					.catch((err) => {
+						console.error("Promise error:", err);
+						return null;
+					});
+				let payload: string;
+				if (!data) {
+					payload = "null";
+				} else if (typeof data === "object") {
+					payload = JSON.stringify(data);
+				} else {
+					payload = String(data);
+				}
+				if (!c.req.raw.signal.aborted) {
+					try {
+						await stream.write(payload);
+					} catch {}
+				}
+				return payload;
+			};
 
-			if (c.req.raw.signal.aborted) return;
-
-			let payload: string;
-			if (!data) {
-				payload = "null";
-			} else if (typeof data === "object") {
-				payload = JSON.stringify(data);
+			let encoded: Buffer | string | undefined;
+			if (shareKey && shareEntry) {
+				if (shareRole === "leader") {
+					try {
+						const v = await produce();
+						shareEntry.resolve!(v);
+						if (shareInflight.get(shareKey) === shareEntry) shareInflight.delete(shareKey);
+						encoded = v;
+					} catch (e) {
+						shareEntry.reject!(e);
+						if (shareInflight.get(shareKey) === shareEntry) shareInflight.delete(shareKey);
+						console.error("Promise error:", e);
+						encoded = undefined;
+					}
+				} else {
+					try {
+						encoded = await shareEntry.promise;
+					} catch (e) {
+						console.error("Promise error:", e);
+						encoded = undefined;
+					}
+				}
 			} else {
-				payload = String(data);
+				encoded = await produce();
 			}
 
-			if (useGzip && gzip) {
-				await new Promise<void>((resolve, reject) => {
-					gzip!.on("data", (chunk: Buffer) => {
-						stream.write(chunk);
-					});
-					gzip!.on("end", resolve);
-					gzip!.on("error", reject);
-					gzip!.end(Buffer.from(payload));
-				});
-			} else {
-				await stream.write(payload);
+			if (c.req.raw.signal.aborted) return;
+
+			if (encoded != null) {
+				// Follower: write the full buffered stream (leader already streamed its own).
+				if (shareRole === "follower") {
+					await stream.write(encoded);
+				}
 			}
 		}),
 	);

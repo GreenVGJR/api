@@ -10,7 +10,7 @@ function getDefaultResponseHTML() {
     <div class="text-white-500 text-xs">${randomPhrase}</div>
     <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#9EF3A7] via-[#1BA1E3] to-[#1B6EE3] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
     <div class="flex items-center gap-2 mt-2 text-gray-400 text-xs flex-wrap justify-center">
-      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/greenvgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
+      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/vgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
     </div>
   </div>`;
 }
@@ -1448,7 +1448,7 @@ async function performRequest(targetUrl, retryCount = 0) {
                 preElement.innerHTML = fragments.join("");
                 preElement.scrollTop = scrollTop;
                 updateStatusUI(resOk, resStatus, duration);
-              }, 0);
+              }, 270); // 240 + Usual JS-Frame
             }
           };
 

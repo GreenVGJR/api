@@ -7044,7 +7044,7 @@ export const parseModernRedditSearch = (html: string) => {
 		while ((cm = REDDIT_CTX_RE.exec(block))) {
 			try {
 				const parsed = JSON.parse(decodeHTML(cm[1]));
-				if (parsed?.action_info?.type === "post") {
+				if (parsed?.action_info?.type === "post" && parsed?.post?.id) {
 					ctx = parsed;
 					break;
 				}
@@ -7245,23 +7245,21 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 		for (let page = 0; page < 4 && pageUrl; page++) {
 			if (page > 0) await sleep(400);
 			const req: Response = await fetch(pageUrl, { headers });
-			const html: string = await req.text();
 
-			if (req.status === 429) {
-				await sleep(2000);
-				const req2: Response = await fetch(pageUrl, { headers });
-				if (req2.status !== 200) break;
-				const html2: string = await req2.text();
-				for (const e of parseModernRedditSearch(html2)) {
-					if (e?.id && !entries.some((x: any) => x.id === e.id)) entries.push(e);
-				}
-			}
 			if (req.status === 403) {
 				if (!refresh_auth) return redditMedia(que, true);
 				blocked = true;
 				break;
 			}
-			if (req.status !== 200) break;
+			let html: string | null = null;
+			if (req.status === 429) {
+				await sleep(2000);
+				const req2: Response = await fetch(pageUrl, { headers });
+				if (req2.status === 200) html = await req2.text();
+			} else if (req.status === 200) {
+				html = await req.text();
+			}
+			if (html === null) break;
 
 			for (const e of parseModernRedditSearch(html)) {
 				if (e?.id && !entries.some((x: any) => x.id === e.id)) entries.push(e);
@@ -8503,7 +8501,6 @@ const renderLensResults = async (location: string): Promise<{ html: string; ok: 
 				...(lensJar() ? { Cookie: lensJar() } : {}),
 			}),
 			extractHtml: true,
-			waitMs: 2500,
 			timeoutMs: 120000,
 		});
 		mergeGoogleTrustCookies(res?.cookies);
@@ -12890,140 +12887,6 @@ export const IMDB = async (query: string): Promise<any> => {
 	}
 };
 
-export const ImgflipSearch = async (query: string): Promise<any> => {
-	if (!query) return null;
-
-	const resolveUrl = (raw: string | null | undefined): string => {
-		if (!raw) return "";
-		const c0 = raw.charCodeAt(0);
-		if (c0 === 47) return raw.charCodeAt(1) === 47 ? `https:${raw}` : `https://imgflip.com${raw}`;
-		return raw;
-	};
-
-	const richText = (s: string): string => decodeHTML(s.replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
-	const IMGFLIP_H2_RE = /<h2[^>]*>([\s\S]*?)<\/h2>/g;
-	const IMGFLIP_A_RE = /<a\b([^>]*)>([\s\S]*?)<\/a>/g;
-	const IMGFLIP_A_CLASS_RE = /class="[^"]*(?:^|\s)s-result(?:\s|$)[^"]*"/;
-	const IMGFLIP_HREF_RE = /\bhref="([^"]*)"/;
-	const IMGFLIP_TITLE_RE = /class="[^"]*\bs-result-title\b[^"]*"[^>]*>([\s\S]*?)</;
-	const IMGFLIP_SUB_RE = /class="[^"]*\bs-result-subtitle\b[^"]*"[^>]*>([\s\S]*?)</;
-	const IMGFLIP_DESC_RE = /class="[^"]*\bs-result-description\b[^"]*"[^>]*>([\s\S]*?)</;
-	const IMGFLIP_IMG_RE = /<img\b[^>]*\bsrc="([^"]*)"/;
-
-	// Parse subtitle string into structured metadata per section
-	const parseMeta = (section: string, subtitle: string, description: string) => {
-		switch (section) {
-			case "memes": {
-				const captions = subtitle.match(/([\d,]+\+?)\s+captions?/)?.[1] ?? null;
-				return { subtitle: captions };
-			}
-			case "images": {
-				const type = subtitle.split(",")[0]?.trim() ?? null;
-				const views = subtitle.match(/([\d,]+)\s+views?/)?.[1] ?? null;
-				return {
-					type,
-					views,
-					description: description || null,
-				};
-			}
-			case "tags": {
-				const count = subtitle.match(/([\d,]+)\s+images?/)?.[1] ?? null;
-				return { count };
-			}
-			case "streams": {
-				const count = subtitle.match(/([\d,]+)\s+submitted/)?.[1] ?? null;
-				return {
-					count,
-					description: description || null,
-				};
-			}
-			case "users": {
-				const joined = subtitle.match(/joined\s+([^,]+)/)?.[1]?.trim() ?? null;
-				const creations = subtitle.match(/([\d,]+)\s+creations?/)?.[1] ?? null;
-				const comments = subtitle.match(/([\d,]+)\s+comments?/)?.[1] ?? null;
-				return {
-					joined,
-					creations,
-					comments,
-				};
-			}
-			default:
-				return { subtitle };
-		}
-	};
-
-	try {
-		const res = await fetch(`https://imgflip.com/search?q=${encodeURIComponent(query)}`, {
-			headers: commonHeaders,
-		});
-
-		const html: string = await res.text();
-
-		const scopeAt = html.indexOf('id="s-results"');
-		if (scopeAt < 0) return null;
-		const scope = html.slice(scopeAt);
-
-		const data: Record<string, any[] | null> = {
-			memes: null,
-			images: null,
-			tags: null,
-			streams: null,
-			users: null,
-		};
-		type Tok = { idx: number; h2?: string; href?: string; inner?: string };
-		const toks: Tok[] = [];
-		IMGFLIP_H2_RE.lastIndex = 0;
-		let hm: RegExpExecArray | null;
-		while ((hm = IMGFLIP_H2_RE.exec(scope))) toks.push({ idx: hm.index, h2: richText(hm[1]).toLowerCase() });
-		IMGFLIP_A_RE.lastIndex = 0;
-		let am: RegExpExecArray | null;
-		while ((am = IMGFLIP_A_RE.exec(scope))) {
-			if (!IMGFLIP_A_CLASS_RE.test(am[1])) continue;
-			toks.push({ idx: am.index, href: IMGFLIP_HREF_RE.exec(am[1])?.[1] || "", inner: am[2] });
-		}
-		toks.sort((a, b) => a.idx - b.idx);
-
-		let currentSection = "unknown";
-		for (const t of toks) {
-			if (t.h2 !== undefined) {
-				currentSection = t.h2;
-				if (data[currentSection] === null) data[currentSection] = [];
-				continue;
-			}
-			if (!Array.isArray(data[currentSection])) continue;
-			const href = t.href || "";
-			const inner = t.inner || "";
-			const url = resolveUrl(href);
-			const title = richText(IMGFLIP_TITLE_RE.exec(inner)?.[1] || "");
-			const subtitle = richText(IMGFLIP_SUB_RE.exec(inner)?.[1] || "");
-			const rawCover = IMGFLIP_IMG_RE.exec(inner)?.[1];
-			const isGif = href.includes("/gif/");
-			const cover = resolveUrl(rawCover);
-			const full_cover = isGif ? cover.replace("/2/", "/").replace(/\.jpg$/, ".mp4") : cover.replace("/2/", "/");
-			const description = richText(IMGFLIP_DESC_RE.exec(inner)?.[1] || "");
-
-			const meta = parseMeta(currentSection, subtitle, description);
-
-			const noCover = currentSection === "users" || currentSection === "streams";
-			const entry: Record<string, any> = noCover
-				? { url, title, ...meta }
-				: {
-						url,
-						title,
-						cover: cover || null,
-						full_cover: full_cover || null,
-						...meta,
-					};
-
-			data[currentSection]!.push(entry);
-		}
-
-		return { data };
-	} catch {
-		return null;
-	}
-};
-
 export const DiscordVoice = async (token: string, guildId: string, action: string, payload: any) => {
 	if (action === "setstatus") {
 		const { channelId, content } = payload;
@@ -14095,26 +13958,7 @@ const parseGoogleImageMeta = (html: string): { byToken: Map<string, GoogleImageM
 			const arrayText = extractJsonArrayAt(tail, arrayStart);
 			if (arrayText) {
 				try {
-					const fields = JSON.parse(arrayText);
-					if (typeof fields[3] === "string") info.pageTitle = fields[3];
-					for (const value of fields) {
-						if (typeof value === "string") {
-							if (value.includes("about-this-image")) {
-								info.aboutImageUrl ??= value;
-							} else if (/^https?:\/\//i.test(value)) {
-								if (!value.includes("/translate?")) info.pageUrl ??= value;
-							} else if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(value)) {
-								info.domain ??= value;
-							} else if (value.includes(" - ") && value !== info.pageTitle) {
-								info.siteName ??= value;
-							}
-							continue;
-						}
-						if (Array.isArray(value) && typeof value[0] === "string" && /^https?:\/\//i.test(value[0])) {
-							info.pageUrl ??= value[0];
-							if (typeof value[1] === "string" && !/^https?:\/\//i.test(value[1])) info.language ??= value[1];
-						}
-					}
+					fillGoogleImageInfo(info, JSON.parse(arrayText));
 				} catch {
 					// malformed payload, keep the original image url only
 				}
@@ -14146,10 +13990,100 @@ const findGoogleDeferredImage = (html: string, cardHtml: string): string => {
 };
 
 const GOOGLE_CARD_RE = /<div[^>]*\bjsname="PNoEC"[^>]*>/g;
-const GOOGLE_IMG_RE = /<img\b[^>]*>/;
 const GOOGLE_ATTR_RE = /(\w[\w-]*)="([^"]*)"/g;
+const GOOGLE_IMG_ENTRY_RE = /"([A-Za-z0-9_-]{10,})":\[0,/g;
+const GOOGLE_SITE_SPAN_RE = /VYhLad[^>]*><span>([^<]*)</;
+
+const fillGoogleImageInfo = (info: GoogleImageMeta, fields: any): void => {
+	if (!Array.isArray(fields)) return;
+	if (typeof fields[3] === "string") info.pageTitle = fields[3];
+	for (const value of fields) {
+		if (typeof value === "string") {
+			if (value.includes("about-this-image")) {
+				info.aboutImageUrl ??= value;
+			} else if (/^https?:\/\//i.test(value)) {
+				if (!value.includes("/translate?")) info.pageUrl ??= value;
+			} else if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(value)) {
+				info.domain ??= value;
+			} else if (value.includes(" - ") && value !== info.pageTitle) {
+				info.siteName ??= value;
+			}
+			continue;
+		}
+		if (Array.isArray(value) && typeof value[0] === "string" && /^https?:\/\//i.test(value[0])) {
+			info.pageUrl ??= value[0];
+			if (typeof value[1] === "string" && !/^https?:\/\//i.test(value[1])) info.language ??= value[1];
+		}
+	}
+};
+
+const extractGoogleImageEntries = (html: string): Array<{ key: string; thumb: string; thumbW: number; thumbH: number; original: string; info: GoogleImageMeta }> => {
+	const js = lensUnescapeJs(html);
+	const out: Array<{ key: string; thumb: string; thumbW: number; thumbH: number; original: string; info: GoogleImageMeta }> = [];
+	GOOGLE_IMG_ENTRY_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = GOOGLE_IMG_ENTRY_RE.exec(js))) {
+		const start = m.index + m[0].length - 3;
+		let depth = 0;
+		let inStr = false;
+		let esc = false;
+		let end = -1;
+		for (let i = start; i < js.length && i - start < 20000; i++) {
+			const ch = js[i];
+			if (inStr) {
+				if (esc) esc = false;
+				else if (ch === "\\") esc = true;
+				else if (ch === '"') inStr = false;
+			} else if (ch === '"') inStr = true;
+			else if (ch === "[") depth++;
+			else if (ch === "]" && --depth === 0) {
+				end = i + 1;
+				break;
+			}
+		}
+		if (end < 0) continue;
+		try {
+			const entry = JSON.parse(js.slice(start, end));
+			if (!Array.isArray(entry)) continue;
+			const triples = entry.filter((x: any) => Array.isArray(x) && typeof x[0] === "string" && HTTP_URL_RE.test(x[0]));
+			const thumbT = triples.find((t: any[]) => /tbn:/.test(String(t[0]))) || triples[0] || [];
+			const origT = triples.find((t: any[]) => t !== thumbT) || [];
+			if (typeof thumbT[0] !== "string" || !thumbT[0]) continue;
+			const holder = entry.find((x: any) => x && typeof x === "object" && !Array.isArray(x) && "2003" in x);
+			const info: GoogleImageMeta = {};
+			if (typeof origT[0] === "string" && origT[0]) info.originalUrl = origT[0];
+			const m2000 = holder?.["2000"];
+			if (Array.isArray(m2000) && typeof m2000[2] === "string") info.imageSize = m2000[2];
+			fillGoogleImageInfo(info, holder?.["2003"]);
+			out.push({
+				key: m[1],
+				thumb: thumbT[0],
+				thumbW: Number(thumbT[1]) || 0,
+				thumbH: Number(thumbT[2]) || 0,
+				original: typeof origT[0] === "string" ? origT[0] : "",
+				info,
+			});
+		} catch {}
+	}
+	return out;
+};
+
+const googleImageEntryAgrees = (cardHtml: string, orig: string): boolean | null => {
+	const site = (GOOGLE_SITE_SPAN_RE.exec(cardHtml)?.[1] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+	let host = "";
+	try {
+		host = new URL(orig).hostname.toLowerCase().replace(/^www\./, "");
+	} catch {
+		return null;
+	}
+	if (!site || !host) return null;
+	if (host.includes(site) || site.includes(host.split(".")[0])) return true;
+	return host.split(".").some((p) => p.length > 3 && site.includes(p));
+};
 
 export const parseGoogleImageItems = (html: string): any[] => {
+	// Google may rotate the response markup at some point; the positional pairing below
+	// self-checks via the agreement gate and falls back to legacy per-card parsing.
 	const { byToken } = parseGoogleImageMeta(html);
 	const raw: any[] = [];
 	const seen = new Set<string>();
@@ -14157,31 +14091,33 @@ export const parseGoogleImageItems = (html: string): any[] => {
 	const starts: number[] = [];
 	let cm: RegExpExecArray | null;
 	while ((cm = GOOGLE_CARD_RE.exec(html))) starts.push(cm.index);
-	for (let i = 0; i < starts.length; i++) {
-		const cardHtml = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : starts[i] + 20000);
-		const imgTag = GOOGLE_IMG_RE.exec(cardHtml)?.[0] || "";
-		let src = "";
-		let imgId = "";
-		let alt = "";
-		if (imgTag) {
+	const wins: string[] = starts.map((s, i) => html.slice(s, i + 1 < starts.length ? starts[i + 1] : s + 20000));
+	const imgOf = (cardHtml: string): { src: string; imgId: string; alt: string } => {
+		let fallback = { src: "", imgId: "", alt: "" };
+		for (const m of cardHtml.matchAll(/<img\b[^>]*>/g)) {
+			const tag = m[0];
 			GOOGLE_ATTR_RE.lastIndex = 0;
+			let src = "";
+			let imgId = "";
+			let alt = "";
 			let am: RegExpExecArray | null;
-			while ((am = GOOGLE_ATTR_RE.exec(imgTag))) {
+			while ((am = GOOGLE_ATTR_RE.exec(tag))) {
 				if (am[1] === "src") src = am[2];
 				else if (am[1] === "id") imgId = am[2];
 				else if (am[1] === "alt") alt = am[2];
 			}
+			if (!imgId) continue;
+			if (alt.replace(WS_COLLAPSE_RE, " ").trim()) return { src, imgId, alt };
+			if (!fallback.imgId) fallback = { src, imgId, alt };
 		}
-		if (!HTTP_URL_RE.test(src)) src = findGoogleDeferredImage(html, cardHtml);
-		const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
-		if (!HTTP_URL_RE.test(src) || !title) continue;
+		return fallback;
+	};
+	const pushItem = (title: string, src: string, imgId: string, info: GoogleImageMeta | undefined, trackingUrl: string): void => {
+		if (!HTTP_URL_RE.test(src) || !title) return;
 		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
-		if (token) {
-			if (seen.has(token)) continue;
-			seen.add(token);
-		}
-		const info = token ? byToken.get(token) : undefined;
-		const trackingUrl = findGoogleTrackingUrl(html, starts[i], cardHtml);
+		const dkey = token || src;
+		if (seen.has(dkey)) return;
+		seen.add(dkey);
 		const hash = imgId.replace(/^dimg_/, "").replace(/_\d+$/, "");
 		raw.push({
 			title,
@@ -14199,6 +14135,41 @@ export const parseGoogleImageItems = (html: string): any[] => {
 			...(info?.domain ? { iconDomain: info.domain } : {}),
 			...(trackingUrl ? { trackingUrl } : {}),
 		});
+	};
+	const bootEntries = extractGoogleImageEntries(html);
+	let paired = false;
+	if (bootEntries.length === wins.length && wins.length > 0) {
+		let agree = 0;
+		let checkable = 0;
+		for (let i = 0; i < wins.length; i++) {
+			const verdict = googleImageEntryAgrees(wins[i], bootEntries[i].original);
+			if (verdict === null) continue;
+			checkable++;
+			if (verdict) agree++;
+		}
+		paired = checkable > 0 && agree / checkable >= 0.5;
+	}
+	if (paired) {
+		for (let i = 0; i < wins.length; i++) {
+			const { imgId, alt } = imgOf(wins[i]);
+			const e = bootEntries[i];
+			const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
+			const token = e.thumb.split("tbn:")[1]?.split(/&/)[0] ?? "";
+			const trackingUrl = findGoogleTrackingUrl(html, starts[i], wins[i]);
+			pushItem(title, e.thumb, imgId, token ? (byToken.get(token) ?? { ...e.info, originalUrl: e.original || e.info.originalUrl }) : { ...e.info, originalUrl: e.original || e.info.originalUrl }, trackingUrl);
+		}
+		return raw;
+	}
+	for (let i = 0; i < wins.length; i++) {
+		const cardHtml = wins[i];
+		const { src: rawSrc, imgId, alt } = imgOf(cardHtml);
+		let src = rawSrc;
+		if (!HTTP_URL_RE.test(src)) src = findGoogleDeferredImage(html, cardHtml);
+		const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
+		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
+		const info = token ? byToken.get(token) : undefined;
+		const trackingUrl = findGoogleTrackingUrl(html, starts[i], cardHtml);
+		pushItem(title, src, imgId, info, trackingUrl);
 	}
 	return raw;
 };
@@ -15539,7 +15510,11 @@ export const AppleMusicSearch = async function AppleMusicSearch(query: string, l
 export const stockCake = async function stockCake(query: string) {
 	if (!query) return null;
 	try {
-		const req = await fetch(`https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`, { headers: commonHeaders });
+		const searchUrl = `https://stockcake.com/api/search-typesense?size=100&page=1&locale=en&keyword=${encodeURIComponent(query)}`;
+		let req = await fetch(searchUrl, { headers: commonHeaders });
+
+		// At certain condition Cloudflare temp-block for TLS Fingerprinting
+		if (req.status === 403) req = await fetch(searchUrl, { headers: commonHeaders });
 
 		if (req.status === 403) {
 			return {

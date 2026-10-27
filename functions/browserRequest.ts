@@ -165,7 +165,7 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		extract_markdown: options.extractMarkdown || false,
 		extract_text: options.extractText || false,
 		extract_html: options.extractHtml || false,
-		google_search: options.googleSearch !== false,
+		google_search: options.googleSearch === true,
 	};
 
 	return new Promise((resolve, reject) => {

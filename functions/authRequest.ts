@@ -20,12 +20,7 @@ export function setKeyTidal(val: string | undefined) {
 	keytidal = val;
 }
 
-/**
- * Normalizes cookies into a request-ready `Cookie` header value.
- * Accepts either an array of raw `Set-Cookie` strings (with attributes) or a
- * single `set-cookie` header string, and returns only `name=value` pairs
- * joined by `; ` (strips expires/path/domain/Secure/HttpOnly/SameSite).
- */
+/** Join raw Set-Cookie string(s) into a Cookie header value (name=value pairs only). */
 export function normalizeCookies(cookies: string | string[] | undefined | null): string {
 	if (!cookies) return "";
 	const list = Array.isArray(cookies) ? cookies : cookies.split(",");
@@ -454,6 +449,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
 export const refreshRedditAuth = async (): Promise<any> => {
 	try {
 		const jar = new Map<string, string>();
+		jar.set("over18", "true");
 		const collect = (res: any) => {
 			const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("set-cookie")].filter(Boolean);
 			for (const c of raw) {
@@ -461,11 +457,9 @@ export const refreshRedditAuth = async (): Promise<any> => {
 				if (m) jar.set(m[1].trim(), m[2]);
 			}
 		};
-		const jarStr = () => {
-			if (process.env.REDDIT_SESSION) jar.set("reddit_session", process.env.REDDIT_SESSION);
-			return [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
-		};
-		for (const targetUrl of ["https://www.reddit.com/svc/shreddit/styling-overrides", "https://ads.reddit.com/register"]) {
+		const jarStr = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+		for (const targetUrl of ["https://www.reddit.com/svc/shreddit/styling-overrides", "https://old.reddit.com/login/"]) {
 			for (let attempt = 0; attempt < 3; attempt++) {
 				try {
 					const response = await fetch(targetUrl, {
@@ -477,11 +471,13 @@ export const refreshRedditAuth = async (): Promise<any> => {
 						redirect: "manual",
 					});
 					collect(response);
-					const html = await response.clone().text();
-					if (!/class=["']g-recaptcha["']/i.test(html)) {
-						if (jar.size) return jarStr();
-						break;
+					if (response.status === 200) {
+						const html = await response.clone().text();
+						if (!/class=["']g-recaptcha["']/i.test(html)) {
+							return jarStr() || null;
+						}
 					}
+					if (attempt < 2) await sleep(800);
 				} catch {
 					break;
 				}
@@ -1157,10 +1153,10 @@ class yly_4wq {
 						get href() {
 							throw new Error("SecurityError");
 						},
-						set href(v: string) {},
+						set href(_v: string) {},
 					};
 				},
-				set location(v: any) {},
+				set location(_v: any) {},
 				get document(): any {
 					throw new Error("SecurityError");
 				},

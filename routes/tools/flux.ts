@@ -86,11 +86,11 @@ app.get("/ai-image/flux_schnell", async (c) => {
 		});
 
 		if (!fallbackResponse.ok) {
-			return await aiImageFailure(c, `Fallback upstream returned ${fallbackResponse.status}`);
+			return await aiImageFailure(`Fallback upstream returned ${fallbackResponse.status}`);
 		}
 		return await aiImageDispatch(c, await resizeImage(await fallbackResponse.arrayBuffer()), "image/png");
 	} catch (e) {
-		return await aiImageFailure(c, `Generation failed: ${(e as any)?.message || String(e)}`);
+		return await aiImageFailure(`Generation failed: ${(e as any)?.message || String(e)}`);
 	}
 });
 
@@ -129,22 +129,22 @@ app.get("/ai-image/flux_klein", async (c) => {
 		});
 
 		if (!response.ok) {
-			return await aiImageFailure(c, `Upstream returned ${response.status}`);
+			return await aiImageFailure(`Upstream returned ${response.status}`);
 		}
 
 		const json = (await response.json()) as any;
 		if (json?.response?.httpCode) {
-			return await aiImageFailure(c, `Upstream error: ${JSON.stringify(json.response)}`);
+			return await aiImageFailure(`Upstream error: ${JSON.stringify(json.response)}`);
 		}
 		const base64Image = json?.response?.image;
 		if (!base64Image) {
-			return await aiImageFailure(c, "No image data in response");
+			return await aiImageFailure("No image data in response");
 		}
 
 		const imageBuffer = Buffer.from(base64Image, "base64");
 		return await aiImageDispatch(c, imageBuffer, "image/png");
 	} catch (e) {
-		return await aiImageFailure(c, `Generation failed: ${(e as any)?.message || String(e)}`);
+		return await aiImageFailure(`Generation failed: ${(e as any)?.message || String(e)}`);
 	}
 });
 

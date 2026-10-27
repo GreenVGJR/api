@@ -11,7 +11,6 @@ import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
 import { ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
 import { createColdStartToken, WebPoMinter } from "bgutils-js/webpo";
-import { parseHTML } from "linkedom";
 import { decodeHTML } from "entities";
 import crypto from "crypto";
 import { Buffer } from "buffer";
@@ -316,6 +315,17 @@ export const commonHeaders = {
 	"User-Agent": userAgent,
 };
 
+const HTTP_URL_RE = /^https?:\/\//;
+const WS_COLLAPSE_RE = /\s+/g;
+const PROTO_REL_RE = /^\/\//;
+const SHORTS_URL_RE = /^\/shorts/;
+const MUSIC_EXPLICIT_RE = /^MUSIC_EXPLICIT/;
+const MUSIC_ARTIST_PAGE_RE = /^MUSIC_PAGE_TYPE_ARTIST/;
+const MPRE_ID_RE = /^MPRE/;
+const GOOGLE_URLQ_RE = /^\/url\?/;
+const TAG_STRIP_RE = /<[^>]*>/g;
+const absHttps = (u: any): any => (typeof u === "string" && PROTO_REL_RE.test(u) ? "https:" + u : u);
+
 // Discord fetch wrapper with per-bucket and global rate limiting
 const discordRateLimitBuckets = new Map<string, { limit: number; remaining: number; resetAfter: number; resetAt: number }>();
 let discordGlobalReqCount = 0;
@@ -514,16 +524,14 @@ const parseAbbreviatedNumber = (str: string | null | undefined): number | null =
 		.replace(/,/g, "")
 		.replace(/subscribers|videos|video|views|view|watching/gi, "")
 		.trim();
-	const match = cleanStr.match(/^(\d+\.?\d*)([KMB]?)$/i);
+	const match = /^(\d+\.?\d*)([KMB]?)$/i.exec(cleanStr);
 	if (!match) {
 		const n = parseFloat(cleanStr);
 		return isNaN(n) ? null : Math.floor(n);
 	}
 
 	let num = parseFloat(match[1]!);
-	const unit = match[2]!.toUpperCase();
-
-	switch (unit) {
+	switch (match[2]!.toUpperCase()) {
 		case "K":
 			num *= 1000;
 			break;
@@ -548,18 +556,15 @@ const formatAbbreviatedNumber = (num: number | string | null | undefined): strin
 	return n.toString();
 };
 
+const YT_INITIAL_RE = /ytInitialData\s*=\s*\{/;
+
 export const parseYtInitial = (html: any) => {
 	try {
-		const dataParts = html.split(/ytInitialData\s*=\s*/);
-		if (dataParts.length < 2) return null;
-
-		let jsonStr = dataParts[1];
-
-		const endIdx = jsonStr.indexOf(";</script>") !== -1 ? jsonStr.indexOf(";</script>") : jsonStr.indexOf("</script>") !== -1 ? jsonStr.indexOf("</script>") : jsonStr.length;
-
-		jsonStr = jsonStr.substring(0, endIdx).trim();
-		if (jsonStr.endsWith(";")) jsonStr = jsonStr.substring(0, jsonStr.length - 1).trim();
-
+		if (typeof html !== "string") return null;
+		const m = YT_INITIAL_RE.exec(html);
+		if (!m) return null;
+		const jsonStr = extractBalancedJsObjectAt(html, m.index + m[0].length - 1);
+		if (!jsonStr) return null;
 		return JSON.parse(jsonStr);
 	} catch (e) {
 		console.error(e);
@@ -689,21 +694,11 @@ const parseLooseJsValue = (input: string): any => {
 			pos += num[0].length;
 			return Number(num[0]);
 		}
-		if (rest.startsWith("true")) {
-			pos += 4;
-			return true;
-		}
-		if (rest.startsWith("false")) {
-			pos += 5;
-			return false;
-		}
-		if (rest.startsWith("null")) {
-			pos += 4;
-			return null;
-		}
-		if (rest.startsWith("undefined")) {
-			pos += 9;
-			return undefined;
+		const lit = /^(?:true|false|null|undefined)\b/.exec(rest);
+		if (lit) {
+			pos += lit[0].length;
+			const w = lit[0];
+			return w === "true" ? true : w === "false" ? false : w === "null" ? null : undefined;
 		}
 		const ident = /^[A-Za-z_$][\w$]*/.exec(rest);
 		if (ident) {
@@ -764,6 +759,26 @@ let unsplashWafCookie: string = "";
 let shazamCfCookie: string | null = "";
 let magnificBuildId: string | null = "";
 let magnificCookies: string = "";
+let driftCookies: string | null = null;
+let gunsCookies: string | null = null;
+let rageCookies: string | null = null;
+let emojiDataCache: EmojiDatabase | null = null;
+let emojiLoadPromise: Promise<EmojiDatabase | null> | null = null;
+let playStoreBootstrap: {
+	fSid: string;
+	bl: string;
+	x: string;
+	expire: number;
+} | null = null;
+let countriesCache: any = null;
+let countriesCachePromise: Promise<void> | null = null;
+let googleTtsWiz: {
+	fSid: string;
+	bl: string;
+	at: string | null;
+	expire: number;
+} | null = null;
+let googleTtsCookies: string | null = null;
 
 // Akamai rate-limits magnific on bursts ("multiple requests at short time"
 // → PoW challenge). Pace upstream hits, dedupe concurrent identical queries,
@@ -1073,7 +1088,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 					altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
 					thumbnail: "https://i.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
 					movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
-					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts") ? "https://i.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
+					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || "") ? "https://i.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
 					title: a.title?.runs?.[0]?.text,
 					description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join("") || "",
 					owners: {
@@ -1100,7 +1115,7 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 					isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE") || false,
 					isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer?.icon?.iconType === "MUSIC") || false,
 					isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
-					isShorts: a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.startsWith("/shorts"),
+					isShorts: SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || ""),
 					mixPlaylist: mixData,
 					viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(" ")?.[0] || a.viewCountText?.runs?.[0]?.text),
 					duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null,
@@ -1139,6 +1154,12 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 			}));
 		});
 		const finalTask2 = mappedTasks2.filter(Boolean).flat();
+
+		if (alk.length === 0) {
+			return {
+				error: "This search may be inappropriate, Youtube asking to sign-in",
+			};
+		}
 
 		return { searchParams: queryId, data: alk?.concat(finalTask2) };
 	} catch (e) {
@@ -1214,9 +1235,9 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 				const flexColumn0 = a.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
 				const flexColumn2 = a.flexColumns?.[2]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
 
-				const artistRuns = flexColumn1.filter((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType?.startsWith("MUSIC_PAGE_TYPE_ARTIST"));
+				const artistRuns = flexColumn1.filter((r: any) => MUSIC_ARTIST_PAGE_RE.test(r?.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType || ""));
 
-				const artistRunsFallback = artistRuns.length > 0 ? artistRuns : flexColumn1.filter((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("MPRE"));
+				const artistRunsFallback = artistRuns.length > 0 ? artistRuns : flexColumn1.filter((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId && !MPRE_ID_RE.test(r?.navigationEndpoint?.browseEndpoint?.browseId || ""));
 
 				const artistRunsFinal =
 					artistRunsFallback.length > 0
@@ -1235,7 +1256,7 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 									}));
 							})();
 
-				const albumRun = flexColumn1.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("MPRE"));
+				const albumRun = flexColumn1.find((r: any) => MPRE_ID_RE.test(r?.navigationEndpoint?.browseEndpoint?.browseId || ""));
 				const durationRun = flexColumn1.filter((r: any) => r?.text?.includes(":")).pop() || flexColumn1[flexColumn1.length - 1];
 
 				const musch = a.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0");
@@ -1331,11 +1352,11 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 					altUrl,
 					baseUrl: videoId ? "https://www.youtube.com/watch?v=" + videoId : null,
 					shortUrl: videoId ? "https://youtu.be/" + videoId : null,
-					thumbnail: musch?.startsWith("//") ? "https:" + musch : musch,
+					thumbnail: absHttps(musch),
 					title: flexColumn0[0]?.text,
 					listenCount: String(parseAbbreviatedNumber(flexColumn2[0]?.text?.split(" ")?.[0])),
 					isATV: titleWatchEndpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType === "MUSIC_VIDEO_TYPE_ATV",
-					isExplicit: a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType?.startsWith("MUSIC_EXPLICIT") || false,
+					isExplicit: MUSIC_EXPLICIT_RE.test(a?.badges?.[0]?.musicInlineBadgeRenderer?.icon?.iconType || ""),
 					isCollab: artistRunsFinal.length > 1,
 					mixPlaylist: mixData,
 					artists:
@@ -1476,7 +1497,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 
 				const sources: any[] = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources || [];
 				const bestThumb = sources.reduce((best: any, s: any) => (!best || s.width > best.width ? s : best), null);
-				const thumbnail = bestThumb ? (bestThumb.url?.startsWith("//") ? "https:" + bestThumb.url : bestThumb.url) : null;
+				const thumbnail = bestThumb ? absHttps(bestThumb.url) : null;
 
 				const badge = a.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
 
@@ -1486,7 +1507,7 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 						const part = row.metadataParts[0].text;
 						const run = part.commandRuns?.[0];
 						const webUrl = run?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-						if (!webUrl?.startsWith("/watch")) return null;
+						if (!/^\/watch/.test(webUrl || "")) return null;
 
 						const watchEndpoint = run?.onTap?.innertubeCommand?.watchEndpoint;
 						const videoId = watchEndpoint?.videoId;
@@ -1524,6 +1545,12 @@ export const YTPlaylist = async function YTPlaylist(que: string) {
 				console.error("Error parsing YouTube Playlist item:", err);
 			}
 		});
+
+		if (alk.length === 0) {
+			return {
+				error: "This search may be inappropriate, Youtube asking to sign-in",
+			};
+		}
 
 		return { data: alk };
 	} catch (e) {
@@ -1997,7 +2024,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 						} catch {}
 
 						let parsedDuration: number | null = null;
-						if (ldJson.duration && ldJson.duration.startsWith("PT")) {
+						if (ldJson.duration && /^PT/.test(ldJson.duration)) {
 							const match = ldJson.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
 							if (match) {
 								const h = parseInt(match[1] || "0", 10);
@@ -2110,7 +2137,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 							const lyricLines: string[] = [];
 							for (let i = 1; i < lyricParts.length; i++) {
 								const part = lyricParts[i];
-								if (part.startsWith("sectionTitle") || part.startsWith("lyricLine")) {
+								if (/^(?:sectionTitle|lyricLine)/.test(part)) {
 									const text = part
 										.split('">')[1]
 										?.split("</div>")[0]
@@ -2377,40 +2404,26 @@ export async function SavetikVideo(url: string) {
 		}
 		if (!json || !json.data) return null;
 
-		const { document } = parseHTML(json.data);
-		const hdLink = Array.from(document.querySelectorAll("a")).find((el: any) => el.textContent?.includes("Download MP4 HD"));
+		const html: string = json.data;
+		const findDlHref = (label: string): string | null => {
+			const m = new RegExp(`<a[^>]*href="([^"]*)"[^>]*>[\\s\\S]*?${label}[\\s\\S]*?</a>`).exec(html);
+			return m?.[1] || null;
+		};
+		const unwrapSnapToken = (u: string | null): string | null => {
+			if (!u || !u.includes("snapcdn.app") || !u.includes("token=")) return u;
+			try {
+				const token = new URL(u).searchParams.get("token");
+				if (!token) return u;
+				const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+				return payload.url || u;
+			} catch {
+				return u;
+			}
+		};
 
-		if (!hdLink) return null;
-
-		let finalUrl = (hdLink as any).getAttribute("href");
+		const finalUrl = unwrapSnapToken(findDlHref("Download MP4 HD"));
 		if (!finalUrl) return null;
-
-		if (finalUrl.includes("snapcdn.app") && finalUrl.includes("token=")) {
-			try {
-				const token = new URL(finalUrl).searchParams.get("token");
-				if (token) {
-					const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
-					if (payload.url) {
-						finalUrl = payload.url;
-					}
-				}
-			} catch {}
-		}
-
-		const musicLink = Array.from(document.querySelectorAll("a")).find((el: any) => el.textContent?.includes("Download MP3"));
-		let musicUrl: any = (musicLink as any)?.getAttribute("href") || null;
-
-		if (musicUrl && musicUrl.includes("snapcdn.app") && musicUrl.includes("token=")) {
-			try {
-				const token = new URL(musicUrl).searchParams.get("token");
-				if (token) {
-					const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
-					if (payload.url) {
-						musicUrl = payload.url;
-					}
-				}
-			} catch {}
-		}
+		const musicUrl = unwrapSnapToken(findDlHref("Download MP3"));
 
 		return {
 			video_url: finalUrl?.split("?")?.[0],
@@ -3085,7 +3098,7 @@ export const Gemini = async function Gemini(que: string, convo: any, retry: numb
 
 		for (const line of lines) {
 			const trimmed = line.trim();
-			if (!trimmed.startsWith("[")) continue;
+			if (trimmed.charCodeAt(0) !== 91) continue;
 			try {
 				const parsed = JSON.parse(trimmed);
 				const items = Array.isArray(parsed[0]) ? parsed : [parsed];
@@ -3350,7 +3363,7 @@ const formatYoutubePublishDate = (value: any) => {
 const buildYoutubeOwnerUrls = (paths: any): string[] | null => {
 	const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => typeof p === "string" && p);
 	if (!list.length) return null;
-	return Array.from(new Set(list.map((p: string) => (p.startsWith("http") ? p : "https://www.youtube.com" + p))));
+	return Array.from(new Set(list.map((p: string) => (HTTP_URL_RE.test(p) ? p : "https://www.youtube.com" + p))));
 };
 
 const buildYoutubeFeeds = (initialData: any) => {
@@ -4804,7 +4817,7 @@ export const DiscordWebhook = async (token: string | null, guildId: string | nul
 				});
 				if (res.ok) {
 					const contentType = res.headers.get("content-type");
-					if (contentType?.startsWith("image/") || contentType?.startsWith("video/")) {
+					if (/^(?:image|video)\//.test(contentType || "")) {
 						const arrayBuffer = await res.arrayBuffer();
 						const buffer = Buffer.from(arrayBuffer);
 						payload.avatar = `data:${contentType};base64,${buffer.toString("base64")}`;
@@ -5093,7 +5106,7 @@ export const BilibiliGlobal = async function BilibiliGlobal(que: string) {
 
 		const res: any = await per.json();
 		return {
-			data: res?.data?.result?.find((f: any) => f?.result_type?.startsWith("video"))?.data || null,
+			data: res?.data?.result?.find((f: any) => /^video/.test(f?.result_type || ""))?.data || null,
 		};
 	} catch (e) {
 		console.error(e);
@@ -5886,7 +5899,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 	return null;
 };
 
-export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string, region_code: string = "") {
+export const DiscordTiktokFeed = async function DiscordTiktokFeed(token: string, channelId: string, messageId?: string) {
 	if (!token) return { error: "Missing token" };
 	if (!channelId) return { error: "Missing channelId" };
 
@@ -6553,7 +6566,7 @@ export const YTChannel = async function YTChannel(que: string) {
 					channelId: a.channelId,
 					url: "https://www.youtube.com/channel/" + a.channelId,
 					handle: handle || null,
-					avatar: (ava?.startsWith("//") ? "https:" + ava : ava) || null,
+					avatar: absHttps(ava) || null,
 					banner: a.tvBanner?.thumbnails?.[0]?.url?.replace(/=w\d+.*/, "=s0") || null,
 					name: a.title?.simpleText || a.title?.runs?.[0]?.text,
 					subscriberCount: parseAbbreviatedNumber(subs),
@@ -6565,6 +6578,12 @@ export const YTChannel = async function YTChannel(que: string) {
 				console.error("Error parsing YouTube Channel item:", err);
 			}
 		});
+
+		if (alk.length === 0) {
+			return {
+				error: "This search may be inappropriate, Youtube asking to sign-in",
+			};
+		}
 
 		return { data: alk };
 	} catch (e) {
@@ -7004,16 +7023,128 @@ export const Capcut = async function Capcut(que: string, limit_number: number = 
 	}
 };
 
+const REDDIT_SEARCH_MARK = 'data-testid="search-sdui-post"';
+const REDDIT_CTX_RE = /data-faceplate-tracking-context="([^"]+)"/g;
+const REDDIT_TITLE_RE = /<a data-testid="post-title" href="([^"]+)"/;
+const REDDIT_VOTES_RE = /<faceplate-number number="([^"]+)"[^>]*><\/faceplate-number> votes/;
+const REDDIT_COMMENTS_RE = /<faceplate-number number="([^"]+)"[^>]*><\/faceplate-number> comments/;
+const REDDIT_TIME_RE = /<faceplate-timeago[^>]*ts="([^"]+)"/;
+const REDDIT_THUMB_RE = /<(?:img|faceplate-img)[^>]*data-testid="search_post_thumbnail"[^>]*src="([^"]+)"/;
+const REDDIT_THUMB_CDN_RE = /<(?:img|faceplate-img)[^>]*src="(https:\/\/(?:preview\.redd\.it|external-preview\.redd\.it|i\.redd\.it|b\.thumbs\.redditmedia\.com)[^"]*)"/;
+
+export const parseModernRedditSearch = (html: string) => {
+	const entries: any[] = [];
+	let pos = html.indexOf(REDDIT_SEARCH_MARK);
+	while (pos !== -1) {
+		const next = html.indexOf(REDDIT_SEARCH_MARK, pos + REDDIT_SEARCH_MARK.length);
+		const block = next === -1 ? html.slice(pos) : html.slice(pos, next);
+		REDDIT_CTX_RE.lastIndex = 0;
+		let ctx: any = null;
+		let cm: RegExpExecArray | null;
+		while ((cm = REDDIT_CTX_RE.exec(block))) {
+			try {
+				const parsed = JSON.parse(decodeHTML(cm[1]));
+				if (parsed?.action_info?.type === "post") {
+					ctx = parsed;
+					break;
+				}
+			} catch {}
+		}
+		if (ctx?.post?.id) {
+			const titleHref = REDDIT_TITLE_RE.exec(block)?.[1] || "";
+			const thumbM = REDDIT_THUMB_RE.exec(block) || REDDIT_THUMB_CDN_RE.exec(block);
+			const votesM = REDDIT_VOTES_RE.exec(block);
+			const commentsM = REDDIT_COMMENTS_RE.exec(block);
+			entries.push({
+				...ctx,
+				id: ctx.post?.id || null,
+				url: !titleHref ? null : titleHref.charCodeAt(0) === 47 ? "https://www.reddit.com" + titleHref : titleHref,
+				permalink: !titleHref ? null : titleHref.charCodeAt(0) === 47 ? "https://www.reddit.com" + titleHref : titleHref,
+				authorUrl: ctx.profile?.name ? "https://www.reddit.com/user/" + ctx.profile.name + "/" : null,
+				thumbnail: thumbM?.[1] ? decodeHTML(thumbM[1]) : null,
+				score: votesM?.[1] ? Number(votesM[1]) : null,
+				comments: commentsM?.[1] ? Number(commentsM[1]) : null,
+				created: REDDIT_TIME_RE.exec(block)?.[1] || null,
+				source: "html",
+			});
+		}
+		pos = next;
+	}
+	return entries;
+};
+
+const REDDIT_LISTING_TAG_RE = /<shreddit-post\b([^>]*)>/g;
+const REDDIT_LISTING_ATTR_RE = /([\w-]+)(?:="([^"]*)")?/g;
+const REDDIT_LISTING_ID_RE = /^t[135]_[a-z0-9]+$/;
+const REDDIT_SUB_PREFIX_RE = /^r\/(.+)$/;
+const REDDIT_NUM_RE = /^[+-]?\d+(\.\d+)?$/;
+
+export const parseModernRedditListing = (html: string) => {
+	const entries: any[] = [];
+	REDDIT_LISTING_TAG_RE.lastIndex = 0;
+	let tm: RegExpExecArray | null;
+	while ((tm = REDDIT_LISTING_TAG_RE.exec(html))) {
+		const tag = tm[1];
+		REDDIT_LISTING_ATTR_RE.lastIndex = 0;
+		let raw: Record<string, any> | null = null;
+		let am: RegExpExecArray | null;
+		while ((am = REDDIT_LISTING_ATTR_RE.exec(tag))) {
+			if (am[1] === "class") continue;
+			raw ??= {};
+			raw[am[1]] = am[2] ?? true;
+		}
+		if (!raw) continue;
+		const id = raw["id"] || "";
+		if (!REDDIT_LISTING_ID_RE.test(id)) continue;
+		const permalink = raw["permalink"] || "";
+		const contentHref = raw["content-href"] || "";
+		const score = raw["score"] || "";
+		const ratio = raw["upvote-ratio"] || "";
+		const commentCount = raw["comment-count"] || "";
+		const thumbM = REDDIT_THUMB_CDN_RE.exec(html.slice(tm.index, tm.index + 20000));
+		entries.push({
+			...raw,
+			id,
+			title: raw["post-title"] ? decodeHTML(raw["post-title"]) : null,
+			url: "https://www.reddit.com" + permalink,
+			permalink: "https://www.reddit.com" + permalink,
+			contentUrl: contentHref ? decodeHTML(contentHref) : null,
+			author: raw["author"] ? decodeHTML(raw["author"]) : null,
+			authorId: raw["author-id"] || null,
+			subreddit: raw["subreddit-name"] || REDDIT_SUB_PREFIX_RE.exec(raw["subreddit-prefixed-name"] || "")?.[1] || null,
+			subredditId: raw["subreddit-id"] || null,
+			thumbnail: thumbM?.[1] ? decodeHTML(thumbM[1]) : null,
+			score: score && REDDIT_NUM_RE.test(score) ? Number(score) : null,
+			upvoteRatio: ratio ? Number(ratio) : null,
+			comments: commentCount && REDDIT_NUM_RE.test(commentCount) ? Number(commentCount) : null,
+			created: raw["created-timestamp"] || null,
+			domain: raw["domain"] || null,
+			postType: raw["post-type"] || null,
+			nsfw: "nsfw" in raw,
+			subredditNsfw: "subreddit-nsfw" in raw,
+			stickied: "stickied" in raw || "pinned" in raw,
+			source: "html",
+		});
+	}
+	return entries;
+};
+
 export const redditSubreddit = async function redditSubreddit(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
 	try {
 		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth();
+		let subCookies = redditCookies;
+		if (process.env.REDDIT_SESSION && subCookies && !subCookies.includes("reddit_session=")) {
+			subCookies += `; reddit_session=${process.env.REDDIT_SESSION}`;
+		}
 
-		const headers: any = commonHeaders;
-		if (redditCookies) headers["Cookie"] = redditCookies;
+		const headers: any = { ...commonHeaders };
+		if (subCookies) headers["Cookie"] = subCookies;
 
-		const req = await fetch(`https://www.reddit.com/search/.json?q=subreddit%3A${encodeURIComponent(que.toLowerCase()?.split(" ")?.[0])}&sort=new&restrict_sr=&t=all&include_over_18=on`, { headers });
+		const name = que.toLowerCase()?.split(" ")?.[0];
+
+		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&feedLength=28&distance=25`, { headers });
 
 		if (req.status === 451) {
 			return { error: "This subreddit is not available in your country" };
@@ -7024,12 +7155,11 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 			return { error: "IP Blocked" };
 		}
 
-		const res: any = await req.json();
-		const finalres: any = res?.data?.children?.map((a: any) => a?.data);
+		const entries = parseModernRedditListing(await req.text());
 		return {
 			_wafChallenge: redditCookies !== "",
 			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
-			data: JSON.parse(decodeHTML(JSON.stringify(finalres?.[0] ? finalres : null))),
+			data: entries,
 		};
 	} catch {
 		return null;
@@ -7104,21 +7234,48 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 	try {
 		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth();
 
-		const headers: any = commonHeaders;
+		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
-		const req = await fetch(`https://www.reddit.com/search/.json?q=${encodeURIComponent(que)}&restrict_sr=&sort=new&t=all&include_over_18=on`, { headers });
+		let pageUrl: string | null = `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&force_seo=1`;
+		const entries: any[] = [];
+		const seenCursor = new Set<string>();
+		let blocked = false;
+		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+		for (let page = 0; page < 4 && pageUrl; page++) {
+			if (page > 0) await sleep(400);
+			const req: Response = await fetch(pageUrl, { headers });
+			const html: string = await req.text();
 
-		if (req.status === 403) {
-			if (!refresh_auth) return redditMedia(que, true);
-			return { error: "IP Blocked" };
+			if (req.status === 429) {
+				await sleep(2000);
+				const req2: Response = await fetch(pageUrl, { headers });
+				if (req2.status !== 200) break;
+				const html2: string = await req2.text();
+				for (const e of parseModernRedditSearch(html2)) {
+					if (e?.id && !entries.some((x: any) => x.id === e.id)) entries.push(e);
+				}
+			}
+			if (req.status === 403) {
+				if (!refresh_auth) return redditMedia(que, true);
+				blocked = true;
+				break;
+			}
+			if (req.status !== 200) break;
+
+			for (const e of parseModernRedditSearch(html)) {
+				if (e?.id && !entries.some((x: any) => x.id === e.id)) entries.push(e);
+			}
+			const m: RegExpMatchArray | null = html.match(/\/svc\/shreddit\/search\/\?[^"'\s]*?cursor=([A-Za-z0-9%._~\-+/=]+)/);
+			const cursor: string | null = m?.[1] ? decodeURIComponent(m[1].replace(/&amp;/g, "&")) : null;
+			pageUrl = cursor && !seenCursor.has(cursor) ? `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cursor=${encodeURIComponent(cursor)}` : null;
+			if (cursor) seenCursor.add(cursor);
 		}
-
-		const res: any = await req.json();
+		if (!entries.length && blocked) return { error: "IP Blocked" };
 		return {
 			_wafChallenge: redditCookies !== "",
 			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
-			data: JSON.parse(decodeHTML(JSON.stringify(res?.data?.children?.map((a: any) => a?.data) || null))),
+			data: entries,
 		};
 	} catch (e) {
 		return null;
@@ -7538,7 +7695,7 @@ const tiktokCollectImages = function tiktokCollectImages(videoDetail: any): stri
 	const urls: string[] = [];
 	const seen = new Set<string>();
 	const push = (u: any) => {
-		if (typeof u !== "string" || !u.startsWith("http")) return;
+		if (typeof u !== "string" || !HTTP_URL_RE.test(u)) return;
 		const path = u.split("?")[0];
 		const last = path.split("/").pop() || "";
 		const key = last.includes("~") ? last.split("~")[0] : path;
@@ -7703,7 +7860,7 @@ const instagramCollectImages = function instagramCollectImages(media: any): stri
 	const urls: string[] = [];
 	const seen = new Set<string>();
 	const push = (u: any) => {
-		if (typeof u !== "string" || !u.startsWith("http")) return;
+		if (typeof u !== "string" || !HTTP_URL_RE.test(u)) return;
 		let key = u;
 		try {
 			key = new URL(u).pathname.split("/").pop() || u;
@@ -7806,14 +7963,14 @@ const threadsFetchEmbed = async function threadsFetchEmbed(code: string): Promis
 	const images: string[] = [];
 	for (const m of html.matchAll(/<img class="img" src="([^"]+)"/g)) {
 		const u = decodeHTML(m[1]);
-		if (!u.startsWith("http") || images.includes(u)) continue;
+		if (!HTTP_URL_RE.test(u) || images.includes(u)) continue;
 		if (/s(100|150)x(100|150)|profile_pic/i.test(u)) continue;
 		images.push(u);
 	}
 	const og = /og:image" content="([^"]+)"/.exec(html)?.[1];
 	if (og) {
 		const u = decodeHTML(og);
-		if (u.startsWith("http") && !images.includes(u)) images.push(u);
+		if (HTTP_URL_RE.test(u) && !images.includes(u)) images.push(u);
 	}
 	return { video: video || null, images: images.slice(0, 10) };
 };
@@ -7883,7 +8040,7 @@ const twitterFetchSyndication = async function twitterFetchSyndication(id: strin
 const twitterCollectImages = function twitterCollectImages(root: any): string[] {
 	const urls: string[] = [];
 	const push = (u: any) => {
-		if (typeof u === "string" && u.startsWith("http") && !urls.includes(u)) urls.push(u);
+		if (typeof u === "string" && HTTP_URL_RE.test(u) && !urls.includes(u)) urls.push(u);
 	};
 	const collectSource = (src: any) => {
 		if (!src || typeof src !== "object") return;
@@ -7910,7 +8067,7 @@ const twitterCollectImages = function twitterCollectImages(root: any): string[] 
 			const rest: string[] = [];
 			for (const v of Object.values(binding) as any[]) {
 				const u = v?.image_value?.url;
-				if (typeof u !== "string" || !u.startsWith("http")) continue;
+				if (typeof u !== "string" || !HTTP_URL_RE.test(u)) continue;
 				if (u.includes("name=orig")) orig.push(u);
 				else rest.push(u);
 			}
@@ -8024,7 +8181,6 @@ const facebookFetchMedia = async function facebookFetchMedia(nodeId: string): Pr
 					"Sec-Fetch-Site": "same-origin",
 					"X-ASBD-ID": "359341",
 					...(keyInstagram?.lsd ? { "X-FB-LSD": keyInstagram.lsd } : {}),
-					"User-Agent": userAgent,
 					...(keyInstagram ? { Cookie: keyInstagram.cookie } : {}),
 				},
 			});
@@ -8034,7 +8190,7 @@ const facebookFetchMedia = async function facebookFetchMedia(nodeId: string): Pr
 				const rawText = await req.text();
 				for (const line of rawText.split("\n")) {
 					const trimmed = line.trim();
-					if (!trimmed.startsWith("{")) continue;
+					if (trimmed.charCodeAt(0) !== 123) continue;
 					try {
 						const res: any = JSON.parse(trimmed);
 						if (res?.data?.currMedia) return res.data.currMedia;
@@ -8100,7 +8256,7 @@ export const FacebookPhoto = async function FacebookPhoto(que: string) {
 
 export async function googleImageReverse(url: string) {
 	const warn = { _warning: "This endpoint is highly protected anti-bot" };
-	if (!url || !url.startsWith("http")) return null;
+	if (!url || !HTTP_URL_RE.test(url)) return null;
 
 	try {
 		const v: any = await fetch(`https://vision.googleapis.com/v1/images:annotate?prettyPrint=false`, {
@@ -8202,7 +8358,7 @@ const downloadLensImage = async (
 		if (!res.ok) return null;
 
 		const declared = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-		if (declared && !declared.startsWith("image/")) return null;
+		if (declared && !/^image\//.test(declared)) return null;
 
 		const buf = Buffer.from(await res.arrayBuffer());
 		if (!buf.length || buf.length > LENS_MAX_IMAGE_BYTES) return null;
@@ -8225,7 +8381,7 @@ const downloadLensImage = async (
 		} else if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
 			mime = "image/gif";
 			ext = "gif";
-		} else if (declared.startsWith("image/")) {
+		} else if (/^image\//.test(declared)) {
 			mime = declared;
 			ext = (declared.split("/")[1] || "jpg").replace("+xml", "").replace(/[^a-z0-9]/g, "") || "jpg";
 		}
@@ -8292,7 +8448,7 @@ const postLensUpload = async (
 		height: number;
 	},
 	filename: string,
-): Promise<{ location: string; html: string; challenged: boolean }> => {
+): Promise<{ location: string; html: string; challenged: boolean; rateLimited: boolean }> => {
 	const { body, contentType } = buildLensMultipart(image, filename);
 	const res = await fetch(lensUploadUrl(), {
 		method: "POST",
@@ -8313,13 +8469,13 @@ const postLensUpload = async (
 
 	if (res.status >= 300 && res.status < 400) {
 		const location = res.headers.get("location") || "";
-		if (location) return { location, html: "", challenged: false };
+		if (location) return { location, html: "", challenged: false, rateLimited: false };
 	}
 
-	if (res.status === 429) return { location: "", html: "", challenged: true };
-	if (res.status >= 400) return { location: "", html: "", challenged: true };
+	if (res.status === 429) return { location: "", html: "", challenged: true, rateLimited: true };
+	if (res.status >= 400) return { location: "", html: "", challenged: true, rateLimited: false };
 	const challenged = isLensBlocked(html);
-	return { location: "", html: challenged ? "" : html, challenged };
+	return { location: "", html: challenged ? "" : html, challenged, rateLimited: false };
 };
 
 const renderLensResults = async (location: string): Promise<{ html: string; ok: boolean }> => {
@@ -8368,31 +8524,31 @@ const lensUnescapeJs = (s: string): string => s.replace(/\\u([0-9a-fA-F]{4})/g, 
 
 const normLensPage = (u: string): string => u.replace(/\/$/, "");
 
-const extractLensQueryImage = (html: string): string => {
-	try {
-		const { document } = parseHTML(html);
-		for (const img of Array.from(document.querySelectorAll("img")) as any[]) {
-			const src = (img.getAttribute("src") || "").replace(/&amp;/g, "&");
-			if (src.startsWith("https://lens.usercontent.google.com/image?")) return src;
-		}
-	} catch {}
+const LENS_QUERY_IMG_RE = /<img\b[^>]*\bsrc="([^"]*)"[^>]*>/g;
+const LENS_IMG_URL_RE = /^https:\/\/lens\.usercontent\.google\.com\/image\?/;
+
+export const extractLensQueryImage = (html: string): string => {
+	LENS_QUERY_IMG_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = LENS_QUERY_IMG_RE.exec(html))) {
+		const src = m[1].replace(/&amp;/g, "&");
+		if (LENS_IMG_URL_RE.test(src)) return src;
+	}
 	return "";
 };
 const normLensText = (s: string): string => s.replace(/\s+/g, " ").trim();
 
-// whose text is the site name glued to the card title — the same pair the
-const extractLensTracking = (html: string): Map<string, string> => {
+const LENS_GOTO_RE = /<a\b[^>]*\bhref="\/goto\?url=([A-Za-z0-9_-]+)"[^>]*>([\s\S]*?)<\/a>/g;
+
+export const extractLensTracking = (html: string): Map<string, string> => {
 	const map = new Map<string, string>();
-	try {
-		const { document } = parseHTML(html);
-		for (const a of Array.from(document.querySelectorAll("a")) as any[]) {
-			const token = (a.getAttribute("href") || "").match(/\/goto\?url=([A-Za-z0-9_-]+)/)?.[1];
-			if (!token) continue;
-			const text = normLensText(a.textContent || "");
-			if (text.length < 10) continue;
-			if (!map.has(text)) map.set(text, `https://www.google.com/goto?url=${token}`);
-		}
-	} catch {}
+	LENS_GOTO_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = LENS_GOTO_RE.exec(html))) {
+		const text = decodeHTML(m[2].replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
+		if (text.length < 10) continue;
+		if (!map.has(text)) map.set(text, `https://www.google.com/goto?url=${m[1]}`);
+	}
 	return map;
 };
 
@@ -8428,7 +8584,7 @@ const extractLensEntries = (html: string): any[][] => {
 	return out;
 };
 
-const parseLensResults = (html: string): any[] => {
+export const parseLensResults = (html: string): any[] => {
 	const tracking = extractLensTracking(html);
 	const data: any[] = [];
 	const seen = new Set<string>();
@@ -8442,9 +8598,9 @@ const parseLensResults = (html: string): any[] => {
 			if (!Array.isArray(meta)) continue;
 
 			const imageUrl = typeof compressed[0] === "string" ? compressed[0] : "";
-			if (!imageUrl.startsWith("http")) continue;
+			if (!HTTP_URL_RE.test(imageUrl)) continue;
 
-			const originalImageUrl = typeof original[0] === "string" && original[0].startsWith("http") ? original[0] : imageUrl;
+			const originalImageUrl = typeof original[0] === "string" && HTTP_URL_RE.test(original[0]) ? original[0] : imageUrl;
 			const width = Number(original[1]) || Number(compressed[1]) || 0;
 			const height = Number(original[2]) || Number(compressed[2]) || 0;
 			const pageUrl = typeof meta[2] === "string" ? meta[2] : "";
@@ -8464,7 +8620,7 @@ const parseLensResults = (html: string): any[] => {
 				item.trackingUrl = goto;
 			}
 			if (title) item.title = title;
-			if (siteName && !siteName.startsWith("http")) item.siteName = siteName;
+			if (siteName && !HTTP_URL_RE.test(siteName)) item.siteName = siteName;
 			data.push(item);
 		} catch {}
 	}
@@ -8473,7 +8629,7 @@ const parseLensResults = (html: string): any[] => {
 };
 
 export async function googleLensReverseUpload(url: string) {
-	if (!url || !url.startsWith("http")) return null;
+	if (!url || !HTTP_URL_RE.test(url)) return null;
 
 	try {
 		const image = await downloadLensImage(url);
@@ -8490,6 +8646,10 @@ export async function googleLensReverseUpload(url: string) {
 		}
 
 		let attempt = await postLensUpload(image, filename);
+		for (let r = 0; r < 3 && attempt.rateLimited; r++) {
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			attempt = await postLensUpload(image, filename);
+		}
 		if (attempt.challenged) {
 			await refreshGoogleTrust();
 			await warmLensCookies();
@@ -8614,7 +8774,7 @@ export const infoThreadUser = async function infoThreadUser(que: string) {
 								for (const arg of args) {
 									const innerReqs = arg?.__bbox?.require || [];
 									for (const innerReq of innerReqs) {
-										if (innerReq?.[0]?.startsWith("RelayPrefetchedStreamCache")) {
+										if (/^RelayPrefetchedStreamCache/.test(innerReq?.[0] || "")) {
 											const data = innerReq?.[3]?.[1]?.__bbox?.result?.data;
 											if (data) webData.push(data);
 										}
@@ -8969,8 +9129,6 @@ export async function googleWeather(query: string): Promise<any> {
 	}
 }
 
-let driftCookies: string | null = null;
-
 export async function DriftProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop();
@@ -9027,6 +9185,18 @@ export async function DriftProfile(query: string): Promise<any> {
 		}
 	}
 
+	const DRIFT_LD_JSON_RE = /<script[^>]*\btype="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i;
+	const DRIFT_STYLE_RE = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+	const DRIFT_VAR_RE = (name: string) => new RegExp(`let ${name}\\s*=\\s*([^;]+)`);
+	const DRIFT_ID_TEXT_RE = (id: string) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*>([\\s\\S]*?)<\\/`);
+	const DRIFT_ID_SRC_RE = (id: string) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*\\bsrc="([^"]*)"`);
+	const DRIFT_ID_ZONE_RE = (id: string, n: number) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*>([\\s\\S]{0,${n}})`);
+	const DRIFT_COLOR_RE = (id: string) => new RegExp(`#${id}\\s*\\{[^}]*color:\\s*([^;]+)`, "i");
+	const driftAbs = (u: string | null): string | null => {
+		if (!u) return null;
+		if (HTTP_URL_RE.test(u)) return u;
+		return "https://drift.rip" + (u.charCodeAt(0) === 47 ? "" : "/") + u;
+	};
 	try {
 		let test = await responseText(res);
 		if (res.url?.includes("/message")) {
@@ -9034,8 +9204,8 @@ export async function DriftProfile(query: string): Promise<any> {
 				data: null,
 			};
 		}
-		const { document } = parseHTML(test);
-		let schemaJson: any = document.querySelector('script[type="application/ld+json"]')?.textContent;
+		const DRIFT_ATTR_both = (tag: string, a: string, b: string): string => new RegExp(`<${tag}[^>]*\\b${a}="${b}"[^>]*\\bcontent="([^"]*)"`, "i").exec(test)?.[1] || new RegExp(`<${tag}[^>]*\\bcontent="([^"]*)"[^>]*\\b${a}="${b}"`, "i").exec(test)?.[1] || "";
+		let schemaJson: any = DRIFT_LD_JSON_RE.exec(test)?.[1] || "";
 
 		try {
 			schemaJson = JSON.parse(schemaJson || "{}");
@@ -9043,184 +9213,203 @@ export async function DriftProfile(query: string): Promise<any> {
 			schemaJson = null;
 		}
 
-		const styles = Array.from(document.querySelectorAll("style"))
-			.map((s: any) => s.textContent)
-			.join("");
-		const myProfileId = test?.split("let currentProfileId =")?.[1]?.split(";")?.[0]?.trim() || null;
+		let styles = "";
+		DRIFT_STYLE_RE.lastIndex = 0;
+		let stm: RegExpExecArray | null;
+		while ((stm = DRIFT_STYLE_RE.exec(test))) styles += stm[1];
+		const myProfileId = DRIFT_VAR_RE("currentProfileId").exec(test)?.[1]?.trim() || null;
+		const driftText = (id: string): string => {
+			const m = DRIFT_ID_TEXT_RE(id).exec(test)?.[1] || "";
+			return decodeHTML(m.replace(TAG_STRIP_RE, "")).trim();
+		};
+		const DRIFT_VIEWS_RE = DRIFT_ID_ZONE_RE("profile-views-inner-container", 2000);
+		const DRIFT_VIEWS_SPAN_RE = /<span[^>]*class="[^"]*\btext-sm\b[^"]*"[^>]*>([\s\S]*?)<\//;
+		const driftViews =
+			DRIFT_VIEWS_SPAN_RE.exec(DRIFT_VIEWS_RE.exec(test)?.[1] || "")?.[1]
+				?.replace(TAG_STRIP_RE, "")
+				.trim()
+				?.replace(",", "") || null;
 
 		return {
 			data: {
 				user: {
-					account_id: test?.split("let userSql = ")?.[1]?.split(";")?.[0]?.trim() || null,
+					account_id: DRIFT_VAR_RE("userSql").exec(test)?.[1]?.trim() || null,
 					profile_id: myProfileId,
 					name: schemaJson?.name?.split("|")?.[1]?.trim() || schemaJson?.mainEntity?.name || "",
 					display_name: {
-						text: document.querySelector("#bio-username")?.textContent?.trim() || "",
-						color: styles.match(/#bio-username\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
+						text: driftText("bio-username"),
+						color: DRIFT_COLOR_RE("bio-username").exec(styles)?.[1] || null,
 					},
 					description: {
-						text: document.querySelector("#bio-description")?.textContent?.trim() || null,
-						color: styles.match(/#bio-description\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
+						text: driftText("bio-description") || null,
+						color: DRIFT_COLOR_RE("bio-description").exec(styles)?.[1] || null,
 					},
 					label: {
-						text: document.querySelector("#bio-label")?.textContent?.trim() || null,
-						color: styles.match(/#bio-label\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
+						text: driftText("bio-label") || null,
+						color: DRIFT_COLOR_RE("bio-label").exec(styles)?.[1] || null,
 					},
 					about_me: {
-						text: document.querySelector("#bio-aboutMe")?.textContent?.trim() || null,
-						color: styles.match(/.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
+						text: driftText("bio-aboutMe") || null,
+						color: /\.bio-aboutMe\s*\{[^}]*color:\s*([^;]+)/i.exec(styles)?.[1] || null,
 					},
 					startPage: {
-						text: document.querySelector("#bio-startText")?.textContent?.trim() || "",
-						color: styles.match(/#bio-startText\s*\{[^}]*color:\s*([^;]+)/i)?.[1] || null,
+						text: driftText("bio-startText"),
+						color: DRIFT_COLOR_RE("bio-startText").exec(styles)?.[1] || null,
 					},
-					views: document.querySelector("#profile-views-inner-container span.text-sm")?.textContent?.trim()?.replace(",", "") || null,
-					badges: [
-						...Array.from(document.querySelectorAll(".bio-badge"))
-							.map((el: any) => {
-								const parent = el.parentElement;
-								const tippyContent = parent?.getAttribute("data-tippy-content");
-								return tippyContent ? { name: tippyContent, icon: el.getAttribute("icon") } : null;
-							})
-							.filter(Boolean),
-					],
+					views: driftViews,
+					badges: (() => {
+						const out: any[] = [];
+						const re = /<[^>]*\bdata-tippy-content="([^"]*)"[^>]*>([\s\S]*?)<\/[^>\s]+>/g;
+						let m: RegExpExecArray | null;
+						while ((m = re.exec(test))) {
+							const icon = /<[^>]*class="[^"]*\bbio-badge\b[^"]*"[^>]*\bicon="([^"]*)"/.exec(m[2])?.[1];
+							if (m[1] && icon) out.push({ name: m[1], icon });
+						}
+						return out;
+					})(),
 					assets: {
-						avatar: schemaJson?.mainEntity?.image ? (schemaJson?.mainEntity?.image?.startsWith("http") ? schemaJson.mainEntity.image : "https://drift.rip/" + schemaJson?.mainEntity?.image) : null,
-						banner: styles.match(/.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null,
+						avatar: schemaJson?.mainEntity?.image ? driftAbs(schemaJson?.mainEntity?.image) : null,
+						banner: /\.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i.exec(styles)?.[1] || null,
 						background: (() => {
-							const videoEl = document.querySelector("#video-background");
-							const bg = test?.split('staticBackground.src = "')?.[1]?.split('"')[0] || videoEl?.getAttribute("src") || videoEl?.querySelector("source")?.getAttribute("src") || null;
-
-							if (!bg) return null;
-							return bg.startsWith("http") ? bg : "https://drift.rip" + (bg.startsWith("/") ? "" : "/") + bg;
+							const fromJs = /staticBackground\.src\s*=\s*"([^"]*)"/.exec(test)?.[1] || null;
+							const tagSrc = DRIFT_ID_SRC_RE("video-background").exec(test)?.[1] || null;
+							const zone = DRIFT_ID_ZONE_RE("video-background", 3000).exec(test)?.[1] || "";
+							const innerSrc = /<source[^>]*\bsrc="([^"]*)"/.exec(zone)?.[1] || null;
+							return driftAbs(fromJs || tagSrc || innerSrc);
 						})(),
 						audio: (() => {
-							const aud = document.querySelector("#background-audio")?.getAttribute("src") || document.querySelector("#background-audio source")?.getAttribute("src") || (test?.includes("hasAudio = true") ? test?.split('audio.src = "')?.[1]?.split('"')[0] : null) || null;
-							if (!aud) return null;
-							return aud.startsWith("http") ? aud : "https://drift.rip" + (aud.startsWith("/") ? "" : "/") + aud;
+							const tagSrc = DRIFT_ID_SRC_RE("background-audio").exec(test)?.[1] || null;
+							const zone = DRIFT_ID_ZONE_RE("background-audio", 2000).exec(test)?.[1] || "";
+							const innerSrc = /<source[^>]*\bsrc="([^"]*)"/.exec(zone)?.[1] || null;
+							const jsSrc = test.includes("hasAudio = true") ? /audio\.src\s*=\s*"([^"]*)"/.exec(test)?.[1] || null : null;
+							return driftAbs(tagSrc || innerSrc || jsSrc);
 						})(),
-						cursor: styles.match(/cursor:\s*url\(['"]?([^'"]+)['"]?\)/i)?.[1] || null,
+						cursor: /cursor:\s*url\(['"]?([^'"]+)['"]?\)/i.exec(styles)?.[1] || null,
 					},
-					connections: [
-						// Discord Users
-						...Array.from(document.querySelectorAll("#profile-cards-section a[data-discord-user-json]")).map((el: any) => {
-							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
-							let richContent: any = null;
-							const rawJson = el.getAttribute("data-discord-user-json") || "";
+					connections: (() => {
+						const out: any[] = [];
+						const driftSafeJson = (raw: string): any => {
 							try {
-								richContent = JSON.parse(rawJson);
+								return JSON.parse(raw);
 							} catch {
 								try {
-									let fixed = rawJson;
-									const openBraces = (fixed.match(/\{/g) || []).length - (fixed.match(/\}/g) || []).length;
-									const openBrackets = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
+									let fixed = raw;
+									const ob = (fixed.match(/\{/g) || []).length - (fixed.match(/\}/g) || []).length;
+									const ab = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
 									if (!fixed.endsWith('"')) fixed += '"';
-									for (let i = 0; i < openBrackets; i++) fixed += "]";
-									for (let i = 0; i < openBraces; i++) fixed += "}";
-									richContent = JSON.parse(fixed);
-								} catch {}
+									for (let i = 0; i < ab; i++) fixed += "]";
+									for (let i = 0; i < ob; i++) fixed += "}";
+									return JSON.parse(fixed);
+								} catch {
+									return null;
+								}
 							}
-							const discordUserId = el.getAttribute("data-discord-user-id") || richContent?.userId || null;
-							const imgEl = el.querySelector("img");
-							return {
-								type: "discordUser",
-								text: richContent?.globalName || richContent?.username || el.querySelector(".module-titleText")?.textContent?.trim() || "",
-								url: discordUserId ? `https://discord.com/users/${discordUserId}` : directUrl || null,
-								tracking_url: href || null,
-								icon_type: imgEl ? "image" : null,
-								icon: imgEl?.getAttribute("src") || null,
-								richContent,
-							};
-						}),
-
-						...Array.from(document.querySelectorAll("#profile-cards-section a[data-guild-json]")).map((el: any) => {
-							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
-							let richContent: any = null;
-							try {
-								richContent = JSON.parse(el.getAttribute("data-guild-json"));
-							} catch {}
-							const imgEl = el.querySelector("img");
-							return {
-								type: "discordServer",
-								text: richContent?.serverName || el.querySelector(".module-titleText")?.textContent?.trim() || "",
-								url: directUrl || null,
-								tracking_url: href || null,
-								icon_type: imgEl ? "image" : null,
-								icon: imgEl?.getAttribute("src") || null,
-								richContent,
-							};
-						}),
-
-						...Array.from(document.querySelectorAll("#profile-cards-section a[data-fivem-id]")).map((el: any) => {
-							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
-							const imgEl = el.querySelector("img");
-							return {
-								type: "fiveM",
-								text: el.querySelector(".module-titleText")?.textContent?.trim() || "",
-								url: directUrl || null,
-								tracking_url: href || null,
-								icon_type: imgEl ? "image" : null,
-								icon: imgEl?.getAttribute("src") || null,
-								richContent: { serverId: el.getAttribute("data-fivem-id") },
-							};
-						}),
-
-						...Array.from(document.querySelectorAll("#profile-cards-section a[data-roblox-user-json]")).map((el: any) => {
-							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
-							let richContent: any = null;
-							try {
-								richContent = JSON.parse(el.getAttribute("data-roblox-user-json"));
-							} catch {}
-							const imgEl = el.querySelector("img");
-							return {
-								type: "roblox",
-								text: richContent?.username || el.querySelector(".module-titleText")?.textContent?.trim() || "",
-								url: directUrl || (richContent?.profileId ? encodeURI("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
-								tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=" + encodeURIComponent("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
-								icon_type: imgEl ? "image" : null,
-								icon: imgEl?.getAttribute("src") || null,
-								richContent,
-							};
-						}),
-
-						...Array.from(document.querySelectorAll("#section-profile-connections > a")).map((el: any) => {
-							const href = el.getAttribute("href") || "";
-							const directUrl = href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href;
-							const iconEl = el.querySelector("iconify-icon");
-							const imgEl = el.querySelector("img");
-							const iconName = iconEl?.getAttribute("icon") || "";
-							const platform = iconName.split(":")[1] || imgEl?.getAttribute("alt") || "unknown";
-							const colorSocialText = (iconEl || imgEl)?.getAttribute("style")?.match(/color:\s*(#[0-9a-fA-F]{3,8})/)?.[1] || null;
-
-							return {
-								type: "social",
-								text:
-									el
-										.getAttribute("data-tippy-content")
-										?.replace(/<[^>]*>/g, "")
-										?.trim() || platform,
-								color: colorSocialText,
-								url: directUrl || null,
-								tracking_url: href || null,
-								icon_type: iconEl ? "iconify" : imgEl ? "image" : null,
-								icon: iconEl?.getAttribute("icon") || imgEl?.getAttribute("src") || null,
-								richContent: null,
-							};
-						}),
-					],
+						};
+						const driftDirect = (href: string): string => (href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href);
+						const DRIFT_ANCHOR_RE = /<a\b([^>]*)>([\s\S]*?)<\/a>/g;
+						const DRIFT_AATTR_RE = /([\w-]+)="([^"]*)"/g;
+						const DRIFT_MODTITLE_RE = /class="[^"]*\bmodule-titleText\b[^"]*"[^>]*>([\s\S]*?)</;
+						const connAt = test.indexOf('id="profile-cards-section"');
+						const connEnd = test.indexOf('id="section-profile-connections"');
+						const cardZone = connAt < 0 ? "" : test.slice(connAt, connEnd > connAt ? connEnd : connAt + 300000);
+						DRIFT_ANCHOR_RE.lastIndex = 0;
+						let ca: RegExpExecArray | null;
+						while ((ca = DRIFT_ANCHOR_RE.exec(cardZone))) {
+							const attrs: Record<string, string> = {};
+							DRIFT_AATTR_RE.lastIndex = 0;
+							let aa: RegExpExecArray | null;
+							while ((aa = DRIFT_AATTR_RE.exec(ca[1]))) attrs[aa[1]] = aa[2];
+							const href = attrs["href"] || "";
+							const inner = ca[2];
+							const directUrl = driftDirect(href);
+							const modTitle = decodeHTML((DRIFT_MODTITLE_RE.exec(inner)?.[1] || "").replace(TAG_STRIP_RE, "")).trim();
+							const imgSrc = /<img\b[^>]*\bsrc="([^"]*)"/.exec(inner)?.[1] || null;
+							const hasImg = /<img\b/.test(inner);
+							if ("data-discord-user-json" in attrs) {
+								const richContent = driftSafeJson(attrs["data-discord-user-json"]);
+								const discordUserId = attrs["data-discord-user-id"] || richContent?.userId || null;
+								out.push({
+									type: "discordUser",
+									text: richContent?.globalName || richContent?.username || modTitle || "",
+									url: discordUserId ? `https://discord.com/users/${discordUserId}` : directUrl || null,
+									tracking_url: href || null,
+									icon_type: hasImg ? "image" : null,
+									icon: imgSrc,
+									richContent,
+								});
+							} else if ("data-guild-json" in attrs) {
+								const richContent = driftSafeJson(attrs["data-guild-json"]);
+								out.push({
+									type: "discordServer",
+									text: richContent?.serverName || modTitle || "",
+									url: directUrl || null,
+									tracking_url: href || null,
+									icon_type: hasImg ? "image" : null,
+									icon: imgSrc,
+									richContent,
+								});
+							} else if ("data-fivem-id" in attrs) {
+								out.push({
+									type: "fiveM",
+									text: modTitle || "",
+									url: directUrl || null,
+									tracking_url: href || null,
+									icon_type: hasImg ? "image" : null,
+									icon: imgSrc,
+									richContent: { serverId: attrs["data-fivem-id"] },
+								});
+							} else if ("data-roblox-user-json" in attrs) {
+								const richContent = driftSafeJson(attrs["data-roblox-user-json"]);
+								out.push({
+									type: "roblox",
+									text: richContent?.username || modTitle || "",
+									url: directUrl || (richContent?.profileId ? encodeURI("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
+									tracking_url: href || (richContent?.profileId ? "https://drift.rip/go?ref=moduleInner&p=" + myProfileId + "&url=" + encodeURIComponent("https://www.roblox.com/users/" + richContent?.profileId + "/profile") : null),
+									icon_type: hasImg ? "image" : null,
+									icon: imgSrc,
+									richContent,
+								});
+							}
+						}
+						const socAt = test.indexOf('id="section-profile-connections"');
+						if (socAt >= 0) {
+							const socZone = test.slice(socAt, socAt + 100000);
+							DRIFT_ANCHOR_RE.lastIndex = 0;
+							let sa: RegExpExecArray | null;
+							while ((sa = DRIFT_ANCHOR_RE.exec(socZone))) {
+								const attrs: Record<string, string> = {};
+								DRIFT_AATTR_RE.lastIndex = 0;
+								let ab2: RegExpExecArray | null;
+								while ((ab2 = DRIFT_AATTR_RE.exec(sa[1]))) attrs[ab2[1]] = ab2[2];
+								const href = attrs["href"] || "";
+								const inner = sa[2];
+								const iconMatch = /<iconify-icon\b[^>]*\bicon="([^"]*)"/.exec(inner);
+								const hasImg = /<img\b/.test(inner);
+								const platform = iconMatch?.[1]?.split(":")[1] || /<img\b[^>]*\balt="([^"]*)"/.exec(inner)?.[1] || "unknown";
+								const styleSrc = /<iconify-icon\b[^>]*\bstyle="([^"]*)"/.exec(inner)?.[1] || /<img\b[^>]*\bstyle="([^"]*)"/.exec(inner)?.[1] || "";
+								out.push({
+									type: "social",
+									text: (attrs["data-tippy-content"] || "").replace(TAG_STRIP_RE, "").trim() || platform,
+									color: /color:\s*(#[0-9a-fA-F]{3,8})/.exec(styleSrc)?.[1] || null,
+									url: driftDirect(href) || null,
+									tracking_url: href || null,
+									icon_type: iconMatch ? "iconify" : hasImg ? "image" : null,
+									icon: iconMatch?.[1] || /<img\b[^>]*\bsrc="([^"]*)"/.exec(inner)?.[1] || null,
+									richContent: null,
+								});
+							}
+						}
+						return out;
+					})(),
 				},
 				web: {
-					webTitle: document.querySelector("head > title")?.textContent,
-					webDesc: document.querySelector('head > meta[name="description"]')?.getAttribute("content"),
-					title: document.querySelector('head > meta[property="og:title"]')?.getAttribute("content"),
-					desc: document.querySelector('head > meta[property="og:description"]')?.getAttribute("content"),
-					bannerUrl: document.querySelector('head > meta[property="og:image"]')?.getAttribute("content"),
-					canonicalTitle: document.querySelector('h1[class="hdn"]')?.textContent,
-					canonicalUrl: document.querySelector('head > link[rel="canonical"]')?.getAttribute("href"),
+					webTitle: /<title[^>]*>([\s\S]*?)<\/title>/i.exec(test)?.[1]?.replace(TAG_STRIP_RE, "").trim(),
+					webDesc: DRIFT_ATTR_both("meta", "name", "description"),
+					title: DRIFT_ATTR_both("meta", "property", "og:title"),
+					desc: DRIFT_ATTR_both("meta", "property", "og:description"),
+					bannerUrl: DRIFT_ATTR_both("meta", "property", "og:image"),
+					canonicalTitle: /<h1[^>]*class="[^"]*\bhdn\b[^"]*"[^>]*>([\s\S]*?)<\/h1>/i.exec(test)?.[1]?.replace(TAG_STRIP_RE, "").trim(),
+					canonicalUrl: DRIFT_ATTR_both("link", "rel", "canonical"),
 				},
 			},
 		};
@@ -9390,9 +9579,7 @@ export async function TrakteerProfile(query: string): Promise<any> {
 		}
 
 		const html = await res.text();
-		const { document } = parseHTML(html);
-		const appDiv = document.querySelector("#app");
-		const dataPage = appDiv?.getAttribute("data-page");
+		const dataPage = /<[^>]*\bid="app"[^>]*\bdata-page="([^"]*)"/.exec(html)?.[1] || /<[^>]*\bdata-page="([^"]*)"[^>]*\bid="app"/.exec(html)?.[1];
 
 		if (!dataPage) return { data: null };
 
@@ -9455,8 +9642,6 @@ export async function SociaBuzzProfile(query: string): Promise<any> {
 	}
 }
 
-let gunsCookies: string | null = null;
-
 export async function GunsProfile(query: string): Promise<any> {
 	if (!query) return null;
 	const username = query.split(/[?#]/)[0].split("/").filter(Boolean).pop()?.trim();
@@ -9488,8 +9673,7 @@ export async function GunsProfile(query: string): Promise<any> {
 					}
 
 					const html = await responseText(res);
-					const { document: doc } = parseHTML(html);
-					const pageTitle = doc.querySelector("title")?.textContent?.trim() || "";
+					const pageTitle = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() || "";
 					const isChallenge = status === 401 || status === 403 || status === 429 || pageTitle === "Just a moment...";
 
 					if (!isChallenge) {
@@ -9628,8 +9812,6 @@ export async function GunsProfile(query: string): Promise<any> {
 		return null;
 	}
 }
-
-let rageCookies: string | null = null;
 
 export async function RageProfile(query: string): Promise<any> {
 	if (!query) return null;
@@ -12713,14 +12895,20 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 
 	const resolveUrl = (raw: string | null | undefined): string => {
 		if (!raw) return "";
-		if (raw.startsWith("//")) return `https:${raw}`;
-		if (raw.startsWith("/")) return `https://imgflip.com${raw}`;
+		const c0 = raw.charCodeAt(0);
+		if (c0 === 47) return raw.charCodeAt(1) === 47 ? `https:${raw}` : `https://imgflip.com${raw}`;
 		return raw;
 	};
 
-	const hasClass = (el: any, name: string): boolean => el.getAttribute?.("class")?.split(" ").includes(name) ?? false;
-
-	const text = (el: any): string => String(el?.textContent ?? "").trim();
+	const richText = (s: string): string => decodeHTML(s.replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
+	const IMGFLIP_H2_RE = /<h2[^>]*>([\s\S]*?)<\/h2>/g;
+	const IMGFLIP_A_RE = /<a\b([^>]*)>([\s\S]*?)<\/a>/g;
+	const IMGFLIP_A_CLASS_RE = /class="[^"]*(?:^|\s)s-result(?:\s|$)[^"]*"/;
+	const IMGFLIP_HREF_RE = /\bhref="([^"]*)"/;
+	const IMGFLIP_TITLE_RE = /class="[^"]*\bs-result-title\b[^"]*"[^>]*>([\s\S]*?)</;
+	const IMGFLIP_SUB_RE = /class="[^"]*\bs-result-subtitle\b[^"]*"[^>]*>([\s\S]*?)</;
+	const IMGFLIP_DESC_RE = /class="[^"]*\bs-result-description\b[^"]*"[^>]*>([\s\S]*?)</;
+	const IMGFLIP_IMG_RE = /<img\b[^>]*\bsrc="([^"]*)"/;
 
 	// Parse subtitle string into structured metadata per section
 	const parseMeta = (section: string, subtitle: string, description: string) => {
@@ -12771,9 +12959,9 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 
 		const html: string = await res.text();
 
-		const { document } = parseHTML(html);
-		const container = document.querySelector("#s-results");
-		if (!container) return null;
+		const scopeAt = html.indexOf('id="s-results"');
+		if (scopeAt < 0) return null;
+		const scope = html.slice(scopeAt);
 
 		const data: Record<string, any[] | null> = {
 			memes: null,
@@ -12782,50 +12970,52 @@ export const ImgflipSearch = async (query: string): Promise<any> => {
 			streams: null,
 			users: null,
 		};
+		type Tok = { idx: number; h2?: string; href?: string; inner?: string };
+		const toks: Tok[] = [];
+		IMGFLIP_H2_RE.lastIndex = 0;
+		let hm: RegExpExecArray | null;
+		while ((hm = IMGFLIP_H2_RE.exec(scope))) toks.push({ idx: hm.index, h2: richText(hm[1]).toLowerCase() });
+		IMGFLIP_A_RE.lastIndex = 0;
+		let am: RegExpExecArray | null;
+		while ((am = IMGFLIP_A_RE.exec(scope))) {
+			if (!IMGFLIP_A_CLASS_RE.test(am[1])) continue;
+			toks.push({ idx: am.index, href: IMGFLIP_HREF_RE.exec(am[1])?.[1] || "", inner: am[2] });
+		}
+		toks.sort((a, b) => a.idx - b.idx);
+
 		let currentSection = "unknown";
-
-		for (const child of container.children) {
-			const heading = child.tagName === "H2" ? child : child.querySelector?.("h2");
-
-			if (heading) {
-				currentSection = text(heading).toLowerCase();
+		for (const t of toks) {
+			if (t.h2 !== undefined) {
+				currentSection = t.h2;
 				if (data[currentSection] === null) data[currentSection] = [];
 				continue;
 			}
+			if (!Array.isArray(data[currentSection])) continue;
+			const href = t.href || "";
+			const inner = t.inner || "";
+			const url = resolveUrl(href);
+			const title = richText(IMGFLIP_TITLE_RE.exec(inner)?.[1] || "");
+			const subtitle = richText(IMGFLIP_SUB_RE.exec(inner)?.[1] || "");
+			const rawCover = IMGFLIP_IMG_RE.exec(inner)?.[1];
+			const isGif = href.includes("/gif/");
+			const cover = resolveUrl(rawCover);
+			const full_cover = isGif ? cover.replace("/2/", "/").replace(/\.jpg$/, ".mp4") : cover.replace("/2/", "/");
+			const description = richText(IMGFLIP_DESC_RE.exec(inner)?.[1] || "");
 
-			if (!hasClass(child, "s-result") && !hasClass(child, "s-more-results")) {
-				continue;
-			}
+			const meta = parseMeta(currentSection, subtitle, description);
 
-			const anchors: any[] = hasClass(child, "s-result") ? [child] : [...child.querySelectorAll("a.s-result")];
+			const noCover = currentSection === "users" || currentSection === "streams";
+			const entry: Record<string, any> = noCover
+				? { url, title, ...meta }
+				: {
+						url,
+						title,
+						cover: cover || null,
+						full_cover: full_cover || null,
+						...meta,
+					};
 
-			for (const el of anchors) {
-				const url = resolveUrl(el.getAttribute("href"));
-				const title = text(el.querySelector(".s-result-title"));
-				const subtitle = text(el.querySelector(".s-result-subtitle"));
-				const rawCover = el.querySelector("img")?.getAttribute("src");
-				const isGif = el.getAttribute("href")?.includes("/gif/") ?? false;
-				const cover = resolveUrl(rawCover);
-				const full_cover = isGif ? cover.replace("/2/", "/").replace(/\.jpg$/, ".mp4") : cover.replace("/2/", "/");
-				const description = text(el.querySelector(".s-result-description"));
-
-				const meta = parseMeta(currentSection, subtitle, description);
-
-				const noCover = currentSection === "users" || currentSection === "streams";
-				const entry: Record<string, any> = noCover
-					? { url, title, ...meta }
-					: {
-							url,
-							title,
-							cover: cover || null,
-							full_cover: full_cover || null,
-							...meta,
-						};
-
-				if (Array.isArray(data[currentSection])) {
-					data[currentSection]!.push(entry);
-				}
-			}
+			data[currentSection]!.push(entry);
 		}
 
 		return { data };
@@ -13619,7 +13809,7 @@ export const googleImgSearchV2 = async (query: string, refresh_auth: boolean = f
 			raw = jsonpMatch[1];
 		}
 
-		if (raw.trim().startsWith("<")) {
+		if (raw.trim().charCodeAt(0) === 60) {
 			return { error: "Google asking to verify you're not a bot" };
 		}
 
@@ -13682,7 +13872,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 			raw = jsonpMatch[1];
 		}
 
-		if (raw.trim().startsWith("<")) {
+		if (raw.trim().charCodeAt(0) === 60) {
 			return { error: "Google asking to verify you're not a bot" };
 		}
 
@@ -13720,36 +13910,43 @@ const googleWebJar = googleTrustJar;
 
 const mergeGoogleWebCookies = (res: Response): void => mergeGoogleTrust(res);
 
-const parseGoogleWebItems = (html: string): any[] => {
-	const { document } = parseHTML(html);
+const GOOGLE_BOX_RE = /<div[^>]*class="[^"]*\byuRUbf\b[^"]*"[^>]*>/g;
+const GOOGLE_HREF_RE = /<a[^>]*\bhref="([^"]+)"[^>]*>/;
+const GOOGLE_H3_RE = /<h3[^>]*>([\s\S]*?)<\/h3>/;
+const GOOGLE_ANCHOR_TEXT_RE = /<a[^>]*>([\s\S]*?)<\/a>/;
+const GOOGLE_SITE_RE = /<span[^>]*class="[^"]*\bVuuXrf\b[^"]*"[^>]*>([\s\S]*?)<\/span>/;
+const GOOGLE_SNIPPET_RE = /<div[^>]*class="[^"]*\bVwiC3b\b[^"]*"[^>]*>([\s\S]*?)<\/div>/;
+const GOOGLE_GOTO_RE = /^\/goto\?url=/;
+const GOOGLE_GOTO_HREF_RE = /<a[^>]*\bhref="(\/goto\?[^"]*)"/;
+const GOOGLE_DEFERRED_TBN_RE = /https:\/\/encrypted-tbn\d+\.gstatic\.com\/images\?q(?:=|\\u003d)tbn:[^"]+/;
+const GOOGLE_JSDATA_RE = /jsdata="[^"]*;[^;]*;([^;\s"]+)/;
+
+export const parseGoogleWebItems = (html: string): any[] => {
 	const raw: any[] = [];
-	const usedSnippets = new Set<any>();
-	for (const box of Array.from(document.querySelectorAll("div.yuRUbf")) as any[]) {
-		const a = (box as any).querySelector("a[href]");
-		let href: string = a?.getAttribute("href") ?? "";
+	GOOGLE_BOX_RE.lastIndex = 0;
+	const starts: number[] = [];
+	let bm: RegExpExecArray | null;
+	while ((bm = GOOGLE_BOX_RE.exec(html))) starts.push(bm.index);
+	for (let i = 0; i < starts.length; i++) {
+		const window = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : starts[i] + 12000);
+		let href = GOOGLE_HREF_RE.exec(window)?.[1] || "";
 		if (!href) continue;
-		if (href.startsWith("/url?")) {
+		if (GOOGLE_URLQ_RE.test(href)) {
 			try {
 				const params = new URLSearchParams(href.split("?")[1] ?? "");
 				href = params.get("q") || params.get("url") || href;
 			} catch {}
 		}
-		const title = ((box as any).querySelector("h3")?.textContent ?? a?.textContent ?? "").replace(/\s+/g, " ").trim();
+		const h3 = GOOGLE_H3_RE.exec(window)?.[1];
+		const anchorText = h3 ?? GOOGLE_ANCHOR_TEXT_RE.exec(window)?.[1] ?? "";
+		const title = decodeHTML(anchorText.replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
 		if (!title) continue;
-		const site = ((box as any).querySelector("span.VuuXrf")?.textContent ?? "").replace(/\s+/g, " ").trim();
-		let snippet = "";
-		let ancestor: any = box;
-		for (let depth = 0; depth < 4 && ancestor; depth++) {
-			const candidate = ancestor.querySelector?.("div.VwiC3b");
-			if (candidate && !usedSnippets.has(candidate)) {
-				snippet = (candidate.textContent ?? "").replace(/\s+/g, " ").trim();
-				if (snippet) {
-					usedSnippets.add(candidate);
-					break;
-				}
-			}
-			ancestor = ancestor.parentNode;
-		}
+		const site = decodeHTML(GOOGLE_SITE_RE.exec(window)?.[1]?.replace(TAG_STRIP_RE, "") || "")
+			.replace(WS_COLLAPSE_RE, " ")
+			.trim();
+		const snippet = decodeHTML(GOOGLE_SNIPPET_RE.exec(window)?.[1]?.replace(TAG_STRIP_RE, "") || "")
+			.replace(WS_COLLAPSE_RE, " ")
+			.trim();
 		raw.push({
 			title,
 			href,
@@ -13784,7 +13981,7 @@ const parseGoogleWebItemsFromJson = (html: string): any[] => {
 	const seen = new Set<string>();
 	const walk = (node: any): void => {
 		if (!Array.isArray(node)) return;
-		if (node.length >= 4 && typeof node[0] === "string" && node[0].startsWith("/goto?url=") && typeof node[1] === "string" && node[1].length > 2 && typeof node[2] === "string" && node[2].length > 10) {
+		if (node.length >= 4 && typeof node[0] === "string" && GOOGLE_GOTO_RE.test(node[0]) && typeof node[1] === "string" && node[1].length > 2 && typeof node[2] === "string" && node[2].length > 10) {
 			const gotoUrl = node[0];
 			if (!seen.has(gotoUrl)) {
 				seen.add(gotoUrl);
@@ -13802,7 +13999,7 @@ const parseGoogleWebItemsFromJson = (html: string): any[] => {
 	return raw;
 };
 
-const parseGoogleWebItemsSmart = (html: string): any[] => {
+export const parseGoogleWebItemsSmart = (html: string): any[] => {
 	const domItems = parseGoogleWebItems(html);
 	const jsonItems = parseGoogleWebItemsFromJson(html);
 	if (!jsonItems.length) return domItems;
@@ -13928,53 +14125,63 @@ const parseGoogleImageMeta = (html: string): { byToken: Map<string, GoogleImageM
 	return { byToken: meta, containers: [...containers] };
 };
 
-// Walk up to find the /goto tracking anchor.
-const findGoogleTrackingUrl = (element: any): string => {
-	let node: any = element;
-	while (node) {
-		const anchor = node.querySelector?.('a[href^="/goto?"]');
-		const href = anchor?.getAttribute?.("href") ?? "";
-		if (typeof href === "string" && href.startsWith("/goto?")) return `https://www.google.com${href}`;
-		node = node.parentElement;
-	}
-	return "";
+// Tracking anchor is an ancestor of the card in the DOM, so in raw html its
+// href sits just before the card markup — last /goto href in the lookbehind.
+const findGoogleTrackingUrl = (html: string, cardStart: number, cardHtml: string): string => {
+	const own = GOOGLE_GOTO_HREF_RE.exec(cardHtml)?.[1];
+	if (own) return `https://www.google.com${own}`;
+	const prefix = html.slice(cardStart > 6000 ? cardStart - 6000 : 0, cardStart);
+	let last = "";
+	for (const m of prefix.matchAll(/<a[^>]*\bhref="(\/goto\?[^"]*)"/g)) last = m[1];
+	return last ? `https://www.google.com${last}` : "";
 };
 
 // Deferred thumbnails: real cdn url lives in bootstrap payload, keyed by jsdata blob id.
-const findGoogleDeferredImage = (html: string, card: any): string => {
-	let key = "";
-	let node: any = card;
-	while (node && !key) {
-		const jsdata: string = node.getAttribute?.("jsdata") ?? "";
-		const candidate = (jsdata.split(";")[2] ?? "").split(" ")[0] ?? "";
-		if (candidate && html.includes(`"${candidate}":`)) key = candidate;
-		node = node.parentElement;
-	}
-	if (!key) return "";
+const findGoogleDeferredImage = (html: string, cardHtml: string): string => {
+	const key = GOOGLE_JSDATA_RE.exec(cardHtml)?.[1] || "";
+	if (!key || !html.includes(`"${key}":`)) return "";
 	const at = html.indexOf(`"${key}":`);
-	const match = html.slice(at, at + 800).match(/https:\/\/encrypted-tbn\d+\.gstatic\.com\/images\?q(?:=|\\u003d)tbn:[^"]+/);
-	return match ? unescapeGoogleImageData(match[0]) : "";
+	const match = GOOGLE_DEFERRED_TBN_RE.exec(html.slice(at, at + 800))?.[0];
+	return match ? unescapeGoogleImageData(match) : "";
 };
 
-const parseGoogleImageItems = (html: string): any[] => {
-	const { document } = parseHTML(html);
+const GOOGLE_CARD_RE = /<div[^>]*\bjsname="PNoEC"[^>]*>/g;
+const GOOGLE_IMG_RE = /<img\b[^>]*>/;
+const GOOGLE_ATTR_RE = /(\w[\w-]*)="([^"]*)"/g;
+
+export const parseGoogleImageItems = (html: string): any[] => {
 	const { byToken } = parseGoogleImageMeta(html);
 	const raw: any[] = [];
 	const seen = new Set<string>();
-	for (const card of Array.from(document.querySelectorAll('div[jsname="PNoEC"]')) as any[]) {
-		const img = card.querySelector("img") as any;
-		const imgId = img?.getAttribute("id") ?? "";
-		let src: string = img?.getAttribute("src") ?? "";
-		if (!src.startsWith("http")) src = findGoogleDeferredImage(html, card);
-		const title = ((img?.getAttribute("alt") ?? "") || "").replace(/\s+/g, " ").trim();
-		if (!src.startsWith("http") || !title) continue;
+	GOOGLE_CARD_RE.lastIndex = 0;
+	const starts: number[] = [];
+	let cm: RegExpExecArray | null;
+	while ((cm = GOOGLE_CARD_RE.exec(html))) starts.push(cm.index);
+	for (let i = 0; i < starts.length; i++) {
+		const cardHtml = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : starts[i] + 20000);
+		const imgTag = GOOGLE_IMG_RE.exec(cardHtml)?.[0] || "";
+		let src = "";
+		let imgId = "";
+		let alt = "";
+		if (imgTag) {
+			GOOGLE_ATTR_RE.lastIndex = 0;
+			let am: RegExpExecArray | null;
+			while ((am = GOOGLE_ATTR_RE.exec(imgTag))) {
+				if (am[1] === "src") src = am[2];
+				else if (am[1] === "id") imgId = am[2];
+				else if (am[1] === "alt") alt = am[2];
+			}
+		}
+		if (!HTTP_URL_RE.test(src)) src = findGoogleDeferredImage(html, cardHtml);
+		const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
+		if (!HTTP_URL_RE.test(src) || !title) continue;
 		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
 		if (token) {
 			if (seen.has(token)) continue;
 			seen.add(token);
 		}
 		const info = token ? byToken.get(token) : undefined;
-		const trackingUrl = findGoogleTrackingUrl(card);
+		const trackingUrl = findGoogleTrackingUrl(html, starts[i], cardHtml);
 		const hash = imgId.replace(/^dimg_/, "").replace(/_\d+$/, "");
 		raw.push({
 			title,
@@ -14000,8 +14207,8 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 	const jar = googleWebJar();
 	const resolved = await Promise.allSettled(
 		raw.slice(0, limit).map(async (item) => {
-			if (item.href.startsWith("http")) return item.href;
-			if (!item.href.startsWith("/goto?")) return null;
+			if (HTTP_URL_RE.test(item.href)) return item.href;
+			if (!GOOGLE_GOTO_RE.test(item.href)) return null;
 			try {
 				const r = await fetch(`https://www.google.com${item.href}`, {
 					headers: {
@@ -14014,7 +14221,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 				});
 				await r.text().catch(() => {});
 				const loc = r.headers.get("location") ?? "";
-				return loc.startsWith("http") ? loc : null;
+				return HTTP_URL_RE.test(loc) ? loc : null;
 			} catch {
 				return null;
 			}
@@ -14024,7 +14231,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 	const seen = new Set<string>();
 	raw.slice(0, limit).forEach((item, idx) => {
 		const r = resolved[idx];
-		const url = item.href.startsWith("http") ? item.href : r.status === "fulfilled" ? r.value : null;
+		const url = HTTP_URL_RE.test(item.href) ? item.href : r.status === "fulfilled" ? r.value : null;
 		if (!url || seen.has(url)) return;
 		seen.add(url);
 		const { href: _href, iconDomain: _iconDomain, ...rest } = item;
@@ -14037,7 +14244,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 			...rest,
 			[urlKey]: url,
 			...(iconUrl ? { iconUrl } : {}),
-			...(item.href.startsWith("/goto?") ? { trackingUrl: `https://www.google.com${item.href}` } : {}),
+			...(GOOGLE_GOTO_RE.test(item.href) ? { trackingUrl: `https://www.google.com${item.href}` } : {}),
 		});
 	});
 	return items;
@@ -14136,8 +14343,8 @@ const mergeGoogleCloakCookies = (cookies: any[] | undefined): void => {
 };
 
 const googleWebCloakFetch = async (url: string): Promise<{ html: string; finalUrl: string } | null> => {
-	for (let attempt = 0; attempt <= 2; attempt++) {
-		if (attempt) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+	for (let attempt = 0; attempt <= 3; attempt++) {
+		if (attempt) await new Promise((resolve) => setTimeout(resolve, 2000));
 		try {
 			googleWebCloakSyncCookies();
 			const res: any = await googleWebCloak.get(url, {
@@ -14146,7 +14353,7 @@ const googleWebCloakFetch = async (url: string): Promise<{ html: string; finalUr
 			});
 			mergeGoogleCloakCookies(res?.cookies);
 			const status = Number(res?.statusCode ?? 0);
-			if (status === 429 && attempt < 2) continue;
+			if (status === 429 && attempt < 3) continue;
 			if (status !== 200) return null;
 			return {
 				html: String(res.text ?? ""),
@@ -14520,9 +14727,6 @@ type EmojiDatabase = {
 
 const EMOJI_SOURCE_URL = "https://emojikitchen.dev/metadata.json";
 
-let emojiDataCache: EmojiDatabase | null = null;
-let emojiLoadPromise: Promise<EmojiDatabase | null> | null = null;
-
 async function loadEmojiData() {
 	if (emojiDataCache) return emojiDataCache;
 	if (emojiLoadPromise) return emojiLoadPromise;
@@ -14803,7 +15007,7 @@ function parseDiscordAutomodStringArray(value: any, label: string, jsonArrayOnly
 	if (Array.isArray(value)) return { value: value.map((v) => String(v)).filter(Boolean) };
 	const raw = String(value).trim();
 	if (!raw) return { value: [] };
-	if (raw.startsWith("[")) {
+	if (raw.charCodeAt(0) === 91) {
 		try {
 			const parsed = JSON.parse(raw);
 			if (Array.isArray(parsed)) return { value: parsed.map((v) => String(v)).filter(Boolean) };
@@ -15363,7 +15567,7 @@ export const Pixabay = async function Pixabay(query: string) {
 				"sec-fetch-mode": "cors",
 				"sec-fetch-site": "same-origin",
 				referer: `https://pixabay.com/id/images/search/${encodeURIComponent(query)}/`,
-				"user-agent": commonHeaders["User-Agent"] + " Pixabay",
+				"User-Agent": commonHeaders["User-Agent"] + " Pixabay",
 			},
 		});
 
@@ -15443,7 +15647,7 @@ export const GoogleGemma = async function GoogleGemma(query: string) {
 
 		for (const line of text.split("\n")) {
 			const trimmed = line.trim();
-			if (!trimmed.startsWith("data:")) continue;
+			if (!/^data:/.test(trimmed)) continue;
 			const payload = trimmed.slice(5).trim();
 			if (payload === "[DONE]") break;
 			try {
@@ -15587,13 +15791,6 @@ const cleanDescription = (html: any): string | null => {
 		.trim();
 };
 
-let playStoreBootstrap: {
-	fSid: string;
-	bl: string;
-	x: string;
-	expire: number;
-} | null = null;
-
 const getPlayStoreBootstrap = async () => {
 	if (playStoreBootstrap && playStoreBootstrap.expire > Date.now()) return playStoreBootstrap;
 	try {
@@ -15648,7 +15845,7 @@ export const PlayStoreSearch = async function PlayStoreSearch(query: string) {
 		let apps: any[] = [];
 		for (const line of text.split("\n")) {
 			const t = line.trim();
-			if (!t.startsWith("[")) continue;
+			if (t.charCodeAt(0) !== 91) continue;
 			try {
 				const arr: any = JSON.parse(t);
 				const items = Array.isArray(arr[0]) ? arr : [arr];
@@ -15928,9 +16125,6 @@ export const DiscordListMemberTags = async (token: string, guildId: string, type
 };
 
 // Country metadata cache
-let countriesCache: any = null;
-let countriesCachePromise: Promise<void> | null = null;
-
 async function ensureCountriesCache() {
 	if (countriesCache) return;
 	if (countriesCachePromise) return countriesCachePromise;
@@ -16293,14 +16487,6 @@ export const holidaysTime = async (query: string, year: string) => {
 		return { error: e.message || "Something just happened" };
 	}
 };
-
-let googleTtsWiz: {
-	fSid: string;
-	bl: string;
-	at: string | null;
-	expire: number;
-} | null = null;
-let googleTtsCookies: string | null = null;
 
 const getGoogleTtsWiz = async () => {
 	if (googleTtsWiz && googleTtsWiz.expire > Date.now()) return googleTtsWiz;
@@ -16882,35 +17068,59 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 				error: "Startpage asking to verify you're not a bot",
 				_wafChallenge: waf(),
 			};
-		const { document } = parseHTML(html);
+		const SP_RESULT_RE = /<(?:div|article)[^>]*class="[^"]*\bresult\b[^"]*"[^>]*>/g;
+		const SP_TITLE_A_RE = /<a[^>]*class="[^"]*\bresult-title\b[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/;
+		const SP_ANY_HTTP_A_RE = /<a[^>]*\bhref="(https?:[^"]*)"[^>]*>([\s\S]*?)<\/a>/;
+		const SP_FIRST_A_RE = /<a[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/;
+		const SP_H2_RE = /<h2[^>]*>([\s\S]*?)<\/h2>/;
+		const SP_DISPLAY_FULL_RE = /<a[^>]*class="[^"]*\bwgl-display-url\b[^"]*"[^>]*>[\s\S]*?class="[^"]*\bdefault-link-text\b[^"]*"[^>]*>([\s\S]*?)</;
+		const SP_SITE_RE = /<a[^>]*class="[^"]*\bwgl-site-title\b[^"]*"[^>]*>[\s\S]*?class="[^"]*\blink-text\b[^"]*"[^>]*>([\s\S]*?)</;
+		const SP_DISPLAY_RE = /<a[^>]*class="[^"]*\bwgl-display-url\b[^"]*"[^>]*>([\s\S]*?)<\/a>/;
+		const SP_SNIPPET_RE = /<p[^>]*class="[^"]*\bdescription\b[^"]*"[^>]*>([\s\S]*?)<\/p>/;
+		const SP_SITELINK_RE = /<a[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+		const SP_ANON_RE = /class="[^"]*\banonymous-view-link\b[^"]*"[^>]*>[\s\S]*?<a[^>]*\bhref="([^"]*)"/;
+		const SP_URL_RE = /^https?:\/\/\S+$/;
+		const SP_DISPLAY_SUB_RE = /class="[^"]*\bstructured-link-text\b[^"]*"[^>]*>([\s\S]*?)</;
+		const rich = (s: string) => decodeHTML(s.replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
 		const items: any[] = [];
-		let nodes = Array.from(document.querySelectorAll(".w-gl .result"));
-		if (!nodes.length) nodes = Array.from(document.querySelectorAll("div.result"));
-		for (const el of nodes) {
-			const h2 = (el as any).querySelector("h2");
-			const titleA = (el as any).querySelector("a.result-title") || (h2?.closest?.("a") as any) || (el as any).querySelector("a[href^='http']");
-			let url = titleA?.getAttribute("href") || "";
-			if (url && !url.startsWith("http")) {
-				const full = (el as any).querySelector("a.wgl-display-url .default-link-text")?.textContent?.replace(/\s+/g, " ").trim() || "";
-				url = /^https?:\/\/\S+$/.test(full) ? full : "";
+		SP_RESULT_RE.lastIndex = 0;
+		const spStarts: number[] = [];
+		let spm: RegExpExecArray | null;
+		while ((spm = SP_RESULT_RE.exec(html))) spStarts.push(spm.index);
+		for (let i = 0; i < spStarts.length; i++) {
+			const window = html.slice(spStarts[i], i + 1 < spStarts.length ? spStarts[i + 1] : spStarts[i] + 20000);
+			const titled = SP_TITLE_A_RE.exec(window);
+			const httpA = titled ? null : SP_ANY_HTTP_A_RE.exec(window);
+			const firstA = titled || httpA ? null : SP_FIRST_A_RE.exec(window);
+			const link = titled || httpA || firstA;
+			let url = link?.[1] || "";
+			if (url && !HTTP_URL_RE.test(url)) {
+				const full = rich(SP_DISPLAY_FULL_RE.exec(window)?.[1] || "");
+				url = SP_URL_RE.test(full) ? full : "";
 			}
 			if (!url) continue;
-			const title = titleA?.querySelector("h2")?.textContent?.trim() || titleA?.textContent?.trim() || "";
-			const siteName = (el as any).querySelector("a.wgl-site-title .link-text")?.textContent?.trim() || "";
-			const displayUrl = (el as any).querySelector("a.wgl-display-url .structured-link-text")?.textContent?.replace(/\s+/g, " ").trim() || (el as any).querySelector("a.wgl-display-url")?.textContent?.trim() || "";
-			const snippet = (el as any).querySelector("p.description")?.textContent?.replace(/\s+/g, " ").trim() || "";
+			const linkInner = link?.[2] || "";
+			const title = rich(SP_H2_RE.exec(linkInner)?.[1] || linkInner);
+			const siteName = rich(SP_SITE_RE.exec(window)?.[1] || "");
+			const displayInner = SP_DISPLAY_RE.exec(window)?.[1] || "";
+			const displayUrl = rich(SP_DISPLAY_SUB_RE.exec(displayInner)?.[1] || displayInner);
+			const snippet = rich(SP_SNIPPET_RE.exec(window)?.[1] || "");
 			const sitelinks: any[] = [];
-			for (const s of Array.from((el as any).querySelectorAll(".wgl-sitelinks a"))) {
-				const su = (s as any).getAttribute("href") || "";
-				const st = (s as any).textContent?.trim() || "";
-				if (su)
+			const slZone = /class="[^"]*\bwgl-sitelinks\b[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*\bresult\b|$)/.exec(window)?.[1];
+			if (slZone) {
+				SP_SITELINK_RE.lastIndex = 0;
+				let slm: RegExpExecArray | null;
+				while ((slm = SP_SITELINK_RE.exec(slZone))) {
+					const su = slm[1];
+					if (!su) continue;
 					sitelinks.push({
-						title: st,
-						url: su.startsWith("http") ? su : `https://www.startpage.com${su}`,
+						title: rich(slm[2] || ""),
+						url: HTTP_URL_RE.test(su) ? su : `https://www.startpage.com${su}`,
 					});
+				}
 			}
-			let anonymousViewUrl = (el as any).querySelector(".anonymous-view-link a")?.getAttribute("href") || "";
-			if (anonymousViewUrl && !anonymousViewUrl.startsWith("http")) anonymousViewUrl = "";
+			let anonymousViewUrl = SP_ANON_RE.exec(window)?.[1] || "";
+			if (anonymousViewUrl && !HTTP_URL_RE.test(anonymousViewUrl)) anonymousViewUrl = "";
 			items.push({
 				title,
 				url,
@@ -16933,7 +17143,7 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 	}
 };
 
-const absolutizeStartpageUrl = (value: string) => (typeof value === "string" && value.startsWith("/") ? `${STARTPAGE_BASE}${value}` : value);
+const absolutizeStartpageUrl = (value: string) => (typeof value === "string" && value.charCodeAt(0) === 47 ? `${STARTPAGE_BASE}${value}` : value);
 
 const matchJsonObjectEnd = (src: string, start: number) => {
 	let depth = 0;
@@ -16960,12 +17170,14 @@ const matchJsonObjectEnd = (src: string, start: number) => {
 	return -1;
 };
 
-const extractStartpageImageResults = (html: string) => {
-	const { document } = parseHTML(html);
-	const scripts = Array.from(document.querySelectorAll("script")) as any[];
+const SP_SCRIPT_RE = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+
+export const extractStartpageImageResults = (html: string) => {
 	let blob = "";
-	for (const s of scripts) {
-		const t = s?.textContent || "";
+	SP_SCRIPT_RE.lastIndex = 0;
+	let sm: RegExpExecArray | null;
+	while ((sm = SP_SCRIPT_RE.exec(html))) {
+		const t = sm[1];
 		if (t.includes("thumbnailUrl") && t.length > blob.length) blob = t;
 	}
 	if (!blob) return [];
@@ -17293,7 +17505,7 @@ export const CanvaGraphics = async function CanvaGraphics(que: string) {
 				const obj = JSON.parse(html.slice(idx, i));
 				const ref = obj?.I?.reference;
 				const href = obj?.N?.K?.A;
-				if (ref && typeof href === "string" && href.startsWith("/graphics/") && !href.startsWith("/graphics/search/") && !href.startsWith("/graphics/s/") && !href.startsWith("/graphics/collection/") && !seen.has(ref)) {
+				if (ref && typeof href === "string" && /^\/graphics\/(?!search\/|s\/|collection\/)/.test(href) && !seen.has(ref)) {
 					seen.add(ref);
 					const thumb = obj?.L?.[0]?.X?.[0];
 					results.push({

@@ -9,12 +9,7 @@ import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
 import { discordFetch } from "./request.js";
 
-/**
- * Patch a Lavalink node's connect() method to temporarily disable TLS
- * certificate verification only during the WebSocket handshake.
- * This avoids globally setting NODE_TLS_REJECT_UNAUTHORIZED which would
- * break HTTP/2 fetch and other secure connections in the process.
- */
+/** Disable TLS verification only for a node's WebSocket handshake (avoids setting NODE_TLS_REJECT_UNAUTHORIZED globally). */
 function patchNodeTls(node: any) {
 	if (!config.disableTLSMusic) return;
 	if (node.__tlsPatched) return;
@@ -337,10 +332,7 @@ function lavalinkNodeList(): any[] {
 	return LAVALINK_NODES.filter((n) => n.host && n.host.length > 0);
 }
 
-/**
- * Returns node configs in the literal order of the LAVALINK_HOST array —
- * no local-first/remote-first reordering. Fallback walks the chain top to bottom.
- */
+/** Node configs in LAVALINK_HOST order; fallback walks the chain top to bottom. */
 function orderedNodeList(_preferLocal: boolean): any[] {
 	return lavalinkNodeList();
 }
@@ -359,7 +351,7 @@ function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 	}
 }
 
-/** Wait for a SPECIFIC node (by id) to connect, without touching/deleting other registered nodes. */
+/** Wait for a specific node (by id) to connect, leaving other registered nodes alone. */
 // Concurrent requests can independently ask to connect the same node (e.g. bootstrap +
 // an endpoint's explicit node pick racing each other). Without a lock each caller would
 // call node.connect() again, opening a duplicate WebSocket to the same Lavalink server —
@@ -419,12 +411,7 @@ function waitForSpecificNodeConnection(manager: LavalinkManager, nodeId: string,
 	return promise;
 }
 
-/**
- * Ensures a specific Lavalink node (by id) is registered and connected.
- * Registers it if missing, connects it if not connected, and waits up to timeoutMs.
- * Leaves all other registered nodes untouched (does not delete/disconnect them),
- * so fallback between nodes keeps working.
- */
+/** Register/connect one node by id and wait up to timeoutMs; leaves other nodes untouched. */
 export async function ensureNodeConnected(manager: LavalinkManager, nodeId: string, log?: (msg: string) => Promise<void>, timeoutMs = 8000): Promise<any | null> {
 	let node = manager.nodeManager.nodes.get(nodeId);
 	if (node?.connected) return node;
@@ -489,11 +476,7 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 	return false;
 }
 
-/**
- * Ensure the local Lavalink node is registered, connected, and ready.
- * Used by the radio endpoint to force playback through the local node.
- * Returns the connected node, or null if the local node is unavailable.
- */
+/** Connect the local node for the radio endpoint; null when unavailable. */
 export async function ensureLocalNode(manager: LavalinkManager, log?: (msg: string) => Promise<void>): Promise<any | null> {
 	if (!localNode.id) {
 		if (log) await log("No localhost Lavalink node is configured in LAVALINK_HOST");
@@ -729,7 +712,7 @@ function findPlayerCapableNode(manager: any, excludedNodeId: string, track: any)
 }
 
 /** Re-connect voice and resume the current track on a player, used after node switches. */
-function autoResumePlayer(player: LavalinkPlayer, reason: string, log: (msg: string) => void) {
+function autoResumePlayer(player: LavalinkPlayer, reason: string) {
 	// If the player was in a voice channel, we must re-connect to send the voice state
 	// to the new Lavalink session. Otherwise, Lavalink will have the track but no
 	// voice server details to stream to.
@@ -1231,7 +1214,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				// Auto-resume: Find any players that were on this node and should be playing
 				for (const player of manager.players.values()) {
 					if (player.node && player.node.id === node.id) {
-						autoResumePlayer(player, "node reconnect", () => {});
+						autoResumePlayer(player, "node reconnect");
 					}
 				}
 			});
@@ -1302,7 +1285,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				}
 			});
 
-			client.on("shardDisconnect", (closeEvent: any, id: number) => {
+			client.on("shardDisconnect", (_closeEvent: any, id: number) => {
 				console.log(`Client shard ${id} disconnected — keeping player alive, waiting for auto-reconnect (token: ...${token.slice(-6)})`);
 				cancelAutoDestroy(token);
 			});
@@ -1675,7 +1658,7 @@ export function formatTrack(track: Track | any, client?: any, guildPlayer?: any,
 
 export function applyTemplate(template: string, track: any, client?: any): string {
 	const data = formatTrack(track, client).data;
-	return template.replace(/{([\w.]+)}/g, (match, path) => {
+	return template.replace(/{([\w.]+)}/g, (_match, path) => {
 		if (path === "currentTimestamp") return new Date().toISOString();
 		const parts = path.split(".");
 		const value = parts.reduce((obj: any, key: string) => obj?.[key], data);

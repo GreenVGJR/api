@@ -13,8 +13,12 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowJs": false,
 		"types": ["bun"],
-		"noUnusedLocals": true
+		"noUnusedLocals": false,
+		"noUnusedParameters": false
 	},
-	"exclude": ["node_modules"],
-	"include": ["functions/**/*", "routes/**/*", "index.ts", "gen-routes.ts"]
+	"watchOptions": {
+		"excludeDirectories": ["**/node_modules", "**/.venv", "**/.git", "**/__pycache__"]
+	},
+	"exclude": ["node_modules", ".venv", "**/__pycache__/**", "functions/tiktok_signature", "dist", "build", "test", "public", "html", "amc", "database", "tsconfig.tsbuildinfo", "**/*.md", "**/*.py", "**/*.pyc"],
+	"include": ["index.ts", "app.ts", "gen-routes.ts", "functions/**/*.ts", "routes/**/*.ts"]
 }

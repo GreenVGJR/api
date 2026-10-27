@@ -227,7 +227,7 @@ const getVsWaitPage = async (): Promise<string> => {
 };
 
 // Returns the "generation failed" image with the error reason in X-Message.
-export const aiImageFailure = async (c: Context, message: string): Promise<Response> => {
+export const aiImageFailure = async (message: string): Promise<Response> => {
 	const buf = await getFailingImage();
 	return new Response(buf, {
 		status: 200,

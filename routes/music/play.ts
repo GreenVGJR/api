@@ -27,10 +27,7 @@ function normalizeUrl(url: string): string {
 	return url;
 }
 
-/**
- * For YouTube URLs containing a playlist (list=...), extract the playlist-only URL.
- * Returns null if the URL doesn't have a list parameter.
- */
+/** Extract the playlist-only URL from a YouTube URL with list=... (null if none). */
 function extractYouTubePlaylistUrl(url: string): string | null {
 	if (!url.includes("youtube.com") && !url.includes("youtu.be")) return null;
 	try {
@@ -52,10 +49,7 @@ function extractYouTubePlaylistUrl(url: string): string | null {
 	return null;
 }
 
-/**
- * For YouTube URLs containing both a video ID and a playlist (list=...), extract the video-only URL.
- * Returns null if the URL doesn't have both a video ID and a playlist parameter.
- */
+/** Extract the video-only URL from a YouTube URL carrying both v and list params. */
 function extractYouTubeVideoUrl(url: string): string | null {
 	if (!url.includes("youtube.com") && !url.includes("youtu.be")) return null;
 	try {
@@ -71,14 +65,7 @@ function extractYouTubeVideoUrl(url: string): string | null {
 	return null;
 }
 
-/**
- * For YouTube Radio/Mix URLs (list=RD*), fetches the watch page, extracts ytInitialData,
- * and returns individual video URLs from the mix panel.
- * Mirrors the BDFD pattern:
- *   split on "var ytInitialData =" → split on ";" → parse JSON
- *   → contents.twoColumnWatchNextResults.playlist.playlist.contents
- *   → map playlistPanelVideoRenderer.videoId
- */
+/** Fetch a YouTube mix page and return its video URLs from the ytInitialData playlist panel. */
 interface YtMixResult {
 	title: string;
 	list: string[];
@@ -87,7 +74,7 @@ interface YtMixResult {
 async function fetchYouTubeMixTracks(url: string): Promise<YtMixResult | null> {
 	try {
 		const res = await fetch(url, {
-			headers: { ...commonHeaders, "Accept-Language": "en-US,en;q=0.9" },
+			headers: { ...commonHeaders },
 		});
 		const html = await res.text();
 		const ytInitialData = parseYtInitial(html);
@@ -596,7 +583,7 @@ app.get("/play", async (c) => {
 					.catch((error) => ({ result: null, error }));
 			};
 
-			const useLavalinkPlatformSearch = async (attempt: string, label: string, searchPlatform: string, q: string, searchPromise = startLavalinkPlatformSearch(searchPlatform, q)) => {
+			const useLavalinkPlatformSearch = async (label: string, searchPlatform: string, q: string, searchPromise = startLavalinkPlatformSearch(searchPlatform, q)) => {
 				if (!PLATFORM_SEARCH[searchPlatform]) return null;
 
 				await log(`Lavalink ${label} search: "${q}"`);
@@ -614,7 +601,7 @@ app.get("/play", async (c) => {
 			const customResult = await pCustom;
 
 			let result: any = null;
-			const loadSoundCloudManual = async (sourceUrl: string, attempt: string | number, overlaySource: CustomSearchResult | null): Promise<boolean> => {
+			const loadSoundCloudManual = async (sourceUrl: string, overlaySource: CustomSearchResult | null): Promise<boolean> => {
 				const streams = await infoSoundcloudStreams(sourceUrl);
 				if (streams.length === 0) {
 					await log(`No SoundCloud manual streams found`);
@@ -684,7 +671,7 @@ app.get("/play", async (c) => {
 				} catch (e: any) {
 					if (effectivePlatform === "soundcloud") {
 						await log(`SoundCloud direct load failed — attempting manual stream resolution`);
-						await loadSoundCloudManual(queryStr, 2, customResult);
+						await loadSoundCloudManual(queryStr, customResult);
 					}
 
 					// Playlist URL fallback: if playlist load failed, try the video-only URL
@@ -780,7 +767,7 @@ app.get("/play", async (c) => {
 							} catch (err: any) {
 								if (attempt.searchPlatform === "soundcloud" && fallbackResult.url) {
 									await log(`SoundCloud direct load failed — attempting manual stream resolution`);
-									if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
+									if (await loadSoundCloudManual(fallbackResult.url, customResult ?? fallbackResult)) break;
 								}
 								await log(`"${attempt.label}" failed: ${err?.message}`);
 							}
@@ -790,7 +777,7 @@ app.get("/play", async (c) => {
 					}
 
 					currentAttempt++;
-					result = await useLavalinkPlatformSearch(String(currentAttempt), attempt.label, attempt.searchPlatform, attempt.query, pFallbackLavalink);
+					result = await useLavalinkPlatformSearch(attempt.label, attempt.searchPlatform, attempt.query, pFallbackLavalink);
 					if (result) applyOverlay(result, customResult);
 					if (result) break;
 
@@ -807,8 +794,8 @@ app.get("/play", async (c) => {
 					} catch (e: any) {
 						if (platform === "soundcloud" && customResult?.url) {
 							await log(`SoundCloud direct load failed (${e?.message || e}) — attempting manual stream resolution`);
-							const manualAttempt = currentAttempt++;
-							await loadSoundCloudManual(customResult.url, manualAttempt, customResult);
+							currentAttempt++;
+							await loadSoundCloudManual(customResult.url, customResult);
 						} else {
 							await log(`${platform} direct URL load failed (${e?.message || e})${allowFallback ? " — falling back to Lavalink search" : ""}`);
 						}
@@ -818,7 +805,7 @@ app.get("/play", async (c) => {
 				}
 
 				if (!result && allowFallback) {
-					result = await useLavalinkPlatformSearch(String(currentAttempt), platform, platform, queryStr, pPrimaryLavalink || undefined);
+					result = await useLavalinkPlatformSearch(platform, platform, queryStr, pPrimaryLavalink || undefined);
 					if (result) applyOverlay(result, customResult);
 					currentAttempt++;
 				}
@@ -895,7 +882,7 @@ app.get("/play", async (c) => {
 								} catch (err: any) {
 									if (attempt.searchPlatform === "soundcloud" && fallbackResult.url) {
 										await log(`SoundCloud direct load failed — attempting manual stream resolution`);
-										if (await loadSoundCloudManual(fallbackResult.url, currentAttempt, customResult ?? fallbackResult)) break;
+										if (await loadSoundCloudManual(fallbackResult.url, customResult ?? fallbackResult)) break;
 									}
 									await log(`"${attempt.label}" failed: ${err?.message}`);
 								}
@@ -905,7 +892,7 @@ app.get("/play", async (c) => {
 						}
 
 						currentAttempt++;
-						result = await useLavalinkPlatformSearch(String(currentAttempt), attempt.label, attempt.searchPlatform, attempt.query, pFallbackLavalink);
+						result = await useLavalinkPlatformSearch(attempt.label, attempt.searchPlatform, attempt.query, pFallbackLavalink);
 						if (result) applyOverlay(result, customResult);
 						if (result) break;
 

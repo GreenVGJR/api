@@ -99,7 +99,7 @@ const API_ROUTES = {
 	discord_tools: {
 		stream: [["/tools/discord/stream?token=&channelId=&messageId=&url=&name=&clone=&onEmbed=&fallbackEmbed=", "string", "number", "number", "url", "string", "boolean", "boolean", "boolean"]],
 		tts: [["/tools/discord/tts?token=&channelId=&quality=&q=&file_name=&messageId=&clone=&lang=", "string", "number", "enum:low,high", "string", "string", "number", "boolean", "string"]],
-		tiktok: [["/tools/discord/tiktokFeed?token=&channelId=&messageId=&region_code=", "string", "number", "number", "string"]],
+		tiktok: [["/tools/discord/tiktokFeed?token=&channelId=&messageId=", "string", "number", "number"]],
 		server: [
 			["/tools/discord/modifyServer?token=&guildId=&reason=&guildName=&guildDescription=&guildVerifyLevel=&guildIcon=&guildSplash=&guildBanner=", "string", "number", "string", "string", "string", "number", "url", "url", "url"],
 			["/tools/discord/infoServer?token=&guildId=", "string", "number"],
@@ -110,7 +110,7 @@ const API_ROUTES = {
 		],
 		client: [["/tools/discord/infoClient?token=", "string"]],
 		member: [
-			["/tools/discord/modifyMemberServer?token=&guildId=&effectStyle=&fontStyle=&colorsStyle=&nickname=&avatar=&banner=&bio=&reason=", "string", "number", "enum:none,solid,gradient,neon,toon,pop,prism,gummy,glow", "enum:default,bangers,bio_rhyme,cherry_bomb,chicle,compagnon,museo_moderno,neo_castel,pixelify,ribes,sinistre,zilla_slab", "json", "string", "url", "url", "string", "string"],
+			["/tools/discord/modifyMemberServer?token=&guildId=&effectStyle=&fontStyle=&colorsStyle=&nickname=&avatar=&banner=&bio=&reason=&reset=", "string", "number", "enum:none,solid,gradient,neon,toon,pop,prism,gummy,glow", "enum:default,bangers,bio_rhyme,cherry_bomb,chicle,compagnon,museo_moderno,neo_castel,pixelify,ribes,sinistre,zilla_slab", "json", "string", "url", "url", "string", "string", "boolean"],
 			["/tools/discord/infoMember?token=&userId=&guildId=", "string", "number", "number"],
 			["/tools/discord/listMember?token=&guildId=&limit=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,no_role,has_role,banned", "string"],
 			["/tools/discord/listMember/role?token=&guildId=&roleId=&type=&permission=", "string", "number", "number", "enum_multi:user,bot,all,oldest,newest,oldest_position,newest_position", "string"],
@@ -190,6 +190,7 @@ const API_ROUTES = {
 		["/info/reddit/subreddit?q=", "string"],
 		["/info/reddit/post?url=", "url"],
 		["/info/tiktok/video?q=", "string"],
+		["/info/tiktok/music?q=", "string"],
 		["/info/tenor?url=", "url"],
 		["/info/giphy?url=", "url"],
 		["/info/klipy?url=", "url"],
@@ -213,7 +214,7 @@ const API_ROUTES = {
 		["/music/connect?token=&voiceId=&guildId=&authorId=&isDeaf=&247=&force=", "string", "number", "number", "number", "boolean", "boolean", "boolean"],
 		["/music/disconnect?token=&guildId=", "string", "number"],
 		["/music/destroy?token=", "string"],
-		["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=", "string", "string", "enum:youtube,youtubemusic,soundcloud,spotify,applemusic,deezer,tidal", "number", "number", "number", "boolean", "boolean", "boolean"],
+		["/music/play?token=&q=&platform=&voiceId=&guildId=&authorId=&isDeaf=&247=&fallback=&list=&index=", "string", "string", "enum:youtube,youtubemusic,soundcloud,spotify,applemusic,deezer,tidal", "number", "number", "number", "boolean", "boolean", "boolean", "string", "number"],
 		["/music/radio?token=&stationId=&voiceId=&guildId=&authorId=&isDeaf=&247=", "string", "string", "number", "number", "number", "boolean", "boolean"],
 		["/music/pause?token=&guildId=", "string", "number"],
 		["/music/resume?token=&guildId=", "string", "number"],

@@ -16,6 +16,7 @@ import { ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
 import { createColdStartToken, WebPoMinter } from "bgutils-js/webpo";
 import { decodeHTML } from "entities";
+import { load as rusteerioLoad } from "rusteerio";
 import crypto from "crypto";
 import { Buffer } from "buffer";
 import emojibaseData from "emojibase-data/en/data.json" with { type: "json" };
@@ -9328,7 +9329,6 @@ export async function DriftProfile(query: string): Promise<any> {
 					url: filterurl.toString(),
 					fetcherType: "stealthy",
 					solveCloudflare: true,
-					headers: commonHeaders,
 					extractHtml: true,
 					// Cap total; Scrapling re-solves per retry.
 					timeoutMs: 45000,
@@ -9359,12 +9359,7 @@ export async function DriftProfile(query: string): Promise<any> {
 		}
 	}
 
-	const DRIFT_LD_JSON_RE = /<script[^>]*\btype="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i;
-	const DRIFT_STYLE_RE = /<style[^>]*>([\s\S]*?)<\/style>/gi;
 	const DRIFT_VAR_RE = (name: string) => new RegExp(`let ${name}\\s*=\\s*([^;]+)`);
-	const DRIFT_ID_TEXT_RE = (id: string) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*>([\\s\\S]*?)<\\/`);
-	const DRIFT_ID_SRC_RE = (id: string) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*\\bsrc="([^"]*)"`);
-	const DRIFT_ID_ZONE_RE = (id: string, n: number) => new RegExp(`<[^>]*[\\s"]id="${id}"[^>]*>([\\s\\S]{0,${n}})`);
 	const DRIFT_COLOR_RE = (id: string) => new RegExp(`#${id}\\s*\\{[^}]*color:\\s*([^;]+)`, "i");
 	const driftAbs = (u: string | null): string | null => {
 		if (!u) return null;
@@ -9378,31 +9373,24 @@ export async function DriftProfile(query: string): Promise<any> {
 				data: null,
 			};
 		}
-		const DRIFT_ATTR_both = (tag: string, a: string, b: string): string => new RegExp(`<${tag}[^>]*\\b${a}="${b}"[^>]*\\bcontent="([^"]*)"`, "i").exec(test)?.[1] || new RegExp(`<${tag}[^>]*\\bcontent="([^"]*)"[^>]*\\b${a}="${b}"`, "i").exec(test)?.[1] || "";
-		let schemaJson: any = DRIFT_LD_JSON_RE.exec(test)?.[1] || "";
-
+		const $d: any = rusteerioLoad(test);
+		let schemaJson: any = null;
 		try {
-			schemaJson = JSON.parse(schemaJson || "{}");
+			schemaJson = JSON.parse($d('script[type="application/ld+json"]').first().html() || "{}");
 		} catch {
 			schemaJson = null;
 		}
 
 		let styles = "";
-		DRIFT_STYLE_RE.lastIndex = 0;
-		let stm: RegExpExecArray | null;
-		while ((stm = DRIFT_STYLE_RE.exec(test))) styles += stm[1];
+		for (const el of $d("style").toArray() as any[]) styles += $d(el).html() ?? "";
 		const myProfileId = DRIFT_VAR_RE("currentProfileId").exec(test)?.[1]?.trim() || null;
-		const driftText = (id: string): string => {
-			const m = DRIFT_ID_TEXT_RE(id).exec(test)?.[1] || "";
-			return decodeHTML(m.replace(TAG_STRIP_RE, "")).trim();
-		};
-		const DRIFT_VIEWS_RE = DRIFT_ID_ZONE_RE("profile-views-inner-container", 2000);
-		const DRIFT_VIEWS_SPAN_RE = /<span[^>]*class="[^"]*\btext-sm\b[^"]*"[^>]*>([\s\S]*?)<\//;
-		const driftViews =
-			DRIFT_VIEWS_SPAN_RE.exec(DRIFT_VIEWS_RE.exec(test)?.[1] || "")?.[1]
-				?.replace(TAG_STRIP_RE, "")
-				.trim()
-				?.replace(",", "") || null;
+		const driftText = (id: string): string =>
+			$d("#" + id)
+				.first()
+				.text()
+				.trim();
+		const driftViews = $d("#profile-views-inner-container span.text-sm").first().text().trim()?.replace(",", "") || null;
+		const driftMeta = (sel: string): string => $d(sel).first().attr("content") || "";
 
 		return {
 			data: {
@@ -9433,11 +9421,11 @@ export async function DriftProfile(query: string): Promise<any> {
 					views: driftViews,
 					badges: (() => {
 						const out: any[] = [];
-						const re = /<[^>]*\bdata-tippy-content="([^"]*)"[^>]*>([\s\S]*?)<\/[^>\s]+>/g;
-						let m: RegExpExecArray | null;
-						while ((m = re.exec(test))) {
-							const icon = /<[^>]*class="[^"]*\bbio-badge\b[^"]*"[^>]*\bicon="([^"]*)"/.exec(m[2])?.[1];
-							if (m[1] && icon) out.push({ name: m[1], icon });
+						for (const el of $d("[data-tippy-content]").toArray() as any[]) {
+							const $el = $d(el);
+							const icon = $el.find(".bio-badge").attr("icon");
+							const name = $el.attr("data-tippy-content");
+							if (name && icon) out.push({ name, icon });
 						}
 						return out;
 					})(),
@@ -9446,15 +9434,13 @@ export async function DriftProfile(query: string): Promise<any> {
 						banner: /\.bio-banner-background\s*\{[^}]*background-image:\s*url\(['"]?([^'"]+)['"]?\)/i.exec(styles)?.[1] || null,
 						background: (() => {
 							const fromJs = /staticBackground\.src\s*=\s*"([^"]*)"/.exec(test)?.[1] || null;
-							const tagSrc = DRIFT_ID_SRC_RE("video-background").exec(test)?.[1] || null;
-							const zone = DRIFT_ID_ZONE_RE("video-background", 3000).exec(test)?.[1] || "";
-							const innerSrc = /<source[^>]*\bsrc="([^"]*)"/.exec(zone)?.[1] || null;
+							const tagSrc = $d("#video-background").attr("src") || null;
+							const innerSrc = $d("#video-background source").first().attr("src") || null;
 							return driftAbs(fromJs || tagSrc || innerSrc);
 						})(),
 						audio: (() => {
-							const tagSrc = DRIFT_ID_SRC_RE("background-audio").exec(test)?.[1] || null;
-							const zone = DRIFT_ID_ZONE_RE("background-audio", 2000).exec(test)?.[1] || "";
-							const innerSrc = /<source[^>]*\bsrc="([^"]*)"/.exec(zone)?.[1] || null;
+							const tagSrc = $d("#background-audio").attr("src") || null;
+							const innerSrc = $d("#background-audio source").first().attr("src") || null;
 							const jsSrc = test.includes("hasAudio = true") ? /audio\.src\s*=\s*"([^"]*)"/.exec(test)?.[1] || null : null;
 							return driftAbs(tagSrc || innerSrc || jsSrc);
 						})(),
@@ -9480,28 +9466,24 @@ export async function DriftProfile(query: string): Promise<any> {
 							}
 						};
 						const driftDirect = (href: string): string => (href.includes("url=") ? decodeURIComponent(new URL(href).searchParams.get("url") || "") : href);
-						const DRIFT_ANCHOR_RE = /<a\b([^>]*)>([\s\S]*?)<\/a>/g;
-						const DRIFT_AATTR_RE = /([\w-]+)="([^"]*)"/g;
-						const DRIFT_MODTITLE_RE = /class="[^"]*\bmodule-titleText\b[^"]*"[^>]*>([\s\S]*?)</;
 						const connAt = test.indexOf('id="profile-cards-section"');
 						const connEnd = test.indexOf('id="section-profile-connections"');
 						const cardZone = connAt < 0 ? "" : test.slice(connAt, connEnd > connAt ? connEnd : connAt + 300000);
-						DRIFT_ANCHOR_RE.lastIndex = 0;
-						let ca: RegExpExecArray | null;
-						while ((ca = DRIFT_ANCHOR_RE.exec(cardZone))) {
-							const attrs: Record<string, string> = {};
-							DRIFT_AATTR_RE.lastIndex = 0;
-							let aa: RegExpExecArray | null;
-							while ((aa = DRIFT_AATTR_RE.exec(ca[1]))) attrs[aa[1]] = aa[2];
-							const href = attrs["href"] || "";
-							const inner = ca[2];
+						const $cz: any = rusteerioLoad(cardZone);
+						for (const a of $cz("a").toArray() as any[]) {
+							const $a = $cz(a);
+							const href = $a.attr("href") || "";
 							const directUrl = driftDirect(href);
-							const modTitle = decodeHTML((DRIFT_MODTITLE_RE.exec(inner)?.[1] || "").replace(TAG_STRIP_RE, "")).trim();
-							const imgSrc = /<img\b[^>]*\bsrc="([^"]*)"/.exec(inner)?.[1] || null;
-							const hasImg = /<img\b/.test(inner);
-							if ("data-discord-user-json" in attrs) {
-								const richContent = driftSafeJson(attrs["data-discord-user-json"]);
-								const discordUserId = attrs["data-discord-user-id"] || richContent?.userId || null;
+							const modTitle = $a.find(".module-titleText").first().text().trim();
+							const imgSrc = $a.find("img").first().attr("src") || null;
+							const hasImg = $a.find("img").length > 0;
+							const discordJson = $a.attr("data-discord-user-json");
+							const guildJson = $a.attr("data-guild-json");
+							const fivemId = $a.attr("data-fivem-id");
+							const robloxJson = $a.attr("data-roblox-user-json");
+							if (discordJson !== undefined) {
+								const richContent = driftSafeJson(discordJson);
+								const discordUserId = $a.attr("data-discord-user-id") || richContent?.userId || null;
 								out.push({
 									type: "discordUser",
 									text: richContent?.globalName || richContent?.username || modTitle || "",
@@ -9511,8 +9493,8 @@ export async function DriftProfile(query: string): Promise<any> {
 									icon: imgSrc,
 									richContent,
 								});
-							} else if ("data-guild-json" in attrs) {
-								const richContent = driftSafeJson(attrs["data-guild-json"]);
+							} else if (guildJson !== undefined) {
+								const richContent = driftSafeJson(guildJson);
 								out.push({
 									type: "discordServer",
 									text: richContent?.serverName || modTitle || "",
@@ -9522,7 +9504,7 @@ export async function DriftProfile(query: string): Promise<any> {
 									icon: imgSrc,
 									richContent,
 								});
-							} else if ("data-fivem-id" in attrs) {
+							} else if (fivemId !== undefined) {
 								out.push({
 									type: "fiveM",
 									text: modTitle || "",
@@ -9530,10 +9512,10 @@ export async function DriftProfile(query: string): Promise<any> {
 									tracking_url: href || null,
 									icon_type: hasImg ? "image" : null,
 									icon: imgSrc,
-									richContent: { serverId: attrs["data-fivem-id"] },
+									richContent: { serverId: fivemId },
 								});
-							} else if ("data-roblox-user-json" in attrs) {
-								const richContent = driftSafeJson(attrs["data-roblox-user-json"]);
+							} else if (robloxJson !== undefined) {
+								const richContent = driftSafeJson(robloxJson);
 								out.push({
 									type: "roblox",
 									text: richContent?.username || modTitle || "",
@@ -9548,27 +9530,22 @@ export async function DriftProfile(query: string): Promise<any> {
 						const socAt = test.indexOf('id="section-profile-connections"');
 						if (socAt >= 0) {
 							const socZone = test.slice(socAt, socAt + 100000);
-							DRIFT_ANCHOR_RE.lastIndex = 0;
-							let sa: RegExpExecArray | null;
-							while ((sa = DRIFT_ANCHOR_RE.exec(socZone))) {
-								const attrs: Record<string, string> = {};
-								DRIFT_AATTR_RE.lastIndex = 0;
-								let ab2: RegExpExecArray | null;
-								while ((ab2 = DRIFT_AATTR_RE.exec(sa[1]))) attrs[ab2[1]] = ab2[2];
-								const href = attrs["href"] || "";
-								const inner = sa[2];
-								const iconMatch = /<iconify-icon\b[^>]*\bicon="([^"]*)"/.exec(inner);
-								const hasImg = /<img\b/.test(inner);
-								const platform = iconMatch?.[1]?.split(":")[1] || /<img\b[^>]*\balt="([^"]*)"/.exec(inner)?.[1] || "unknown";
-								const styleSrc = /<iconify-icon\b[^>]*\bstyle="([^"]*)"/.exec(inner)?.[1] || /<img\b[^>]*\bstyle="([^"]*)"/.exec(inner)?.[1] || "";
+							const $sz: any = rusteerioLoad(socZone);
+							for (const a of $sz("a").toArray() as any[]) {
+								const $a = $sz(a);
+								const href = $a.attr("href") || "";
+								const icon = $a.find("iconify-icon").first().attr("icon") || null;
+								const hasImg = $a.find("img").length > 0;
+								const platform = icon?.split(":")[1] || $a.find("img").first().attr("alt") || "unknown";
+								const styleSrc = $a.find("iconify-icon").first().attr("style") || $a.find("img").first().attr("style") || "";
 								out.push({
 									type: "social",
-									text: (attrs["data-tippy-content"] || "").replace(TAG_STRIP_RE, "").trim() || platform,
+									text: ($a.attr("data-tippy-content") || "").trim() || platform,
 									color: /color:\s*(#[0-9a-fA-F]{3,8})/.exec(styleSrc)?.[1] || null,
 									url: driftDirect(href) || null,
 									tracking_url: href || null,
-									icon_type: iconMatch ? "iconify" : hasImg ? "image" : null,
-									icon: iconMatch?.[1] || /<img\b[^>]*\bsrc="([^"]*)"/.exec(inner)?.[1] || null,
+									icon_type: icon ? "iconify" : hasImg ? "image" : null,
+									icon: icon || $a.find("img").first().attr("src") || null,
 									richContent: null,
 								});
 							}
@@ -9577,13 +9554,13 @@ export async function DriftProfile(query: string): Promise<any> {
 					})(),
 				},
 				web: {
-					webTitle: /<title[^>]*>([\s\S]*?)<\/title>/i.exec(test)?.[1]?.replace(TAG_STRIP_RE, "").trim(),
-					webDesc: DRIFT_ATTR_both("meta", "name", "description"),
-					title: DRIFT_ATTR_both("meta", "property", "og:title"),
-					desc: DRIFT_ATTR_both("meta", "property", "og:description"),
-					bannerUrl: DRIFT_ATTR_both("meta", "property", "og:image"),
-					canonicalTitle: /<h1[^>]*class="[^"]*\bhdn\b[^"]*"[^>]*>([\s\S]*?)<\/h1>/i.exec(test)?.[1]?.replace(TAG_STRIP_RE, "").trim(),
-					canonicalUrl: DRIFT_ATTR_both("link", "rel", "canonical"),
+					webTitle: $d("title").length ? $d("title").first().text().trim() : undefined,
+					webDesc: driftMeta('meta[name="description"]'),
+					title: driftMeta('meta[property="og:title"]'),
+					desc: driftMeta('meta[property="og:description"]'),
+					bannerUrl: driftMeta('meta[property="og:image"]'),
+					canonicalTitle: $d("h1.hdn").length ? $d("h1.hdn").first().text().trim() : undefined,
+					canonicalUrl: $d('link[rel="canonical"]').first().attr("href") || "",
 				},
 			},
 		};
@@ -10892,11 +10869,13 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 			const urlGuildPreview = `https://discord.com/api/v10/guilds/${guildId}/preview`;
 			const urlGuildDirectory = `https://discord.com/api/v10/discovery/${guildId}`;
 			const urlGuildRichContent = `https://discord.com/api/guilds/${guildId}/widget.json`;
-			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq] = await Promise.all([discordFetch(urlGuildPreview, { headers }), discordFetch(urlGuildDirectory, { headers }), discordFetch(urlGuildRichContent, { headers })]);
+			const urlGuildIndex = `https://discord.com/api/v10/index/servers/${guildId}`;
+			const [guildPreviewReq, guildDirectoryReq, guildRichContentReq, guildIndexReq] = await Promise.all([discordFetch(urlGuildPreview, { headers }), discordFetch(urlGuildDirectory, { headers }), discordFetch(urlGuildRichContent, { headers }), discordFetch(urlGuildIndex, { headers })]);
 
 			let guildPreviewData: any = null;
 			let guildDirectoryData: any = null;
 			let guildRichContentData: any = null;
+			let guildIndexData: any = null;
 			try {
 				guildPreviewData = await guildPreviewReq.json();
 			} catch {}
@@ -10905,6 +10884,9 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 			} catch {}
 			try {
 				guildRichContentData = await guildRichContentReq.json();
+			} catch {}
+			try {
+				guildIndexData = await guildIndexReq.json();
 			} catch {}
 
 			data.guild = {
@@ -10920,6 +10902,15 @@ export const DiscordInfoApp = async (token: string | null, botId: string) => {
 						? formatDiscordDiscovery(guildDirectoryData)
 						: {
 								error: formatDiscordApiError(guildDirectoryReq, guildDirectoryData),
+							},
+				discovery:
+					guildIndexReq.status === 200
+						? {
+								...(guildIndexData?.data?.guild && typeof guildIndexData.data.guild === "object" ? formatDiscordGuild(guildIndexData.data.guild) : {}),
+								seo: guildIndexData?.seo ?? null,
+							}
+						: {
+								error: formatDiscordApiError(guildIndexReq, guildIndexData),
 							},
 				richContent:
 					guildRichContentReq.status === 200

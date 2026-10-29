@@ -11,7 +11,7 @@ app.get("/roblox/users", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "apis.roblox.com, catalog.roblox.com, friends.roblox.com, users.roblox.com, thumbnails.roblox.com");
+	c.header("X-Route", "apis.roblox.com, catalog.roblox.com, users.roblox.com, thumbnails.roblox.com");
 	return await dispatch(c, () => RobloxUsers(query));
 });
 

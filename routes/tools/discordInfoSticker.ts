@@ -20,6 +20,7 @@ app.get("/discord/infoSticker", async (c) => {
 	if (!token) return c.json({ error: "Missing valid parameter: token" }, 202);
 	if (!q) return c.json({ error: "Missing valid parameter: q" }, 202);
 
+	c.header("X-Route", "discord.com");
 	return await dispatch(c, () => DiscordInfoSticker(token!, q));
 });
 

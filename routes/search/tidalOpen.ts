@@ -11,7 +11,7 @@ app.get("/tidal/v2", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "tidal.com");
+	c.header("X-Route", "tidal.com, auth.tidal.com, embed.tidal.com");
 	const limitStr: any = c.req.query("limit");
 	const limit = isNaN(limitStr) ? 1 : Math.min(20, Math.max(1, parseInt(limitStr, 10)));
 	return await dispatch(c, () => TidalOpen(query, false, limit));

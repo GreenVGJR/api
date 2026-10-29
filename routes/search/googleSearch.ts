@@ -12,7 +12,7 @@ app.get("/google", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "cse.google.com, www.google.com");
+	c.header("X-Route", "cse.google.com");
 	return await dispatch(c, () => googleSearch(query));
 });
 

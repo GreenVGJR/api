@@ -18,7 +18,7 @@ app.get("/discord/tts", async (c) => {
 	if (!channelId) return c.json({ error: "Missing valid parameter: channelId" }, 202);
 	if (!q) return c.json({ error: "Missing valid parameter: q" }, 202);
 
-	c.header("X-Route", "translate.google.com");
+	c.header("X-Route", "translate.google.com, content-texttospeech.googleapis.com, discord.com");
 
 	return await dispatch(c, () => DiscordTTS(token, channelId, q, file_name ?? undefined, messageId ?? undefined, clone, lang ?? undefined, quality ?? undefined));
 });

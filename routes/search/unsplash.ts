@@ -11,7 +11,7 @@ app.get("/unsplash", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "www.unsplash.com, unsplash.com");
+	c.header("X-Route", "unsplash.com");
 	return await dispatch(c, () => Unsplash(query));
 });
 

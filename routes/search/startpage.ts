@@ -11,7 +11,7 @@ app.get("/startpage", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "www.startpage.com");
+	c.header("X-Route", "us.startpage.com, www.startpage.com");
 	return await dispatch(c, () => StartpageSearch(query));
 });
 

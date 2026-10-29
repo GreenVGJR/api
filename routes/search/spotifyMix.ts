@@ -11,7 +11,7 @@ app.get("/spotify/mix", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "api-partner.spotify.com, spclient.wg.spotify.com, open.spotify.com, clienttoken.spotify.com");
+	c.header("X-Route", "api-partner.spotify.com, spclient.wg.spotify.com, open.spotify.com, clienttoken.spotify.com, embed.spotify.com");
 	return await dispatch(c, () => SPMixSearch(query, false, 1));
 });
 

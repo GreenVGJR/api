@@ -12,7 +12,7 @@ app.get("/googleImage/cse", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "cse.google.com, www.google.com");
+	c.header("X-Route", "cse.google.com");
 	return await dispatch(c, () => googleImgSearchV2(query));
 });
 

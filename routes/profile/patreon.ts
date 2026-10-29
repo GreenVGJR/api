@@ -12,7 +12,7 @@ app.get("/patreon", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 
-	c.header("X-Route", "patreon.com");
+	c.header("X-Route", "www.patreon.com");
 
 	return await dispatch(c, () => PatreonProfile(query));
 });

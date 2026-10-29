@@ -8,7 +8,7 @@ import { post as httpcloakPost, Session as HttpcloakSession, Preset as Httpcloak
 import { BotGuardClient, getChallenge } from "bgutils-js/botguard";
 import { commonHeaders, userAgent_mobile } from "./request.js";
 import { ClientTransaction } from "x-client-transaction-id";
-import { parseHTML } from "linkedom";
+import { load as rusteerioLoad } from "rusteerio";
 
 export let twitterDocument: any = null;
 export let twitterTransaction: any = null;
@@ -422,8 +422,26 @@ export const twitterKey = async function twitterKey(typeName: string) {
 			headers: commonHeaders,
 		});
 		const html = await response.text();
-		const { document } = parseHTML(html);
-		twitterDocument = document;
+		const $tw: any = rusteerioLoad(html);
+		twitterDocument = {
+			querySelectorAll: (sel: string) => {
+				if (sel === "script") {
+					return ($tw("script").toArray() as any[]).map((el: any) => ({
+						textContent: $tw(el).html() ?? "",
+					}));
+				}
+				return ($tw(sel).toArray() as any[]).map((el: any) => {
+					const d = $tw(el).children().eq(0).children().eq(1).attr("d") ?? null;
+					return { children: [{ children: [null, { getAttribute: (k: string) => (k === "d" ? d : null) }] }] };
+				});
+			},
+			querySelector: (sel: string) => {
+				const el = $tw(sel).first();
+				if (!el.length) return null;
+				return { getAttribute: (k: string) => el.attr(k) ?? null };
+			},
+			documentElement: { outerHTML: html },
+		};
 
 		twitterTransaction = new ClientTransaction(twitterDocument);
 		await twitterTransaction.initialize();

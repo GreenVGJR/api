@@ -24,7 +24,7 @@ app.get("/duckduckgo/image", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "duckduckgo.com");
+	c.header("X-Route", "duckduckgo.com, links.duckduckgo.com");
 	return await dispatch(c, () => duckImageSearch(query));
 });
 
@@ -36,7 +36,7 @@ app.get("/duckduckgo/video", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "duckduckgo.com");
+	c.header("X-Route", "duckduckgo.com, links.duckduckgo.com");
 	return await dispatch(c, () => duckVideoSearch(query));
 });
 

@@ -14,5 +14,6 @@ import infoTwitterTweet from "./infoTwitterTweet.js";
 import infoYoutube from "./infoYoutube.js";
 import redditPost from "./redditPost.js";
 import redditSubreddit from "./redditSubreddit.js";
+import tiktokMusic from "./tiktokMusic.js";
 
-export default [googleWeather, infoGiphy, infoGoogleImage, infoGoogleLens, infoITunes, infoKlipy, infoPinterest, infoSoundcloud, infoSpotify, infoTenor, infoTiktokVideo, infoTwitterTweet, infoYoutube, redditPost, redditSubreddit] as any[];
+export default [googleWeather, infoGiphy, infoGoogleImage, infoGoogleLens, infoITunes, infoKlipy, infoPinterest, infoSoundcloud, infoSpotify, infoTenor, infoTiktokVideo, infoTwitterTweet, infoYoutube, redditPost, redditSubreddit, tiktokMusic] as any[];

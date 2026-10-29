@@ -34,8 +34,7 @@ function extractYouTubePlaylistUrl(url: string): string | null {
 		const urlObj = new URL(url);
 		const listParam = urlObj.searchParams.get("list");
 		if (listParam) {
-			// RD* are YouTube Radio/Mix lists — they can't be loaded as /playlist URLs.
-			// They're handled separately via fetchYouTubeMixTracks.
+			// RD* lists are YouTube Mixes, not loadable /playlist URLs: handled via fetchYouTubeMixTracks.
 			if (listParam.startsWith("RD")) return null;
 			urlObj.pathname = "/playlist";
 			for (const key of [...urlObj.searchParams.keys()]) {
@@ -475,9 +474,7 @@ app.get("/play", async (c) => {
 
 			if (!gp) {
 				await log("Creating Lavalink player...");
-				// Prefer a remote node first, only falling back to local (vgjr). Explicitly
-				// pick + connect it so the manager doesn't silently auto-assign a different,
-				// possibly-unconnected node.
+				// Prefer a remote node over local (vgjr); explicitly pick + connect it so the manager avoids an unconnected node.
 				const preferredNodeIds = getLavalinkNodeIds(false);
 				let chosenNodeId: string | null = null;
 				// 1. Try to find an already connected node

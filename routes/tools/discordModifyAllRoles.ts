@@ -150,8 +150,7 @@ app.get("/discord/modifyAllRoles", async (c) => {
 				};
 			}
 
-			// Also verify bot role hierarchy (bot highest role must be higher than target roles)
-			// Skip roles that are too high and count them as failed instead of blocking the operation
+			// Skip roles at/above the bot's highest role and count them as failed instead of blocking.
 			const botHighestRole = botMember.roles.highest;
 			const skippedRoles: string[] = [];
 			const validRolesToApply: any[] = [];

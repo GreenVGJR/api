@@ -46,10 +46,7 @@ export function verifyChallengeHash(solution: string | undefined | null, challen
 	return crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(normalizedHash));
 }
 
-// Binds the solution to its exact bytes: X-Mc-Token must be the base64url
-// (no padding, 22 chars) of the last 16 bytes of gzip (RFC 1952) over the
-// UTF-8 bytes of the x-challenge-codes value. Stateless — the server
-// recomputes it from the echoed codes, so no store is needed.
+// X-Mc-Token is base64url (no padding, 22 chars) of last 16 gzip bytes (RFC 1952) of x-challenge-codes; stateless recompute.
 export function mcTokenForCodes(codes: string | undefined | null): string | null {
 	if (!codes) return null;
 	try {

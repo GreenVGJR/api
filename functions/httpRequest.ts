@@ -59,9 +59,7 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 			return a.length === b.length && crypto.timingSafeEqual(a, b);
 		};
 		if (matches(`GET\n${url.pathname}${url.search}\n${tStr}.${n}`)) return true;
-		// aiImageHandshake() 302-redirects (appending the hs/ts registry cache key)
-		// after the client signed the URL, and fetch follows it transparently with
-		// the old header ΓÇö so also accept the signature over the pre-redirect URL.
+		// aiImageHandshake 302 appends hs/ts; fetch follows with old header, so also accept pre-redirect URL.
 		const stripped = new URL(c.req.url);
 		stripped.searchParams.delete("hs");
 		stripped.searchParams.delete("ts");
@@ -72,8 +70,7 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 	}
 };
 
-// Scopes the handshake/cache entry to BOTH the prompt and the current URL path,
-// so the same prompt on a different AI-image route gets its own validation.
+// Handshake/cache key includes prompt and URL path (per-route validation).
 const aiImageKey = (c: Context): string => {
 	const prompt = c.req.query("prompt") || "";
 	const pathname = new URL(c.req.url).pathname;
@@ -216,8 +213,7 @@ export const getFailingImage = async (): Promise<Buffer> => {
 	return _failingImage;
 };
 
-// The navigate-phase VS wait page. The wallpaper is inlined as a data URI because the
-// response is `no-store` and lives for ~1s, so a second request would never be cached.
+// VS wait page inlines wallpaper as data URI (no-store, ~1s lifetime, never cached).
 let _vsWaitPage: string | null = null;
 const getVsWaitPage = async (): Promise<string> => {
 	if (_vsWaitPage) return _vsWaitPage;

@@ -145,9 +145,7 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 	c.header("Content-Type", "application/json");
 	c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
-	// BDFD clients must identify with a dated UA shaped like BDFD-..-..-..-
-	// (e.g. BDFD-11-09-2026-), optionally suffixed with one extra segment
-	// (e.g. BDFD-11-09-2026-81b210b). Only the shape is checked, not the values.
+	// BDFD UA must match BDFD-..-..-..- plus optional segment; shape only, values unchecked.
 	const lookExistChallengeC = /^BDFD-[^-]+-[^-]+-[^-]+-([^-]+)?$/;
 	if (!lookExistChallengeC.test(c.req.header("user-agent") || "")) {
 		const checkAccept = c.req.header("accept") === "application/json";
@@ -352,10 +350,7 @@ function createLavalinkNodes(manager: LavalinkManager, nodeConfigs: any[]) {
 }
 
 /** Wait for a specific node (by id) to connect, leaving other registered nodes alone. */
-// Concurrent requests can independently ask to connect the same node (e.g. bootstrap +
-// an endpoint's explicit node pick racing each other). Without a lock each caller would
-// call node.connect() again, opening a duplicate WebSocket to the same Lavalink server —
-// which then logs multiple disconnects on shutdown. This dedupes in-flight connect attempts.
+// Dedupe in-flight connect() calls: concurrent connects open duplicate WebSockets.
 const nodeConnectLocks = new WeakMap<any, Promise<boolean>>();
 
 function waitForSpecificNodeConnection(manager: LavalinkManager, nodeId: string, timeoutMs: number, connectNode: boolean) {
@@ -391,11 +386,7 @@ function waitForSpecificNodeConnection(manager: LavalinkManager, nodeId: string,
 
 		manager.nodeManager.on("connect", onConnect);
 
-		// Only call connect() if the node has no active socket at all. A node can already be
-		// mid-handshake (e.g. manager.init() started connecting every node in the background);
-		// calling connect() again on top of that races with the in-flight WebSocket and can
-		// null out `node.socket` mid-open, crashing the library with
-		// "TypeError: null is not an object (evaluating 'this.socket.on')".
+		// Never connect() over a handshaking/open socket: it races and nulls node.socket (TypeError).
 		const sock: any = (node as any).socket;
 		const alreadyHandshaking = !!sock && typeof sock.readyState === "number" && (sock.readyState === 0 || sock.readyState === 1);
 		if (connectNode && !node.connected && !alreadyHandshaking) {
@@ -444,8 +435,7 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 	const nodeList = nodes.map((n: any) => n.id).join(", ");
 	if (log) await log(`Connecting to Lavalink node(s): ${nodeList}`);
 
-	// Register all configured nodes up front (without deleting any that already exist),
-	// so nodes that aren't tried first remain available for later fallback/moveNode calls.
+	// Register all nodes up front so untried ones stay available for fallback/moveNode.
 	createLavalinkNodes(manager, nodes);
 
 	for (const nodeConfig of nodes) {
@@ -505,12 +495,10 @@ const g = globalThis as any;
 const players: Map<string, ManagedPlayer> = g.__vgjr_players || (g.__vgjr_players = new Map<string, ManagedPlayer>());
 const musicLogCooldowns: Map<string, number> = g.__vgjr_musicLogCooldowns || (g.__vgjr_musicLogCooldowns = new Map<string, number>());
 
-// Persistent 24/7 state: "token:guildId" → true/false
-// Stored separately so it survives Lavalink player object recreation
+// 24/7 state "token:guildId" → bool; kept separate so it survives player recreation.
 const state247: Map<string, boolean> = g.__vgjr_state247 || (g.__vgjr_state247 = new Map<string, boolean>());
 
-// Last known voice channel per guild: "token:guildId" → voiceChannelId
-// Used as fallback when playerDestroy fires after voiceChannelId is already null
+// Last known VC "token:guildId" → voiceChannelId; fallback when playerDestroy clears voiceChannelId.
 const lastVoiceChannel: Map<string, string> = g.__vgjr_lastVoiceChannel || (g.__vgjr_lastVoiceChannel = new Map<string, string>());
 
 // Persistent voice status settings: "token:guildId" → { trackStart: { status, content }, ... }
@@ -626,8 +614,7 @@ export function get247(token: string, guildId: string): boolean {
 export function clear247(token: string, guildId: string) {
 	state247.delete(get247Key(token, guildId));
 }
-// Wipes every 24/7 entry for a token (all guilds) — used by full destroy so
-// a re-created client can never auto-rejoin voice channels.
+// Clear all 24/7 entries for a token so a re-created client never auto-rejoins.
 export function clearAll247(token: string) {
 	for (const [key] of state247) {
 		if (key.startsWith(token + ":")) state247.delete(key);
@@ -713,9 +700,7 @@ function findPlayerCapableNode(manager: any, excludedNodeId: string, track: any)
 
 /** Re-connect voice and resume the current track on a player, used after node switches. */
 function autoResumePlayer(player: LavalinkPlayer, reason: string) {
-	// If the player was in a voice channel, we must re-connect to send the voice state
-	// to the new Lavalink session. Otherwise, Lavalink will have the track but no
-	// voice server details to stream to.
+	// Re-connect voice to send voice state to the new Lavalink session before resuming.
 	if (!player.voiceChannelId) return;
 	player
 		.connect()
@@ -832,8 +817,7 @@ function cancelAutoDestroy(token: string) {
 	managed.destroyTimer = null;
 }
 
-// Handle potential library crashes from lavalink-client and discord.js.
-// Hot reload can re-evaluate this module, so install global handlers once.
+// Install global crash handlers once: hot reload can re-evaluate this module.
 if (!g.__vgjr_music_process_handlers_installed) {
 	g.__vgjr_music_process_handlers_installed = true;
 
@@ -970,8 +954,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 						destroyPlayer: false,
 					},
 					onEmptyQueue: {
-						// undefined = never auto-destroy — we handle this entirely
-						// ourselves in the queueEnd event so 24/7 mode works.
+						// Never auto-destroy here; queueEnd handles it so 24/7 mode works.
 						destroyAfterMs: undefined,
 						autoPlayFunction: async (player, lastPlayedTrack) => {
 							await fillAutoplay(player, lastPlayedTrack);
@@ -1053,9 +1036,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				}
 			};
 
-			// Re-establish voice connections + resume playback for all players after a
-			// gateway shard resumes. The Lavalink manager/node stays intact across a
-			// Discord disconnect, but the voice server state is lost and must be re-sent.
+			// After shard resume the manager/node survives but voice server state is lost and must be re-sent.
 			const reconnectAllVoiceAfterShardResume = async () => {
 				if (!players.has(token)) return;
 				// Give the gateway a moment to re-sync guild/voice caches before reconnecting
@@ -1144,8 +1125,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				// voiceChannelId may already be null by the time this fires, fall back to last known
 				const voiceChannelId = p.voiceChannelId ?? lastVoiceChannel.get(`${token}:${p.guildId}`);
 				if (get247(token, p.guildId)) {
-					// Do not update voice status here. We keep the current status (trackStart or queueEnd)
-					// so it persists smoothly through the reconnection.
+					// Keep current voice status (trackStart/queueEnd) through reconnection.
 					if (voiceChannelId) {
 						console.log(`Player destroyed for guild ${p.guildId} in 24/7 mode — reconnecting`);
 						reconnect247(p.guildId, voiceChannelId, "playerDestroy");
@@ -1165,9 +1145,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				scheduleAutoDestroy(token);
 			});
 
-			// Track which nodes have failed since the last successful connection, so we
-			// only surface a console error once every configured node has been exhausted
-			// (avoids spamming a warning per-node while others are still trying).
+			// Log a node error only after every configured node has failed.
 			const failedNodeIds = new Set<string>();
 
 			manager.nodeManager.on("error", (node, err) => {
@@ -1180,9 +1158,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				}
 			});
 
-			// Track which node ids have dropped, so the "connect" handler below can tell
-			// a genuine reconnect (needs auto-resume) apart from a brand-new node connecting
-			// for the first time (e.g. right after a player was just created — nothing to resume).
+			// Track dropped node ids to tell genuine reconnects (resume) from first-time connects.
 			const droppedNodeIds = new Set<string>();
 			const lastConnectLog = new Map<string, number>();
 
@@ -1232,9 +1208,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 								try {
 									const fallbackNode = findPlayerCapableNode(manager, node.id, player.queue.current);
 									if (!fallbackNode) return;
-									// Re-check: this event may have fired before a destroy/
-									// disconnect completed — never move players of a dead context,
-									// to a dead node, or without voice data (changeNode throws).
+									// Skip changeNode for dead contexts/nodes or missing voice data (throws); event can race destroy.
 									if (!players.has(token)) return;
 									if (manager.players.get(player.guildId) !== player) return;
 									if (!fallbackNode.connected) return;
@@ -1270,8 +1244,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 					const is247 = get247(token, oldState.guild.id);
 
 					if (is247) {
-						// Do not update voice status here. We keep the current status (trackStart or queueEnd)
-						// so it persists smoothly through the reconnection.
+						// Keep current voice status (trackStart/queueEnd) through reconnection.
 						reconnect247(oldState.guild.id, oldState.channelId!, "voiceStateUpdate");
 						return;
 					}
@@ -1339,10 +1312,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 					username: readyClient.user.username,
 				});
 
-				// Wait for the primary node group; mode 2 then falls back to local only.
-				// connectNodes=false: manager.init() above already kicked off connections for
-				// every registered node in the background — calling node.connect() again here
-				// races with that in-flight handshake and corrupts the node's socket state.
+				// connectNodes=false: manager.init() already connects in background; extra connect() corrupts socket state.
 				const nodeConnected = await connectLavalinkWithFallback(manager, config.nodeConnectTimeout ?? 4000, log, preferLocal, false);
 
 				if (!nodeConnected) {
@@ -1361,8 +1331,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 			} catch (err) {
 				players.delete(token);
 
-				// Kill all node connections — remove from map FIRST so the
-				// library's close() handler doesn't re-trigger reconnect()
+				// Remove nodes from map FIRST so close() can't re-trigger reconnect().
 				const nodesToKill = [...manager.nodeManager.nodes.values()];
 				for (const node of nodesToKill) {
 					try {
@@ -1436,8 +1405,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 		console.error("Error clearing voice status during destroy:", err);
 	}
 
-	// Explicitly destroy every Lavalink player concurrently — allSettled so one
-	// guild failing can't block teardown of the rest or the discord.js client.
+	// Destroy all guild players concurrently; allSettled so one failure can't block teardown.
 	try {
 		const guildPlayers = [...managed.player.players.values()];
 		await Promise.allSettled(
@@ -1450,11 +1418,7 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 	} catch {}
 
 	try {
-		// node.destroy() (not disconnect()): closes the socket, removes listeners,
-		// stops heartbeat/reconnect timers, deletes the node from the map, and
-		// emits "destroy" (not "disconnect") so the auto-switch handler above
-		// never fires during teardown. Any surviving players on the node are
-		// destroyed internally via allSettled as a backstop.
+		// Use node.destroy() (not disconnect()): emits "destroy" not "disconnect" so auto-switch never fires during teardown.
 		const nodesToKill = [...managed.player.nodeManager.nodes.values()];
 		for (const node of nodesToKill) {
 			try {

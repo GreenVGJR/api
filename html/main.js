@@ -676,6 +676,24 @@ function setStatus(dotColor, text, textClass, shimmer = false) {
   slideStatusText(text, "font-semibold " + textClass + shimmerClass);
 }
 
+function setStatusInstant(dotColor, text, textClass, shimmer = false) {
+  if (slideAnimTimeout) clearTimeout(slideAnimTimeout);
+  slideAnimTimeout = null;
+  if (statusSizer) statusSizer.textContent = text;
+  syncStatusWidth();
+  const shimmerClass = shimmer ? " waiting-loading" : "";
+  setStatusDotColor(dotColor);
+  statusText.textContent = text;
+  statusText.className = textClass + shimmerClass;
+  responseTitle.textContent = text;
+  responseTitle.className = `${STATUS_BASE_CLASS} font-semibold ${textClass}${shimmerClass}`;
+  responseTitle.classList.remove("status-slide-out");
+  if (responseTitleNext) {
+    responseTitleNext.style.display = "none";
+    responseTitleNext.classList.remove("status-slide-in");
+  }
+}
+
 const sendRow = document.getElementById("sendRow");
 const paramsPanel = document.getElementById("paramsPanel");
 const paramsToggle = document.getElementById("paramsToggle");
@@ -1217,7 +1235,7 @@ async function performRequest(targetUrl, retryCount = 0) {
       });
       return await performRequest(targetUrl, retryCount + 1);
     }
-    setStatus("blue-400", "Rendering", "text-gray-400", true);
+    setStatusInstant("blue-400", "Rendering", "text-gray-400", true);
 
     let duration;
     let preParsedJson = null;
@@ -1417,7 +1435,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           let lastReported = 0;
           const fragments = [];
 
-          setStatus("blue-400", `Rendering (0/${lines.length} lines)`, "text-gray-400", true);
+          setStatusInstant("blue-400", `Rendering (0/${lines.length} lines)`, "text-gray-400", true);
 
           const buildColorfulChunk = () => {
             const deadline = performance.now() + FRAME_BUDGET_MS;
@@ -1434,7 +1452,7 @@ async function performRequest(targetUrl, retryCount = 0) {
 
               if (chunkIndex - lastReported >= REPORT_EVERY || chunkIndex >= lines.length) {
                 lastReported = chunkIndex;
-                setStatus("blue-400", `Rendering (${chunkIndex}/${lines.length} lines)`, "text-gray-400", true);
+                setStatusInstant("blue-400", `Rendering (${chunkIndex}/${lines.length} lines)`, "text-gray-400", true);
               }
 
               if (performance.now() >= deadline) break;
@@ -2223,6 +2241,12 @@ async function fetchInitialEndpoints() {
 
 let animationTimeout = null;
 
+function endpointSkeletonHTML() {
+  const row = (w) => `<div class="ep-skeleton-row"><div class="ep-skeleton-line" style="width:${w}%"></div></div>`;
+  const group = (widths) => `<div class="ep-skeleton-group" aria-hidden="true"><div class="ep-skeleton-group-head"><div class="ep-skeleton-line ep-skeleton-head-line"></div><div class="ep-skeleton-line ep-skeleton-count-line"></div></div><div class="space-y-1">${widths.map(row).join("")}</div></div>`;
+  return `<div class="space-y-3" data-skeleton="true" role="status" aria-label="Loading endpoints">${group([92, 78, 85, 64])}${group([88, 71, 80])}${group([90, 68, 76, 58])}<span class="sr-only">Loading endpoints…</span></div>`;
+}
+
 function renderEndpoints(animate = false) {
   const categoryEndpoints = endpoints[currentCategory] || [];
   const q = epSearchText.trim();
@@ -2270,11 +2294,14 @@ function renderEndpoints(animate = false) {
 
   const renderBody = () => {
     if (totalCount === 0) {
-      return `
+      if (hasLoadedEndpoints()) {
+        return `
             <div class="text-gray-600 text-xs p-4 text-center">
-                ${hasLoadedEndpoints() ? "No endpoints found." : "Loading..."}
+                No endpoints found.
             </div>
          `;
+      }
+      return endpointSkeletonHTML();
     }
     if (shownCount === 0) {
       return `
@@ -2326,7 +2353,7 @@ function renderEndpoints(animate = false) {
     paintKbActive(false);
   };
 
-  if (animate && oldHTML && !oldHTML.includes("Loading...")) {
+  if (animate && oldHTML && !oldHTML.includes("data-skeleton")) {
     endpointsList.classList.add("is-animating");
     endpointsList.innerHTML = `
             <div class="swipe-layer old space-y-1">${oldHTML}</div>

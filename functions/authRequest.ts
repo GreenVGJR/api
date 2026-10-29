@@ -537,8 +537,7 @@ export const devianKey = async function devianKey(): Promise<{
 		const initialMatch = secres.match(/window\.__INITIAL_STATE__\s*=\s*JSON\.parse\(\s*"((?:\\.|[^"\\])*)"\s*\)/);
 		if (!initialMatch?.[1]) return null;
 
-		// The captured group is the JS string literal content. Decode it the way the
-		// browser's JS engine would (tolerant of non-JSON escapes), then JSON.parse.
+		// Decode the captured group as the browser's JS engine would (tolerant of non-JSON escapes), then JSON.parse.
 		const unescapeJsString = (lit: string): string => {
 			let out = "";
 			for (let i = 0; i < lit.length; i++) {
@@ -610,10 +609,7 @@ const mergeCookieJar = (base: string, setCookies: string[]): string => {
 	return [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
 };
 
-// Akamai interstitial PoW: page carries `var i = N; var j = i + Number("A"+"B")`
-// and expects POST /_sec/verify?provider=interstitial {"bm-verify": token, pow: j}.
-// Answers {"reload": true} and rotates ak_bmsc. Returns the merged cookie jar,
-// or null when the html isn't a solvable challenge.
+// Akamai interstitial PoW: POST {"bm-verify": token, pow} to /_sec/verify?provider=interstitial; returns merged jar or null.
 export const solveMagnificPow = async (challengeHtml: string, cookies: string, verifyOrigin: string): Promise<string | null> => {
 	try {
 		const i = Number(challengeHtml.match(/var i\s*=\s*(\d+)/)?.[1]);
@@ -642,9 +638,7 @@ export const solveMagnificPow = async (challengeHtml: string, cookies: string, v
 	}
 };
 
-// Fetches the challenge content itself (per upstream behavior this URL reliably
-// serves the interstitial instead of a hard block) and returns its html plus
-// the cookies it sets, merged over the passed jar.
+// Fetch challenge HTML from the interstitial URL; returns html plus cookies merged over the jar.
 export const fetchMagnificChallenge = async (cookies: string): Promise<{ html: string; cookies: string } | null> => {
 	try {
 		const res = await fetch("https://magnific.com/search", {
@@ -834,14 +828,8 @@ let spi_9qw: Promise<{
 
 const SP_NONCE_CAP = 50_000_000;
 
-// Parallel SHA256(randomData + nonce) search: worker i of N checks nonces
-// i, i+N, i+2N... First match wins, rest stop via shared flag. Resolves the
-// winning { nonce, hash } so callers can report attempts as nonce + 1.
-//
-// Part A: fastest loop per benchmark (crypto.hash one-shot, 416k h/s vs
-// 156k h/s for createHash+hex) with Buffer byte-check instead of hex
-// (difficulty hex zeros == leading zero bytes + optional half nibble).
-// Part B: persistent pool — workers spawn once and are reused across solves.
+// Parallel SHA256(randomData + nonce) search: workers check i, i+N...; first match wins, attempts = nonce + 1.
+// Fastest loop is crypto.hash one-shot (416k vs 156k h/s) with Buffer byte-check; workers persist across solves.
 const powWorkerCode = "const{parentPort}=require('node:worker_threads');" + "const crypto=require('node:crypto');" + "const oneShot=typeof crypto.hash==='function';" + "parentPort.on('message',(job)=>{" + "const{solveId,randomData,full,half,index,stride,cap,stop}=job;" + "const flag=new Int32Array(stop);" + "let nonce=index;for(;;){" + "let d;" + "if(oneShot){d=crypto.hash('sha256',randomData+nonce,'buffer');}" + "else{d=crypto.createHash('sha256').update(randomData+nonce,'utf8').digest();}" + "let ok=true;" + "for(let b=0;b<full;b++){if(d[b]!==0){ok=false;break;}}" + "if(ok&&half&&(d[full]&240)!==0){ok=false;}" + "if(ok){parentPort.postMessage({solveId:solveId,nonce:nonce,hash:d.toString('hex')});return;}" + "nonce+=stride;" + "if((nonce&255)===0&&Atomics.load(flag,0)!==0){parentPort.postMessage({solveId:solveId,stopped:true});return;}" + "if(nonce>cap){parentPort.postMessage({solveId:solveId,exhausted:true});return;}" + "}});";
 
 let powPoolSize = 0;
@@ -979,8 +967,7 @@ const powRunSolve = (randomData: string, difficulty: number, retried: boolean): 
 	});
 };
 
-// Serializes solves: a tight-loop worker can't take a second job until it
-// finishes the first, so extra solves queue behind the active one.
+// Serializes solves: busy workers can't take a second job, extras queue behind the active one.
 const jkw_4qx = (randomData: string, difficulty: number): Promise<{ nonce: number; hash: string } | null> => {
 	return new Promise((resolve) => {
 		const run = () => {

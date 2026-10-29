@@ -1,3 +1,2 @@
-// Shared map for radio stream URLs → proxy endpoint
-// Key: guildId, Value: original stream URL
+// Radio stream URLs by guildId for the proxy endpoint.
 export const radioStreamUrls = new Map<string, string>();

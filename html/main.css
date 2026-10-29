@@ -741,6 +741,52 @@ kbd.kbd {
 	display: none;
 }
 
+.ep-skeleton-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px 4px;
+}
+
+.ep-skeleton-line {
+	height: 10px;
+	border-radius: 999px;
+	background: linear-gradient(100deg, #1a1a1a 40%, #2e2e2e 50%, #1a1a1a 60%);
+	background-size: 200% 100%;
+	animation: ep-skeleton-shimmer 1.4s infinite linear;
+}
+
+.ep-skeleton-head-line {
+	width: 96px;
+}
+
+.ep-skeleton-count-line {
+	width: 28px;
+	height: 14px;
+	margin-left: auto;
+}
+
+.ep-skeleton-row {
+	padding: 4px 8px;
+}
+
+.ep-skeleton-row .ep-skeleton-line {
+	height: 22px;
+	border-radius: 8px;
+}
+
+@keyframes ep-skeleton-shimmer {
+	to {
+		background-position: -200% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ep-skeleton-line {
+		animation: none;
+	}
+}
+
 .endpoint-item.kb-active {
 	outline: 1px solid var(--accent);
 	outline-offset: -1px;

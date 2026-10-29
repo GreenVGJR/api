@@ -227,8 +227,7 @@ function failPending(error: Error) {
 	closeSocket(error.message);
 }
 
-// Each playground room keeps at most 10 user messages, so long conversations
-// rotate to a fresh room and seed it with the stored history as one message.
+// Rooms hold max 10 user messages; longer chats rotate rooms and seed history as one message.
 function rotateRoom() {
 	baseWsUrl = buildDefaultPlaygroundWs();
 	roomUserMessages = 0;
@@ -266,8 +265,7 @@ function toNumber(value: unknown) {
 	return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-// The playground reports usage cumulatively for the whole session, so per-request
-// numbers are the difference against the snapshot taken before the request started.
+// Usage is cumulative per session; per-request numbers diff against the pre-request snapshot.
 function buildUsage(current: Record<string, unknown> | null, baseline: Record<string, unknown> | null): ChatUsage {
 	const now = current ?? {};
 	const before = baseline ?? {};

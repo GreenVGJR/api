@@ -156,9 +156,7 @@ app.get("/radio", async (c) => {
 
 		// Create new Player & Connect
 		await log("Creating Lavalink player for radio streaming...");
-		// Prefer the local (vgjr) node first, only falling back to remote. Explicitly
-		// pick + connect it so the manager doesn't silently auto-assign a different,
-		// possibly-unconnected node.
+		// Prefer the local (vgjr) node over remote; explicitly pick + connect it so the manager avoids an unconnected node.
 		const preferredNodeIds = getLavalinkNodeIds(true);
 		let chosenNodeId: string | null = null;
 		// 1. Try to find an already connected node
@@ -219,10 +217,7 @@ app.get("/radio", async (c) => {
 		// 6. Search and load radio stream URL, trying each Lavalink node on failure
 		await log("Searching and loading radio stream via Lavalink...");
 		const requester = authorId ? await client.users.fetch(authorId as string).catch(() => ({ id: authorId, username: "Discord User" })) : client.user;
-		// Radio: strictly prefer the local (vgjr) node first, falling back to remote
-		// nodes only if the local node fails. Note we do NOT prepend guildPlayer.node
-		// (the node it was created on) ahead of the local node — after a track was
-		// just played, that could be a remote node and would otherwise be tried first.
+		// Prefer the local (vgjr) node first; don't prepend guildPlayer.node since it may be remote from a prior track.
 		const nodeIds = getLavalinkNodeIds(true);
 		let searchResult: any;
 		let lastError: string | null = null;

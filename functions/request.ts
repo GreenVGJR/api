@@ -7,6 +7,10 @@ import { googleTrustJar, googleTrustHas, googleTrustIsFresh, mergeGoogleTrust, m
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
+// @ts-expect-error no types
+import { encrypt as webGnarlyEncrypt } from "./tiktok_signature/web_gnarly.mjs";
+// @ts-expect-error no types
+import { encrypt as webDynosaurEncrypt } from "./tiktok_signature/web_dynosaur.mjs";
 
 import { ProtoUtils } from "youtubei.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
@@ -181,9 +185,7 @@ async function generateCbPotFall(videoId: string) {
 	const integrityTokenJson = (await integrityTokenResponse.json()) as [string, number, number, string];
 	const integrityToken = integrityTokenJson[0];
 	const estimatedTtlSecs = integrityTokenJson[1];
-	// The TTL is a duration, but the caption cache compares against Date.now(), so it
-	// needs an absolute deadline. Storing the raw duration made every lookup miss,
-	// forcing a fresh BotGuard mint on every single caption request.
+	// Caption cache compares against Date.now: store an absolute deadline, not the raw TTL.
 	bgIntegrityExp = estimatedTtlSecs ? Date.now() + estimatedTtlSecs * 1000 : Date.now() + CAPTION_POT_TTL_FALLBACK;
 	if (!integrityToken) throw new Error("BotGuard integrity token unavailable");
 	const minter = await WebPoMinter.create({ integrityToken }, webPoSignalOutput as any);
@@ -235,18 +237,13 @@ export async function getPoToken() {
 	return poTokenCache;
 }
 
-// Every YouTube route reads poTokenCache for its visitorData/serviceIntegrityDimensions,
-// so it has to be primed before the request is built - otherwise those fields are
-// silently omitted. Single-flight so a burst of requests mints one token, not one each.
-// Cheap when already cached (the usual case, since warmPoToken primes at boot); it only
-// blocks on a BotGuard mint if the warmup failed or the token expired.
+// Prime poTokenCache before building requests or fields are silently omitted; single-flighted.
+// Cheap when cached (usual case); only blocks on a BotGuard mint if warmup failed/expired.
 export async function ensurePoToken() {
 	return await getPoToken();
 }
 
-// Called from index.ts on startup alongside the music/browser warmups so the first real
-// YouTube request doesn't pay for the BotGuard mint. Never rejects - a failed warmup just
-// leaves ensurePoToken() to mint lazily on first use.
+// Warm at startup so the first request skips the BotGuard mint; never rejects, falls back to lazy mint.
 export async function warmPoToken() {
 	const existing = await getPoToken();
 	if (existing?.po_token) console.log("[Botguard] Initialized");
@@ -261,9 +258,7 @@ function withYoutubePoToken(baseUrl: any, poToken: string) {
 		const url = new URL(String(baseUrl));
 		url.searchParams.set("fmt", "json3");
 		url.searchParams.set("potc", "1");
-		// searchParams serialises the value itself, so the token must NOT be
-		// pre-encoded: encodeURIComponent here would double-encode it (e.g. the
-		// "=" padding became "%253D" in the URL, corrupting the pot server-side).
+		// Don't pre-encode the token: searchParams serialises it, double-encoding corrupts the pot ("=" -> "%253D").
 		url.searchParams.set("pot", poToken);
 		url.searchParams.set("xorb", "2");
 		url.searchParams.set("xobt", "3");
@@ -314,6 +309,10 @@ export const commonHeaders = {
 	"Sec-Fetch-Site": "none",
 	"User-Agent": userAgent,
 };
+
+const TIKTOK_WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0";
+const TIKTOK_WEB_SEARCH_CODE = '{"tiktok":{"client_params_x":{"search_engine":{"ies_mt_user_live_video_card_use_libra":1,"mt_search_general_user_live_card":1}},"search_server":{}}}';
+const TIKTOK_WEB_SIGN_OPTS = { ubcode: 14, canvas: 411533585, version: "5.3.2", scm_version: "1.0.0.417", total_reqs: 6, enc_reqs: 1, envcode: 1, field_53: "www.tiktok.com/search" };
 
 const HTTP_URL_RE = /^https?:\/\//;
 const WS_COLLAPSE_RE = /\s+/g;
@@ -572,8 +571,7 @@ export const parseYtInitial = (html: any) => {
 	}
 };
 
-// Extracts a balanced `{...}` object literal starting at `bracePos`,
-// string-aware. Returns null when no balanced object starts there.
+// Extracts a string-aware balanced {...} at bracePos; null when absent.
 const extractBalancedJsObjectAt = (html: string, bracePos: number): string | null => {
 	if (html[bracePos] !== "{") return null;
 	let depth = 0;
@@ -597,9 +595,7 @@ const extractBalancedJsObjectAt = (html: string, bracePos: number): string | nul
 	return null;
 };
 
-// Parses a JS object-literal payload with unquoted keys (SvelteKit embeds
-// these instead of strict JSON). Unknown identifier references resolve to
-// null; duplicate keys resolve last-wins like normal JS evaluation.
+// Parses SvelteKit's unquoted-key object literals: unknown identifiers -> null, duplicate keys last-wins.
 const parseLooseJsValue = (input: string): any => {
 	let pos = 0;
 	const skipWs = () => {
@@ -780,10 +776,7 @@ let googleTtsWiz: {
 } | null = null;
 let googleTtsCookies: string | null = null;
 
-// Akamai rate-limits magnific on bursts ("multiple requests at short time"
-// → PoW challenge). Pace upstream hits, dedupe concurrent identical queries,
-// cache results briefly, and single-flight key refreshes so one burst costs
-// one upstream hit instead of N.
+// Akamai PoW-challenges magnific bursts: pace hits, dedupe/cache briefly, single-flight key refreshes.
 const MAGNIFIC_MIN_GAP_MS = 1000;
 const MAGNIFIC_CACHE_TTL_MS = 60_000;
 const magnificCache = new Map<string, { exp: number; data: any }>();
@@ -1981,8 +1974,7 @@ export const ShazamLyrics = async function ShazamLyrics(que: string, refresh_aut
 
 		if (shazamUrl) {
 			try {
-				// Have TLS Fingerprint (Akamai anti-bot protection)
-				// When detects suspicious, shazam would rotate the response to different track
+				// Shazam uses TLS fingerprinting (Akamai): suspicious clients get rotated to a different track.
 				const { "Sec-Fetch-Dest": _sfd, "Sec-Fetch-Mode": _sfm, "Sec-Fetch-Site": _sfs, ...kfmv } = commonHeaders;
 				const shazamRes = await (httpcloakGet as any)(shazamUrl, {
 					httpVersion: "h2",
@@ -4346,8 +4338,7 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 
 		let result = await search(que, `/search/pins/?q=${encodeURIComponent(que)}`, false);
 
-		// Retry but use autocomplete query
-		// Auto-skipped for nsfw query
+		// Retry via autocomplete query; auto-skipped for NSFW queries.
 		if (!result) {
 			fallbackCount += 1;
 			try {
@@ -4660,8 +4651,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 		// Normalize values for comparison (treat null, undefined, empty string, and empty array as the same "empty" state)
 		const normalize = (v: any) => (v === "" || v === undefined || v === null || (Array.isArray(v) && v.length === 0) ? null : v);
 
-		// Discord nests the style fields under display_name_styles instead of returning them flat,
-		// so a flat lookup always reads undefined and makes every style write look like a no-op.
+		// Style fields live under display_name_styles, so flat lookups read undefined and look like no-ops.
 		const STYLE_KEYS: Record<string, string> = {
 			display_name_font_id: "font_id",
 			display_name_effect_id: "effect_id",
@@ -4677,9 +4667,8 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 		// Arrays compare by identity in JS, so compare colors by value
 		const sameValue = (a: any, b: any) => (Array.isArray(a) || Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b);
 
-		// Discord requires the style triple to be all-set or all-null: mixing a null with any
-		// value returns 400/670009, even when the non-null fields carry the current values.
-		// Completing a partial edit from the current style cannot rescue a clear, so warn instead.
+		// Style triple must be all-set or all-null: mixing returns 400/670009 even with current values.
+		// A partial completion can't rescue a clear, so warn instead.
 		const styleFields = Object.keys(payload).filter((k) => STYLE_KEYS[k]);
 		if (styleFields.some((f) => payload[f] === null) && styleFields.some((f) => payload[f] !== null)) {
 			payloadError = [...(Array.isArray(payloadError) ? payloadError : []), "[effectStyle/fontStyle/colorsStyle] Discord rejects mixing a clear with a set (400/670009). Try with another combination."];
@@ -4749,9 +4738,7 @@ export const DiscordMember = async (token: string, guildId: string, payload: any
 			}
 		} catch (e) {}
 
-		// Discord applies display_name_styles on a cooldown that is separate from the HTTP rate
-		// limit: writes inside that window return 200 with the previous values and no error.
-		// Detect that so it is reported instead of looking like a successful change.
+		// display_name_styles cooldown is separate from HTTP rate limits: in-window writes return 200 with stale values, so detect it.
 		const unreappliedStyles = (p: any) => {
 			const requested = Object.keys(payload).filter((k) => STYLE_KEYS[k]);
 			if (requested.length === 0) return [];
@@ -5434,13 +5421,10 @@ export const KickSearch = async function KickSearch(que: string, withStream: boo
 		const res: any = await per.json().catch(() => null);
 		const data = res?.data || null;
 		if (data) {
-			// withStream=false keeps this to a single upstream request; the playback
-			// tokens cost one extra fetch per live stream, so they're opt-in.
+			// withStream=false stays a single upstream request; per-stream playback tokens are opt-in.
 			if (withStream && (Array.isArray(data.livestreams) || Array.isArray(data.channels))) {
-				// Playback URLs are signed per-request tokens, so they need one extra
-				// fetch per live stream. Slugs are deduped across both arrays (the same
-				// streams appear in each), fetched in parallel + best-effort with one
-				// retry for transient failures: failures become null, never break the response.
+				// Playback URLs are signed per-request: one extra fetch per stream, slugs deduped and parallel.
+				// Best-effort with one retry; failures become null without breaking the response.
 				const slugs: string[] = [];
 				const seen = new Set<string>();
 				for (const ls of data.livestreams ?? []) {
@@ -5636,41 +5620,236 @@ export const Pexels = async function Pexels(que: string) {
 	}
 };
 
-export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, limit: number = 1, refresh_auth: boolean = false) {
-	if (!que) return null;
+const tiktokWebSearchCloak = new HttpcloakSession({
+	preset: HttpcloakPreset.FIREFOX_LATEST_WINDOWS,
+	httpVersion: "h2",
+	timeout: 30,
+});
+
+export const TiktokMusicDetail = async function TiktokMusicDetail(query: string) {
+	if (!query) return null;
+
+	const musicId = /^\d+$/.test(query.trim()) ? query.trim() : /-(\d+)\/?(?:[?#]|$)/.exec(query)?.[1] || "";
+	if (!musicId) {
+		return {
+			error: "Invalid TikTok music url or id",
+		};
+	}
 
 	try {
-		if (refresh_auth || !tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		if (!tiktokSessionKeys?.device_id) return null;
+		const sess = tiktokSessionKeys;
 
-		const pul = await fetch(`https://api.tiktokv.com/aweme/v1/search/item/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&count=${limit}&keyword=${encodeURIComponent(que)}&version_code=3.2.0&app_name=musical_ly&channel=App+Store&app_id=${tiktokSessionKeys.app_id}&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&aid=1988&os_version=16.2&device_platform=iphone&iid=7386407102867523334&device_brand=iphone&device_type=iPhone10,6`, {
+		const params: Array<[string, string]> = [
+			["WebIdLastTime", String(sess.deviceIdCreate)],
+			["aid", "1988"],
+			["app_language", "en"],
+			["app_name", "tiktok_web"],
+			["browser_language", "en-US"],
+			["browser_name", "Mozilla"],
+			["browser_online", "true"],
+			["browser_platform", "Win32"],
+			["browser_version", "5.0 (Windows)"],
+			["channel", "tiktok_web"],
+			["cookie_enabled", "true"],
+			["data_collection_enabled", "false"],
+			["device_id", String(sess.device_id)],
+			["device_platform", "web_pc"],
+			["focus_state", "true"],
+			["from_page", "music"],
+			["history_len", "1"],
+			["is_fullscreen", "false"],
+			["is_page_visible", "true"],
+			["language", "en"],
+			["musicId", musicId],
+			["odinId", String(sess.odin_id)],
+			["os", "windows"],
+			["priority_region", ""],
+			["referer", ""],
+			["region", "ID"],
+			["root_referer", ""],
+			["screen_height", "768"],
+			["screen_width", "1366"],
+			["tz_name", "Asia/Jakarta"],
+			["user_is_login", "false"],
+			["webcast_language", "en"],
+		];
+		const sp = new URLSearchParams();
+		for (const [k, v] of params) sp.append(k, v);
+		const baseQs = sp.toString();
+		const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, field_53: "www.tiktok.com" });
+		const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}&msToken=`;
+		const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
+		const url = `https://www.tiktok.com/api/music/detail/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
+
+		try {
+			const ttwid = /ttwid=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+			const csrf = /tt_csrf_token=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+			if (ttwid) tiktokWebSearchCloak.setCookie("ttwid", decodeURIComponent(ttwid), { domain: ".tiktok.com", path: "/", secure: true });
+			if (csrf) tiktokWebSearchCloak.setCookie("tt_csrf_token", csrf, { domain: ".tiktok.com", path: "/", secure: true });
+		} catch {}
+
+		const res: any = await tiktokWebSearchCloak.get(url, {
 			headers: {
 				...commonHeaders,
-				"X-Khronos": Math.floor(Date.now() / 1000).toString(),
-				"X-Bogus": "1",
-				Cookie: tiktokSessionKeys?.cookie,
+				Accept: "*/*",
+				Priority: "u=4",
+				Referer: "https://www.tiktok.com/",
+				"Sec-GPC": "1",
+				"Sec-Fetch-Dest": "empty",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Site": "same-origin",
+				"User-Agent": TIKTOK_WEB_UA,
 			},
 		});
-
-		const res = await pul.text();
-		if (res === "") {
+		const text = String(res?.text ?? "");
+		const minted = String(res?.headers?.["x-ms-token"] || "");
+		if (minted) {
+			try {
+				tiktokWebSearchCloak.setCookie("msToken", minted, { domain: ".tiktok.com", path: "/", secure: true });
+			} catch {}
+		}
+		if (Number(res?.statusCode ?? 0) !== 200 || !text) {
 			return {
 				error: "Akamai asking to verify you're not a bot",
 			};
 		}
-		let testres;
+		let payload: any = null;
 		try {
-			testres = JSON.parse(res);
-			if (!testres?.aweme_list && !refresh_auth) return await TiktokSearchVideo(que, limit, true);
-		} catch {}
-
-		if (testres?.search_nil_info) {
+			payload = JSON.parse(text);
+		} catch {
+			return {
+				error: "Akamai asking to verify you're not a bot",
+			};
+		}
+		if (payload?.status_code !== 0) {
 			return {
 				error: "Tiktok blocked this request",
 			};
 		}
+		const music = payload?.musicInfo || payload?.musicinfo || payload?.music_detail || payload?.music || payload?.data || null;
 		return {
-			_warning: "This endpoint may stop working in future as tiktok keep updating anti-bot protect",
-			data: testres?.aweme_list || null,
+			data: music,
+		};
+	} catch {
+		return null;
+	}
+};
+
+export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, limit: number = 1) {
+	if (!que) return null;
+
+	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		if (!tiktokSessionKeys?.device_id) return null;
+		const sess = tiktokSessionKeys;
+
+		const perPage = Math.min(Math.max(limit || 1, 1), 12);
+		const items: any[] = [];
+		let cursor = 0;
+		let historyLen = 2;
+
+		for (let page = 0; page < 5 && items.length < limit; page++) {
+			const params: Array<[string, string]> = [
+				["WebIdLastTime", String(sess.deviceIdCreate)],
+				["aid", "1988"],
+				["app_language", "en"],
+				["app_name", "tiktok_web"],
+				["browser_language", "en-US"],
+				["browser_name", "Mozilla"],
+				["browser_online", "true"],
+				["browser_platform", "Win32"],
+				["browser_version", "5.0 (Windows)"],
+				["channel", "tiktok_web"],
+				["cookie_enabled", "true"],
+				["count", String(perPage)],
+				["cursor", String(cursor)],
+				["data_collection_enabled", "false"],
+				["device_id", String(sess.device_id)],
+				["device_platform", "web_pc"],
+				["device_type", "web_h265"],
+				["from_page", "search"],
+				["history_len", String(historyLen)],
+				["keyword", que],
+				["odinId", String(sess.odin_id)],
+				["offset", String(cursor)],
+				["os", "windows"],
+				["priority_region", ""],
+				["referer", ""],
+				["region", "ID"],
+				["user_is_login", "false"],
+				["web_search_code", TIKTOK_WEB_SEARCH_CODE],
+				["webcast_language", "en"],
+			];
+			if (sess.abVersion) {
+				const at = params.findIndex(([k]) => k === "cookie_enabled");
+				params.splice(at < 0 ? params.length : at, 0, ["client_ab_versions", String(sess.abVersion)]);
+			}
+			const sp = new URLSearchParams();
+			for (const [k, v] of params) sp.append(k, v);
+			const baseQs = sp.toString();
+			const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, TIKTOK_WEB_SIGN_OPTS);
+			const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}&msToken=`;
+			const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
+			const url = `https://www.tiktok.com/api/search/general/full/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
+
+			try {
+				const ttwid = /ttwid=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+				const csrf = /tt_csrf_token=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+				if (ttwid) tiktokWebSearchCloak.setCookie("ttwid", decodeURIComponent(ttwid), { domain: ".tiktok.com", path: "/", secure: true });
+				if (csrf) tiktokWebSearchCloak.setCookie("tt_csrf_token", csrf, { domain: ".tiktok.com", path: "/", secure: true });
+			} catch {}
+
+			const res: any = await tiktokWebSearchCloak.get(url, {
+				headers: {
+					...commonHeaders,
+					Accept: "*/*",
+					Referer: `https://www.tiktok.com/search?q=${encodeURIComponent(que)}`,
+					"Sec-Fetch-Dest": "empty",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Site": "same-origin",
+					"User-Agent": TIKTOK_WEB_UA,
+				},
+			});
+			const text = String(res?.text ?? "");
+			const minted = String(res?.headers?.["x-ms-token"] || "");
+			if (minted) {
+				try {
+					tiktokWebSearchCloak.setCookie("msToken", minted, { domain: ".tiktok.com", path: "/", secure: true });
+				} catch {}
+			}
+			if (Number(res?.statusCode ?? 0) !== 200 || !text) {
+				if (items.length) break;
+				if (page === 0) tiktokSessionKeys = await tiktokSessions();
+				continue;
+			}
+			let payload: any = null;
+			try {
+				payload = JSON.parse(text);
+			} catch {
+				if (items.length) break;
+				continue;
+			}
+			if (payload?.status_code !== 0 || !Array.isArray(payload?.data)) {
+				if (items.length) break;
+				continue;
+			}
+			for (const section of payload.data) {
+				if (section?.type === 1 && section?.item?.id && !items.some((x: any) => x.id === section.item.id)) items.push(section.item);
+			}
+			if (!payload.has_more) break;
+			cursor = Number(payload.cursor ?? cursor + perPage) || 0;
+			historyLen += 1;
+		}
+
+		if (!items.length) {
+			return {
+				error: "Akamai asking to verify you're not a bot",
+			};
+		}
+		return {
+			data: items.slice(0, limit),
 		};
 	} catch {
 		return null;
@@ -7573,8 +7752,7 @@ export const InstagramVideo = async function InstagramVideo(que: string) {
 			}
 
 			if (media) {
-				// Shape varies by tier: embed/page nodes expose `video_url` directly,
-				// GraphQL nodes expose a `video_versions` array (pick widest).
+				// Video URL shape varies by tier: video_url directly or widest entry in video_versions.
 				let videoUrl: string | null = typeof media.video_url === "string" && media.video_url ? media.video_url : null;
 				if (!videoUrl && Array.isArray(media.video_versions) && media.video_versions.length > 0) {
 					const best = [...media.video_versions].sort((x: any, y: any) => (y?.width || 0) - (x?.width || 0))[0];
@@ -8514,8 +8692,7 @@ const renderLensResults = async (location: string): Promise<{ html: string; ok: 
 	}
 };
 
-// ── Lens result extraction ───────────────────────────────────────────────────
-// Both are JSON.parsed — no regex scraping of URLs/titles.
+// Lens result extraction: both JSON.parsed, no regex scraping of URLs/titles.
 
 const lensUnescapeJs = (s: string): string => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))).replace(/\\\//g, "/");
 
@@ -9817,8 +9994,7 @@ export async function RageProfile(query: string): Promise<any> {
 
 	let res: any;
 
-	// Earned clearance is usually either valid (first try passes) or stale
-	// (instant re-challenge), so don't burn extra httpcloak roundtrips on it.
+	// Earned clearance is valid or instantly re-challenged, so skip extra httpcloak roundtrips.
 	const rageMaxAttempts = rageCookies ? 2 : 3;
 	for (let attempts = 0; attempts < rageMaxAttempts; attempts++) {
 		try {
@@ -9843,9 +10019,7 @@ export async function RageProfile(query: string): Promise<any> {
 						url: `https://rage.wtf/${username}`,
 						fetcherType: "stealthy",
 						solveCloudflare: true,
-						// No custom headers: the stealthy session sends its own
-						// browser-consistent set; overriding the UA breaks the
-						// TLS/UA pairing and the managed challenge never clears.
+						// No custom headers: overriding UA breaks TLS/UA pairing so the managed challenge never clears.
 						cookies: rageCookies
 							? rageCookies.split(";").map((c) => {
 									const idx = c.indexOf("=");
@@ -9893,8 +10067,7 @@ export async function RageProfile(query: string): Promise<any> {
 			return { data: null };
 		}
 
-		// Current rage.wtf structure: SvelteKit embeds the profile payload as a
-		// JS object literal inside the kit.start() bootstrap script.
+		// rage.wtf embeds the profile payload as a JS object literal in the kit.start() bootstrap script.
 		const svelteMarker = "data:{profile:";
 		const svelteMarkerIdx = html.indexOf(svelteMarker);
 		const svelteObjStr = svelteMarkerIdx === -1 ? null : extractBalancedJsObjectAt(html, svelteMarkerIdx + "data:".length);
@@ -13820,10 +13993,7 @@ export const parseGoogleWebItems = (html: string): any[] => {
 	return raw;
 };
 
-// Pulls result rows out of Google's inline `var m = {...}` wiz payload.
-// The wiz format stores each result as a nested array where one element is
-// ["/goto?url=...", title, snippet, 1, id, lang, ..., siteName], so we walk
-// the object and collect those rows instead of relying on DOM class names.
+// Walk Google's inline var m wiz payload for ["/goto?url=...", title, snippet, ...] rows, not DOM classes.
 const extractGoogleWebM = (html: string): any | null => {
 	try {
 		const mStart = html.indexOf("var m={");
@@ -13969,8 +14139,7 @@ const parseGoogleImageMeta = (html: string): { byToken: Map<string, GoogleImageM
 	return { byToken: meta, containers: [...containers] };
 };
 
-// Tracking anchor is an ancestor of the card in the DOM, so in raw html its
-// href sits just before the card markup — last /goto href in the lookbehind.
+// Tracking anchor precedes the card in raw HTML: use the last /goto href in the lookbehind.
 const findGoogleTrackingUrl = (html: string, cardStart: number, cardHtml: string): string => {
 	const own = GOOGLE_GOTO_HREF_RE.exec(cardHtml)?.[1];
 	if (own) return `https://www.google.com${own}`;
@@ -14082,8 +14251,7 @@ const googleImageEntryAgrees = (cardHtml: string, orig: string): boolean | null 
 };
 
 export const parseGoogleImageItems = (html: string): any[] => {
-	// Google may rotate the response markup at some point; the positional pairing below
-	// self-checks via the agreement gate and falls back to legacy per-card parsing.
+	// Markup may rotate: positional pairing self-checks via the agreement gate with legacy fallback.
 	const { byToken } = parseGoogleImageMeta(html);
 	const raw: any[] = [];
 	const seen = new Set<string>();
@@ -14226,10 +14394,8 @@ const isGoogleWebChallenged = (html: string, finalUrl = "", imageSearch = false)
 const isGoogleSafeSearchHidden = (html: string): boolean => /hidden by safesearch|disembunyikan oleh safesearch/i.test(html);
 const parGoogle = "&authuser=0&hl=en&gl=SG&safeui=off&noredirect=1";
 
-// SafeSearch hides results server-side; the page carries a signed setprefs
-// link that flips safeui=off for this jar. Returns items when the bypass
-// worked, [] when prefs flipped but results stay hidden (network-enforced),
-// null when the page isn't a SafeSearch wall or has no usable signature.
+// SafeSearch hides server-side; signed setprefs link flips safeui=off for this jar.
+// Returns items on bypass, [] when network-enforced, null when not a SafeSearch wall/no signature.
 const bypassGoogleSafeSearch = async (html: string, searchUrl: string, parse: (html: string) => any[] = parseGoogleWebItems, limit = 10, urlKey = "url"): Promise<any[] | null> => {
 	if (!isGoogleSafeSearchHidden(html)) return null;
 	const sig = html.match(/\/setprefs\?sig=([A-Za-z0-9\-_%]+)/)?.[1];
@@ -14270,6 +14436,7 @@ const bypassGoogleSafeSearch = async (html: string, searchUrl: string, parse: (h
 // Chrome-fingerprint client: queries Google with solved cookies after bridge.
 const googleWebCloak = new HttpcloakSession({
 	preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+	httpVersion: "h2",
 	timeout: 30,
 });
 
@@ -16786,8 +16953,7 @@ export const DeviantArt = async (query: string, refresh_auth: boolean = false): 
 				.replace(/blur_\d+/g, "blur_10")
 				.replace(/,strp/g, "");
 
-		// Replace each deviation's media with exactly two URLs:
-		// original (file.download token) when present, then the highest resolution variant.
+		// Replace each deviation media with two URLs: original (file.download token) then highest-res variant.
 		for (const dev of parsed.deviations) {
 			const med = dev?.media;
 			if (!med?.baseUri || !Array.isArray(med.token)) continue;

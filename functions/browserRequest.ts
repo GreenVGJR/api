@@ -54,9 +54,7 @@ let rl: readline.Interface | null = null;
 let requestCounter = 0;
 let requestQueue: Promise<any> = Promise.resolve();
 
-// Requests are keyed by id instead of a single pending slot: a request that times
-// out may still produce a response later, and that stale line must never be
-// handed to whichever request is in flight by then.
+// Requests keyed by id: a timed-out response must never resolve the next in-flight request.
 interface PendingRequest {
 	resolve: (value: any) => void;
 	reject: (reason: any) => void;
@@ -202,11 +200,8 @@ export async function browserRequest<T = Record<string, any>>(options: Scrapling
 	});
 }
 
-// Pre-launches the browser window so the first real browserRequest skips
-// Chromium startup and goes straight to navigating. Fire-and-forget at boot.
-// Single-flight: hot-reloads must never spawn a second Chromium (each one is
-// hundreds of MB + a pegged vCPU on small boxes). DISABLE_BROWSER_WARMUP=1
-// skips it entirely for tiny VPS - the first real request just starts cold.
+// Pre-launches Chromium so first request skips startup; single-flight avoids a second heavy browser.
+// DISABLE_BROWSER_WARMUP=1 skips it for tiny VPS (first request starts cold).
 let warmupDone = false;
 let warmupInflight: Promise<boolean> | null = null;
 
@@ -251,8 +246,7 @@ export function closeBrowser() {
 	warmupDone = false;
 	rejectAllPending(new Error("Browser session closed"));
 
-	// Closing stdin lets the bridge hit EOF and shut its Chromium down properly; a hard
-	// kill skips that and orphans the process tree.
+	// Close stdin for clean Chromium shutdown; a hard kill orphans the process tree.
 	try {
 		proc.stdin.end();
 	} catch {}

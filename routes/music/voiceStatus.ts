@@ -80,8 +80,7 @@ app.get("/voiceStatus", async (c) => {
 				await log("Fetched current configurations");
 			}
 
-			// Return response: status is true only if a player is active,
-			// but the data always reflects the most recent settings.
+			// Status is true only with an active player, but data always reflects the latest settings.
 			await s.write(
 				`],"data":${JSON.stringify({
 					status: isActivePlayer,

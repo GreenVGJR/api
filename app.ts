@@ -261,9 +261,7 @@ function getTurnstileKeys(host: string | undefined): {
 
 const app = new Hono({ strict: false });
 
-// ── Maintenance mode ────────────────────────────────────────────────────────
-// When enabled: browsers (UA starts with "Mozilla/5.0") are 302-redirected to
-// /maintenance, API clients get a 503 JSON error directly.
+// Maintenance mode: browsers 302 to /maintenance, API clients get 503 JSON.
 if (maintenanceConfig?.enabled) {
 	app.use("*", async (c: Context, next: Next) => {
 		const pathname = new URL(c.req.url).pathname;
@@ -392,11 +390,9 @@ async function createBackChallengeJwt(maxAge: number): Promise<string> {
 
 const VF_COOKIE = "vf";
 const VF_MAX_AGE = 30;
-// Consumed vf token nonces (`n` claim) mapped to their expiry (unix seconds).
-// Tokens are single-use: presenting the same token twice is rejected (406).
+// Consumed vf nonces (`n` claim) with expiry; single-use, replays rejected (406).
 const usedVfNonces = new Map<string, number>();
-// Guaranteed cleanup even when no verifications are running (verifyVfHeader
-// also prunes lazily on each call).
+// Interval cleanup for used vf nonces (verifyVfHeader also prunes lazily).
 setInterval(() => {
 	const nowSec = Math.floor(Date.now() / 1000);
 	for (const [seen, exp] of usedVfNonces) {
@@ -407,9 +403,7 @@ setInterval(() => {
 function isVfEligible(c: Context): boolean {
 	if (c.req.header("sec-fetch-site") !== "same-origin") return false;
 	if (!c.req.header("user-agent")?.startsWith("Mozilla/5.0")) return false;
-	// Browsers omit Origin on same-origin GETs (including the manual /?vf
-	// fetch), so only enforce it when present — otherwise legitimate
-	// same-origin requests would 406.
+	// Origin enforced only when present; same-origin GETs often omit it (else legit 406).
 	const origin = c.req.header("origin");
 	if (origin) {
 		const host = (c.req.header("host") || "").toLowerCase();
@@ -450,8 +444,7 @@ async function verifyVfHeader(c: Context): Promise<boolean> {
 		if (!token) return false;
 		const payload: any = await verify(token, getBackChallengeJwtKey(), "HS256");
 		if (payload?.sub !== "vf") return false;
-		// Single-use guard: each vf token may be presented exactly once.
-		// Replays (same `n`) are rejected so the caller must mint a fresh token.
+		// Single-use vf guard: replays (same `n`) rejected, mint a fresh token.
 		const n = payload?.n;
 		if (typeof n !== "string" || !n) return false;
 		const nowSec = Math.floor(Date.now() / 1000);
@@ -745,9 +738,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 
 app.get("/", async (c: Context) => {
 	c.header("Cache-Control", "public, no-store, no-transform");
-	// Private hosts (localhost / LAN) skip the vf gate: non-browser clients
-	// don't send sec-fetch-site, so they'd 406 on ?vf and could never mint
-	// the token ?json requires. Public hosts keep the full check.
+	// Private hosts skip the vf gate (no sec-fetch-site would 406 ?vf/?json); public hosts checked.
 	const isPrivateHost = isLocalRequest(c.req.header("host"));
 	if (c.req.query("vf") !== undefined) {
 		if (!isPrivateHost && !isVfEligible(c)) {
@@ -859,9 +850,7 @@ const routeTypeTotals: Record<string, number> = {
 const totalEndpoints = Object.values(routeTypeTotals).reduce((a, b) => a + b, 0);
 console.log(`✅ Loaded ${totalEndpoints} endpoints total`);
 
-// ── Radio Stream Proxy ────────────────────────────────────────────────────────
-// Lavalink sometimes chokes on non-compliant HTTP responses from radio streams.
-// This proxy fetches the stream on Lavalink's behalf so the bot controls the HTTP layer.
+// Radio proxy: fetch streams for Lavalink to handle non-compliant responses.
 import { radioStreamUrls } from "./functions/radioProxy.js";
 
 app.get("/radio-proxy/:guildId", async (c) => {

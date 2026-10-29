@@ -211,8 +211,7 @@ app.get("/skip", async (c) => {
 
 		await log(skippedTrack ? `Skipping: "${skippedTrack.info.title}"...` : "Skipping: Unknown...");
 
-		// Use skip(0, false) originally intended, but if it's a live track,
-		// we use stopPlaying(false) to ensure it stops correctly then plays next.
+		// Live tracks need stopPlaying(false) to stop correctly; others use skip(0, false).
 		if (skippedTrack?.info.isStream) {
 			await (queue as any).stopPlaying(false);
 		} else {
@@ -815,8 +814,7 @@ app.get("/move", async (c) => {
 
 		await log(`Moving track "${fromTrack.info.title}" from ${from} to ${to}`);
 
-		// Save reference before removing — queue.queue.splice() does NOT
-		// return removed items like Array.splice (it returns {})
+		// queue.queue.splice() returns {} unlike Array.splice, so keep a reference before removing.
 		await queue.queue.splice(from, 1);
 		// After removal, indices shift: if to > from, adjust down by 1
 		await queue.queue.splice(to > from ? to - 1 : to, 0, fromTrack);
@@ -874,8 +872,7 @@ app.get("/back", async (c) => {
 		await log(`Backing to previous track: "${prevTrack?.info.title || "Unknown"}"`);
 
 		try {
-			// lavalink-client has no built-in previous() — prepend the previous
-			// track back into the queue then skip the current one
+			// lavalink-client has no previous(): prepend the previous track, then skip current.
 			await queue.queue.add(prevTrack as any, 0);
 			await queue.skip();
 			await log("Back successful");

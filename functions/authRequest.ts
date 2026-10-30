@@ -507,6 +507,37 @@ export const refreshRedditAuth = async (): Promise<any> => {
 	}
 };
 
+export const syncRedditCookies = (res: any, current: string): string => {
+	try {
+		const getAll = res?.headers?.getSetCookie;
+		if (typeof getAll !== "function") return current || "";
+		const raw: string[] = getAll.call(res.headers) || [];
+		if (!raw.length) return current || "";
+		const jar = new Map<string, string>();
+		for (const part of String(current || "").split(";")) {
+			const m = /^([^=]+)=([\s\S]*)$/.exec(part.trim());
+			if (m && m[1]) jar.set(m[1].trim(), m[2]);
+		}
+		let changed = false;
+		for (const c of raw) {
+			const m = /^([^=]+)=([^;]*)/.exec(c);
+			if (!m || !m[1]) continue;
+			const name = m[1].trim();
+			if (/^(path|domain|expires|max-age|samesite|secure|httponly)$/i.test(name)) continue;
+			if (m[2] === "") {
+				if (jar.delete(name)) changed = true;
+			} else if (jar.get(name) !== m[2]) {
+				jar.set(name, m[2]);
+				changed = true;
+			}
+		}
+		if (!changed) return current || "";
+		return [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+	} catch {
+		return current;
+	}
+};
+
 export async function tiktokSessions(): Promise<{
 	cookie: string;
 	device_id: string;

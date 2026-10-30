@@ -1,9 +1,9 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, tiktokSessions, devianKey, magnificKey, solveMagnificPow, fetchMagnificChallenge, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, syncRedditCookies, tiktokSessions, devianKey, magnificKey, solveMagnificPow, fetchMagnificChallenge, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
-import { googleTrustJar, googleTrustHas, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
+import { googleTrustJar, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
 import signTikTok, { solveTiktokWAF } from "./tiktok_signature/index.mjs";
@@ -5668,7 +5668,7 @@ export const TiktokMusicDetail = async function TiktokMusicDetail(query: string)
 			["os", "windows"],
 			["priority_region", ""],
 			["referer", ""],
-			["region", "ID"],
+			["region", "US"],
 			["root_referer", ""],
 			["screen_height", "768"],
 			["screen_width", "1366"],
@@ -5778,7 +5778,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				["os", "windows"],
 				["priority_region", ""],
 				["referer", ""],
-				["region", "ID"],
+				["region", "US"],
 				["user_is_login", "false"],
 				["web_search_code", TIKTOK_WEB_SEARCH_CODE],
 				["webcast_language", "en"],
@@ -7313,7 +7313,7 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth();
+		if (refresh_auth || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
 		let subCookies = redditCookies;
 		if (process.env.REDDIT_SESSION && subCookies && !subCookies.includes("reddit_session=")) {
 			subCookies += `; reddit_session=${process.env.REDDIT_SESSION}`;
@@ -7321,10 +7321,12 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 
 		const headers: any = { ...commonHeaders };
 		if (subCookies) headers["Cookie"] = subCookies;
+		const sentIdent = ((subCookies || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
 
 		const name = que.toLowerCase()?.split(" ")?.[0];
 
 		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&feedLength=28&distance=25`, { headers });
+		redditCookies = syncRedditCookies(req, redditCookies);
 
 		if (req.status === 451) {
 			return { error: "This subreddit is not available in your country" };
@@ -7336,6 +7338,8 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 		}
 
 		const entries = parseModernRedditListing(await req.text());
+		const freshIdent = ((redditCookies || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
+		if (!entries.length && !refresh_auth && freshIdent !== sentIdent) return redditSubreddit(que, true);
 		return {
 			_wafChallenge: redditCookies !== "",
 			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
@@ -7354,8 +7358,9 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 		try {
 			const urlRedirect = await fetch(url, {
 				method: "HEAD",
-				headers: commonHeaders,
+				headers: { ...commonHeaders, ...(redditCookies ? { Cookie: redditCookies } : {}) },
 			});
+			if (/reddit\.com/i.test(urlRedirect.url)) redditCookies = syncRedditCookies(urlRedirect, redditCookies);
 			const location = urlRedirect.url;
 			urlObj = new URL(location);
 		} catch {
@@ -7364,12 +7369,13 @@ export const RedditPost = async (url: string, refresh_auth: boolean = false): Pr
 		const pathname = urlObj.pathname.replace(/\/+$/, "");
 		const jsonUrl = `https://www.reddit.com${pathname}.json`;
 
-		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth();
+		if (refresh_auth || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
 
-		const headers: any = commonHeaders;
+		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
 
 		const req = await fetch(jsonUrl, { headers });
+		if (/reddit\.com/i.test(req.url)) redditCookies = syncRedditCookies(req, redditCookies);
 
 		if (req.status === 451) {
 			return { error: "This subreddit is not available in your country" };
@@ -7412,19 +7418,20 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 	if (!que) return null;
 
 	try {
-		if (refresh_auth || redditCookies === "") redditCookies = await refreshRedditAuth();
+		if (refresh_auth || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
 
 		const headers: any = { ...commonHeaders };
 		if (redditCookies) headers["Cookie"] = redditCookies;
+		const sentIdent = ((headers["Cookie"] || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
 
-		let pageUrl: string | null = `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&force_seo=1`;
+		let pageUrl: string | null = `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cId=${crypto.randomUUID()}&iId=${crypto.randomUUID()}`;
 		const entries: any[] = [];
 		const seenCursor = new Set<string>();
 		let blocked = false;
-		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 		for (let page = 0; page < 4 && pageUrl; page++) {
-			if (page > 0) await sleep(400);
 			const req: Response = await fetch(pageUrl, { headers });
+			redditCookies = syncRedditCookies(req, redditCookies);
+			if (redditCookies) headers["Cookie"] = redditCookies;
 
 			if (req.status === 403) {
 				if (!refresh_auth) return redditMedia(que, true);
@@ -7433,8 +7440,9 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 			}
 			let html: string | null = null;
 			if (req.status === 429) {
-				await sleep(2000);
 				const req2: Response = await fetch(pageUrl, { headers });
+				redditCookies = syncRedditCookies(req2, redditCookies);
+				if (redditCookies) headers["Cookie"] = redditCookies;
 				if (req2.status === 200) html = await req2.text();
 			} else if (req.status === 200) {
 				html = await req.text();
@@ -7450,6 +7458,8 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 			if (cursor) seenCursor.add(cursor);
 		}
 		if (!entries.length && blocked) return { error: "IP Blocked" };
+		const freshIdent = ((redditCookies || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
+		if (!entries.length && !blocked && !refresh_auth && freshIdent !== sentIdent) return redditMedia(que, true);
 		return {
 			_wafChallenge: redditCookies !== "",
 			_warning: "Reddit has updated all endpoints to require authentication, and may change in the future",
@@ -13943,6 +13953,29 @@ const GOOGLE_H3_RE = /<h3[^>]*>([\s\S]*?)<\/h3>/;
 const GOOGLE_ANCHOR_TEXT_RE = /<a[^>]*>([\s\S]*?)<\/a>/;
 const GOOGLE_SITE_RE = /<span[^>]*class="[^"]*\bVuuXrf\b[^"]*"[^>]*>([\s\S]*?)<\/span>/;
 const GOOGLE_SNIPPET_RE = /<div[^>]*class="[^"]*\bVwiC3b\b[^"]*"[^>]*>([\s\S]*?)<\/div>/;
+const GOOGLE_CITE_RE = /<cite[^>]*>([\s\S]*?)<\/cite>/;
+const GOOGLE_CITE_SEG_RE = /^[A-Za-z0-9\-_~.+%@$,;=!*'()]+$/;
+
+const citeUrlFromBox = (window: string): string | null => {
+	try {
+		const citeHtml = GOOGLE_CITE_RE.exec(window)?.[1] || "";
+		if (!citeHtml) return null;
+		const base = decodeHTML(citeHtml.split("<")[0]).trim();
+		if (!HTTP_URL_RE.test(base) || /\s/.test(base)) return null;
+		const parts = decodeHTML(citeHtml.replace(/<[^>]*>/g, " "))
+			.split("›")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		if (parts.length && (parts[0] === base || /^https?:\/\//.test(parts[0]))) parts.shift();
+		const valid = parts.every((seg) => GOOGLE_CITE_SEG_RE.test(seg) && !seg.includes("...") && !seg.includes("…"));
+		const url = base.replace(/\/+$/, "") + (valid && parts.length ? "/" + parts.join("/") : "");
+		if (!HTTP_URL_RE.test(url) || /\s/.test(url)) return null;
+		new URL(url);
+		return url;
+	} catch {
+		return null;
+	}
+};
 const GOOGLE_GOTO_RE = /^\/goto\?url=/;
 const GOOGLE_GOTO_HREF_RE = /<a[^>]*\bhref="(\/goto\?[^"]*)"/;
 const GOOGLE_DEFERRED_TBN_RE = /https:\/\/encrypted-tbn\d+\.gstatic\.com\/images\?q(?:=|\\u003d)tbn:[^"]+/;
@@ -13956,7 +13989,7 @@ export const parseGoogleWebItems = (html: string): any[] => {
 	while ((bm = GOOGLE_BOX_RE.exec(html))) starts.push(bm.index);
 	for (let i = 0; i < starts.length; i++) {
 		const window = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : starts[i] + 12000);
-		let href = GOOGLE_HREF_RE.exec(window)?.[1] || "";
+		let href = decodeHTML(GOOGLE_HREF_RE.exec(window)?.[1] || "");
 		if (!href) continue;
 		if (GOOGLE_URLQ_RE.test(href)) {
 			try {
@@ -13974,11 +14007,13 @@ export const parseGoogleWebItems = (html: string): any[] => {
 		const snippet = decodeHTML(GOOGLE_SNIPPET_RE.exec(window)?.[1]?.replace(TAG_STRIP_RE, "") || "")
 			.replace(WS_COLLAPSE_RE, " ")
 			.trim();
+		const citeUrl = citeUrlFromBox(window);
 		raw.push({
 			title,
 			href,
 			...(site ? { siteName: site } : {}),
 			...(snippet ? { snippet } : {}),
+			...(citeUrl ? { citeUrl } : {}),
 		});
 	}
 	return raw;
@@ -14334,41 +14369,64 @@ export const parseGoogleImageItems = (html: string): any[] => {
 };
 
 const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Promise<any[]> => {
-	const jar = googleWebJar();
-	const resolved = await Promise.allSettled(
-		raw.slice(0, limit).map(async (item) => {
-			if (HTTP_URL_RE.test(item.href)) return item.href;
-			if (!GOOGLE_GOTO_RE.test(item.href)) return null;
-			try {
-				const r = await fetch(`https://www.google.com${item.href}`, {
-					headers: {
-						Accept: "*/*",
-						"User-Agent": googleWebUA,
-						...(jar ? { Cookie: jar } : {}),
-					},
-					redirect: "manual",
-					signal: AbortSignal.timeout(15000),
-				});
-				await r.text().catch(() => {});
-				const loc = r.headers.get("location") ?? "";
-				return HTTP_URL_RE.test(loc) ? loc : null;
-			} catch {
-				return null;
+	const sliced = raw.slice(0, limit);
+	const cloakLocation = (res: any): string => {
+		try {
+			const headers = res?.headers || {};
+			for (const k of Object.keys(headers)) {
+				if (k.toLowerCase() === "location") return String((headers as any)[k] || "");
 			}
-		}),
-	);
+		} catch {}
+		return "";
+	};
+	const resolveOne = async (href: string): Promise<string | null> => {
+		if (HTTP_URL_RE.test(href)) return href;
+		if (!GOOGLE_GOTO_RE.test(href)) return null;
+		const target = `https://www.google.com${href}`;
+		try {
+			googleWebCloakSyncCookies();
+			const res: any = await googleWebCloak.get(target, {
+				headers: { Referer: "https://www.google.com/" },
+				fetchMode: "navigate",
+				allowRedirects: false,
+			});
+			mergeGoogleCloakCookies(res?.cookies);
+			const loc = cloakLocation(res);
+			if (HTTP_URL_RE.test(loc)) return loc;
+		} catch {}
+		try {
+			const r = await fetch(target, {
+				headers: {
+					Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+					"Accept-Language": "en-US,en;q=0.9",
+					"User-Agent": googleWebUA,
+					Referer: "https://www.google.com/",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					...(googleWebJar() ? { Cookie: googleWebJar() } : {}),
+				},
+				redirect: "manual",
+				signal: AbortSignal.timeout(15000),
+			});
+			await r.text().catch(() => {});
+			const loc = r.headers.get("location") ?? "";
+			if (HTTP_URL_RE.test(loc)) return loc;
+		} catch {}
+		return null;
+	};
+	const resolved = await Promise.all(sliced.map((s) => resolveOne(s.href)));
 	const items: any[] = [];
 	const seen = new Set<string>();
-	raw.slice(0, limit).forEach((item, idx) => {
-		const r = resolved[idx];
-		const url = HTTP_URL_RE.test(item.href) ? item.href : r.status === "fulfilled" ? r.value : null;
-		if (!url || seen.has(url)) return;
-		seen.add(url);
-		const { href: _href, iconDomain: _iconDomain, ...rest } = item;
+	sliced.forEach((item, idx) => {
+		const url = HTTP_URL_RE.test(item.href) ? item.href : resolved[idx] || item.citeUrl || null;
+		if (url && seen.has(url)) return;
+		if (url) seen.add(url);
+		const { href: _href, iconDomain: _iconDomain, citeUrl: _citeUrl, ...rest } = item;
 		let iconUrl = "";
 		try {
-			const host = typeof item.iconDomain === "string" && item.iconDomain ? item.iconDomain : new URL(url).hostname;
-			iconUrl = `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+			const host = typeof item.iconDomain === "string" && item.iconDomain ? item.iconDomain : url ? new URL(url).hostname : "";
+			if (host) iconUrl = `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
 		} catch {}
 		items.push({
 			...rest,
@@ -14529,7 +14587,7 @@ const googleWebSearchFor = async (query: string, url: string, parse: (html: stri
 
 	try {
 		// 1. Cold jar: bridge solves, then fetch below.
-		let solved: any = googleTrustHas("DV") ? null : await googleWebSolve(url);
+		let solved: any = googleTrustIsFresh() ? null : await googleWebSolve(url);
 
 		// 2. Solved jar: httpcloak fetch.
 		let cloak = await googleWebCloakFetch(url);

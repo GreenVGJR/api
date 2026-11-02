@@ -14529,22 +14529,53 @@ const mergeGoogleCloakCookies = (cookies: any[] | undefined): void => {
 	mergeGoogleTrustCookies(record);
 };
 
-const googleWebCloakFetch = async (url: string): Promise<{ html: string; finalUrl: string } | null> => {
+const GOOGLE_WEB_CLOAK_CONCURRENCY = 3;
+let googleWebCloakActive = 0;
+const googleWebCloakQueue: Array<() => void> = [];
+
+const googleWebCloakAcquire = (): Promise<void> => {
+	if (googleWebCloakActive < GOOGLE_WEB_CLOAK_CONCURRENCY) {
+		googleWebCloakActive++;
+		return Promise.resolve();
+	}
+	return new Promise<void>((resolve) => googleWebCloakQueue.push(resolve));
+};
+
+const googleWebCloakRelease = (): void => {
+	const next = googleWebCloakQueue.shift();
+	if (next) next();
+	else googleWebCloakActive--;
+};
+
+const googleWebCloakGet = async (url: string): Promise<any> => {
+	await googleWebCloakAcquire();
+	try {
+		googleWebCloakSyncCookies();
+		return await googleWebCloak.get(url, {
+			headers: { Referer: "https://www.google.com/" },
+			fetchMode: "navigate",
+		});
+	} finally {
+		googleWebCloakRelease();
+	}
+};
+
+const googleWebCloakFetch = async (url: string, retryOn429 = true): Promise<{ html: string; finalUrl: string; status: number } | null> => {
 	for (let attempt = 0; attempt <= 3; attempt++) {
 		if (attempt) await new Promise((resolve) => setTimeout(resolve, 2000));
 		try {
-			googleWebCloakSyncCookies();
-			const res: any = await googleWebCloak.get(url, {
-				headers: { Referer: "https://www.google.com/" },
-				fetchMode: "navigate",
-			});
+			const res: any = await googleWebCloakGet(url);
 			mergeGoogleCloakCookies(res?.cookies);
 			const status = Number(res?.statusCode ?? 0);
-			if (status === 429 && attempt < 3) continue;
-			if (status !== 200) return null;
+			if (status === 429) {
+				if (!retryOn429 || attempt >= 3) return { html: "", finalUrl: String(res?.finalUrl ?? url), status };
+				continue;
+			}
+			if (status !== 200) return { html: "", finalUrl: String(res?.finalUrl ?? url), status };
 			return {
 				html: String(res.text ?? ""),
 				finalUrl: String(res.finalUrl ?? url),
+				status,
 			};
 		} catch {}
 	}
@@ -14568,6 +14599,28 @@ const googleWebSolve = async (url: string): Promise<any | null> => {
 	return res;
 };
 
+let googleWebSolveInflight: Promise<any | null> | null = null;
+
+const googleWebSolveCold = async (url: string): Promise<any | null> => {
+	if (googleTrustIsFresh()) return null;
+	if (googleWebSolveInflight) {
+		await googleWebSolveInflight;
+		return googleTrustIsFresh() ? null : googleWebSolve(url);
+	}
+	googleWebSolveInflight = (async () => {
+		try {
+			return await googleWebSolve(url);
+		} catch {
+			return null;
+		}
+	})();
+	try {
+		return await googleWebSolveInflight;
+	} finally {
+		googleWebSolveInflight = null;
+	}
+};
+
 const googleWebSearchFor = async (query: string, url: string, parse: (html: string) => any[] = parseGoogleWebItemsSmart, limit = 10, urlKey = "url"): Promise<any> => {
 	if (!query) return null;
 
@@ -14587,21 +14640,23 @@ const googleWebSearchFor = async (query: string, url: string, parse: (html: stri
 
 	try {
 		// 1. Cold jar: bridge solves, then fetch below.
-		let solved: any = googleTrustIsFresh() ? null : await googleWebSolve(url);
+		let solved: any = googleTrustIsFresh() ? null : await googleWebSolveCold(url);
 
 		// 2. Solved jar: httpcloak fetch.
-		let cloak = await googleWebCloakFetch(url);
-		if (cloak) {
+		let cloak = await googleWebCloakFetch(url, !solved?.html);
+		if (cloak?.status === 200) {
 			const out = await finish(cloak.html, cloak.finalUrl);
 			if (out) return out;
 		}
 
 		// 3. Re-challenged: solve again, retry; else bridge payload.
-		solved ??= await googleWebSolve(url);
-		cloak = await googleWebCloakFetch(url);
-		if (cloak) {
-			const out = await finish(cloak.html, cloak.finalUrl);
-			if (out) return out;
+		if (!(cloak?.status === 429 && solved?.html)) {
+			solved ??= await googleWebSolve(url);
+			cloak = await googleWebCloakFetch(url, !solved?.html);
+			if (cloak?.status === 200) {
+				const out = await finish(cloak.html, cloak.finalUrl);
+				if (out) return out;
+			}
 		}
 		const html: string = solved?.html ?? "";
 		if (!html) return null;

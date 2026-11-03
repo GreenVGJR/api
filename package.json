@@ -12,7 +12,7 @@
 		"rusteerio": "^2.0.0",
 		"sharp": "^0.35.5",
 		"tslib": "^2.9.1",
-		"x-client-transaction-id": "^0.3.2",
+		"x-client-transaction-id": "^0.3.3",
 		"youtubei.js": "^18.3.0"
 	},
 	"scripts": {

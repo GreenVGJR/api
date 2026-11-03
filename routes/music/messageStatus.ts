@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { EmbedBuilder } from "discord.js";
-import { getOrCreatePlayer, createMusicStream, getMessageStatusSettings, setMessageStatusSetting, applyTemplate } from "../../functions/musicPlayer.js";
+import { getOrCreatePlayer, createMusicStream, getMessageStatusSettings, setMessageStatusSetting, applyTemplate, normalizeMessagePayload, isComponentsV2Payload } from "../../functions/musicPlayer.js";
 import { ALLOWED_TAGS } from "../../functions/types/index.js";
 
 const app = new Hono();
@@ -110,7 +110,15 @@ app.get("/messageStatus", async (c) => {
 						return;
 					}
 
-					if (parsed.embeds && Array.isArray(parsed.embeds)) {
+					const prepared = normalizeMessagePayload(parsed);
+					if (prepared.error) {
+						await log(`Invalid content: ${prepared.error}`);
+						await s.write(`],"data":${JSON.stringify({ status: false, message: prepared.error, type: { primary: "error", alt: "invalid_query" } })}}`);
+						return;
+					}
+					parsed = prepared.payload;
+
+					if (!isComponentsV2Payload(parsed) && parsed.embeds && Array.isArray(parsed.embeds)) {
 						for (let i = 0; i < parsed.embeds.length; i++) {
 							const stubEmbed = JSON.parse(JSON.stringify(parsed.embeds[i]));
 							if (typeof stubEmbed.timestamp === "string" && /\{.*\}/.test(stubEmbed.timestamp)) {
@@ -140,29 +148,11 @@ app.get("/messageStatus", async (c) => {
 					} else {
 						try {
 							const resolved = currentTrack && content.includes("{") ? applyTemplate(content, currentTrack, client) : content;
-							const payload = JSON.parse(resolved);
-							if (payload.embeds) {
-								payload.embeds = payload.embeds.map((e: any) => {
-									if (e.footer && (!e.footer.icon_url || e.footer.icon_url === "null" || e.footer.icon_url === "undefined")) {
-										delete e.footer.icon_url;
-									}
-									if (e.footer && !e.footer.text) delete e.footer;
-									if (e.author && (!e.author.icon_url || e.author.icon_url === "null" || e.author.icon_url === "undefined")) {
-										delete e.author.icon_url;
-									}
-									if (e.author && !e.author.name) delete e.author;
-									if (e.thumbnail && (!e.thumbnail.url || e.thumbnail.url === "null" || e.thumbnail.url === "undefined")) {
-										delete e.thumbnail;
-									}
-									if (e.image && (!e.image.url || e.image.url === "null" || e.image.url === "undefined")) {
-										delete e.image;
-									}
-									return e;
-								});
-							}
+							const prepared = normalizeMessagePayload(JSON.parse(resolved));
+							if (prepared.error) throw new Error(prepared.error);
 							const targetChannel = await client.channels.fetch(channelId).catch(() => null);
 							if (targetChannel && typeof (targetChannel as any).send === "function") {
-								const sent = await (targetChannel as any).send(payload);
+								const sent = await (targetChannel as any).send(prepared.payload);
 								sendResult = sent;
 							} else {
 								sendResult = { error: "Cannot send messages in this channel" };

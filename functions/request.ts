@@ -5695,9 +5695,7 @@ export const TiktokMusicDetail = async function TiktokMusicDetail(query: string)
 			headers: {
 				...commonHeaders,
 				Accept: "*/*",
-				Priority: "u=4",
 				Referer: "https://www.tiktok.com/",
-				"Sec-GPC": "1",
 				"Sec-Fetch-Dest": "empty",
 				"Sec-Fetch-Mode": "cors",
 				"Sec-Fetch-Site": "same-origin",

@@ -523,7 +523,7 @@ export function setVoiceStatusSetting(token: string, guildId: string, type: stri
 }
 
 // Persistent message status settings: "token:guildId" → { trackStart: { status, channelId, content }, ... }
-export const messageStatusStore: Map<string, any> = new Map();
+export const messageStatusStore: Map<string, any> = g.__vgjr_messageStatusStore || (g.__vgjr_messageStatusStore = new Map());
 
 export function getMessageStatusSettings(token: string, guildId: string) {
 	const key = `${token}:${guildId}`;
@@ -543,6 +543,92 @@ export function setMessageStatusSetting(token: string, guildId: string, type: st
 	messageStatusStore.set(key, current);
 }
 
+const MESSAGE_FLAGS_COMPONENTS_V2 = 1 << 15;
+const COMPONENTS_V2_TYPES = new Set([9, 10, 11, 12, 13, 14, 17]);
+const TOP_LEVEL_COMPONENT_TYPES = new Set([1, 9, 10, 12, 13, 14, 17]);
+
+function hasComponentsV2Flag(flags: any): boolean {
+	if (typeof flags === "number") return (flags & MESSAGE_FLAGS_COMPONENTS_V2) !== 0;
+	if (typeof flags === "string") return flags.split(/[\s,|]+/).includes("IsComponentsV2");
+	if (Array.isArray(flags)) return flags.includes("IsComponentsV2");
+	return false;
+}
+
+export function isComponentsV2Payload(payload: any): boolean {
+	const components = Array.isArray(payload?.components) ? payload.components : [];
+	return hasComponentsV2Flag(payload?.flags) || components.some((component: any) => COMPONENTS_V2_TYPES.has(Number(component?.type)));
+}
+
+function cleanupEmbeds(embeds: any[]): any[] {
+	return embeds.map((e: any) => {
+		if (!e || typeof e !== "object") return e;
+		if (e.footer && (!e.footer.icon_url || e.footer.icon_url === "null" || e.footer.icon_url === "undefined")) {
+			delete e.footer.icon_url;
+		}
+		if (e.footer && !e.footer.text) delete e.footer;
+		if (e.author && (!e.author.icon_url || e.author.icon_url === "null" || e.author.icon_url === "undefined")) {
+			delete e.author.icon_url;
+		}
+		if (e.author && !e.author.name) delete e.author;
+		if (e.thumbnail && (!e.thumbnail.url || e.thumbnail.url === "null" || e.thumbnail.url === "undefined")) {
+			delete e.thumbnail;
+		}
+		if (e.image && (!e.image.url || e.image.url === "null" || e.image.url === "undefined")) {
+			delete e.image;
+		}
+		return e;
+	});
+}
+
+export function normalizeMessagePayload(input: any): { payload?: any; error?: string } {
+	if (typeof input !== "object" || input === null || Array.isArray(input)) {
+		return { error: 'Content must be a JSON object (e.g. {"content":"...","embeds":[...]})' };
+	}
+
+	if (isComponentsV2Payload(input)) {
+		if (!Array.isArray(input.components) || input.components.length === 0) {
+			return { error: "Components V2 requires a non-empty components array" };
+		}
+		if (input.content !== undefined && input.content !== "") {
+			return { error: "Components V2 does not allow the content field" };
+		}
+		if (input.embeds !== undefined) {
+			return { error: "Components V2 does not allow the embeds field" };
+		}
+		if (input.poll !== undefined) {
+			return { error: "Components V2 does not allow the poll field" };
+		}
+		if (input.stickers !== undefined) {
+			return { error: "Components V2 does not allow the stickers field" };
+		}
+		for (const component of input.components) {
+			if (!component || typeof component !== "object" || Array.isArray(component)) {
+				return { error: "Each top-level component must be an object" };
+			}
+			if (!TOP_LEVEL_COMPONENT_TYPES.has(Number(component.type))) {
+				return { error: `Component type ${String(component.type)} cannot be sent at the top level` };
+			}
+		}
+		delete input.content;
+		input.flags = typeof input.flags === "number" ? input.flags | MESSAGE_FLAGS_COMPONENTS_V2 : MESSAGE_FLAGS_COMPONENTS_V2;
+		return { payload: input };
+	}
+
+	if (Array.isArray(input.embeds)) input.embeds = cleanupEmbeds(input.embeds);
+	if (Array.isArray(input.components)) {
+		for (const component of input.components) {
+			if (!component || typeof component !== "object" || Array.isArray(component)) {
+				return { error: "Each top-level component must be an object" };
+			}
+			if (Number(component.type) !== 1) {
+				return { error: "Only action rows can be sent at the top level without Components V2" };
+			}
+		}
+	}
+	if (typeof input.content === "string") input.content = input.content.slice(0, 2000);
+	return { payload: input };
+}
+
 async function sendMessageStatus(client: any, token: string, guildId: string, type: string, track?: any) {
 	try {
 		const settings = getMessageStatusSettings(token, guildId);
@@ -557,32 +643,14 @@ async function sendMessageStatus(client: any, token: string, guildId: string, ty
 		let payload: any;
 		try {
 			payload = JSON.parse(resolved);
-			if (typeof payload !== "object" || payload === null) throw new Error("not an object");
-
-			if (payload.embeds && Array.isArray(payload.embeds)) {
-				payload.embeds = payload.embeds.map((e: any) => {
-					if (e.footer && (!e.footer.icon_url || e.footer.icon_url === "null" || e.footer.icon_url === "undefined")) {
-						delete e.footer.icon_url;
-					}
-					if (e.footer && !e.footer.text) delete e.footer;
-					if (e.author && (!e.author.icon_url || e.author.icon_url === "null" || e.author.icon_url === "undefined")) {
-						delete e.author.icon_url;
-					}
-					if (e.author && !e.author.name) delete e.author;
-					if (e.thumbnail && (!e.thumbnail.url || e.thumbnail.url === "null" || e.thumbnail.url === "undefined")) {
-						delete e.thumbnail;
-					}
-					if (e.image && (!e.image.url || e.image.url === "null" || e.image.url === "undefined")) {
-						delete e.image;
-					}
-					return e;
-				});
-			}
+			if (typeof payload !== "object" || payload === null) payload = { content: resolved };
 		} catch {
 			payload = { content: resolved };
 		}
 
-		payload.content = (payload.content || "").slice(0, 2000);
+		const prepared = normalizeMessagePayload(payload);
+		if (prepared.error) throw new Error(prepared.error);
+		payload = prepared.payload;
 
 		const channel = await client.channels.fetch(setting.channelId);
 		if (channel && typeof channel.send === "function") {

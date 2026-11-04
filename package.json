@@ -2,7 +2,7 @@
 	"type": "module",
 	"dependencies": {
 		"bgutils-js": "^4.0.3",
-		"discord.js": "^14.28.0",
+		"discord.js": "^14.28.1",
 		"emojibase-data": "^18.0.0",
 		"entities": "^8.1.0",
 		"hono": "^4.13.16",

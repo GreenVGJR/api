@@ -3,11 +3,14 @@ import facebookPhoto from "./facebookPhoto.js";
 import facebookVideo from "./facebookVideo.js";
 import instagramPhoto from "./instagramPhoto.js";
 import instagramVideo from "./instagramVideo.js";
+import redditPhoto from "./redditPhoto.js";
+import redditVideo from "./redditVideo.js";
 import threadsPhoto from "./threadsPhoto.js";
 import threadsVideo from "./threadsVideo.js";
+import tiktokMusic from "./tiktokMusic.js";
 import tiktokPhoto from "./tiktokPhoto.js";
 import tiktokVideo from "./tiktokVideo.js";
 import twitterPhoto from "./twitterPhoto.js";
 import twitterVideo from "./twitterVideo.js";
 
-export default [facebookPhoto, facebookVideo, instagramPhoto, instagramVideo, threadsPhoto, threadsVideo, tiktokPhoto, tiktokVideo, twitterPhoto, twitterVideo] as any[];
+export default [facebookPhoto, facebookVideo, instagramPhoto, instagramVideo, redditPhoto, redditVideo, threadsPhoto, threadsVideo, tiktokMusic, tiktokPhoto, tiktokVideo, twitterPhoto, twitterVideo] as any[];

@@ -1253,6 +1253,7 @@ async function performRequest(targetUrl, retryCount = 0) {
           if (json.url && json.type) {
             const mediaUrl = json.url;
             const isVideo = json.type === "video";
+            const isAudio = json.type === "audio";
 
             duration = Math.round(performance.now() - startTime);
             updateStatusUI(true, 200, duration);
@@ -1269,7 +1270,14 @@ async function performRequest(targetUrl, retryCount = 0) {
             responseArea.classList.add("empty-state");
             const mediaTag = isVideo
               ? `<video src="${escapeAttribute(mediaUrl)}" controls class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;"></video>`
-              : `<img src="${escapeAttribute(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
+              : isAudio
+                ? `<audio src="${escapeAttribute(mediaUrl)}" controls preload="auto" class="w-full max-w-full rounded-lg shadow-lg"></audio>`
+                : `<img src="${escapeAttribute(mediaUrl)}" alt="Download" class="max-w-full max-h-full rounded-lg shadow-lg" style="object-fit: contain;" />`;
+
+            if (isAudio) {
+              responseArea.innerHTML = `<div class="w-full h-full flex items-center justify-center p-4">${mediaTag}</div>`;
+              return null;
+            }
 
             const mediaProbe = document.createElement(isVideo ? "video" : "img");
             if (isVideo) mediaProbe.preload = "auto";

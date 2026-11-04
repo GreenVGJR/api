@@ -311,7 +311,8 @@ export const commonHeaders = {
 	"User-Agent": userAgent,
 };
 
-const TIKTOK_WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0";
+const TIKTOK_WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36";
+const TIKTOK_WEB_UA_VERSION = TIKTOK_WEB_UA.replace("Mozilla/", "");
 const TIKTOK_WEB_SEARCH_CODE = '{"tiktok":{"client_params_x":{"search_engine":{"ies_mt_user_live_video_card_use_libra":1,"mt_search_general_user_live_card":1}},"search_server":{}}}';
 const TIKTOK_WEB_SIGN_OPTS = { ubcode: 14, canvas: 411533585, version: "5.3.2", scm_version: "1.0.0.417", total_reqs: 6, enc_reqs: 1, envcode: 1, field_53: "www.tiktok.com/search" };
 
@@ -2189,7 +2190,96 @@ export const Deezer = async function Deezer(que: string, limits: number = 1) {
 	}
 };
 
-export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: boolean = false) {
+const tiktokWebSearchCloak = new HttpcloakSession({
+	preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+	httpVersion: "h2",
+	timeout: 30,
+});
+
+const tiktokWebApiGet = async (path: string, params: Array<[string, string]>, referer: string): Promise<{ payload: any | null; error?: string }> => {
+	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+	if (!tiktokSessionKeys?.device_id) return { payload: null, error: "Failed to initialize TikTok session" };
+	const sess = tiktokSessionKeys;
+
+	const sp = new URLSearchParams();
+	for (const [k, v] of params) sp.append(k, v);
+	const baseQs = sp.toString();
+	const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, field_53: "www.tiktok.com" });
+	const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}`;
+	const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
+	const url = `https://www.tiktok.com${path}?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
+
+	try {
+		const ttwid = /ttwid=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+		const csrf = /tt_csrf_token=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
+		if (ttwid) tiktokWebSearchCloak.setCookie("ttwid", decodeURIComponent(ttwid), { domain: ".tiktok.com", path: "/", secure: true });
+		if (csrf) tiktokWebSearchCloak.setCookie("tt_csrf_token", decodeURIComponent(csrf), { domain: ".tiktok.com", path: "/", secure: true });
+	} catch {}
+
+	const res: any = await tiktokWebSearchCloak.get(url, {
+		headers: {
+			...commonHeaders,
+			Accept: "*/*",
+			Referer: referer,
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
+			"User-Agent": TIKTOK_WEB_UA,
+		},
+	});
+	const text = String(res?.text ?? "");
+	const minted = String(res?.headers?.["x-ms-token"] || "");
+	if (minted) {
+		try {
+			tiktokWebSearchCloak.setCookie("msToken", minted, { domain: ".tiktok.com", path: "/", secure: true });
+		} catch {}
+	}
+	if (Number(res?.statusCode ?? 0) !== 200 || !text) {
+		return { payload: null, error: "Akamai asking to verify you're not a bot" };
+	}
+	try {
+		return { payload: JSON.parse(text) };
+	} catch {
+		return { payload: null, error: "Akamai asking to verify you're not a bot" };
+	}
+};
+
+const tiktokPlayUrl = (url?: string): string | null => {
+	if (!url) return null;
+	const match = url.match(/^https?:\/\/(?:www\.)?tiktok\.com(\/aweme\/v1\/play\/\?.*)$/);
+	if (!match) return url;
+	return `https://api.tiktokv.com${match[1]}`.replace(/([?&])faid=\d+/, "$1faid=563145");
+};
+
+const tiktokBestGear = (gears: any): any => {
+	if (!Array.isArray(gears) || gears.length === 0) return null;
+	return gears.reduce((best: any, gear: any) => {
+		if (!best) return gear;
+		const width = Number(gear?.PlayAddr?.Width) || 0;
+		const height = Number(gear?.PlayAddr?.Height) || 0;
+		const bestWidth = Number(best?.PlayAddr?.Width) || 0;
+		const bestHeight = Number(best?.PlayAddr?.Height) || 0;
+		if (width * height !== bestWidth * bestHeight) return width * height > bestWidth * bestHeight ? gear : best;
+		return (Number(gear?.Bitrate) || 0) > (Number(best?.Bitrate) || 0) ? gear : best;
+	}, null);
+};
+
+const resolveTiktokPlayUrl = async (url?: string): Promise<string | null> => {
+	const playUrl = tiktokPlayUrl(url);
+	if (!playUrl) return null;
+	try {
+		const res = await fetch(playUrl, {
+			headers: { "User-Agent": TIKTOK_WEB_UA, Referer: "https://www.tiktok.com/" },
+			redirect: "manual",
+			signal: AbortSignal.timeout(10_000),
+		});
+		return res.headers.get("location") || playUrl;
+	} catch {
+		return playUrl;
+	}
+};
+
+export const TiktokVideo = async function TiktokVideo(url: string) {
 	if (!url) return null;
 
 	let videoId: string | null = null;
@@ -2247,41 +2337,58 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 	if (!videoId) return { error: "Invalid or expired link" };
 
 	try {
+		if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
+		if (!tiktokSessionKeys?.device_id) return null;
+		const sess = tiktokSessionKeys;
 		const targetUrl = `https://www.tiktok.com/@/video/${videoId}`;
 		finalUrl = targetUrl;
-		let scriptContent: string | undefined;
-		try {
-			const response = await (httpcloakGet as any)(targetUrl, {
-				httpVersion: "h2",
-				tlsOnly: true,
-				headers: {
-					...commonHeaders,
-					Cookie: tiktokSessionKeys?.cookie,
-					Referer: "https://www.tiktok.com/404?fromUrl=/a",
-					"Sec-Fetch-Site": "same-origin",
-					"User-Agent": "undici",
-				},
-			});
-			const html = await responseText(response);
-			scriptContent = html.split('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')[1]?.split("</script>")[0];
-			if (!wafRetried) {
-				const testIfNeedSolve = await solveTiktokWAF(html);
-				if (testIfNeedSolve) {
-					setTiktokWafCookie(testIfNeedSolve);
-					return await TiktokVideo(url, true);
-				}
-			}
-		} catch {}
-		if (!scriptContent) return { error: "Can't process this due to WAF Challenge" };
 
-		const json = JSON.parse(scriptContent);
-		const checkVideo = json?.__DEFAULT_SCOPE__?.["webapp.video-detail"];
-		const videoDetail = checkVideo?.itemInfo?.itemStruct;
+		const params: Array<[string, string]> = [
+			["WebIdLastTime", String(sess.deviceIdCreate)],
+			["aid", "1988"],
+			["app_language", "en"],
+			["app_name", "tiktok_web"],
+			["browser_language", "en-US"],
+			["browser_name", "Mozilla"],
+			["browser_online", "true"],
+			["browser_platform", "Win32"],
+			["browser_version", TIKTOK_WEB_UA_VERSION],
+			["channel", "tiktok_web"],
+			["cookie_enabled", "true"],
+			["data_collection_enabled", "false"],
+			["device_id", String(sess.device_id)],
+			["device_platform", "web_pc"],
+			["focus_state", "true"],
+			["from_page", "video"],
+			["history_len", "4"],
+			["is_fullscreen", "false"],
+			["is_page_visible", "true"],
+			["itemId", videoId],
+			["language", "en"],
+			["odinId", String(sess.odin_id)],
+			["os", "windows"],
+			["priority_region", ""],
+			["referer", ""],
+			["region", "US"],
+			["root_referer", ""],
+			["screen_height", "768"],
+			["screen_width", "1366"],
+			["tz_name", "Asia/Jakarta"],
+			["user_is_login", "false"],
+			["webcast_language", "en"],
+		];
+		const { payload, error } = await tiktokWebApiGet("/api/item/detail/", params, targetUrl);
+		if (error) return { error };
+		if (payload?.status_code !== 0) {
+			const statusMsg = payload?.status_msg || payload?.statusMsg;
+			return { error: statusMsg || "Tiktok blocked this request" };
+		}
 
-		if (!videoDetail?.video)
-			return {
-				...(checkVideo ? { url: finalUrl, error: checkVideo } : { data: null }),
-			};
+		const videoDetail = payload?.itemInfo?.itemStruct;
+
+		if (!videoDetail?.video) {
+			return { data: null };
+		}
 
 		responseData.aweme_id = videoDetail.id?.toString();
 
@@ -2318,7 +2425,7 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		if (videoDetail.video?.dynamicCover) responseData.dynamicCover = videoDetail.video?.dynamicCover;
 		if (videoDetail.video?.duration) responseData.duration = videoDetail.video?.duration;
 
-		const playUrl = videoDetail.video?.PlayAddrStruct?.UrlList?.[2]?.replace("?faid=1988", "?faid=1233");
+		const playUrl = tiktokPlayUrl(videoDetail.video?.PlayAddrStruct?.UrlList?.[2]);
 		if (playUrl) responseData.play_url = playUrl;
 
 		if (videoDetail.video?.bitrateInfo) {
@@ -2329,8 +2436,33 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 				fps: br.BitrateFPS,
 				format: br.Format,
 				codec: br.CodecType,
-				play_url: br.PlayAddr?.UrlList?.[2]?.replace("1988", "1233"),
+				play_url: tiktokPlayUrl(br.PlayAddr?.UrlList?.[2]),
 			}));
+		}
+
+		const bestGear = Array.isArray(videoDetail.video?.bitrateInfo)
+			? videoDetail.video.bitrateInfo.reduce((best: any, gear: any) => {
+					if (!best) return gear;
+					const width = Number(gear?.PlayAddr?.Width) || 0;
+					const height = Number(gear?.PlayAddr?.Height) || 0;
+					const bestWidth = Number(best?.PlayAddr?.Width) || 0;
+					const bestHeight = Number(best?.PlayAddr?.Height) || 0;
+					if (width * height !== bestWidth * bestHeight) return width * height > bestWidth * bestHeight ? gear : best;
+					return (Number(gear?.Bitrate) || 0) > (Number(best?.Bitrate) || 0) ? gear : best;
+				}, null)
+			: null;
+		const bestPlayUrl = tiktokPlayUrl(bestGear?.PlayAddr?.UrlList?.[2] || bestGear?.PlayAddr?.UrlList?.[0]);
+		if (bestPlayUrl) {
+			responseData.best_quality = {
+				url: bestPlayUrl,
+				resolution: `${bestGear.PlayAddr?.Width}x${bestGear.PlayAddr?.Height}`,
+				width: bestGear.PlayAddr?.Width,
+				height: bestGear.PlayAddr?.Height,
+				bitrate: bestGear.Bitrate,
+				fps: bestGear.BitrateFPS,
+				codec: bestGear.CodecType,
+				format: bestGear.Format,
+			};
 		}
 
 		if (videoDetail.statsV2?.diggCount) responseData.likeCount = videoDetail.statsV2?.diggCount?.toString();
@@ -2361,7 +2493,6 @@ export const TiktokVideo = async function TiktokVideo(url: string, wafRetried: b
 		}
 
 		return {
-			_wafChallenge: wafRetried,
 			data: responseData,
 			altData: [videoDetail, htmlaweme?.itemInfo?.itemStruct || null],
 		};
@@ -5621,12 +5752,6 @@ export const Pexels = async function Pexels(que: string) {
 	}
 };
 
-const tiktokWebSearchCloak = new HttpcloakSession({
-	preset: HttpcloakPreset.FIREFOX_LATEST_WINDOWS,
-	httpVersion: "h2",
-	timeout: 30,
-});
-
 export const TiktokMusicDetail = async function TiktokMusicDetail(query: string) {
 	if (!query) return null;
 
@@ -5651,7 +5776,7 @@ export const TiktokMusicDetail = async function TiktokMusicDetail(query: string)
 			["browser_name", "Mozilla"],
 			["browser_online", "true"],
 			["browser_platform", "Win32"],
-			["browser_version", "5.0 (Windows)"],
+			["browser_version", TIKTOK_WEB_UA_VERSION],
 			["channel", "tiktok_web"],
 			["cookie_enabled", "true"],
 			["data_collection_enabled", "false"],
@@ -5676,52 +5801,8 @@ export const TiktokMusicDetail = async function TiktokMusicDetail(query: string)
 			["user_is_login", "false"],
 			["webcast_language", "en"],
 		];
-		const sp = new URLSearchParams();
-		for (const [k, v] of params) sp.append(k, v);
-		const baseQs = sp.toString();
-		const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, field_53: "www.tiktok.com" });
-		const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}&msToken=`;
-		const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
-		const url = `https://www.tiktok.com/api/music/detail/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
-
-		try {
-			const ttwid = /ttwid=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
-			const csrf = /tt_csrf_token=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
-			if (ttwid) tiktokWebSearchCloak.setCookie("ttwid", decodeURIComponent(ttwid), { domain: ".tiktok.com", path: "/", secure: true });
-			if (csrf) tiktokWebSearchCloak.setCookie("tt_csrf_token", csrf, { domain: ".tiktok.com", path: "/", secure: true });
-		} catch {}
-
-		const res: any = await tiktokWebSearchCloak.get(url, {
-			headers: {
-				...commonHeaders,
-				Accept: "*/*",
-				Referer: "https://www.tiktok.com/",
-				"Sec-Fetch-Dest": "empty",
-				"Sec-Fetch-Mode": "cors",
-				"Sec-Fetch-Site": "same-origin",
-				"User-Agent": TIKTOK_WEB_UA,
-			},
-		});
-		const text = String(res?.text ?? "");
-		const minted = String(res?.headers?.["x-ms-token"] || "");
-		if (minted) {
-			try {
-				tiktokWebSearchCloak.setCookie("msToken", minted, { domain: ".tiktok.com", path: "/", secure: true });
-			} catch {}
-		}
-		if (Number(res?.statusCode ?? 0) !== 200 || !text) {
-			return {
-				error: "Akamai asking to verify you're not a bot",
-			};
-		}
-		let payload: any = null;
-		try {
-			payload = JSON.parse(text);
-		} catch {
-			return {
-				error: "Akamai asking to verify you're not a bot",
-			};
-		}
+		const { payload, error } = await tiktokWebApiGet("/api/music/detail/", params, "https://www.tiktok.com/");
+		if (error) return { error };
 		if (payload?.status_code !== 0) {
 			return {
 				error: "Tiktok blocked this request",
@@ -5752,14 +5833,14 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 		for (let page = 0; page < 5 && items.length < limit; page++) {
 			const params: Array<[string, string]> = [
 				["WebIdLastTime", String(sess.deviceIdCreate)],
-				["aid", "1988"],
+				["aid", "1340"],
 				["app_language", "en"],
 				["app_name", "tiktok_web"],
 				["browser_language", "en-US"],
 				["browser_name", "Mozilla"],
 				["browser_online", "true"],
 				["browser_platform", "Win32"],
-				["browser_version", "5.0 (Windows)"],
+				["browser_version", TIKTOK_WEB_UA_VERSION],
 				["channel", "tiktok_web"],
 				["cookie_enabled", "true"],
 				["count", String(perPage)],
@@ -5767,16 +5848,24 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				["data_collection_enabled", "false"],
 				["device_id", String(sess.device_id)],
 				["device_platform", "web_pc"],
-				["device_type", "web_h265"],
+				["focus_state", "true"],
 				["from_page", "search"],
 				["history_len", String(historyLen)],
+				["is_fullscreen", "false"],
+				["is_non_personalized_search", "0"],
+				["is_page_visible", "true"],
 				["keyword", que],
+				["language", "en"],
 				["odinId", String(sess.odin_id)],
 				["offset", String(cursor)],
 				["os", "windows"],
 				["priority_region", ""],
 				["referer", ""],
 				["region", "US"],
+				["root_referer", ""],
+				["screen_height", "768"],
+				["screen_width", "1366"],
+				["tz_name", "Asia/Jakarta"],
 				["user_is_login", "false"],
 				["web_search_code", TIKTOK_WEB_SEARCH_CODE],
 				["webcast_language", "en"],
@@ -5789,9 +5878,9 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 			for (const [k, v] of params) sp.append(k, v);
 			const baseQs = sp.toString();
 			const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, TIKTOK_WEB_SIGN_OPTS);
-			const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}&msToken=`;
+			const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}`;
 			const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
-			const url = `https://www.tiktok.com/api/search/general/full/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
+			const url = `https://www.tiktok.com/api/search/item/full/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
 
 			try {
 				const ttwid = /ttwid=([^;]+)/.exec(sess.cookie || "")?.[1] || "";
@@ -5804,7 +5893,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				headers: {
 					...commonHeaders,
 					Accept: "*/*",
-					Referer: `https://www.tiktok.com/search?q=${encodeURIComponent(que)}`,
+					Referer: `https://www.tiktok.com/search/video?q=${encodeURIComponent(que)}`,
 					"Sec-Fetch-Dest": "empty",
 					"Sec-Fetch-Mode": "cors",
 					"Sec-Fetch-Site": "same-origin",
@@ -5830,12 +5919,12 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				if (items.length) break;
 				continue;
 			}
-			if (payload?.status_code !== 0 || !Array.isArray(payload?.data)) {
+			if (payload?.status_code !== 0 || !Array.isArray(payload?.item_list)) {
 				if (items.length) break;
 				continue;
 			}
-			for (const section of payload.data) {
-				if (section?.type === 1 && section?.item?.id && !items.some((x: any) => x.id === section.item.id)) items.push(section.item);
+			for (const item of payload.item_list) {
+				if (item?.id && !items.some((x: any) => x.id === item.id)) items.push(item);
 			}
 			if (!payload.has_more) break;
 			cursor = Number(payload.cursor ?? cursor + perPage) || 0;
@@ -5847,8 +5936,34 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				error: "Akamai asking to verify you're not a bot",
 			};
 		}
+		const data = await Promise.all(
+			items.slice(0, limit).map(async (item: any) => {
+				const video = item.video || {};
+				const bestGear = tiktokBestGear(video.bitrateInfo);
+				const rawPlayUrl = bestGear?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play")) || bestGear?.PlayAddr?.UrlList?.[0] || video.playAddr || video.downloadAddr;
+				const playUrl = await resolveTiktokPlayUrl(rawPlayUrl);
+				const restVideo = { ...video };
+				delete restVideo.bitrateInfo;
+				return {
+					...item,
+					video: {
+						...restVideo,
+						...(playUrl ? { playUrl } : {}),
+						...(bestGear
+							? {
+									quality: {
+										resolution: `${bestGear.PlayAddr?.Width}x${bestGear.PlayAddr?.Height}`,
+										bitrate: bestGear.Bitrate,
+										codec: bestGear.CodecType,
+									},
+								}
+							: {}),
+					},
+				};
+			}),
+		);
 		return {
-			data: items.slice(0, limit),
+			data,
 		};
 	} catch {
 		return null;
@@ -5930,27 +6045,81 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
 
 	const clientABVersions: string = tiktokSessionKeys.abVersion || "";
-	// const customUA: string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
-
-	const url = `https://www.tiktok.com/api/explore/item_list/?WebIdLastTime=${tiktokSessionKeys.deviceIdCreate}&aid=1988&app_id=${tiktokSessionKeys.app_id}&app_language=en&app_name=tiktok_web${clientABVersions ? `&clientABVersions=${clientABVersions}` : ""}&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Linux%20x86_64&browser_version=5.0%20(X11)&categoryType=120&channel=tiktok_web&cookie_enabled=true&count=1&data_collection_enabled=false&device_id=${tiktokSessionKeys.device_id}&odinId=${tiktokSessionKeys.odin_id}&device_platform=web_pc&enable_cache=false&is_fullscreen=true&is_page_visible=true&language=en&os=linux&priority_region=${region_code}&pullType=2&referer=&region=${region_code}&tz_name=&user_is_login=false&video_encoding=dash&webcast_language=en&screen_height=1440&screen_width=2560`;
+	const region = region_code || "ID";
+	const now = new Date();
+	const params: Array<[string, string]> = [
+		["WebIdLastTime", String(tiktokSessionKeys.deviceIdCreate)],
+		["aid", "1988"],
+		["app_language", "en"],
+		["app_name", "tiktok_web"],
+		["browser_language", "en-US"],
+		["browser_name", "Mozilla"],
+		["browser_online", "true"],
+		["browser_platform", "Win32"],
+		["browser_version", TIKTOK_WEB_UA_VERSION],
+		["channel", "tiktok_web"],
+		["clientABVersions", clientABVersions],
+		["cookie_enabled", "true"],
+		["count", "1"],
+		["coverFormat", "2"],
+		["cpu_core_number", "8"],
+		["dark_mode", "false"],
+		["data_collection_enabled", "false"],
+		["day_of_week", String(now.getDay())],
+		["device_id", String(tiktokSessionKeys.device_id)],
+		["device_platform", "web_pc"],
+		["device_score", "5.25"],
+		["device_type", "web_h265"],
+		["enable_cache", "false"],
+		["focus_state", "true"],
+		["from_page", "fyp"],
+		["history_len", "3"],
+		["isNonPersonalized", "false"],
+		["is_fullscreen", "false"],
+		["is_new_user", "true"],
+		["is_page_visible", "true"],
+		["itemID", ""],
+		["language", "en"],
+		["launch_mode", "direct"],
+		["network", "10"],
+		["odinId", String(tiktokSessionKeys.odin_id)],
+		["os", "windows"],
+		["priority_region", region_code],
+		["pullType", "1"],
+		["referer", "https://www.tiktok.com/404?fromUrl=/"],
+		["region", region],
+		["root_referer", "https://www.tiktok.com/404?fromUrl=/"],
+		["screen_height", "768"],
+		["screen_width", "1366"],
+		["showAboutThisAd", "true"],
+		["showAds", "false"],
+		["store_region", region],
+		["time_of_day", String(now.getHours())],
+		["tz_name", "Asia/Jakarta"],
+		["video_encoding", "dash"],
+		["vv_count", "0"],
+		["vv_count_fyp", "0"],
+		["watchLiveLastTime", ""],
+		["webcast_language", "en"],
+		["window_height", "721"],
+		["window_width", "1078"],
+	];
+	const sp = new URLSearchParams();
+	for (const [k, v] of params) sp.append(k, v);
+	const baseQs = sp.toString();
+	const dynosaur = webDynosaurEncrypt(baseQs, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, field_53: "www.tiktok.com" });
+	const preGnarly = `${baseQs}&X-Dynosaur=${dynosaur}&msToken=`;
+	const gnarly = webGnarlyEncrypt(`${preGnarly}&X-Bogus=1`, "", TIKTOK_WEB_UA, { ...TIKTOK_WEB_SIGN_OPTS, enc_reqs: 6 });
+	const signedUrl = `https://www.tiktok.com/api/recommend/item_list/?${preGnarly}&X-Bogus=1&X-Gnarly=${gnarly}`;
 	const headers = {
 		...commonHeaders,
+		"User-Agent": TIKTOK_WEB_UA,
 		Cookie: tiktokSessionKeys?.cookie,
-		Referer: "https://www.tiktok.com/explore",
+		Referer: "https://www.tiktok.com/foryou",
 		"Sec-Fetch-Dest": "empty",
 		"Sec-Fetch-Mode": "cors",
 		"Sec-Fetch-Site": "same-origin",
 	};
-
-	const signedUrl = signTikTok({
-		url,
-		userAgent,
-		msToken: "",
-		body: "",
-		perf: { txr: 105, tfr: 13, ixr: 15, ifr: 6 },
-		envcode: 65,
-		ubcode: 8,
-	});
 
 	for (let i = 0; i < 3; i++) {
 		try {
@@ -5987,9 +6156,9 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 					const sortedBitrateAsc = [...bitrateInfo].sort((a: any, b: any) => (a.Bitrate || 0) - (b.Bitrate || 0));
 					const sortedBitrateDesc = [...bitrateInfo].sort((a: any, b: any) => (b.PlayAddr?.Width || 0) * (b.PlayAddr?.Height || 0) - (a.PlayAddr?.Width || 0) * (a.PlayAddr?.Height || 0));
 
-					const videoUrl = (videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
-					const highestVideoUrl = sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
-					const lowestVideoUrl = sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play"))?.replace("faid=1988", "faid=1180") || null;
+					const videoUrl = tiktokPlayUrl((videoInfo.PlayAddrStruct?.UrlList || []).find((u: string) => u.includes("aweme/v1/play")));
+					const highestVideoUrl = tiktokPlayUrl(sortedBitrateDesc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play")));
+					const lowestVideoUrl = tiktokPlayUrl(sortedBitrateAsc[0]?.PlayAddr?.UrlList?.find((u: string) => u.includes("aweme/v1/play")));
 
 					const extractRedirect = async (url: string) => {
 						try {
@@ -6023,7 +6192,7 @@ export const TiktokFeed = async function TiktokFeed(region_code: string = "") {
 							res: `${br.PlayAddr?.Width}x${br.PlayAddr?.Height}`,
 							format: br.Format,
 							codec: br.CodecType,
-							play_url: br.PlayAddr?.UrlList?.[2]?.replace("faid=1988", "faid=1180"),
+							play_url: tiktokPlayUrl(br.PlayAddr?.UrlList?.[2]),
 						})),
 						author: {
 							url: "https://www.tiktok.com/@" + item.author?.uniqueId,
@@ -7313,9 +7482,6 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 	try {
 		if (refresh_auth || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
 		let subCookies = redditCookies;
-		if (process.env.REDDIT_SESSION && subCookies && !subCookies.includes("reddit_session=")) {
-			subCookies += `; reddit_session=${process.env.REDDIT_SESSION}`;
-		}
 
 		const headers: any = { ...commonHeaders };
 		if (subCookies) headers["Cookie"] = subCookies;
@@ -7323,7 +7489,7 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 
 		const name = que.toLowerCase()?.split(" ")?.[0];
 
-		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&feedLength=28&distance=25`, { headers });
+		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&feedLength=28&distance=25&render-mode=partial`, { headers });
 		redditCookies = syncRedditCookies(req, redditCookies);
 
 		if (req.status === 451) {
@@ -7412,6 +7578,307 @@ const collectListingData = (listing: any): any[] => {
 	return out;
 };
 
+const REDDIT_ATTR_RE = /([\w-]+)(?:="([^"]*)")?/g;
+const REDDIT_IMG_URL_RE = /https?:\/\/[^\s"'<>]+/g;
+
+const parseRedditTagAttrs = (tag: string): Record<string, string> => {
+	const attrs: Record<string, string> = {};
+	REDDIT_ATTR_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = REDDIT_ATTR_RE.exec(tag))) {
+		if (m[1] === "class") continue;
+		attrs[m[1]] = m[2] ?? "";
+	}
+	return attrs;
+};
+
+const extractRedditImages = (html: string): string[] => {
+	const primary: string[] = [];
+	const preview: string[] = [];
+	const seen = new Set<string>();
+	REDDIT_IMG_URL_RE.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = REDDIT_IMG_URL_RE.exec(html))) {
+		const raw = decodeHTML(m[0]).split(/["'\s]/)[0];
+		if (!raw) continue;
+		let u: URL;
+		try {
+			u = new URL(raw);
+		} catch {
+			continue;
+		}
+		const host = u.hostname.toLowerCase();
+		const isPrimary = host === "i.redd.it";
+		const isPreview = host === "preview.redd.it" || host === "cf.preview.redd.it" || host === "external-preview.redd.it";
+		if (!isPrimary && !isPreview) continue;
+		if (u.pathname.includes("/snoovatar/")) continue;
+		if (isPreview) {
+			const width = u.searchParams.get("width");
+			if (width && width !== "1080") continue;
+		}
+		const key = u.toString();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		(isPrimary ? primary : preview).push(key);
+	}
+	return primary.length ? primary : preview;
+};
+
+const parseRedditShredditHtml = (html: string) => {
+	const postTag = /<shreddit-post\b([^>]*)>/i.exec(html)?.[1] || "";
+	const postAttrs = parseRedditTagAttrs(postTag);
+	const playerTag = /<shreddit-player\b([^>]*)>/i.exec(html)?.[1] || "";
+	const playerAttrs = parseRedditTagAttrs(playerTag);
+	let media: string | null = null;
+	const packagedRaw = playerAttrs["packaged-media-json"];
+	if (packagedRaw) {
+		try {
+			const packaged = JSON.parse(decodeHTML(packagedRaw));
+			const perms = packaged?.playbackMp4s?.permutations;
+			if (Array.isArray(perms)) {
+				const sorted = [...perms].sort((a: any, b: any) => {
+					const ah = Number(a?.source?.dimensions?.height) || 0;
+					const bh = Number(b?.source?.dimensions?.height) || 0;
+					if (ah !== bh) return bh - ah;
+					const ab = Number(a?.source?.bitrateBps) || 0;
+					const bb = Number(b?.source?.bitrateBps) || 0;
+					return bb - ab;
+				});
+				const best = sorted.find((p: any) => typeof p?.source?.url === "string" && p.source.url);
+				if (best) media = decodeHTML(best.source.url);
+			}
+		} catch {}
+	}
+	if (!media) {
+		const vid = /v\.redd\.it\/([A-Za-z0-9]+)/.exec(playerAttrs["src"] || "")?.[1];
+		if (vid) media = `https://v.redd.it/${vid}`;
+	}
+	return {
+		title: postAttrs["post-title"] ? decodeHTML(postAttrs["post-title"]) : null,
+		author: postAttrs["author"] ? decodeHTML(postAttrs["author"]) : null,
+		media,
+		images: extractRedditImages(html),
+	};
+};
+
+const parseRedditRss = (xml: string) => {
+	const entry = /<entry>([\s\S]*?)<\/entry>/i.exec(xml)?.[1] || "";
+	const title = /<title>([\s\S]*?)<\/title>/i.exec(entry)?.[1] || "";
+	const author = /<name>([\s\S]*?)<\/name>/i.exec(entry)?.[1] || "";
+	const content = /<content type="html">([\s\S]*?)<\/content>/i.exec(entry)?.[1] || "";
+	const decodedContent = decodeHTML(content);
+	const vid = /v\.redd\.it\/([A-Za-z0-9]+)/.exec(decodedContent)?.[1];
+	return {
+		title: title ? decodeHTML(title) : null,
+		author: author ? decodeHTML(author).replace(/^\/u\//, "") : null,
+		media: vid ? `https://v.redd.it/${vid}` : null,
+		images: extractRedditImages(decodedContent),
+	};
+};
+
+let redgifsToken = "";
+let redgifsTokenExpiry = 0;
+
+const getRedgifsToken = async (): Promise<string> => {
+	if (redgifsToken && Date.now() < redgifsTokenExpiry) return redgifsToken;
+	try {
+		const res = await fetch("https://api.redgifs.com/v2/auth/temporary", {
+			headers: { ...commonHeaders, Accept: "application/json", Origin: "https://www.redgifs.com", Referer: "https://www.redgifs.com/" },
+		});
+		const json: any = await res.json();
+		const token = typeof json?.token === "string" ? json.token : "";
+		if (!token) return "";
+		redgifsToken = token;
+		try {
+			const payload = JSON.parse(Buffer.from(token.split(".")[1] || "", "base64").toString());
+			redgifsTokenExpiry = Number(payload?.exp || 0) * 1000 - 60_000;
+		} catch {
+			redgifsTokenExpiry = Date.now() + 10 * 60_000;
+		}
+		return token;
+	} catch {
+		return "";
+	}
+};
+
+const fetchRedgifs = async (id: string): Promise<{ media: string | null; poster: string | null }> => {
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const token = await getRedgifsToken();
+		if (!token) return { media: null, poster: null };
+		try {
+			const res = await fetch(`https://api.redgifs.com/v2/gifs/${encodeURIComponent(id)}`, {
+				headers: { ...commonHeaders, Accept: "application/json", Authorization: `Bearer ${token}`, Origin: "https://www.redgifs.com", Referer: "https://www.redgifs.com/" },
+			});
+			if (res.status === 401 || res.status === 403) {
+				redgifsToken = "";
+				redgifsTokenExpiry = 0;
+				continue;
+			}
+			const json: any = await res.json();
+			const urls = json?.gif?.urls;
+			return {
+				media: urls?.hd || urls?.sd || null,
+				poster: urls?.poster || json?.gif?.thumbnail || null,
+			};
+		} catch {
+			return { media: null, poster: null };
+		}
+	}
+	return { media: null, poster: null };
+};
+
+export const RedditDownload = async (url: string, refresh_auth: boolean = false): Promise<any> => {
+	if (!url) return null;
+	try {
+		let refreshed = refresh_auth;
+		if (refreshed || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
+		const headers = (extra: Record<string, string> = {}) => ({
+			...commonHeaders,
+			...(redditCookies ? { Cookie: redditCookies } : {}),
+			...extra,
+		});
+		const redditGet = async (target: string, extra: Record<string, string> = {}, method = "GET"): Promise<Response> => {
+			let res = await fetch(target, { method, headers: headers(extra), redirect: "follow" });
+			redditCookies = syncRedditCookies(res, redditCookies);
+			if (res.status === 403 && !refreshed) {
+				refreshed = true;
+				redditCookies = (await refreshRedditAuth()) || redditCookies;
+				res = await fetch(target, { method, headers: headers(extra), redirect: "follow" });
+				redditCookies = syncRedditCookies(res, redditCookies);
+			}
+			return res;
+		};
+
+		let finalUrl = url;
+		for (const method of ["HEAD", "GET"]) {
+			try {
+				const res = await redditGet(url, {}, method);
+				if (res.url) finalUrl = res.url;
+				if (finalUrl !== url) break;
+			} catch {}
+		}
+		const idMatch = /(?:comments|redd\.it)\/([a-z0-9]+)/i.exec(finalUrl) || /t3_([a-z0-9]+)/i.exec(finalUrl);
+		const postId = idMatch?.[1];
+		if (!postId) return { error: "Invalid Reddit URL" };
+
+		let title: string | null = null;
+		let author: string | null = null;
+		let media: string | null = null;
+		let images: string[] = [];
+		let source = "";
+		let canonical = `https://www.reddit.com/comments/${postId}/`;
+		let partialHtml = "";
+		let embedHtml = "";
+		let rssContent = "";
+
+		const oembed = await redditGet(`https://www.reddit.com/oembed?url=${encodeURIComponent(`https://www.reddit.com/r/reddit/comments/${postId}`)}`, { Accept: "application/json" });
+		if (oembed.status === 200) {
+			try {
+				const j: any = await oembed.json();
+				if (typeof j?.title === "string") title = j.title;
+				if (typeof j?.author_name === "string") author = j.author_name;
+				const href = /href="([^"]+)"/i.exec(String(j?.html || ""))?.[1];
+				if (href) {
+					const decodedHref = decodeHTML(href);
+					canonical = decodedHref.startsWith("/") ? `https://www.reddit.com${decodedHref}` : decodedHref;
+				}
+			} catch {}
+		}
+
+		const partial = await redditGet(`https://www.reddit.com/svc/shreddit/partial-post/reddit/t3_${postId}?render-mode=partial`, {
+			Accept: "text/vnd.reddit.partial+html, text/html",
+			Referer: "https://www.reddit.com/",
+		});
+		if (partial.status === 200) {
+			partialHtml = await partial.text();
+			if (partialHtml.includes("<shreddit-post")) {
+				const parsed = parseRedditShredditHtml(partialHtml);
+				title = parsed.title || title;
+				author = parsed.author || author;
+				media = parsed.media || media;
+				images = parsed.images.length ? parsed.images : images;
+				source = "partial";
+			}
+		}
+
+		if (!media && !images.length) {
+			const embedBase = canonical.replace(/^https?:\/\/www\.reddit\.com/i, "https://embed.reddit.com").replace(/\?.*$/, "");
+			const embedUrl = `${embedBase}${embedBase.includes("?") ? "&" : "?"}render-mode=partial`;
+			const embed = await redditGet(embedUrl, { Accept: "text/vnd.reddit.partial+html, text/html, */*", Referer: "https://www.reddit.com/" });
+			if (embed.status === 200) {
+				embedHtml = await embed.text();
+				if (embedHtml.includes("<shreddit-player") || embedHtml.includes("i.redd.it") || embedHtml.includes("preview.redd.it")) {
+					const parsed = parseRedditShredditHtml(embedHtml);
+					title = parsed.title || title;
+					author = parsed.author || author;
+					media = parsed.media || media;
+					images = parsed.images.length ? parsed.images : images;
+					source = "embed";
+				}
+			}
+		}
+
+		if (!media && !images.length) {
+			const rssUrl = canonical.endsWith("/") ? `${canonical}.rss` : `${canonical}/.rss`;
+			const rss = await redditGet(rssUrl, { Accept: "application/atom+xml" });
+			if (rss.status === 200) {
+				const xml = await rss.text();
+				if (xml.includes("<entry>")) {
+					const parsed = parseRedditRss(xml);
+					title = parsed.title || title;
+					author = parsed.author || author;
+					media = parsed.media || media;
+					images = parsed.images.length ? parsed.images : images;
+					rssContent = xml;
+					source = "rss";
+				}
+			}
+		}
+
+		if (!media) {
+			const jsonRes = await redditGet(`https://www.reddit.com/comments/${postId}.json`, { Accept: "application/json" });
+			if (jsonRes.status === 200) {
+				try {
+					const j: any = await jsonRes.json();
+					const post = Array.isArray(j) ? j?.[0]?.data?.children?.[0]?.data : null;
+					const fallback = post?.secure_media?.reddit_video?.fallback_url || post?.media?.reddit_video?.fallback_url || post?.preview?.reddit_video_preview?.fallback_url;
+					if (typeof fallback === "string" && fallback) {
+						media = decodeHTML(fallback);
+						source = "json";
+					}
+					if (!images.length && Array.isArray(post?.preview?.images)) {
+						images = post.preview.images.map((img: any) => decodeHTML(img?.source?.url || "")).filter(Boolean) as string[];
+					}
+				} catch {}
+			}
+		}
+
+		const redgifsMatch = [partialHtml, embedHtml, rssContent].map((html) => /redgifs\.com\/(?:watch|ifr)\/([A-Za-z0-9]+)/i.exec(html)).find(Boolean);
+		const redgifsId = redgifsMatch?.[1] || "";
+		if (redgifsId) {
+			const redgifs = await fetchRedgifs(redgifsId);
+			if (redgifs.media) {
+				media = redgifs.media;
+				source = "redgifs";
+			}
+			if (redgifs.poster) images.push(redgifs.poster);
+		}
+
+		images = [...new Set(images.filter(Boolean))];
+		if (!media && !images.length) return { error: "Reddit content unavailable", postid: postId };
+		return {
+			media: media || null,
+			images,
+			title: title || null,
+			author: author || null,
+			postid: postId,
+			source: source || null,
+		};
+	} catch {
+		return null;
+	}
+};
+
 export const redditMedia = async function redditMedia(que: string, refresh_auth: boolean = false) {
 	if (!que) return null;
 
@@ -7422,7 +7889,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 		if (redditCookies) headers["Cookie"] = redditCookies;
 		const sentIdent = ((headers["Cookie"] || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
 
-		let pageUrl: string | null = `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cId=${crypto.randomUUID()}&iId=${crypto.randomUUID()}`;
+		let pageUrl: string | null = `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cId=${crypto.randomUUID()}&iId=${crypto.randomUUID()}&render-mode=partial`;
 		const entries: any[] = [];
 		const seenCursor = new Set<string>();
 		let blocked = false;
@@ -7452,7 +7919,7 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 			}
 			const m: RegExpMatchArray | null = html.match(/\/svc\/shreddit\/search\/\?[^"'\s]*?cursor=([A-Za-z0-9%._~\-+/=]+)/);
 			const cursor: string | null = m?.[1] ? decodeURIComponent(m[1].replace(/&amp;/g, "&")) : null;
-			pageUrl = cursor && !seenCursor.has(cursor) ? `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cursor=${encodeURIComponent(cursor)}` : null;
+			pageUrl = cursor && !seenCursor.has(cursor) ? `https://www.reddit.com/svc/shreddit/search/?q=${encodeURIComponent(que)}&cursor=${encodeURIComponent(cursor)}&render-mode=partial` : null;
 			if (cursor) seenCursor.add(cursor);
 		}
 		if (!entries.length && blocked) return { error: "IP Blocked" };

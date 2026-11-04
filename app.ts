@@ -201,6 +201,9 @@ const API_ROUTES = {
 	download: [
 		["/download/tiktok/video?url=&json=", "url", "boolean"],
 		["/download/tiktok/photo?url=", "url"],
+		["/download/tiktok/music?url=&json=", "url", "boolean"],
+		["/download/reddit/video?url=&json=", "url", "boolean"],
+		["/download/reddit/photo?url=", "url"],
 		["/download/instagram/video?url=&json=", "url", "boolean"],
 		["/download/instagram/photo?url=", "url"],
 		["/download/threads/video?url=&json=", "url", "boolean"],

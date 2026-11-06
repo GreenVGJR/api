@@ -5,14 +5,14 @@ import { stream } from "hono/streaming";
 import { getCookie } from "hono/cookie";
 import { sign, verify } from "hono/jwt";
 import path from "path";
-import fs from "fs/promises";
+import fs from "fs";
 import crypto from "crypto";
 import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/telemetry.js";
 import { applyVsChallenge } from "./functions/httpRequest.js";
-import { commonHeaders } from "./functions/request.js";
+import { commonHeaders } from "./functions/types/headers.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
 import { VS_COOKIE, VS_COOKIE_MAX_AGE, signVsCookie } from "./functions/vsChallenge.js";
 
@@ -23,8 +23,52 @@ export const autoGenBuild: any = _g.__vgjr_autoGenBuild || (_g.__vgjr_autoGenBui
 export const autoGenBuildPara: any = _g.__vgjr_autoGenBuildPara || (_g.__vgjr_autoGenBuildPara = crypto.randomBytes(6).toString("base64url"));
 
 const skipRouteLoad = (config as any)?.maintenance?.enabled === true;
-const lazyRouteModule = (spec: string): Promise<any> => (skipRouteLoad ? Promise.resolve({ default: [] }) : import(spec));
-const startupDataPromise = Promise.all([lazyRouteModule("./routes/search/index.js"), lazyRouteModule("./routes/lyrics/index.js"), lazyRouteModule("./routes/tools/index.js"), lazyRouteModule("./routes/info/index.js"), lazyRouteModule("./routes/profile/index.js"), lazyRouteModule("./routes/download/index.js"), lazyRouteModule("./routes/music/index.js"), lazyRouteModule("./routes/suggest/index.js"), fs.readFile(path.join(__dirname, "node_modules/hono/package.json"), "utf-8").catch(() => ""), fs.readFile(path.join(__dirname, "public/robots.txt"), "utf-8"), fs.readFile(path.join(__dirname, "public/favicon.ico")), fs.readFile(path.join(__dirname, "html/playground.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/cf.js"), "utf-8"), fs.readFile(path.join(__dirname, "html/backChallenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/challenge.html"), "utf-8"), fs.readFile(path.join(__dirname, "html/main.css"), "utf-8"), fs.readFile(path.join(__dirname, "amc/index.html"), "utf-8")] as const);
+
+const domainLoaders = {
+	search: () => import("./routes/search/index.js"),
+	lyrics: () => import("./routes/lyrics/index.js"),
+	tools: () => import("./routes/tools/index.js"),
+	info: () => import("./routes/info/index.js"),
+	profile: () => import("./routes/profile/index.js"),
+	download: () => import("./routes/download/index.js"),
+	music: () => import("./routes/music/index.js"),
+	suggest: () => import("./routes/suggest/index.js"),
+} as const;
+
+type DomainName = keyof typeof domainLoaders;
+
+const domainApps = new Map<DomainName, Hono>();
+const domainPending = new Map<DomainName, Promise<Hono>>();
+const warmState = globalThis as any;
+warmState.__vgjr_used_domains ??= new Set<string>();
+
+async function loadDomain(name: DomainName): Promise<Hono> {
+	const existing = domainApps.get(name);
+	if (existing) return existing;
+	const pending = domainPending.get(name);
+	if (pending) return pending;
+	const promise = domainLoaders[name]().then(
+		(mod) => {
+			const sub = new Hono();
+			for (const route of mod.default) sub.route(`${routeBase}/${name}`, route);
+			sub.use("*", async (c: Context) => {
+				c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
+				return c.body(null, 404);
+			});
+			domainApps.set(name, sub);
+			domainPending.delete(name);
+			const count = mod.default.reduce((acc: number, entry: any) => acc + (entry?.routes?.length || 0), 0);
+			console.log(`📦 Loaded ${count} ${name} endpoints (lazy)`);
+			return sub;
+		},
+		(error) => {
+			domainPending.delete(name);
+			throw error;
+		},
+	);
+	domainPending.set(name, promise);
+	return promise;
+}
 
 const API_ROUTES = {
 	suggestion: [
@@ -66,6 +110,8 @@ const API_ROUTES = {
 			chat: [
 				["/tools/chat/zai?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
+				["/tools/chat/gpt/luna?prompt=&conversation=", "string", "string"],
+				["/tools/chat/reddit/ask?prompt=", "string"],
 				["/tools/chat/gemma?prompt=&conversation=", "string", "string"],
 				["/tools/chat/nemotron?prompt=&conversation=", "string", "string"],
 				["/tools/chat/qwen?prompt=&conversation=", "string", "string"],
@@ -315,22 +361,31 @@ app.use("*", async (c: Context, next: Next) => {
 		}
 	}
 
-	c.header("Cache-Control", "public, max-age=5, must-revalidate");
 	await next();
+	if (!c.res.headers.has("Cache-Control")) {
+		c.header("Cache-Control", "public, max-age=5, must-revalidate");
+	}
 });
 
 const starttime = (globalThis as any).__vgjr_starttime || Date.now();
 
-const [reqsModule, lyricsModule, toolsModule, infoModule, profileModule, downloadModule, musicModule, suggestModule, honoPackageJson, robots, favicon, playgroundTemplateSource, mainJs, cfJs, backChallengeTemplateSource, challengeTemplateSource, rawCss, amcTemplateSource] = await startupDataPromise;
-
-const reqs = reqsModule.default;
-const lyrics = lyricsModule.default;
-const tools = toolsModule.default;
-const info = infoModule.default;
-const profile = profileModule.default;
-const download = downloadModule.default;
-const music = musicModule.default;
-const suggest = suggestModule.default;
+const readText = (rel: string): string => fs.readFileSync(path.join(__dirname, rel), "utf-8");
+const honoPackageJson = (() => {
+	try {
+		return readText("node_modules/hono/package.json");
+	} catch {
+		return "";
+	}
+})();
+const robots = readText("public/robots.txt");
+const favicon = fs.readFileSync(path.join(__dirname, "public/favicon.ico"));
+const playgroundTemplateSource = readText("html/playground.html");
+const mainJs = readText("html/main.js");
+const cfJs = readText("html/cf.js");
+const backChallengeTemplateSource = readText("html/backChallenge.html");
+const challengeTemplateSource = readText("html/challenge.html");
+const rawCss = readText("html/main.css");
+const amcTemplateSource = readText("amc/index.html");
 const honoVersion = (() => {
 	try {
 		return JSON.parse(honoPackageJson).version;
@@ -809,51 +864,6 @@ app.get("/", async (c: Context) => {
 const routeBase = BUILD_ID ? `/${BUILD_ID}` : "";
 const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "/music", "/suggest"];
 
-reqs.forEach((val: any) => {
-	app.route(`${routeBase}/search`, val);
-});
-lyrics.forEach((val: any) => {
-	app.route(`${routeBase}/lyrics`, val);
-});
-tools.forEach((val: any) => {
-	app.route(`${routeBase}/tools`, val);
-});
-info.forEach((val: any) => {
-	app.route(`${routeBase}/info`, val);
-});
-profile.forEach((val: any) => {
-	app.route(`${routeBase}/profile`, val);
-});
-download.forEach((val: any) => {
-	app.route(`${routeBase}/download`, val);
-});
-music.forEach((val: any) => {
-	app.route(`${routeBase}/music`, val);
-});
-suggest.forEach((val: any) => {
-	app.route(`${routeBase}/suggest`, val);
-});
-
-// ── Startup: log loaded endpoint counts per route type ───────────────────────
-const logLoadedEndpoints = (label: string, apps: any[]): number => {
-	const count = apps.reduce((acc, app) => acc + (app?.routes?.length || 0), 0);
-	console.log(`📦 Loaded ${count} ${label} endpoint${count === 1 ? "" : "s"}`);
-	return count;
-};
-
-const routeTypeTotals: Record<string, number> = {
-	search: logLoadedEndpoints("search", reqs),
-	lyrics: logLoadedEndpoints("lyrics", lyrics),
-	tools: logLoadedEndpoints("tools", tools),
-	info: logLoadedEndpoints("info", info),
-	profile: logLoadedEndpoints("profile", profile),
-	download: logLoadedEndpoints("download", download),
-	music: logLoadedEndpoints("music", music),
-	suggest: logLoadedEndpoints("suggest", suggest),
-};
-const totalEndpoints = Object.values(routeTypeTotals).reduce((a, b) => a + b, 0);
-console.log(`✅ Loaded ${totalEndpoints} endpoints total`);
-
 // Radio proxy: fetch streams for Lavalink to handle non-compliant responses.
 import { radioStreamUrls } from "./functions/radioProxy.js";
 
@@ -903,6 +913,32 @@ app.get("/radio-proxy/:guildId", async (c) => {
 	});
 });
 
+if (!skipRouteLoad) {
+	for (const name of Object.keys(domainLoaders) as DomainName[]) {
+		app.all(`${routeBase}/${name}/*`, async (c: Context) => {
+			warmState.__vgjr_used_domains.add(name);
+			const sub = await loadDomain(name);
+			return sub.fetch(c.req.raw);
+		});
+	}
+
+	if (!warmState.__vgjr_skip_warmup) {
+		const usedDomains = warmState.__vgjr_used_domains as Set<string>;
+		if (usedDomains.size === 0) {
+			usedDomains.add("tools");
+			usedDomains.add("search");
+		}
+		const warmGeneration = (warmState.__vgjr_warm_generation = (warmState.__vgjr_warm_generation || 0) + 1);
+		setTimeout(async () => {
+			for (const name of usedDomains) {
+				if (warmState.__vgjr_warm_generation !== warmGeneration) return;
+				if (!(name in domainLoaders)) continue;
+				await loadDomain(name as DomainName).catch(() => {});
+			}
+		}, 0);
+	}
+}
+
 if (BUILD_ID) {
 	app.use("*", async (c: Context, next: Next) => {
 		const url = new URL(c.req.url);
@@ -918,22 +954,9 @@ if (BUILD_ID) {
 	});
 }
 
-app.use("*", async (c: Context, next: Next) => {
-	if (BUILD_ID) {
-		const url = new URL(c.req.url);
-		const pathname = url.pathname;
-		const checkElement = pathname.split("/").slice(1);
-		if (checkElement[0] !== BUILD_ID) {
-			return c.json({ error: "Signature mismatch" }, 403);
-		}
-	}
-	const checkexists = c.notFound();
-
-	if (checkexists) {
-		c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
-		return c.body(null, 404);
-	}
-	await next();
+app.use("*", async (c: Context) => {
+	c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");
+	return c.body(null, 404);
 });
 
 export default app;

@@ -620,7 +620,7 @@ export function loadChatConversation(raw?: string): { conversation: LoadedConver
 	return { conversation: { id: raw, turns: normalized.turns } };
 }
 
-function saveChatConversation(id: string, turns: ChatTurn[]): { success: true } | { error: string } {
+export function saveChatConversation(id: string, turns: ChatTurn[]): { success: true } | { error: string } {
 	const payload: StoredConversation = { v: 1, t: trimConversationTurns(turns) };
 	const stored = chatConversations.set(id, JSON.stringify(payload));
 	if ("error" in stored) return { error: stored.error };

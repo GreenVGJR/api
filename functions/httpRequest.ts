@@ -5,7 +5,7 @@ import zlib from "zlib";
 import crypto from "crypto";
 import { readFile } from "fs/promises";
 import path from "path";
-import { commonHeaders } from "./request.js";
+import { commonHeaders } from "./types/headers.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
 import { maxLimitRequestsPerSec, wafChallenge, buildId } from "../config.json";

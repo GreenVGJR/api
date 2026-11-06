@@ -1,3 +1,5 @@
+export * from "./headers.js";
+
 export const DISCORD_FLAGS: Record<number, string> = {
 	0: "Discord Staff",
 	1: "Partnered Server Owner",

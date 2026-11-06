@@ -5,7 +5,7 @@
 	"restrictLocal": false,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
-	"endpointChallenge": true,
+	"endpointChallenge": false,
 	"wafChallenge": true,
 	"turnstile": {
 		"enabled": true,

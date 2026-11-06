@@ -3,6 +3,7 @@ import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
+import { userAgent, userAgent_mobile, discordUserAgent, commonHeaders } from "./types/headers.js";
 import { googleTrustJar, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
@@ -19,6 +20,7 @@ import { decodeHTML } from "entities";
 import { load as rusteerioLoad } from "rusteerio";
 import crypto from "crypto";
 import { Buffer } from "buffer";
+import type { ChatTurn } from "./cfPlayground.js";
 import emojibaseData from "emojibase-data/en/data.json" with { type: "json" };
 import emojibaseGroups from "emojibase-data/meta/groups.json" with { type: "json" };
 
@@ -296,20 +298,7 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 	};
 }
 
-export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/159.0";
-export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/156.0.0.0 Mobile/15E148 Safari/604.1";
-export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
-
-export const commonHeaders = {
-	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-	"Accept-Encoding": "gzip, deflate, br, zstd",
-	"Accept-Language": "en-US,en;q=0.9",
-	Priority: "u=0, i",
-	"Sec-Fetch-Dest": "document",
-	"Sec-Fetch-Mode": "navigate",
-	"Sec-Fetch-Site": "none",
-	"User-Agent": userAgent,
-};
+export { userAgent, userAgent_mobile, discordUserAgent, commonHeaders };
 
 const TIKTOK_WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36";
 const TIKTOK_WEB_UA_VERSION = TIKTOK_WEB_UA.replace("Mozilla/", "");
@@ -493,6 +482,39 @@ async function fetchYoutubeWithRetry<T>(request: () => Promise<Response>, parse:
 	}
 	return { ok: false };
 }
+
+const fetchYoutubeMixInitialData = async (videoId: string, playlistId: string): Promise<any | null> => {
+	if (!videoId || !playlistId) return null;
+
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			const response = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&list=${encodeURIComponent(playlistId)}`, {
+				headers: {
+					...commonHeaders,
+					...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+				},
+			});
+
+			if (response.status === 403 || response.status === 429) {
+				if (attempt === 0) {
+					keyYoutubeVisitor = null;
+					await sleepYoutubeRetry(YOUTUBE_JSON_RETRY_DELAY_MS);
+					continue;
+				}
+				return null;
+			}
+			if (response.status !== 200) return null;
+
+			const data = parseYtInitial(await response.text());
+			if (data && typeof data === "object") return data;
+			return null;
+		} catch {
+			return null;
+		}
+	}
+
+	return null;
+};
 
 const responseText = async (response: any): Promise<string> => {
 	if (!response) return "";
@@ -1002,21 +1024,8 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 
 			if (checkmix && deepSearch) {
 				try {
-					const mixPageResult = await fetchYoutubeWithRetry(
-						async () => {
-							return await fetch(`https://www.youtube.com/watch?v=&list=${checkmix}`, {
-								headers: commonHeaders,
-							});
-						},
-						parseYoutubeInitialDataResponse,
-						"YTVideo",
-					);
-
-					if (!mixPageResult.ok) {
-						throw new Error("Rate-limited");
-					}
-
-					const rlkres: any = mixPageResult.data;
+					const rlkres = await fetchYoutubeMixInitialData(a.videoId, checkmix);
+					if (!rlkres) console.warn(`YTVideo mix skipped for ${a.videoId}: unusable page data`);
 
 					if (rlkres) {
 						const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
@@ -1068,7 +1077,6 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 						}
 					}
 				} catch (e) {
-					if (e instanceof Error && e.message === "Rate-limited") throw e;
 					console.error("Mix fetch error:", e);
 				}
 			}
@@ -1265,21 +1273,8 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 				let mixData: any = null;
 				if (muspl && deepSearch) {
 					try {
-						const mixPageResult = await fetchYoutubeWithRetry(
-							async () => {
-								return await fetch(`https://www.youtube.com/watch?v=&list=${muspl}`, {
-									headers: commonHeaders,
-								});
-							},
-							parseYoutubeInitialDataResponse,
-							"YTMusic",
-						);
-
-						if (!mixPageResult.ok) {
-							throw new Error("Rate-limited");
-						}
-
-						const rlkres: any = mixPageResult.data;
+						const rlkres = await fetchYoutubeMixInitialData(videoId, muspl);
+						if (!rlkres) console.warn(`YTMusic mix skipped for ${videoId}: unusable page data`);
 
 						if (rlkres) {
 							const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
@@ -1331,7 +1326,6 @@ export const YTMusic = async function YTMusic(que: string, deepSearch: boolean =
 							}
 						}
 					} catch (e) {
-						if (e instanceof Error && e.message === "Rate-limited") throw e;
 						console.error("YTMusic mix fetch error:", e);
 					}
 				}
@@ -15053,6 +15047,7 @@ const googleWebSolve = async (url: string): Promise<any | null> => {
 		url,
 		fetcherType: "stealthy",
 		headers: googleWebJar() ? { Cookie: googleWebJar() } : undefined,
+		googleSearch: true,
 		extractHtml: true,
 		timeoutMs: 90000,
 	});
@@ -18260,5 +18255,583 @@ export const CanvaGraphics = async function CanvaGraphics(que: string) {
 		try {
 			session.close();
 		} catch {}
+	}
+};
+
+export const DUCK_MODEL = "gpt-6-luna";
+
+const DUCK_UA = commonHeaders["User-Agent"];
+const DUCK_ORIGIN = "https://duck.ai";
+const DUCK_FAIL = "Upstream failed, Duck.ai might block this request";
+const DUCK_RATE_LIMIT = "Duck.ai rate limit reached, try again later";
+const DUCK_STACK = "Error\n    at l (https://duck.ai/dist/duckai-dist/entry.duckai.d07c80b39c9724fc7678.js:2:2161892)";
+const DUCK_MAX_MS = 90000;
+const DUCK_IDLE_MS = 30000;
+const DUCK_COOLDOWN_MS = 60000;
+const DUCK_MIN_GAP_MS = 1500;
+
+let duckNext: string | null = null;
+let duckCooldownUntil = 0;
+let duckCookie = "";
+let duckCookieExpire = 0;
+let duckChain: Promise<unknown> = Promise.resolve();
+let duckLastAt = 0;
+
+export type DuckResult = {
+	_warning: string;
+	model: string;
+	conversation: string;
+	response: string;
+	data: {
+		latencyMs: number;
+		characters: number;
+	};
+};
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function duckEnqueue<T>(task: () => Promise<T>): Promise<T> {
+	const run = async (): Promise<T> => {
+		const wait = duckLastAt + DUCK_MIN_GAP_MS - Date.now();
+		if (wait > 0) await sleep(wait);
+		try {
+			return await task();
+		} finally {
+			duckLastAt = Date.now();
+		}
+	};
+	const result = duckChain.then(run, run);
+	duckChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
+}
+
+function duckHeaders(): Record<string, string> {
+	return {
+		...commonHeaders,
+		Accept: "*/*",
+		Origin: DUCK_ORIGIN,
+		Referer: DUCK_ORIGIN + "/",
+		"Sec-Fetch-Dest": "empty",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Site": "same-origin",
+	};
+}
+
+function duckChatHeaders(): Record<string, string> {
+	return {
+		"x-ddg-journey-id": crypto.randomBytes(16).toString("hex"),
+		"x-duckai-consent-purposes": "user-location,image-generation,web-search",
+		"x-duckai-continuation": "resubmit-context",
+		"x-duckai-response-id": crypto.randomUUID(),
+		"x-duckai-tool-approval": "web-search",
+	};
+}
+
+async function duckSessionCookie(): Promise<string> {
+	if (duckCookie && duckCookieExpire > Date.now()) return duckCookie;
+	const res = await fetch(DUCK_ORIGIN + "/duckchat/v1/capabilities", { headers: duckHeaders() });
+	const raw = res.headers.get("set-cookie") || "";
+	const match = /duckai_experiment_image-generation-model=([^;,\s]+)/.exec(raw);
+	if (res.status === 200 && match) {
+		duckCookie = "duckai_experiment_image-generation-model=" + match[1];
+		duckCookieExpire = Date.now() + 3600 * 1000;
+	}
+	return duckCookie;
+}
+
+async function duckChallenge(): Promise<string> {
+	const { JSDOM } = await import("jsdom");
+	let encoded: string;
+	if (duckNext) {
+		encoded = duckNext;
+		duckNext = null;
+	} else {
+		const res = await fetch(DUCK_ORIGIN + "/duckchat/v1/status", {
+			headers: { ...duckHeaders(), "x-vqd-accept": "1", "cache-control": "no-store", cookie: await duckSessionCookie() },
+		});
+		if (res.status === 429) {
+			duckCooldownUntil = Date.now() + DUCK_COOLDOWN_MS;
+			console.error("duckChat status rate limited");
+			throw new Error(DUCK_RATE_LIMIT);
+		}
+		const next = res.headers.get("x-vqd-hash-1");
+		if (res.status !== 200 || !next) {
+			console.error("duckChat status failed", res.status);
+			throw new Error(DUCK_FAIL);
+		}
+		encoded = next;
+	}
+
+	const script = Buffer.from(encoded, "base64").toString("utf8");
+	const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
+		url: DUCK_ORIGIN + "/",
+		runScripts: "dangerously",
+		pretendToBeVisual: true,
+	});
+
+	try {
+		const win = dom.window as any;
+		Object.defineProperty(win.navigator, "userAgent", { get: () => DUCK_UA, configurable: true });
+		Object.defineProperty(win.navigator, "webdriver", { get: () => false, configurable: true });
+		const proto = win.HTMLElement.prototype;
+		for (const key of ["offsetWidth", "offsetHeight", "scrollWidth", "scrollHeight", "clientWidth", "clientHeight"]) {
+			Object.defineProperty(proto, key, { get: () => 120, configurable: true });
+		}
+		proto.getBoundingClientRect = () => ({ x: 0, y: 0, width: 120, height: 120, top: 0, left: 0, right: 120, bottom: 120 });
+		win.getComputedStyle = () => ({ getPropertyValue: () => "block" });
+
+		const solved = await win.eval(script);
+		if (!solved || !Array.isArray(solved.client_hashes)) throw new Error(DUCK_FAIL);
+
+		const hashes = solved.client_hashes.map((value: unknown) => crypto.createHash("sha256").update(String(value), "utf8").digest("base64"));
+		const payload = {
+			...solved,
+			client_hashes: hashes,
+			meta: { ...(solved.meta || {}), origin: DUCK_ORIGIN, stack: DUCK_STACK, duration: "192" },
+		};
+		return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+	} finally {
+		dom.window.close();
+	}
+}
+
+function duckMessages(turns: ChatTurn[], prompt: string) {
+	return [...turns.map((turn) => (turn.role === "user" ? { role: "user", content: [{ type: "text", text: turn.content }] } : { role: "assistant", content: turn.content })), { role: "user", content: [{ type: "text", text: prompt }] }];
+}
+
+async function duckRead(body: ReadableStream<Uint8Array>): Promise<string> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	const deadline = Date.now() + DUCK_MAX_MS;
+	let buffer = "";
+	let output = "";
+	let done = false;
+
+	try {
+		while (!done && Date.now() < deadline) {
+			const wait = Math.min(DUCK_IDLE_MS, deadline - Date.now());
+			const chunk = await Promise.race([reader.read(), sleep(wait).then(() => null)]);
+			if (!chunk || chunk.done) break;
+
+			buffer += decoder.decode(chunk.value, { stream: true });
+			for (;;) {
+				const newline = buffer.indexOf("\n");
+				if (newline < 0) break;
+				const line = buffer.slice(0, newline).trim();
+				buffer = buffer.slice(newline + 1);
+				if (!line.startsWith("data:")) continue;
+
+				const payload = line.slice(5).trim();
+				if (!payload) continue;
+				if (payload === "[DONE]") {
+					done = true;
+					break;
+				}
+				if (payload.startsWith("[")) continue;
+
+				let event: any;
+				try {
+					event = JSON.parse(payload);
+				} catch {
+					continue;
+				}
+				if (event?.action === "error") {
+					const type = typeof event.type === "string" ? event.type : DUCK_FAIL;
+					if (type === "ERR_RATE_LIMIT") {
+						duckCooldownUntil = Date.now() + DUCK_COOLDOWN_MS;
+						throw new Error(DUCK_RATE_LIMIT);
+					}
+					throw new Error(type);
+				}
+				if (event?.role === "assistant" && typeof event.message === "string") output += event.message;
+			}
+		}
+	} finally {
+		try {
+			await reader.cancel();
+		} catch {}
+	}
+
+	return output;
+}
+
+async function duckOnce(model: string, prompt: string, turns: ChatTurn[]): Promise<string> {
+	const token = await duckChallenge();
+	const res = await fetch(DUCK_ORIGIN + "/duckchat/v1/chat", {
+		method: "POST",
+		headers: {
+			...duckHeaders(),
+			...duckChatHeaders(),
+			Accept: "text/event-stream",
+			"Content-Type": "application/json",
+			"X-Vqd-Hash-1": token,
+			cookie: await duckSessionCookie(),
+		},
+		body: JSON.stringify({
+			model,
+			messages: duckMessages(turns, prompt),
+			canUseTools: false,
+			reasoningEffort: "none",
+		}),
+	});
+
+	if (res.status === 429) {
+		duckCooldownUntil = Date.now() + DUCK_COOLDOWN_MS;
+		console.error("duckChat chat rate limited");
+		throw new Error(DUCK_RATE_LIMIT);
+	}
+	if (res.status !== 200 || !res.body) {
+		const detail = await res.text().catch(() => "");
+		console.error("duckChat request failed", res.status, detail.slice(0, 300));
+		throw new Error(DUCK_FAIL);
+	}
+
+	const next = res.headers.get("x-vqd-hash-1");
+	if (next) duckNext = next;
+
+	const response = await duckRead(res.body);
+	if (!response) {
+		console.error("duckChat empty response");
+		throw new Error(DUCK_FAIL);
+	}
+	return response;
+}
+
+async function duckWithRetry(model: string, prompt: string, turns: ChatTurn[]): Promise<string> {
+	let last: unknown;
+	for (let attempt = 0; attempt < 3; attempt++) {
+		try {
+			return await duckEnqueue(() => duckOnce(model, prompt, turns));
+		} catch (error) {
+			last = error;
+			const message = error instanceof Error ? error.message : DUCK_FAIL;
+			if (message === DUCK_RATE_LIMIT || (message.startsWith("ERR_") && message !== "ERR_CHALLENGE")) throw error;
+			if (attempt < 2) await sleep(500 * (attempt + 1));
+		}
+	}
+	throw last instanceof Error ? last : new Error(DUCK_FAIL);
+}
+
+export async function duckChat(model: string, prompt: string, conversationId: string, turns: ChatTurn[]): Promise<DuckResult | { error: string }> {
+	const { CHAT_WARNING, saveChatConversation } = await import("./cfPlayground.js");
+	const started = Date.now();
+	if (Date.now() < duckCooldownUntil) return { error: DUCK_RATE_LIMIT };
+
+	try {
+		const response = await duckWithRetry(model, prompt, turns);
+		const completed: ChatTurn[] = [...turns, { role: "user", content: prompt }, { role: "assistant", content: response }];
+		const saved = saveChatConversation(conversationId, completed);
+		if ("error" in saved) return { error: `Failed to save conversation: ${saved.error}` };
+
+		return {
+			_warning: CHAT_WARNING,
+			model,
+			conversation: conversationId,
+			response,
+			data: {
+				latencyMs: Date.now() - started,
+				characters: response.length,
+			},
+		};
+	} catch (error) {
+		return { error: error instanceof Error ? error.message : DUCK_FAIL };
+	}
+}
+
+const REDDIT_TOKEN_URL = "https://www.reddit.com/svc/shreddit/token";
+const REDDIT_ANSWERS_URL = "https://answers.reddit.com/v1/answers";
+const REDDIT_SOURCE = "TYPEAHEAD_EXPANDED_SEARCH_BAR";
+const REDDIT_FEATURES = ["ra:block_quote", "ra:block_quote_card", "ra:inline_quote", "ra:source", "ra:carousel", "ra:videocard", "ra:imagecard", "ra:product", "ra:retailers", "ra:retailer", "ra:product_card", "ra:hero_product_card", "ra:grid", "ra:subreddit", "ra:reasoning", "ra:thinking_step", "ra:subreddit_source_bar", "ra:post_sources", "ra:post_source", "ra:subreddit_sources", "ra:subreddit_source", "ra:post", "ra:post_collection", "ra:official_entity"];
+
+type RedditSession = {
+	jar: string;
+	token: string;
+	expires: number;
+};
+
+let redditSession: RedditSession | null = null;
+let redditSessionInflight: Promise<RedditSession> | null = null;
+
+const redditSessionFresh = (): boolean => !!redditSession && redditSession.expires > Date.now();
+
+const refreshRedditSession = async (): Promise<RedditSession> => {
+	if (redditSessionFresh()) return redditSession as RedditSession;
+	if (redditSessionInflight) return redditSessionInflight;
+
+	redditSessionInflight = (async () => {
+		let jar = (await refreshRedditAuth()) ?? "";
+		if (!jar) throw new Error("Failed to get Reddit session");
+
+		const csrf = /(?:^|; )csrf_token=([^;]*)/.exec(jar)?.[1] ?? "";
+		if (!csrf) throw new Error("Reddit csrf token missing");
+
+		const res = await fetch(REDDIT_TOKEN_URL, {
+			method: "POST",
+			headers: {
+				...commonHeaders,
+				Accept: "application/json",
+				"Content-Type": "application/json",
+				Cookie: jar,
+				Origin: "https://www.reddit.com",
+				Referer: "https://www.reddit.com/answers/",
+				"Sec-Fetch-Site": "same-origin",
+				"Sec-Fetch-Mode": "cors",
+				"Sec-Fetch-Dest": "empty",
+			},
+			body: JSON.stringify({ csrf_token: csrf }),
+		});
+		if (res.status !== 200) throw new Error(`Reddit token failed (${res.status})`);
+
+		const data = await res.json();
+		const token = typeof data?.token === "string" ? data.token : "";
+		if (!token) throw new Error("Reddit token missing");
+
+		jar = syncRedditCookies(res, jar);
+
+		let expires = Date.now() + 30 * 60 * 1000;
+		try {
+			const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"));
+			if (typeof payload?.exp === "number") expires = Math.min(expires, payload.exp * 1000 - 60_000);
+		} catch {}
+
+		redditSession = { jar, token, expires };
+		return redditSession;
+	})();
+
+	try {
+		return await redditSessionInflight;
+	} finally {
+		redditSessionInflight = null;
+	}
+};
+
+const parseRedditSse = (text: string): { quota: any; value: any } => {
+	let quota: any = null;
+	let value: any = null;
+
+	for (const block of text.split("\n\n")) {
+		if (!block.trim()) continue;
+		let event = "";
+		let data = "";
+		for (const line of block.split("\n")) {
+			if (line.startsWith("event: ")) event = line.slice(7).trim();
+			else if (line.startsWith("data: ")) data += (data ? "\n" : "") + line.slice(6);
+		}
+		if (!data) continue;
+
+		if (event === "userQuota") {
+			try {
+				quota = JSON.parse(data);
+			} catch {}
+			continue;
+		}
+		if (event !== "patch") continue;
+
+		try {
+			const operations = JSON.parse(data);
+			for (const operation of Array.isArray(operations) ? operations : [operations]) {
+				if (operation?.value && typeof operation.value === "object") value = { ...(value ?? {}), ...operation.value };
+			}
+		} catch {}
+	}
+
+	return { quota, value };
+};
+
+const redditText = (node: any): string => {
+	if (!node || typeof node !== "object") return "";
+	if (typeof node.t === "string") return node.t;
+	if (typeof node.raw === "string") return node.raw;
+	if (node.raw && typeof node.raw.t === "string") return node.raw.t;
+
+	const type = String(node.e ?? "");
+	if (type === "ra:thinking_step" || type === "ra:imagecard" || type.startsWith("ra:post_source") || type.startsWith("ra:subreddit_source")) return "";
+
+	const parts = (Array.isArray(node.c) ? node.c : []).map(redditText).filter(Boolean);
+	if (type === "li") return "- " + parts.join(" ");
+	return parts.join(type === "par" || type === "h" ? " " : "\n");
+};
+
+const redditDocumentText = (document: any): string => {
+	if (!Array.isArray(document)) return "";
+	return document.map(redditText).filter(Boolean).join("\n\n");
+};
+
+const redditPermalink = (id: string): string => `https://www.reddit.com/comments/${id.replace(/^t[13]_/, "")}`;
+
+const redditCommentCache = new Map<string, string>();
+
+const resolveRedditComment = async (id: string, jar: string): Promise<string | null> => {
+	const cached = redditCommentCache.get(id);
+	if (cached) return cached;
+
+	try {
+		const res = await fetch(`https://www.reddit.com/svc/shreddit/comment/${id}?depth=1`, {
+			headers: {
+				...commonHeaders,
+				Accept: "text/html",
+				Cookie: jar,
+				Referer: "https://www.reddit.com/",
+			},
+		});
+		if (res.status !== 200) return null;
+
+		const text = await res.text();
+		const target = id.replace(/^t1_/, "");
+		const links = [...text.matchAll(/permalink="([^"]+)"/g)].map((match) => match[1]);
+		const permalink = links.find((link) => link.includes(`/comment/${target}/`)) ?? links[0];
+		if (!permalink) return null;
+
+		const url = `https://www.reddit.com${permalink}`;
+		redditCommentCache.set(id, url);
+		return url;
+	} catch {
+		return null;
+	}
+};
+
+const resolveRedditComments = async (ids: string[], jar: string): Promise<(string | null)[]> => {
+	const results: (string | null)[] = new Array(ids.length).fill(null);
+	let index = 0;
+	const worker = async (): Promise<void> => {
+		while (index < ids.length) {
+			const current = index++;
+			results[current] = await resolveRedditComment(ids[current], jar);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(3, ids.length) }, worker));
+	return results;
+};
+
+const collectSubredditNames = (document: any): Map<string, string> => {
+	const names = new Map<string, string>();
+	const walk = (node: any): void => {
+		if (!node || typeof node !== "object") return;
+		if (node.e === "ra:subreddit_source_bar") {
+			const infos = Array.isArray(node.subreddit_info) ? node.subreddit_info : [];
+			const ids: string[] = [];
+			const collect = (child: any): void => {
+				if (!child || typeof child !== "object") return;
+				if (child.e === "ra:subreddit_source" && typeof child.id === "string") ids.push(child.id);
+				for (const nested of child.c ?? []) collect(nested);
+			};
+			for (const child of node.c ?? []) collect(child);
+			ids.forEach((id, index) => {
+				const name = infos[index]?.name;
+				if (typeof name === "string" && name) names.set(id, name);
+			});
+		}
+		for (const child of node.c ?? []) walk(child);
+	};
+	for (const node of Array.isArray(document) ? document : []) walk(node);
+	return names;
+};
+
+export const redditAsk = async (prompt: string): Promise<any> => {
+	const started = Date.now();
+
+	try {
+		let session = await refreshRedditSession();
+		let refreshed = false;
+		let lastError = "Reddit returned an empty answer";
+
+		const ask = async (current: RedditSession): Promise<Response> => {
+			const uuid = crypto.randomUUID();
+			const correlationId = `${uuid}__${new Date().toISOString()}`;
+			return await fetch(`${REDDIT_ANSWERS_URL}/${uuid}`, {
+				method: "POST",
+				headers: {
+					...commonHeaders,
+					Accept: "*/*",
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${current.token}`,
+					Cookie: current.jar,
+					Origin: "https://www.reddit.com",
+					Referer: "https://www.reddit.com/",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Dest": "empty",
+					"x-reddit-app-name": "web3x",
+				},
+				body: JSON.stringify({
+					format: "RTJSON",
+					query: prompt,
+					source: REDDIT_SOURCE,
+					correlationId,
+					supportedFeatures: REDDIT_FEATURES,
+				}),
+			});
+		};
+
+		for (let attempt = 0; attempt < 3; attempt++) {
+			if (attempt > 0) await sleep(300 * attempt);
+			const res = await ask(session);
+
+			if (res.status === 401 || res.status === 403) {
+				if (!refreshed) {
+					refreshed = true;
+					redditSession = null;
+					session = await refreshRedditSession();
+					continue;
+				}
+				lastError = `Reddit answers failed (${res.status})`;
+				continue;
+			}
+			if (res.status === 429) return { error: "Reddit rate limit reached, try again later", isFallback: true };
+			if (res.status !== 200) {
+				lastError = `Reddit answers failed (${res.status})`;
+				continue;
+			}
+
+			const text = await res.text();
+			const { quota, value } = parseRedditSse(text);
+			const response = redditDocumentText(value?.richtext?.document);
+			if (!response) {
+				lastError = "Reddit returned an empty answer";
+				continue;
+			}
+
+			const followUps: string[] = (Array.isArray(value?.followUps) ? value.followUps : []).map((item: any) => item?.query).filter((item: any): item is string => typeof item === "string" && !!item);
+			const posts: string[] = (Array.isArray(value?.posts) ? value.posts : []).map((item: any) => item?.ID).filter((item: any): item is string => typeof item === "string" && !!item);
+			const comments: string[] = (Array.isArray(value?.comments) ? value.comments : []).map((item: any) => item?.ID).filter((item: any): item is string => typeof item === "string" && !!item);
+			const subreddits: string[] = (Array.isArray(value?.subreddits) ? value.subreddits : []).map((item: any) => item?.ID ?? item?.name).filter((item: any): item is string => typeof item === "string" && !!item);
+			const subredditNames = collectSubredditNames(value?.richtext?.document);
+			const uniqueComments = [...new Set(comments)];
+			const resolvedComments = await resolveRedditComments(uniqueComments, session.jar);
+			const commentUrlMap = new Map(uniqueComments.map((id, index) => [id, resolvedComments[index]]));
+			const urls = {
+				posts: posts.map(redditPermalink),
+				comments: comments.map((id: string) => commentUrlMap.get(id) ?? null),
+				subreddits: subreddits.map((id: string) => {
+					if (id.startsWith("r/")) return `https://www.reddit.com/${id}`;
+					const name = subredditNames.get(id);
+					return name ? `https://www.reddit.com/${name}` : null;
+				}),
+			};
+
+			return {
+				isFallback: false,
+				response,
+				data: {
+					latencyMs: Date.now() - started,
+					characters: response.length,
+					followUps,
+					posts,
+					comments,
+					subreddits,
+					quota,
+					urls,
+				},
+			};
+		}
+
+		return { error: lastError, isFallback: true };
+	} catch (error) {
+		return { error: error instanceof Error ? error.message : "Reddit answers failed", isFallback: true };
 	}
 };

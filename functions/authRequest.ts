@@ -464,11 +464,11 @@ export const twitterKey = async function twitterKey(typeName: string) {
 	}
 };
 
-export const refreshRedditAuth = async (): Promise<any> => {
+export const refreshRedditAuth = async (useSessionCookie: boolean = true): Promise<any> => {
 	try {
 		const jar = new Map<string, string>();
 		jar.set("over18", "true");
-		if (process.env.REDDIT_SESSION) jar.set("reddit_session", process.env.REDDIT_SESSION);
+		if (useSessionCookie && process.env.REDDIT_SESSION) jar.set("reddit_session", process.env.REDDIT_SESSION);
 		const collect = (res: any) => {
 			const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("set-cookie")].filter(Boolean);
 			for (const c of raw) {

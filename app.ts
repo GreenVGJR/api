@@ -49,7 +49,7 @@ async function loadDomain(name: DomainName): Promise<Hono> {
 	if (pending) return pending;
 	const promise = domainLoaders[name]().then(
 		(mod) => {
-			const sub = new Hono();
+			const sub = new Hono({ strict: false });
 			for (const route of mod.default) sub.route(`${routeBase}/${name}`, route);
 			sub.use("*", async (c: Context) => {
 				c.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=3600");

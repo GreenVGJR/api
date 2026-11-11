@@ -2190,9 +2190,9 @@ const tiktokWebSearchCloak = new HttpcloakSession({
 	timeout: 30,
 });
 
-const tiktokWebApiGet = async (path: string, params: Array<[string, string]>, referer: string): Promise<{ payload: any | null; error?: string }> => {
+const tiktokWebApiGet = async (path: string, params: Array<[string, string]>, referer: string): Promise<{ payload?: any | null; error?: string }> => {
 	if (!tiktokSessionKeys?.device_id) tiktokSessionKeys = await tiktokSessions();
-	if (!tiktokSessionKeys?.device_id) return { payload: null, error: "Failed to initialize TikTok session" };
+	if (!tiktokSessionKeys?.device_id) return { error: "Failed to initialize TikTok session" };
 	const sess = tiktokSessionKeys;
 
 	const sp = new URLSearchParams();
@@ -2229,12 +2229,12 @@ const tiktokWebApiGet = async (path: string, params: Array<[string, string]>, re
 		} catch {}
 	}
 	if (Number(res?.statusCode ?? 0) !== 200 || !text) {
-		return { payload: null, error: "Akamai asking to verify you're not a bot" };
+		return { error: "Akamai asking to verify you're not a bot" };
 	}
 	try {
 		return { payload: JSON.parse(text) };
 	} catch {
-		return { payload: null, error: "Akamai asking to verify you're not a bot" };
+		return { error: "Akamai asking to verify you're not a bot" };
 	}
 };
 
@@ -4087,7 +4087,7 @@ export const infoYoutubeChannel = async function infoYoutubeChannel(url: string,
 							content: tabContent,
 						};
 					} catch {
-						return { title: tab.title, error: "Failed to fetch" };
+						return { error: "Failed to fetch" };
 					}
 				}),
 			);
@@ -4444,7 +4444,7 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 			// Check Sensitive Content (Regional based usually)
 			if (res?.resource_response?.data?.sensitivity?.type) return null;
 
-			return { isFallback: fallbackCount !== 0, error: "Pins not found" };
+			return { error: "Pins not found" };
 		};
 
 		const search = async (query: string, sourceUrl: string, forceShow: boolean) => {
@@ -4497,10 +4497,7 @@ export const pinterest = async function pinterest(que: string, type: string = "a
 		}
 
 		if (!result) {
-			return {
-				isFallback: fallbackCount !== 0,
-				error: "Pins not found. Your query may violate terms of service",
-			};
+			return { error: "Pins not found. Your query may violate terms of service" };
 		}
 		if ("data" in result && Array.isArray(result.data)) result.data = result.data.slice(0, limit_number);
 		return result;
@@ -4602,10 +4599,7 @@ export const pinterestExplore = async function pinterestExplore(que: string, rat
 		}
 
 		if (!result) {
-			return {
-				isFallback: fallbackCount !== 0,
-				error: "Boards not found. Your query may violate terms of service",
-			};
+			return { error: "Boards not found. Your query may violate terms of service" };
 		}
 		return result;
 	} catch (e) {
@@ -5823,6 +5817,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 		const items: any[] = [];
 		let cursor = 0;
 		let historyLen = 2;
+		let lastText = "";
 
 		for (let page = 0; page < 5 && items.length < limit; page++) {
 			const params: Array<[string, string]> = [
@@ -5895,6 +5890,7 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 				},
 			});
 			const text = String(res?.text ?? "");
+			lastText = text;
 			const minted = String(res?.headers?.["x-ms-token"] || "");
 			if (minted) {
 				try {
@@ -5925,11 +5921,18 @@ export const TiktokSearchVideo = async function TiktokSearchVideo(que: string, l
 			historyLen += 1;
 		}
 
-		if (!items.length) {
+		if (!lastText) {
 			return {
 				error: "Akamai asking to verify you're not a bot",
 			};
 		}
+
+		if (!items.length) {
+			return {
+				error: "Tiktok hid for this results",
+			};
+		}
+
 		const data = await Promise.all(
 			items.slice(0, limit).map(async (item: any) => {
 				const video = item.video || {};
@@ -7859,7 +7862,7 @@ export const RedditDownload = async (url: string, refresh_auth: boolean = false)
 		}
 
 		images = [...new Set(images.filter(Boolean))];
-		if (!media && !images.length) return { error: "Reddit content unavailable", postid: postId };
+		if (!media && !images.length) return { error: "Reddit content unavailable" };
 		return {
 			media: media || null,
 			images,
@@ -7879,7 +7882,13 @@ export const redditMedia = async function redditMedia(que: string, refresh_auth:
 	try {
 		if (refresh_auth || redditCookies === "") redditCookies = (await refreshRedditAuth()) || "";
 
-		const headers: any = { ...commonHeaders };
+		const headers: any = {
+			...commonHeaders,
+			Referer: "https://www.reddit.com/",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-origin",
+		};
 		if (redditCookies) headers["Cookie"] = redditCookies;
 		const sentIdent = ((headers["Cookie"] || "").match(/(?:^|;\s*)(?:loid|session_tracker)=[^;]*/g) || []).sort().join(";");
 
@@ -8924,16 +8933,10 @@ export async function googleImageReverse(url: string) {
 			signal: AbortSignal.timeout(20000),
 		});
 		if (v.status === 429) {
-			return {
-				...warn,
-				error: "Rate-limited",
-			};
+			return { error: "Rate-limited" };
 		}
 		if (v.status === 451) {
-			return {
-				...warn,
-				error: "This image contains content that is restricted for accessing",
-			};
+			return { error: "This image contains content that is restricted for accessing" };
 		}
 		const vj: any = await v.json().catch(() => null);
 
@@ -9308,10 +9311,7 @@ export async function googleLensReverseUpload(url: string) {
 		if (!renderedHtml && attempt.location) {
 			const rendered = await renderLensResults(attempt.location);
 			if (!rendered.ok) {
-				return {
-					error: "Google blocked the result page for this server",
-					resultsUrl: attempt.location,
-				};
+				return { error: "Google blocked the result page for this server" };
 			}
 			renderedHtml = rendered.html;
 		}
@@ -14900,7 +14900,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 const isGoogleWebChallenged = (html: string, finalUrl = "", imageSearch = false): boolean => finalUrl.includes("/sorry/") || html.includes("detected unusual traffic") || (html.includes("enablejs") && (imageSearch ? !html.includes('jsname="PNoEC"') : !html.includes("yuRUbf")));
 
 const isGoogleSafeSearchHidden = (html: string): boolean => /hidden by safesearch|disembunyikan oleh safesearch/i.test(html);
-const parGoogle = "&authuser=0&hl=en&gl=SG&safeui=off&noredirect=1";
+const parGoogle = "&authuser=0&hl=en&gl=US&safeui=off&noredirect=1";
 
 // SafeSearch hides server-side; signed setprefs link flips safeui=off for this jar.
 // Returns items on bypass, [] when network-enforced, null when not a SafeSearch wall/no signature.
@@ -17743,11 +17743,7 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
 	try {
 		let auth = await getStartpageAuth(searchUrl);
-		if (!auth)
-			return {
-				error: "Anubis asking to verify you're not a bot",
-				_wafChallenge: waf(),
-			};
+		if (!auth) return { error: "Anubis asking to verify you're not a bot" };
 		wafStatus = true;
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
@@ -17760,19 +17756,11 @@ export const StartpageSearch = async function StartpageSearch(que: string, authR
 		if (html.includes("anubis_challenge") && !authRetried) {
 			invalidateStartpageAuth();
 			auth = await getStartpageAuth(searchUrl);
-			if (!auth)
-				return {
-					error: "Startpage asking to verify you're not a bot",
-					_wafChallenge: waf(),
-				};
+			if (!auth) return { error: "Startpage asking to verify you're not a bot" };
 			wafAttempt = auth.reused ? 0 : auth.attempts;
 			html = await fetchResults(auth.cookie);
 		}
-		if (!html || html.includes("anubis_challenge"))
-			return {
-				error: "Startpage asking to verify you're not a bot",
-				_wafChallenge: waf(),
-			};
+		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot" };
 		const SP_RESULT_RE = /<(?:div|article)[^>]*class="[^"]*\bresult\b[^"]*"[^>]*>/g;
 		const SP_TITLE_A_RE = /<a[^>]*class="[^"]*\bresult-title\b[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/;
 		const SP_ANY_HTTP_A_RE = /<a[^>]*\bhref="(https?:[^"]*)"[^>]*>([\s\S]*?)<\/a>/;
@@ -17929,11 +17917,7 @@ export const StartpageImageSearch = async function StartpageImageSearch(que: str
 	const waf = () => ({ status: wafStatus, attempt: wafAttempt });
 	try {
 		let auth = await getStartpageAuth(searchUrl);
-		if (!auth)
-			return {
-				error: "Anubis asking to verify you're not a bot",
-				_wafChallenge: waf(),
-			};
+		if (!auth) return { error: "Anubis asking to verify you're not a bot" };
 		wafStatus = true;
 		wafAttempt = auth.reused ? 0 : auth.attempts;
 		const fetchResults = async (cookie: string) => {
@@ -17946,19 +17930,11 @@ export const StartpageImageSearch = async function StartpageImageSearch(que: str
 		if (html.includes("anubis_challenge") && !authRetried) {
 			invalidateStartpageAuth();
 			auth = await getStartpageAuth(searchUrl);
-			if (!auth)
-				return {
-					error: "Startpage asking to verify you're not a bot",
-					_wafChallenge: waf(),
-				};
+			if (!auth) return { error: "Startpage asking to verify you're not a bot" };
 			wafAttempt = auth.reused ? 0 : auth.attempts;
 			html = await fetchResults(auth.cookie);
 		}
-		if (!html || html.includes("anubis_challenge"))
-			return {
-				error: "Startpage asking to verify you're not a bot",
-				_wafChallenge: waf(),
-			};
+		if (!html || html.includes("anubis_challenge")) return { error: "Startpage asking to verify you're not a bot" };
 
 		const raw = extractStartpageImageResults(html);
 		const items = raw.map((r: any) => ({
@@ -18552,19 +18528,24 @@ type RedditSession = {
 	jar: string;
 	token: string;
 	expires: number;
+	quotaRemaining?: number;
 };
 
 let redditSession: RedditSession | null = null;
 let redditSessionInflight: Promise<RedditSession> | null = null;
 
-const redditSessionFresh = (): boolean => !!redditSession && redditSession.expires > Date.now();
+/** Refresh the anonymous session before its Answers quota drops below this. */
+const REDDIT_MIN_QUOTA = 5;
+
+const redditSessionFresh = (): boolean => !!redditSession && redditSession.expires > Date.now() && (redditSession.quotaRemaining ?? Infinity) > REDDIT_MIN_QUOTA;
 
 const refreshRedditSession = async (): Promise<RedditSession> => {
 	if (redditSessionFresh()) return redditSession as RedditSession;
 	if (redditSessionInflight) return redditSessionInflight;
 
 	redditSessionInflight = (async () => {
-		let jar = (await refreshRedditAuth()) ?? "";
+		// Reddit Answers runs anonymously: never seed the env REDDIT_SESSION cookie here.
+		let jar = (await refreshRedditAuth(false)) ?? "";
 		if (!jar) throw new Error("Failed to get Reddit session");
 
 		const csrf = /(?:^|; )csrf_token=([^;]*)/.exec(jar)?.[1] ?? "";
@@ -18782,7 +18763,10 @@ export const redditAsk = async (prompt: string): Promise<any> => {
 				lastError = `Reddit answers failed (${res.status})`;
 				continue;
 			}
-			if (res.status === 429) return { error: "Reddit rate limit reached, try again later", isFallback: true };
+			if (res.status === 429) {
+				session.quotaRemaining = 0;
+				return { error: "Reddit rate limit reached, try again later" };
+			}
 			if (res.status !== 200) {
 				lastError = `Reddit answers failed (${res.status})`;
 				continue;
@@ -18790,6 +18774,7 @@ export const redditAsk = async (prompt: string): Promise<any> => {
 
 			const text = await res.text();
 			const { quota, value } = parseRedditSse(text);
+			if (typeof quota?.queriesRemaining === "number") session.quotaRemaining = quota.queriesRemaining;
 			const response = redditDocumentText(value?.richtext?.document);
 			if (!response) {
 				lastError = "Reddit returned an empty answer";
@@ -18830,8 +18815,8 @@ export const redditAsk = async (prompt: string): Promise<any> => {
 			};
 		}
 
-		return { error: lastError, isFallback: true };
+		return { error: lastError };
 	} catch (error) {
-		return { error: error instanceof Error ? error.message : "Reddit answers failed", isFallback: true };
+		return { error: error instanceof Error ? error.message : "Reddit answers failed" };
 	}
 };

@@ -14645,7 +14645,7 @@ const findGoogleDeferredImage = (html: string, cardHtml: string): string => {
 
 const GOOGLE_CARD_RE = /<div[^>]*\bjsname="PNoEC"[^>]*>/g;
 const GOOGLE_ATTR_RE = /(\w[\w-]*)="([^"]*)"/g;
-const GOOGLE_IMG_ENTRY_RE = /"([A-Za-z0-9_-]{10,})":\[0,/g;
+const GOOGLE_IMG_ENTRY_RE = /"([A-Za-z0-9_-]{10,})":\[(1,\[)?0,/g;
 const GOOGLE_SITE_SPAN_RE = /VYhLad[^>]*><span>([^<]*)</;
 
 const fillGoogleImageInfo = (info: GoogleImageMeta, fields: any): void => {
@@ -14677,7 +14677,8 @@ const extractGoogleImageEntries = (html: string): Array<{ key: string; thumb: st
 	GOOGLE_IMG_ENTRY_RE.lastIndex = 0;
 	let m: RegExpExecArray | null;
 	while ((m = GOOGLE_IMG_ENTRY_RE.exec(js))) {
-		const start = m.index + m[0].length - 3;
+		const wrapped = !!m[2];
+		const start = m.index + m[0].length - (wrapped ? 6 : 3);
 		let depth = 0;
 		let inStr = false;
 		let esc = false;
@@ -14697,7 +14698,9 @@ const extractGoogleImageEntries = (html: string): Array<{ key: string; thumb: st
 		}
 		if (end < 0) continue;
 		try {
-			const entry = JSON.parse(js.slice(start, end));
+			const parsed = JSON.parse(js.slice(start, end));
+			// Newer payloads wrap the entry as [1, [0, ...]]; unwrap before reading.
+			const entry = Array.isArray(parsed?.[1]) ? parsed[1] : parsed;
 			if (!Array.isArray(entry)) continue;
 			const triples = entry.filter((x: any) => Array.isArray(x) && typeof x[0] === "string" && HTTP_URL_RE.test(x[0]));
 			const thumbT = triples.find((t: any[]) => /tbn:/.test(String(t[0]))) || triples[0] || [];
@@ -14790,8 +14793,25 @@ export const parseGoogleImageItems = (html: string): any[] => {
 		});
 	};
 	const bootEntries = extractGoogleImageEntries(html);
+	const byKey = new Map<string, (typeof bootEntries)[number]>();
+	for (const e of bootEntries) byKey.set(e.key, e);
+	// Newer payloads order cards differently from entries, so pair by the
+	// jsdata key carried on the card instead of by position.
+	const cardKey = (cardHtml: string): string => {
+		let key = "";
+		for (const mm of cardHtml.matchAll(/jsdata="([^"]+)"/g)) {
+			for (const part of mm[1].split(";")) {
+				const k = part.trim();
+				if (byKey.has(k)) key = k;
+			}
+		}
+		return key;
+	};
+	let keyed = 0;
+	for (const w of wins) if (cardKey(w)) keyed++;
+	const pairedByKey = wins.length > 0 && keyed / wins.length >= 0.5;
 	let paired = false;
-	if (bootEntries.length === wins.length && wins.length > 0) {
+	if (!pairedByKey && bootEntries.length === wins.length && wins.length > 0) {
 		let agree = 0;
 		let checkable = 0;
 		for (let i = 0; i < wins.length; i++) {
@@ -14802,10 +14822,11 @@ export const parseGoogleImageItems = (html: string): any[] => {
 		}
 		paired = checkable > 0 && agree / checkable >= 0.5;
 	}
-	if (paired) {
+	if (pairedByKey || paired) {
 		for (let i = 0; i < wins.length; i++) {
 			const { imgId, alt } = imgOf(wins[i]);
-			const e = bootEntries[i];
+			const e = pairedByKey ? byKey.get(cardKey(wins[i])) : bootEntries[i];
+			if (!e) continue;
 			const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
 			const token = e.thumb.split("tbn:")[1]?.split(/&/)[0] ?? "";
 			const trackingUrl = findGoogleTrackingUrl(html, starts[i], wins[i]);
@@ -14838,8 +14859,13 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 		} catch {}
 		return "";
 	};
-	const resolveOne = async (href: string): Promise<string | null> => {
+	const resolveOne = async (item: any): Promise<string | null> => {
+		const href = item.href;
 		if (HTTP_URL_RE.test(href)) return href;
+		// Fast path: Google's <cite> already shows the final URL. Resolving the
+		// opaque /goto?url= token over the network costs a round-trip per result
+		// (~1.5s for 10) and almost always lands on the same URL.
+		if (item.citeUrl && HTTP_URL_RE.test(item.citeUrl)) return item.citeUrl;
 		if (!GOOGLE_GOTO_RE.test(href)) return null;
 		const target = `https://www.google.com${href}`;
 		try {
@@ -14874,7 +14900,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 		} catch {}
 		return null;
 	};
-	const resolved = await Promise.all(sliced.map((s) => resolveOne(s.href)));
+	const resolved = await Promise.all(sliced.map((s) => resolveOne(s)));
 	const items: any[] = [];
 	const seen = new Set<string>();
 	sliced.forEach((item, idx) => {
@@ -15020,36 +15046,34 @@ const googleWebCloakGet = async (url: string): Promise<any> => {
 };
 
 const googleWebCloakFetch = async (url: string, retryOn429 = true): Promise<{ html: string; finalUrl: string; status: number } | null> => {
-	for (let attempt = 0; attempt <= 3; attempt++) {
-		if (attempt) await new Promise((resolve) => setTimeout(resolve, 2000));
+	for (let attempt = 0; attempt < 3; attempt++) {
 		try {
 			const res: any = await googleWebCloakGet(url);
 			mergeGoogleCloakCookies(res?.cookies);
 			const status = Number(res?.statusCode ?? 0);
-			if (status === 429) {
-				if (!retryOn429 || attempt >= 3) return { html: "", finalUrl: String(res?.finalUrl ?? url), status };
-				continue;
-			}
-			if (status !== 200) return { html: "", finalUrl: String(res?.finalUrl ?? url), status };
-			return {
-				html: String(res.text ?? ""),
-				finalUrl: String(res.finalUrl ?? url),
-				status,
-			};
+			const finalUrl = String(res?.finalUrl ?? url);
+			if (status === 200) return { html: String(res.text ?? ""), finalUrl, status };
+			// 429/403: retry immediately, no backoff. Anything else is a hard answer.
+			if ((status === 429 || status === 403) && retryOn429 && attempt < 2) continue;
+			return { html: "", finalUrl, status };
 		} catch {}
 	}
 	return null;
 };
 
-// Drives the bridge once to collect challenge cookies.
-const googleWebSolve = async (url: string): Promise<any | null> => {
+// Drives the bridge once to collect challenge cookies. Web results ship in the
+// first response, so the bridge stops at `domcontentloaded`; images wait for
+// `load` because their thumbnails are deferred until the DOM renders.
+const googleWebSolve = async (url: string, imageSearch = false): Promise<any | null> => {
 	const res = await browserRequest({
 		url,
 		fetcherType: "stealthy",
 		headers: googleWebJar() ? { Cookie: googleWebJar() } : undefined,
 		googleSearch: true,
+		googleSolve: true,
+		googleImage: imageSearch,
 		extractHtml: true,
-		timeoutMs: 90000,
+		timeoutMs: 45000,
 	});
 	mergeGoogleTrustCookies(res?.cookies);
 	if (!res?.success || !res.html) {
@@ -15061,15 +15085,15 @@ const googleWebSolve = async (url: string): Promise<any | null> => {
 
 let googleWebSolveInflight: Promise<any | null> | null = null;
 
-const googleWebSolveCold = async (url: string): Promise<any | null> => {
+const googleWebSolveCold = async (url: string, imageSearch = false): Promise<any | null> => {
 	if (googleTrustIsFresh()) return null;
 	if (googleWebSolveInflight) {
 		await googleWebSolveInflight;
-		return googleTrustIsFresh() ? null : googleWebSolve(url);
+		return googleTrustIsFresh() ? null : googleWebSolve(url, imageSearch);
 	}
 	googleWebSolveInflight = (async () => {
 		try {
-			return await googleWebSolve(url);
+			return await googleWebSolve(url, imageSearch);
 		} catch {
 			return null;
 		}
@@ -15099,32 +15123,38 @@ const googleWebSearchFor = async (query: string, url: string, parse: (html: stri
 	};
 
 	try {
-		// 1. Cold jar: bridge solves, then fetch below.
-		let solved: any = googleTrustIsFresh() ? null : await googleWebSolveCold(url);
+		// A single image hit usually means an unfamiliar deferred-thumbnail layout
+		// the parser could not pair; the bridge renders it, so treat it as a miss.
+		const weak = (out: any): boolean => imageSearch && Array.isArray(out?.data) && out.data.length < 2;
 
-		// 2. Solved jar: httpcloak fetch.
-		let cloak = await googleWebCloakFetch(url, !solved?.html);
+		// 1. Fresh jar (no NID): the bridge is the only way to earn trust cookies,
+		// and its first response already carries the full results page.
+		if (!googleTrustIsFresh()) {
+			const solved = await googleWebSolveCold(url, imageSearch);
+			if (solved?.html) {
+				const out = await finish(solved.html, solved.url ?? "");
+				if (out && !weak(out)) return out;
+			}
+		}
+
+		// 2. Trusted jar: plain httpcloak fetch; every response refreshes the jar
+		// (last-write-wins) so a rotated cookie is picked up automatically.
+		const cloak = await googleWebCloakFetch(url);
 		if (cloak?.status === 200) {
 			const out = await finish(cloak.html, cloak.finalUrl);
-			if (out) return out;
+			if (out && !weak(out)) return out;
+			// 200 but SearchGuard instead of results: refresh trust against the
+			// same URL the caller asked for (a fixed URL pattern is an easy bot
+			// signal), then retry the fetch with the refreshed jar.
+			await refreshGoogleTrust(url);
+			const retry = await googleWebCloakFetch(url);
+			if (retry?.status === 200) {
+				const out2 = await finish(retry.html, retry.finalUrl);
+				if (out2) return out2;
+			}
 		}
 
-		// 3. Re-challenged: solve again, retry; else bridge payload.
-		if (!(cloak?.status === 429 && solved?.html)) {
-			solved ??= await googleWebSolve(url);
-			cloak = await googleWebCloakFetch(url, !solved?.html);
-			if (cloak?.status === 200) {
-				const out = await finish(cloak.html, cloak.finalUrl);
-				if (out) return out;
-			}
-		}
-		const html: string = solved?.html ?? "";
-		if (!html) return null;
-		return (
-			(await finish(html, solved?.url ?? "")) ?? {
-				error: "Google asking to verify you're not a bot",
-			}
-		);
+		return { error: "Google asking to verify you're not a bot" };
 	} catch (e) {
 		console.error(e);
 		return null;

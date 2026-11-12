@@ -32,25 +32,26 @@ export const mergeGoogleTrustCookies = (cookies: Record<string, string> | undefi
 
 export const googleTrustIsFresh = (): boolean => !!trust.NID;
 
-export const refreshGoogleTrust = async (): Promise<boolean> => {
+const solveTrust = async (url: string, label: string): Promise<boolean> => {
 	if (refreshInflight) return refreshInflight;
 
 	refreshInflight = (async () => {
 		try {
 			const res = await browserRequest({
-				url: "https://www.google.com/search?udm=50",
+				url,
 				fetcherType: "stealthy",
+				googleSolve: true,
 				extractHtml: false,
-				timeoutMs: 120000,
+				timeoutMs: 45000,
 			});
 			mergeGoogleTrustCookies(res?.cookies);
 			if (res?.cookies?.NID) {
 				return true;
 			}
-			if (res && !res.success) console.warn(`refreshGoogleTrust: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
+			if (res && !res.success) console.warn(`${label}: browser fetch failed: ${String(res.error ?? "unknown").slice(0, 160)}`);
 			return !!trust.NID;
 		} catch (e) {
-			console.warn("refreshGoogleTrust: bridge threw:", String(e).slice(0, 160));
+			console.warn(`${label}: bridge threw:`, String(e).slice(0, 160));
 			return !!trust.NID;
 		} finally {
 			refreshInflight = null;
@@ -58,4 +59,14 @@ export const refreshGoogleTrust = async (): Promise<boolean> => {
 	})();
 
 	return refreshInflight;
+};
+
+export const refreshGoogleTrust = async (url?: string): Promise<boolean> => solveTrust(url || "https://www.google.com/search?udm=50", "refreshGoogleTrust");
+
+// Startup warmup: solve once so the first user search goes straight to the
+// cloak path. The homepage sets NID but the cloak fingerprint still gets
+// challenged, so this must warm with a search URL.
+export const warmGoogleTrust = async (): Promise<boolean> => {
+	if (googleTrustIsFresh()) return true;
+	return refreshGoogleTrust();
 };

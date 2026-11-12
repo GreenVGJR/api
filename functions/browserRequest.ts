@@ -26,6 +26,8 @@ export interface ScraplingOptions {
 	retries?: number;
 	solveCloudflare?: boolean;
 	googleSearch?: boolean;
+	googleSolve?: boolean;
+	googleImage?: boolean;
 	waitSelector?: string;
 	waitSelectorState?: "attached" | "detached" | "visible" | "hidden";
 	waitMs?: number;
@@ -164,6 +166,8 @@ async function executeRequest(options: ScraplingOptions): Promise<any> {
 		extract_text: options.extractText || false,
 		extract_html: options.extractHtml || false,
 		google_search: options.googleSearch === true,
+		google_solve: options.googleSolve === true,
+		google_image: options.googleImage === true,
 	};
 
 	return new Promise((resolve, reject) => {

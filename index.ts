@@ -16,6 +16,7 @@ const warmupPromise = firstBoot
 	? Promise.all([
 			import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {}),
 			import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {}),
+			import("./functions/googleTrust.js").then(({ warmGoogleTrust }) => warmGoogleTrust()).catch(() => {}), // Prime Google trust cookies so the first search skips the cold solve.
 			import("./functions/request.js").then(({ warmPoToken }) => warmPoToken()).catch(() => {}), // Prime poToken cache.
 		])
 	: Promise.resolve();

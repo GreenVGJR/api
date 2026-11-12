@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+from types import SimpleNamespace
 from typing import Dict, Any
 
 
@@ -47,6 +48,70 @@ def _close_pooled_pages(session):
 				pass
 	except Exception:
 		pass
+
+
+def _google_solve_fetch(session, url, headers, timeout, extract_html, image_search=False):
+	"""Single-navigation Google solve.
+
+	Web results ship complete in the first response, so `domcontentloaded` plus
+	the raw body is enough. Image results use deferred thumbnails that only
+	exist in the rendered DOM, so those wait for `load` and read page.content().
+	Cookies are merged by the caller (last-write-wins), so nothing is cleared.
+	"""
+	if not session or not getattr(session, "context", None):
+		raise RuntimeError("stealthy session not started")
+
+	page = session.context.new_page()
+	try:
+		page.set_default_navigation_timeout(timeout)
+		page.set_default_timeout(timeout)
+		if headers:
+			page.set_extra_http_headers(headers)
+
+		wait_until = "load" if image_search else "domcontentloaded"
+		resp = None
+		status = 0
+		# 429/403 are the only statuses worth an immediate retry; 200 carries the
+		# full results and anything else is a hard answer we should not hammer.
+		for _attempt in range(3):
+			resp = page.goto(url, wait_until=wait_until, referer="https://www.google.com/")
+			status = resp.status if resp is not None else 0
+			if status == 200 or status not in (429, 403):
+				break
+
+		html = ""
+		if extract_html:
+			if image_search:
+				html = page.content()
+			else:
+				try:
+					body = resp.body() if resp is not None else b""
+					html = body.decode("utf-8", errors="ignore") if body else ""
+				except Exception:
+					html = page.content()
+		cookies = {}
+		try:
+			for cookie in session.context.cookies():
+				if cookie.get("name"):
+					cookies[cookie["name"]] = cookie.get("value", "")
+		except Exception:
+			pass
+
+		# Shape matches scrapling's Response so the shared extraction below works.
+		return SimpleNamespace(
+			status=status,
+			url=page.url,
+			headers={},
+			cookies=cookies,
+			body=html.encode("utf-8") if html else b"",
+			success=status == 200,
+		)
+	finally:
+		try:
+			page.close()
+		except Exception:
+			pass
+
 
 def main():
     stealthy_session = None
@@ -137,6 +202,8 @@ def main():
             retries = input_data.get("retries", 3)
             solve_cloudflare = input_data.get("solve_cloudflare", True)
             google_search = input_data.get("google_search", False)
+            google_solve = input_data.get("google_solve", False)
+            google_image = input_data.get("google_image", False)
             wait_selector = input_data.get("wait_selector")
             wait_selector_state = input_data.get("wait_selector_state")
             wait_ms = input_data.get("wait_ms")
@@ -214,7 +281,10 @@ def main():
                             stealthy_headless = headless
                             stealthy_session = StealthySession(headless=headless, cookies=cookies, retries=SESSION_RETRIES, extra_flags=stealthy_flags)
                             stealthy_session.start()
-                        response = stealthy_session.fetch(url, **kwargs)
+                        if google_solve:
+                            response = _google_solve_fetch(stealthy_session, url, headers, timeout, extract_html, google_image)
+                        else:
+                            response = stealthy_session.fetch(url, **kwargs)
                         active_session = stealthy_session
 
                 # Extract values using selectors
@@ -277,7 +347,7 @@ def main():
 
                 result = {
                     "request_id": request_id,
-                    "success": True,
+                    "success": getattr(response, "success", True),
                     "status": response.status,
                     "url": response.url,
                     "headers": headers_dict,

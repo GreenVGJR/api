@@ -3478,6 +3478,24 @@ const formatYoutubePublishDate = (value: any) => {
 	});
 };
 
+const formatYoutubeDuration = (value: any): string | null => {
+	if (value === null || value === undefined || value === "") return null;
+	let total = 0;
+	if (typeof value === "string" && /^P/i.test(value)) {
+		const m = /^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i.exec(value);
+		if (!m) return null;
+		total = Number(m[1] || 0) * 86400 + Number(m[2] || 0) * 3600 + Number(m[3] || 0) * 60 + Number(m[4] || 0);
+	} else {
+		total = Number(value);
+	}
+	if (!Number.isFinite(total) || total <= 0) return null;
+	const s = Math.floor(total);
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const sec = s % 60;
+	return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+};
+
 const buildYoutubeOwnerUrls = (paths: any): string[] | null => {
 	const list = (Array.isArray(paths) ? paths : [paths]).filter((p) => typeof p === "string" && p);
 	if (!list.length) return null;
@@ -3519,6 +3537,8 @@ const buildYoutubeData = (challenge: any, source: any) => ({
 		title: source.title || null,
 		description: source.description || null,
 		releaseDate: source.releaseDate || null,
+		duration: source.duration ?? null,
+		isLive: source.isLive === true,
 		viewCount: String(source.viewCount || 0),
 		owners: {
 			name: source.ownerName || null,
@@ -3554,6 +3574,7 @@ const youtubeMetaFromHtml = (html: string) => {
 		title: meta("og:title") || meta("title"),
 		description: meta("og:description") || meta("description"),
 		date: meta("datepublished") || meta("og:video:release_date"),
+		duration: meta("og:video:duration") || meta("duration"),
 		viewCount: meta("interactioncount"),
 		tags,
 	};
@@ -3596,6 +3617,8 @@ export const buildYoutubePartialData = (videoId: string, playerResponse: any, in
 			title,
 			description,
 			releaseDate: formatYoutubePublishDate(microformat.publishDate || microformat.uploadDate || meta.date) || primary.dateText?.simpleText || null,
+			duration: formatYoutubeDuration(details.lengthSeconds || microformat.lengthSeconds || meta.duration),
+			isLive: !!details.isLiveContent || !!microformat.liveBroadcastDetails?.isLiveNow,
 			viewCount,
 			ownerName,
 			ownerUrl: buildYoutubeOwnerUrls([ownerUrl]),
@@ -3720,6 +3743,8 @@ export const infoYoutube = async function infoYoutube(que: string, options?: { a
 			title: details.title || null,
 			description: details.shortDescription || null,
 			releaseDate: formatYoutubePublishDate(microformat.publishDate || microformat.uploadDate),
+			duration: formatYoutubeDuration(details.lengthSeconds || microformat.lengthSeconds),
+			isLive,
 			viewCount: details.viewCount || 0,
 			ownerName: ownerRenderer.title?.simpleText || details.author || null,
 			ownerUrl: buildYoutubeOwnerUrls([ownerRenderer.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || ownerRenderer.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || null]),

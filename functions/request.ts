@@ -3534,6 +3534,80 @@ const buildYoutubeData = (challenge: any, source: any) => ({
 	},
 });
 
+const YT_BOT_CHECK_RE = /sign in to confirm you(?:'|&#39;|’)?re not a bot/i;
+
+const youtubeMetaFromHtml = (html: string) => {
+	const map = new Map<string, string>();
+	const tags: string[] = [];
+	for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+		const tag = match[0];
+		const key = /\b(?:property|name|itemprop)=["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase();
+		const content = /\bcontent=["']([^"']*)["']/i.exec(tag)?.[1];
+		if (!key || content === undefined) continue;
+		const value = decodeHTML(content).replace(WS_COLLAPSE_RE, " ").trim();
+		if (!value) continue;
+		if (key === "og:video:tag") tags.push(value);
+		else if (!map.has(key)) map.set(key, value);
+	}
+	const meta = (key: string): string | null => map.get(key) || null;
+	return {
+		title: meta("og:title") || meta("title"),
+		description: meta("og:description") || meta("description"),
+		date: meta("datepublished") || meta("og:video:release_date"),
+		viewCount: meta("interactioncount"),
+		tags,
+	};
+};
+
+const youtubeText = (node: any): string | null => {
+	if (!node) return null;
+	if (typeof node === "string") return node;
+	if (typeof node.simpleText === "string" && node.simpleText) return node.simpleText;
+	if (Array.isArray(node.runs)) {
+		const text = node.runs.map((r: any) => r?.text || "").join("");
+		if (text) return text;
+	}
+	return null;
+};
+
+export const buildYoutubePartialData = (videoId: string, playerResponse: any, initialData: any, html: string) => {
+	const details = playerResponse?.videoDetails || {};
+	const microformat = playerResponse?.microformat?.playerMicroformatRenderer || {};
+	const primary = collectYoutubeRenderers(initialData, "videoPrimaryInfoRenderer")[0] || {};
+	const secondary = collectYoutubeRenderers(initialData, "videoSecondaryInfoRenderer")[0] || {};
+	const owner = collectYoutubeRenderers(initialData, "videoOwnerRenderer")[0] || {};
+	const meta = youtubeMetaFromHtml(html);
+
+	const id = details.videoId || microformat.videoId || videoId;
+	const title = details.title || youtubeText(microformat.title) || youtubeText(primary.title) || meta.title;
+	if (!id || !title) return null;
+
+	const viewRaw = details.viewCount || microformat.viewCount || primary.viewCount?.videoViewCountRenderer?.originalViewCount || primary.viewCount?.videoViewCountRenderer?.viewCount?.simpleText || meta.viewCount || 0;
+	const viewCount = Number(String(viewRaw).replace(/[^\d]/g, "")) || 0;
+
+	const description = details.shortDescription || youtubeText(microformat.description) || secondary.attributedDescription?.content || youtubeText(secondary.description) || meta.description || null;
+
+	const ownerName = microformat.ownerChannelName || youtubeText(owner.title) || details.author || null;
+	const ownerUrl = owner.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || owner.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || microformat.ownerProfileUrl || null;
+
+	return {
+		...buildYoutubeData(null, {
+			videoId: id,
+			title,
+			description,
+			releaseDate: formatYoutubePublishDate(microformat.publishDate || microformat.uploadDate || meta.date) || primary.dateText?.simpleText || null,
+			viewCount,
+			ownerName,
+			ownerUrl: buildYoutubeOwnerUrls([ownerUrl]),
+			ownerAvatars: (owner.thumbnail?.thumbnails || []).map((t: any) => t?.url?.replace(/=s\d+.*/, "=s0")).filter(Boolean),
+			keywords: details.keywords || meta.tags || [],
+			feeds: buildYoutubeFeeds(initialData),
+			captions: [],
+		}),
+		_partial: true,
+	};
+};
+
 const normalizeYoutubeCaptions = (tracks: any[], poToken: string) =>
 	tracks
 		.filter((track: any) => track?.baseUrl || track?.base_url)
@@ -3573,10 +3647,13 @@ async function getYoutubeLiveCaptions(hlsUrl: string | null | undefined) {
 	}
 }
 
-export const infoYoutube = async function infoYoutube(que: string) {
+export const infoYoutube = async function infoYoutube(que: string, options?: { allowPartial?: boolean }) {
 	let videoId = que.match(/(?:[?&]v(?:i)?=|(?:^|\/)(?:youtu\.be|v|vi|u\/\w|embed|shorts|watch|live|source)\/)([A-Za-z0-9_-]{11})(?=$|[?#&/])/)?.[1];
 	videoId = videoId || undefined;
 	if (!videoId) return null;
+	// Default on: a gated page still carries usable metadata, and callers can
+	// opt out with { allowPartial: false } when they need the raw error.
+	const allowPartial = options?.allowPartial !== false;
 
 	try {
 		// Prime poToken cache so content token binds to this session's visitor data.
@@ -3594,28 +3671,36 @@ export const infoYoutube = async function infoYoutube(que: string) {
 			async (response) => {
 				const res: any = await response.text();
 				const ytInitialPlayerResponse = extractYoutubePageJson(res, "ytInitialPlayerResponse");
-				if (!ytInitialPlayerResponse || typeof ytInitialPlayerResponse !== "object") {
-					throw new Error("YouTube returned no player response");
+				const ytInitialData = extractYoutubePageJson(res, "ytInitialData");
+				// A gated page can omit the player response entirely; ytInitialData
+				// and <meta> tags still carry metadata, so only fail when both miss.
+				if (!ytInitialPlayerResponse && !ytInitialData) {
+					throw new Error("YouTube returned no page data");
 				}
-				return {
-					ytInitialPlayerResponse,
-					ytInitialData: extractYoutubePageJson(res, "ytInitialData"),
-				};
+				return { ytInitialPlayerResponse, ytInitialData, html: res };
 			},
 			"infoYoutube",
 		);
 		if (!page.ok || !page.data) return { error: "Rate-limited" };
 
-		const { ytInitialPlayerResponse, ytInitialData } = page.data;
+		const { ytInitialPlayerResponse, ytInitialData, html: pageHtml } = page.data;
 
-		const playability = ytInitialPlayerResponse.playabilityStatus || {};
+		const playability = ytInitialPlayerResponse?.playabilityStatus || {};
 		if (playability.status && playability.status !== "OK") {
-			return {
-				error: playability.reason || playability.subreason || playability.status,
-			};
+			const reason = playability.reason || playability.subreason || playability.status;
+			if (allowPartial) {
+				const partial = buildYoutubePartialData(videoId, ytInitialPlayerResponse, ytInitialData, pageHtml);
+				if (partial?.data?.title) return partial;
+			}
+			return { error: reason };
 		}
-		if (!ytInitialPlayerResponse.videoDetails?.videoId) {
-			return { error: "YouTube returned an invalid info response" };
+		if (!ytInitialPlayerResponse?.videoDetails?.videoId) {
+			const reason = YT_BOT_CHECK_RE.test(pageHtml) ? "Sign in to confirm you're not a bot" : "YouTube returned an invalid info response";
+			if (allowPartial) {
+				const partial = buildYoutubePartialData(videoId, ytInitialPlayerResponse, ytInitialData, pageHtml);
+				if (partial?.data?.title) return partial;
+			}
+			return { error: reason };
 		}
 
 		const poToken = await getYoutubeCaptionPoToken(videoId);
@@ -7272,6 +7357,8 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 	}
 };
 
+// Have TLS Fingerprint, require http2 or above
+// Recommended using Firefox UA as it's get less bot signal
 export const Bandcamp = async function Bandcamp(que: string) {
 	if (!que) return null;
 

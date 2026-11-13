@@ -113,7 +113,7 @@ function isSoundCloudTrack(track: any): boolean {
 async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
 	try {
 		if (url.includes("youtube.com") || url.includes("youtu.be")) {
-			const info: any = await infoYoutube(url);
+			const info: any = await infoYoutube(url, { allowPartial: true });
 			if (info?.data?.title) {
 				return {
 					url,

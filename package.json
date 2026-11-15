@@ -8,7 +8,7 @@
 		"hono": "^4.13.18",
 		"httpcloak": "1.7.2",
 		"jsdom": "^31.0.1",
-		"lavalink-client": "^2.11.0",
+		"lavalink-client": "^2.11.2",
 		"rusteerio": "^2.0.0",
 		"sharp": "^0.35.5",
 		"tslib": "^2.9.1",

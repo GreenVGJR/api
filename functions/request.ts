@@ -7598,7 +7598,7 @@ export const redditSubreddit = async function redditSubreddit(que: string, refre
 
 		const name = que.toLowerCase()?.split(" ")?.[0];
 
-		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&feedLength=28&distance=25&render-mode=partial`, { headers });
+		const req = await fetch(`https://www.reddit.com/svc/shreddit/community-more-posts/best/?t=DAY&name=${encodeURIComponent(name)}&render-mode=partial`, { headers });
 		redditCookies = syncRedditCookies(req, redditCookies);
 
 		if (req.status === 451) {

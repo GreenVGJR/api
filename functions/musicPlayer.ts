@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, ChannelType, PermissionsBitField, VoiceChannel } from "discord.js";
 import { LavalinkManager, Player as LavalinkPlayer, Track } from "lavalink-client";
 import { stream } from "hono/streaming";
+import zlib from "zlib";
 
 import config from "../config.json" with { type: "json" };
 import { generateChallenge, verifyChallenge, verifyChallengeHash, verifyMcToken, ipToNumber } from "./musicChallenges.ts";
@@ -178,7 +179,7 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 					c: parts,
 					d: challengeData.difficulty,
 				});
-				const gzipData = Bun.deflateSync(Buffer.from(payload));
+				const gzipData = zlib.deflateSync(Buffer.from(payload));
 				return stream(c, async (s: any) => {
 					await s.write(gzipData);
 				});

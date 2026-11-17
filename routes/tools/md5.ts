@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import crypto from "crypto";
 const app = new Hono();
 
 app.get("/md5", async (c) => {
@@ -10,7 +9,7 @@ app.get("/md5", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 	return c.json({
-		value: crypto.createHash("md5").update(query).digest("hex"),
+		value: new Bun.CryptoHasher("md5").update(query).digest("hex"),
 	});
 });
 

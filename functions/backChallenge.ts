@@ -61,7 +61,7 @@ export function isBackChallengeProofValid(value: string, nonce: string): boolean
 export function cookieChallengeIsValid(c: Context, cookieValue: any) {
 	if (!cookieValue) return false;
 	const ua = c.req.header("user-agent") || "";
-	const key = crypto.createHash("sha512").update(ua).digest();
+	const key = new Bun.CryptoHasher("sha512").update(ua).digest();
 	let decoded: string;
 	try {
 		const raw = Buffer.from(cookieValue, "base64url");

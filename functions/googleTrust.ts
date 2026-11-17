@@ -61,7 +61,7 @@ const solveTrust = async (url: string, label: string): Promise<boolean> => {
 	return refreshInflight;
 };
 
-export const refreshGoogleTrust = async (url?: string): Promise<boolean> => solveTrust(url || "https://www.google.com/search?udm=50", "refreshGoogleTrust");
+export const refreshGoogleTrust = async (url?: string): Promise<boolean> => solveTrust(url || "https://www.google.com/search?q=anime&udm=28", "refreshGoogleTrust");
 
 // Startup warmup: solve once so the first user search goes straight to the
 // cloak path. The homepage sets NID but the cloak fingerprint still gets

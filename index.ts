@@ -12,13 +12,48 @@ if (firstBoot) {
 
 const bootAt = Date.now();
 const appPromise = import("./app.js");
+// Heavy warmups stay off the app-ready path: appPromise drives readiness while these trickle in.
 const warmupPromise = firstBoot
 	? Promise.all([
-			import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {}),
-			import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {}),
-			import("./functions/googleTrust.js").then(({ warmGoogleTrust }) => warmGoogleTrust()).catch(() => {}), // Prime Google trust cookies so the first search skips the cold solve.
-			import("./functions/request.js").then(({ warmPoToken }) => warmPoToken()).catch(() => {}), // Prime poToken cache.
-		])
+			// BotGuard needs jsdom + a JS interpreter + network calls. Run it in a worker
+			// so the main thread never blocks on the mint; request.ts adopts the token
+			// from globalThis, and its lazy single-flight mint remains the fallback.
+			new Promise<void>((resolve) => {
+				const bgWorker = new Worker(new URL("./functions/botguardWorker.ts", import.meta.url));
+				const finish = () => {
+					clearTimeout(bgTimer);
+					bgWorker.terminate();
+					resolve();
+				};
+				const bgTimer = setTimeout(() => {
+					console.warn("[Botguard] worker warmup timed out");
+					finish();
+				}, 120_000);
+				bgWorker.onmessage = (e) => {
+					const data = e.data as { ok?: boolean; token?: { po_token: string; visitor_data: string }; error?: string };
+					if (data?.ok && data.token?.po_token) {
+						g.__vgjr_po_token = data.token;
+						console.log("[Botguard] Initialized in worker");
+					} else {
+						console.warn("[Botguard] worker warmup failed:", data?.error ?? "unknown");
+					}
+					finish();
+				};
+				bgWorker.onerror = (e) => {
+					console.warn("[Botguard] worker error:", e.message);
+					finish();
+				};
+			}),
+
+			// Skip the ~1s musicPlayer import entirely when no bot is configured — music routes lazy-load it on demand.
+			(process.env.DISCORD_TOKENS || "").trim() ? import("./functions/musicPlayer.js").then(({ autoInit }) => autoInit()).catch(() => {}) : Promise.resolve(),
+		]).then(async () => {
+			// Browser tasks stay sequential: both go through the single serialized
+			// browserRequest queue, so starting them together buys nothing.
+			await import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {});
+			// Prime Google trust cookies so the first search skips the cold solve.
+			await import("./functions/googleTrust.js").then(({ warmGoogleTrust }) => warmGoogleTrust()).catch(() => {});
+		})
 	: Promise.resolve();
 
 appPromise.then(() => console.log(`✅ App ready in ${Date.now() - bootAt}ms`)).catch((e) => console.error("❌ App failed to load:", e));
@@ -29,26 +64,6 @@ if (firstBoot) {
 	console.log(`🏠 Local:    http://localhost:${port}/playground`);
 	console.log(`App is loading, please wait...`);
 	g.__vgjr_refresh_count = 0;
-
-	if (!g.__vgjr_shutdown_handlers) {
-		g.__vgjr_shutdown_handlers = true;
-		const shutdown = async () => {
-			const { destroyAllPlayers } = await import("./functions/musicPlayer.js").catch(() => ({ destroyAllPlayers: async () => {} }));
-			await destroyAllPlayers().catch(() => {});
-		};
-		process.on("SIGINT", async () => {
-			console.log("\n[SIGINT] Shutting down music players...");
-			await shutdown();
-			await new Promise((r) => setTimeout(r, 500));
-			process.exit(0);
-		});
-		process.on("SIGTERM", async () => {
-			console.log("\n[SIGTERM] Shutting down music players...");
-			await shutdown();
-			await new Promise((r) => setTimeout(r, 500));
-			process.exit(0);
-		});
-	}
 } else {
 	console.log("🔄 Routes hot-reloaded!");
 }

@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import zlib from "zlib";
 
 function getMdKey(): string {
 	const key = process.env.MD_KEY;
@@ -19,11 +18,11 @@ export function ipToNumber(ip: string): number | string {
 }
 
 function hashInput(input: string): string {
-	return crypto.createHash("sha256").update(input).digest("base64url");
+	return new Bun.CryptoHasher("sha256").update(input).digest("base64url");
 }
 
 function md5(input: string): string {
-	return crypto.createHash("md5").update(input).digest("hex");
+	return new Bun.CryptoHasher("md5").update(input).digest("hex");
 }
 
 function formatChallengeHash(hash: string): string {
@@ -50,9 +49,9 @@ export function verifyChallengeHash(solution: string | undefined | null, challen
 export function mcTokenForCodes(codes: string | undefined | null): string | null {
 	if (!codes) return null;
 	try {
-		const gz = zlib.gzipSync(Buffer.from(codes, "utf8"));
+		const gz = Bun.gzipSync(Buffer.from(codes, "utf8"));
 		if (gz.length < 16) return null;
-		return gz.subarray(gz.length - 16).toString("base64url");
+		return Buffer.from(gz.subarray(gz.length - 16)).toString("base64url");
 	} catch {
 		return null;
 	}
@@ -69,7 +68,7 @@ export function verifyMcToken(codes: string | undefined | null, mcToken: string 
 }
 
 function encryptPayload(data: object, key: string): string {
-	const cipherKey = crypto.createHash("sha256").update(key).digest();
+	const cipherKey = new Bun.CryptoHasher("sha256").update(key).digest();
 	const iv = crypto.randomBytes(12);
 	const cipher = crypto.createCipheriv("aes-256-gcm", cipherKey, iv);
 	const encrypted = Buffer.concat([cipher.update(JSON.stringify(data), "utf8"), cipher.final()]);
@@ -79,7 +78,7 @@ function encryptPayload(data: object, key: string): string {
 
 function decryptPayload(payload: string, key: string): object | null {
 	try {
-		const cipherKey = crypto.createHash("sha256").update(key).digest();
+		const cipherKey = new Bun.CryptoHasher("sha256").update(key).digest();
 		const raw = Buffer.from(payload, "base64url");
 		if (raw.length < 28) return null;
 		const iv = raw.subarray(0, 12);
@@ -150,7 +149,7 @@ export function verifyChallenge(solution: string | undefined | null, ip: string 
 		if (!magic.equals(CHALLENGE_MAGIC)) return false;
 
 		const hashInputStr = challengeB64 + nonceStr;
-		const hash = crypto.createHash("sha512").update(hashInputStr).digest();
+		const hash = new Bun.CryptoHasher("sha512").update(hashInputStr).digest();
 
 		let zeroBits = 0;
 		for (const byte of hash) {

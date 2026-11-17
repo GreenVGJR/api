@@ -13,7 +13,7 @@ import { encrypt as webGnarlyEncrypt } from "./tiktok_signature/web_gnarly.mjs";
 // @ts-expect-error no types
 import { encrypt as webDynosaurEncrypt } from "./tiktok_signature/web_dynosaur.mjs";
 
-import { ProtoUtils } from "youtubei.js";
+import { encodeVisitorData, decodeVisitorData } from "./youtubeProto.js";
 import { getChallenge, BotGuardClient } from "bgutils-js/botguard";
 import { createColdStartToken, WebPoMinter } from "bgutils-js/webpo";
 import { decodeHTML } from "entities";
@@ -89,7 +89,7 @@ async function ensureBotGuardDom() {
 function getFallbackPoToken() {
 	const id = Math.random().toString(36).substring(2, 13);
 	const ts = Math.floor(Date.now() / 1000);
-	const visitorData = ProtoUtils.encodeVisitorData(id, ts);
+	const visitorData = encodeVisitorData(id, ts);
 	return {
 		po_token: createColdStartToken(id),
 		visitor_data: visitorData,
@@ -224,6 +224,13 @@ async function getYoutubeCaptionPoToken(videoId: string) {
 
 export async function getPoToken() {
 	if (poTokenCache) return poTokenCache;
+	// A startup worker may have pre-minted a token and stashed it here. Adopt it
+	// so the main thread never has to run the heavy BotGuard/jsdom path itself.
+	const shared = (globalThis as any).__vgjr_po_token as { po_token: string; visitor_data: string } | null | undefined;
+	if (shared?.po_token) {
+		poTokenCache = shared;
+		return poTokenCache;
+	}
 	if (!poTokenInFlight) {
 		poTokenInFlight = (async () => {
 			try {
@@ -284,7 +291,7 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 	let decodedVisitorData: any = null;
 	if (poTokenCache?.visitor_data) {
 		try {
-			decodedVisitorData = ProtoUtils.decodeVisitorData(poTokenCache.visitor_data);
+			decodedVisitorData = decodeVisitorData(poTokenCache.visitor_data);
 		} catch {}
 	}
 
@@ -3045,7 +3052,7 @@ export function Number_random(min: number, max: number) {
 	return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const CONVO_KEY = crypto.createHash("sha256").update("conversation").digest();
+const CONVO_KEY = new Bun.CryptoHasher("sha256").update("conversation").digest();
 const GEMINI_RETRY_COOLDOWN_MS = 1000;
 
 function encryptConvo(data: string): string {
@@ -5304,7 +5311,7 @@ export const BilibiliGlobal = async function BilibiliGlobal(que: string) {
 			.sort(([a], [b]) => a.localeCompare(b))
 			.map(([key, value]) => `${key}=${value}`)
 			.join("&");
-		const w_rid = crypto.createHash("md5").update(`${signedPayload}XgB5zU5l`).digest("hex");
+		const w_rid = new Bun.CryptoHasher("md5").update(`${signedPayload}XgB5zU5l`).digest("hex");
 		const params = new URLSearchParams({ ...baseParams, w_rid });
 
 		const per = await fetch(`https://api.bilibili.com/x/web-interface/wbi/search/all/v2?${params.toString()}`, {
@@ -7430,7 +7437,7 @@ export const Capcut = async function Capcut(que: string, limit_number: number = 
 		const croppedHost = linkhost.slice(-7);
 
 		const signStr = `9e2c|${croppedHost}|7|5.8.0|${time}||11ac`;
-		const sign = crypto.createHash("md5").update(signStr).digest("hex");
+		const sign = new Bun.CryptoHasher("md5").update(signStr).digest("hex");
 
 		const body = {
 			sdk_version: "100.0.0",
@@ -18506,7 +18513,7 @@ async function duckChallenge(): Promise<string> {
 		const solved = await win.eval(script);
 		if (!solved || !Array.isArray(solved.client_hashes)) throw new Error(DUCK_FAIL);
 
-		const hashes = solved.client_hashes.map((value: unknown) => crypto.createHash("sha256").update(String(value), "utf8").digest("base64"));
+		const hashes = solved.client_hashes.map((value: unknown) => new Bun.CryptoHasher("sha256").update(String(value), "utf8").digest("base64"));
 		const payload = {
 			...solved,
 			client_hashes: hashes,

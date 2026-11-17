@@ -7,7 +7,6 @@ import { sign, verify } from "hono/jwt";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import zlib from "zlib";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/telemetry.js";
@@ -518,9 +517,9 @@ async function verifyVfHeader(c: Context): Promise<boolean> {
 	}
 }
 
-function encodeBackChallengePayload(payload: Buffer, userAgent: string, jwtToken: string): string {
-	const userAgentKey = crypto.createHash("sha512").update(userAgent).digest();
-	const jwtKey = crypto.createHash("sha512").update(jwtToken).digest();
+function encodeBackChallengePayload(payload: Uint8Array, userAgent: string, jwtToken: string): string {
+	const userAgentKey = new Bun.CryptoHasher("sha512").update(userAgent).digest();
+	const jwtKey = new Bun.CryptoHasher("sha512").update(jwtToken).digest();
 	const result = Buffer.alloc(payload.length);
 	for (let i = 0; i < payload.length; i++) {
 		result[i] = payload[i] ^ userAgentKey[i % userAgentKey.length] ^ jwtKey[i % jwtKey.length];
@@ -543,7 +542,7 @@ async function getBackChallengeHtml(challengeValue: string, url: URL, userAgent:
 
 	const valueArray = (challengeValue.match(/.{2}/g) || []).map((chunk) => btoa("\u0000" + chunk));
 	const numericStr = stringToNumeric(JSON.stringify(valueArray));
-	const gzipBuffer = zlib.gzipSync(Buffer.from(numericStr));
+	const gzipBuffer = Bun.gzipSync(Buffer.from(numericStr));
 	const jwtToken = await createBackChallengeJwt(randomMaxAge);
 	const encodedPayload = encodeBackChallengePayload(gzipBuffer, userAgent, jwtToken);
 	const canvasParams = generateCanvasParams();
@@ -767,7 +766,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 
 		return stream(c, async (s) => {
 			await s.write("");
-			await s.write(zlib.gzipSync(rendered));
+			await s.write(Bun.gzipSync(rendered));
 		});
 	}
 
@@ -778,7 +777,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 
 	c.header("Refresh", `0; url=${c.req.path}?fm=${PLAYGROUND_CHALLENGE}&l=1`);
 	c.status(200);
-	return c.body(zlib.gzipSync(challengeHtml));
+	return c.body(Bun.gzipSync(challengeHtml));
 });
 
 ["/amc/terms", "/amc/privacy"].forEach((route) => {
@@ -790,7 +789,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 		return stream(c, async (s) => {
 			await s.write(""); // Initial flush
 
-			await s.write(zlib.gzipSync(amcTemplate));
+			await s.write(Bun.gzipSync(amcTemplate));
 		});
 	});
 });

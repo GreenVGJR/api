@@ -52,7 +52,7 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 		if (!Number.isFinite(t)) return false;
 		if (Math.abs(Date.now() - t) > 5 * 60 * 1000) return false;
 		const url = new URL(c.req.url);
-		const hmac = (msg: string) => crypto.createHmac("sha256", String(autoGenBuild)).update(msg, "utf8").digest("hex");
+		const hmac = (msg: string) => new Bun.CryptoHasher("sha256", String(autoGenBuild)).update(msg, "utf8").digest("hex");
 		const matches = (msg: string) => {
 			const a = Buffer.from(hmac(msg), "utf8");
 			const b = Buffer.from(sig.toLowerCase(), "utf8");
@@ -74,7 +74,7 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 const aiImageKey = (c: Context): string => {
 	const prompt = c.req.query("prompt") || "";
 	const pathname = new URL(c.req.url).pathname;
-	return crypto.createHash("md5").update(`${prompt}|${pathname}`, "utf8").digest("hex");
+	return new Bun.CryptoHasher("md5").update(`${prompt}|${pathname}`, "utf8").digest("hex");
 };
 
 export const aiImageHandshake = async (c: Context): Promise<Response | null> => {

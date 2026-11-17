@@ -5,22 +5,20 @@
 		"discord.js": "^14.28.1",
 		"emojibase-data": "^18.0.0",
 		"entities": "^9.0.0",
-		"hono": "^4.13.18",
+		"hono": "^4.13.19",
 		"httpcloak": "1.7.2",
 		"jsdom": "^31.0.1",
 		"lavalink-client": "^2.11.2",
 		"rusteerio": "^2.0.0",
 		"sharp": "^0.35.5",
-		"tslib": "^2.9.1",
-		"x-client-transaction-id": "^0.3.3",
-		"youtubei.js": "^18.3.0"
+		"x-client-transaction-id": "^0.3.3"
 	},
 	"scripts": {
+		"tsc": "bun check",
 		"pm2-check": "command -v pm2 >/dev/null 2>&1 || npm install -g pm2",
-		"start-t": "bun --hot --experimental-http2-fetch --tls-max-v1.3 .",
-		"start": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun --hot --experimental-http2-fetch --tls-max-v1.3 .\" --name api -i 1 && pm2 save --force",
+		"start-t": "bun --hot --experimental-http2-fetch --tls-max-v1.3 --dns-result-order=ipv6first .",
+		"start": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun --hot --experimental-http2-fetch --tls-max-v1.3 --dns-result-order=ipv6first .\" --name api -i 1 && pm2 save --force",
 		"start-4": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun --hot --experimental-http2-fetch --tls-max-v1.3 --dns-result-order=ipv4first .\" --name api -i 1 && pm2 save --force",
-		"start-6": "npm run pm2-check && pm2 delete api 2>/dev/null; pm2 start \"bun --hot --experimental-http2-fetch --tls-max-v1.3 --dns-result-order=ipv6first .\" --name api -i 1 && pm2 save --force",
 		"stop": "npm run pm2-check && pm2 delete api 2>/dev/null && pm2 save --force",
 		"gen": "bun gen-routes.ts",
 		"prettier": "bun fmt --print-width 10000 --use-tabs",
@@ -33,7 +31,6 @@
 	"devDependencies": {
 		"@types/bun": "^1.4.4",
 		"@types/node": "^26.6.6",
-		"tsx": "^4.23.15",
 		"typescript": "^7.0.2"
 	}
 }

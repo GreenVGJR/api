@@ -3,12 +3,15 @@ import vm from "node:vm";
 import os from "node:os";
 import { Worker } from "node:worker_threads";
 import { Buffer } from "buffer";
-import { JSDOM } from "jsdom";
+import { createRequire } from "node:module";
 import { post as httpcloakPost, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 import { BotGuardClient, getChallenge } from "bgutils-js/botguard";
 import { commonHeaders, userAgent_mobile } from "./request.js";
-import { ClientTransaction } from "x-client-transaction-id";
 import { load as rusteerioLoad } from "rusteerio";
+
+const requireModule = createRequire(import.meta.url);
+let JSDOMCtor: any;
+const getJSDOM = () => (JSDOMCtor ??= requireModule("jsdom").JSDOM);
 
 export let twitterDocument: any = null;
 export let twitterTransaction: any = null;
@@ -150,7 +153,7 @@ export const spotifyKey = async function spotifyKey(): Promise<string | undefine
 		const counter = Math.floor(st / 30);
 		const cb = Buffer.alloc(8);
 		cb.writeBigUInt64BE(BigInt(counter));
-		const h = crypto.createHmac("sha1", key).update(cb).digest();
+		const h = Buffer.from(new Bun.CryptoHasher("sha1", key).update(cb).digest());
 		const bin = h.readUInt32BE((h[h.length - 1] ?? 0) & 0xf) & 0x7fffffff;
 		return String(bin % 1000000).padStart(6, "0");
 	};
@@ -264,7 +267,7 @@ export const mackOauth = async function mackOauth(method: string, url: string, a
 	const paramString = buildParamString(params);
 	const signatureBase = `${method.toUpperCase()}&${strictEncodeURIComponent(url)}&${strictEncodeURIComponent(paramString)}`;
 	const signingKey = `${strictEncodeURIComponent(CONSUMER_SECRET_MACK)}&`;
-	const signature = crypto.createHmac("sha1", signingKey).update(signatureBase).digest("base64");
+	const signature = new Bun.CryptoHasher("sha1", signingKey).update(signatureBase).digest("base64");
 
 	return { signature, params };
 };
@@ -443,6 +446,7 @@ export const twitterKey = async function twitterKey(typeName: string) {
 			documentElement: { outerHTML: html },
 		};
 
+		const { ClientTransaction } = await import("x-client-transaction-id");
 		twitterTransaction = new ClientTransaction(twitterDocument);
 		await twitterTransaction.initialize();
 
@@ -486,6 +490,7 @@ export const refreshRedditAuth = async (useSessionCookie: boolean = true): Promi
 							...commonHeaders,
 							...(jar.size ? { Cookie: jarStr() } : {}),
 							Referer: "https://www.google.com/",
+							Dnt: "1",
 						},
 						redirect: "manual",
 					});
@@ -1201,7 +1206,7 @@ class yly_4wq {
 		} else {
 			let doc = null;
 			try {
-				doc = new JSDOM("<!DOCTYPE html>", { url: abs }).window.document;
+				doc = new (getJSDOM())("<!DOCTYPE html>", { url: abs }).window.document;
 			} catch {}
 			const fc = lpg_2uz(abs, doc, (this as any)._sb);
 			fc.location = { href: abs };
@@ -1338,7 +1343,7 @@ async function egl_1yt(): Promise<tdw_9uf | null> {
 	});
 	const interpUrl: string | undefined = ch?.interpreterUrl?.privateDoNotAccessOrElseTrustedResourceUrlWrappedValue;
 	if (!ch?.program || !ch?.globalName || !interpUrl) return null;
-	const key: string = ch?.interpreterHash ?? crypto.createHash("sha256").update(ch.program).digest("hex");
+	const key: string = ch?.interpreterHash ?? new Bun.CryptoHasher("sha256").update(ch.program).digest("hex");
 	if (nfr_4qx && nfr_4qx.key === key && nfr_4qx.expire > Date.now()) return nfr_4qx;
 	const progRes = await fetch(`https:${interpUrl}`, { headers: commonHeaders });
 	if (!progRes.ok) return null;
@@ -1372,7 +1377,7 @@ export async function bat_2uw(que: string, gTa: string, cid?: string): Promise<s
 	try {
 		const st = await pmp_7as();
 		if (!st) return null;
-		const qh = crypto.createHash("sha256").update(`${que}${gTa}`).digest("hex");
+		const qh = new Bun.CryptoHasher("sha256").update(`${que}${gTa}`).digest("hex");
 		const fTa: string = await st.bg.snapshot({ contentBinding: { qh, cid: cid || "", prqid: "", prsid: "" } }, rmm_4wq);
 		if (typeof fTa !== "string" || !fTa.length) return null;
 		return fTa;

@@ -7,7 +7,7 @@
 
 > [!NOTE]
 > You need a VPS instance to run this.<br>
-> Recommended at least 2GB of RAM, or 4GB with browser scraping installed
+> Require at least 256MB of RAM, or 1GB with browser scraping installed
 
 ---
 

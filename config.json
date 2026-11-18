@@ -1,12 +1,15 @@
 {
-	"maxLimitRequestsPerSec": 15,
+	"maxLimitRequestsPerSec": 50,
 	"targetDomain": "api.vgjr.top",
 	"buildId": false,
 	"restrictLocal": false,
 	"disableTLSMusic": false,
 	"playgroundChallenge": false,
 	"endpointChallenge": false,
-	"wafChallenge": true,
+	"wafChallenge": {
+		"enabled": true,
+		"restrictLocal": false
+	},
 	"turnstile": {
 		"enabled": true,
 		"siteKey": "0x4AAAAAAEE1E-kNdZdp_W7x",

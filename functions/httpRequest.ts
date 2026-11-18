@@ -7,8 +7,8 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { commonHeaders } from "./types/headers.js";
 import { recordRequestLog } from "./telemetry.js";
-import { autoGenBuild, autoGenBuildPara, isLocalRequest } from "../app.js";
-import { maxLimitRequestsPerSec, wafChallenge, buildId } from "../config.json";
+import { autoGenBuild, autoGenBuildPara, isLocalRequest, isWafChallengeActive } from "../app.js";
+import { maxLimitRequestsPerSec, buildId } from "../config.json";
 import { VS_COOKIE, signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
@@ -485,7 +485,7 @@ export async function rateLimit(): Promise<void> {
 export const applyVsChallenge = async (c: Context): Promise<Response | null> => {
 	const vsUa = c.req.header("user-agent") ?? "";
 	const vsMozilla = vsUa.startsWith("Mozilla/5.0");
-	if (!wafChallenge || !vsMozilla || (await verifyVsCookie(c))) return null;
+	if (!isWafChallengeActive(c.req.header("host")) || !vsMozilla || (await verifyVsCookie(c))) return null;
 
 	const vsSite = c.req.header("sec-fetch-site");
 	const vsMode = c.req.header("sec-fetch-mode");
@@ -497,7 +497,7 @@ export const applyVsChallenge = async (c: Context): Promise<Response | null> => 
 		const challenge = await signVsChallenge(c.req.url, vsUa);
 		c.header("Cache-Control", "no-store");
 		c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-		c.header("Refresh", "1");
+		c.header("Refresh", "0");
 		return c.html(await getVsWaitPage(), 403);
 	}
 	if (vsPartialSet) {
@@ -511,13 +511,13 @@ export const dispatch = async (c: Context, promiseFactory: any, options?: { shar
 	const ua = c.req.header("user-agent") || "";
 	const fetchmode = c.req.header("sec-fetch-mode") || "";
 	if (ua.toLowerCase().includes("bot")) {
-		return logResponse(c, c.text("", 403));
+		return c.text("", 403);
 	}
 
 	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden. Please refresh this page", 403));
 
 	const vsRes = await applyVsChallenge(c);
-	if (vsRes) return logResponse(c, vsRes);
+	if (vsRes) return vsRes;
 
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
@@ -549,7 +549,7 @@ export const dispatch = async (c: Context, promiseFactory: any, options?: { shar
 	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
 	c.header("X-Enc-Route", "v6");
-	if (wafChallenge) c.header("Set-Cookie", `${VS_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`);
+	if (isWafChallengeActive(c.req.header("host"))) c.header("Set-Cookie", `${VS_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`);
 
 	let shareKey: string | null = null;
 	if (options?.share !== false) {

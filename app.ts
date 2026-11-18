@@ -78,7 +78,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/googleImage/web?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/spotify/mix?q=", "string"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/yahoo/web?q=", "string"], ["/search/yahooImage/web?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/googleImage/web?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/spotify/mix?q=", "string"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -289,7 +289,7 @@ const API_ROUTES = {
 	],
 };
 
-const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, wafChallenge, targetDomain, turnstile: turnstileConfig, maintenance: maintenanceConfig } = config;
+const { buildId: buildIdConfig, restrictLocal, playgroundChallenge, endpointChallenge, targetDomain, turnstile: turnstileConfig, maintenance: maintenanceConfig } = config;
 
 const turnstileLocalKeys = {
 	siteKey: turnstileConfig.localSiteKeyForTest,
@@ -379,10 +379,11 @@ const honoPackageJson = (() => {
 const robots = readText("public/robots.txt");
 const favicon = fs.readFileSync(path.join(__dirname, "public/favicon.ico"));
 const playgroundTemplateSource = readText("html/playground.html");
-const mainJs = readText("html/main.js");
+const mainJs = readText("html/main.min.js");
 const cfJs = readText("html/cf.js");
 const backChallengeTemplateSource = readText("html/backChallenge.html");
 const challengeTemplateSource = readText("html/challenge.html");
+const tailwindCss = readText("html/tailwind.generated.css");
 const rawCss = readText("html/main.css");
 const amcTemplateSource = readText("amc/index.html");
 const honoVersion = (() => {
@@ -398,6 +399,9 @@ const mainCss = rawCss
 	.replace(/\s+/g, " ")
 	.replace(/\s*([{}:;,])\s*/g, "$1")
 	.trim();
+
+// Generated Tailwind utilities first, then the hand-written playground styles.
+const inlineCss = `${tailwindCss}\n${mainCss}`;
 
 const amcTemplate = amcTemplateSource
 	.replace(/<!--[\s\S]*?-->/g, "")
@@ -610,6 +614,16 @@ export function isLocalRequest(host: string | undefined): boolean {
 	return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.startsWith("192.168.") || h.startsWith("10.") || h.startsWith("172.");
 }
 
+// `wafChallenge` is either a boolean (legacy) or { enabled, restrictLocal }.
+// When restrictLocal is true, localhost/private hosts skip the WAF challenge entirely.
+export function isWafChallengeActive(host: string | undefined): boolean {
+	const cfg: any = config.wafChallenge;
+	const enabled = typeof cfg === "boolean" ? cfg : !!cfg?.enabled;
+	if (!enabled) return false;
+	if (cfg?.restrictLocal && isLocalRequest(host)) return false;
+	return true;
+}
+
 app.use("*", async (c: Context, next: Next) => {
 	if (c.req.path.startsWith("/amc")) {
 		await next();
@@ -759,10 +773,12 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 		const pageProto = fwdProto || (c.req.url.startsWith("https:") ? "https" : "http");
 		const apiBaseUrl = pageProto === "https" ? `https://${host}` : `http://${host}`;
 		const tsKeys = getTurnstileKeys(host);
-		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)};`;
+		// No trailing semicolon: the minified bundle places {{SSR_STATE}} in a
+		// comma expression, so the injected state must stay expression-compatible.
+		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)}`;
 		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 
-		const rendered = playgroundTemplateBase.replace("{{INLINE_CSS}}", mainCss).replace("{{INLINE_CF}}", cfJs).replace("{{INLINE_JS}}", finalJs);
+		const rendered = playgroundTemplateBase.replace("{{INLINE_CSS}}", inlineCss).replace("{{INLINE_CF}}", cfJs).replace("{{INLINE_JS}}", finalJs);
 
 		return stream(c, async (s) => {
 			await s.write("");
@@ -805,7 +821,7 @@ app.get("/", async (c: Context) => {
 		return createVfTokenResponse(c);
 	}
 	if (c.req.query("vs") !== undefined) {
-		if (!wafChallenge) return c.json({ ok: true });
+		if (!isWafChallengeActive(c.req.header("host"))) return c.json({ ok: true });
 		try {
 			const payload: any = await verify(c.req.query("vs") ?? "", getBackChallengeJwtKey(), "HS256");
 			const ua = c.req.header("user-agent") ?? "";

@@ -86,6 +86,11 @@
 	animation: swipeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
+/* First endpoint load: same slide-in as a category switch, without an old layer. */
+.ep-first-in {
+	animation: swipeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
 .swipe-layer.old {
 	animation: swipeOut 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 	pointer-events: none;
@@ -117,7 +122,7 @@
 	background-clip: text;
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
-	animation: shine 1.5s infinite ease-out;
+	animation: shine 1.25s infinite ease-in-out;
 }
 
 .ai-image-skeleton-wrap {
@@ -204,9 +209,8 @@
 	0% {
 		background-position: 200% 0;
 	}
-
 	100% {
-		background-position: -200% 0;
+		background-position: 0% 0;
 	}
 }
 

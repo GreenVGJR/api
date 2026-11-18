@@ -10,7 +10,7 @@ function getDefaultResponseHTML() {
     <div class="text-white-500 text-xs">${randomPhrase}</div>
     <div class="text-dark-500 text-xs mt-3">Made with <a href="https://antigravity.google" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-[#9EF3A7] via-[#1BA1E3] to-[#1B6EE3] bg-clip-text text-transparent">Antigravity</span></a> and <a href="https://opencode.ai" target="_blank" class="hover:underline"><span class="bg-gradient-to-r from-white via-gray-300 to-gray-500 bg-clip-text text-transparent">Opencode</span></a></div>
     <div class="flex items-center gap-2 mt-2 text-gray-400 text-xs flex-wrap justify-center">
-      <a href="https://github.com/GreenVGJR/api" target="_blank" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/vgjr" target="_blank" class="hover:text-mint-400 transition-colors">Support :D</a>
+      <a href="https://github.com/GreenVGJR/api" target="_blank" style="display:inline-flex;align-items:center;min-height:24px" class="hover:text-mint-400 transition-colors">Source Code</a><span class="text-gray-400">|</span><a href="https://status.vgjr.top" target="_blank" style="display:inline-flex;align-items:center;min-height:24px" class="hover:text-mint-400 transition-colors">Status Page</a><span class="text-gray-400">|</span><a href="https://ko-fi.com/vgjr" target="_blank" style="display:inline-flex;align-items:center;min-height:24px" class="hover:text-mint-400 transition-colors">Support :D</a>
     </div>
   </div>`;
 }
@@ -27,6 +27,7 @@ const initSPA = () => {
     "bg-black text-white font-sans";
   const appRoot = document.getElementById("appRoot");
   appRoot.innerHTML = `
+    <main>
     <div class="h-dvh flex flex-col max-w-5xl xl:max-w-[84rem] mx-auto px-4 sm:px-6 py-3 sm:py-6">
         <section id="playgroundView" class="flex flex-col flex-1 min-h-0">
         <div class="flex flex-col xl:grid xl:grid-cols-[150px_minmax(0,64rem)_150px] gap-1.5 xl:gap-4 flex-1 min-h-0">
@@ -42,7 +43,7 @@ const initSPA = () => {
             <div class="flex flex-col flex-1 min-h-0 min-w-0">
                 <div id="urlBar" class="relative mb-3 sm:mb-2 flex-shrink-0">
                     <div class="flex items-center bg-black/60 rounded-lg sm:rounded-xl border border-dark-500 overflow-hidden focus-within:border-white/20 transition-colors">
-                        <textarea id="urlInput" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" spellcheck="false" autocomplete="off" rows="1"></textarea>
+                        <textarea id="urlInput" aria-label="API request URL" class="flex-1 bg-transparent py-2 sm:py-3 px-3 sm:px-4 font-mono text-xs sm:text-sm text-white placeholder-gray-600 outline-none resize-none overflow-x-auto whitespace-nowrap focus:whitespace-pre-wrap focus:break-all focus:overflow-x-auto no-scrollbar" spellcheck="false" autocomplete="off" rows="1"></textarea>
                         <button id="copyBtn" class="copy-btn cursor-pointer p-3 text-gray-500 hover:text-mint-400 transition-colors" title="Copy URL">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -52,38 +53,37 @@ const initSPA = () => {
                 </div>
 
                 <aside id="categoryTabsMobile" class="block xl:hidden category-tabs overflow-x-auto flex-shrink-0 min-h-0 border-b border-dark-700 pb-1.5 mb-1.5 no-scrollbar">
-                    <nav id="categoryTabsMobileNav" class="flex gap-1.5" aria-label="Endpoint categories"></nav>
+                    <nav id="categoryTabsMobileNav" class="flex gap-1" aria-label="Endpoint categories"></nav>
                 </aside>
 
                 <div id="workspaceGrid" class="flex flex-col md:grid md:grid-cols-[300px_1fr] gap-1.5 md:gap-4 flex-1 min-h-0">
                     <div id="endpointPane" class="overflow-y-auto pr-1 flex-[3] md:flex-none md:h-full min-h-0 border-b border-dark-700 md:border-b-0 pb-1.5 md:pb-0 no-scrollbar">
                         <div id="endpointSearchWrap">
                             <input id="endpointSearch" type="text" placeholder="Filter endpoints…" spellcheck="false" autocomplete="off" aria-label="Filter endpoints" />
-                            <span id="endpointSearchCount" aria-hidden="true"></span>
+                            <span id="endpointSearchCount" aria-hidden="true" style="--text-faint:#9ca3af"></span>
                             <span id="endpointSearchKbd" aria-hidden="true"><kbd class="kbd">/</kbd></span>
                         </div>
-                        <div id="endpointsList" role="listbox" aria-label="Endpoints" class="space-y-1"></div>
+                        <div id="endpointsList" class="space-y-1"></div>
                     </div>
 
                     <div class="flex flex-col min-h-0 min-w-0 overflow-hidden flex-[7]">
                         <div class="bg-dark-700/30 panel-gradient rounded-lg sm:rounded-xl border border-dark-500 flex-1 flex flex-col min-h-0">
-                            <div id="responseHeader" class="rounded-t-lg sm:rounded-t-xl flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b border-dark-500 flex-shrink-0">
+                            <div id="responseHeader" class="rounded-t-lg sm:rounded-t-xl flex items-center justify-between px-3 sm:px-4 py-1 sm:py-1.5 border-b border-dark-500 flex-shrink-0">
                                 <span class="text-xs text-gray-500 font-mono inline-flex items-center">
-                                    <span id="statusDot" class="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-gray-500 mr-3"></span>
                                     <span id="statusTextWrap" class="relative inline-block overflow-hidden h-[1.2em] whitespace-nowrap">
                                         <span id="responseTitle" class="font-semibold text-gray-400 absolute inset-0 flex items-center"></span>
                                         <span id="responseTitleNext" class="font-semibold text-gray-400 absolute inset-0 flex items-center" style="display:none"></span>
                                         <span id="statusSizer" class="invisible" aria-hidden="true"></span>
-                                    </span><span class="text-gray-600 mx-1.5">|</span><span id="uptimeDisplay" class="text-gray-500">00:00:00</span>
+                                    </span><span id="uptimeGroup" class="invisible inline-flex items-center"><span class="text-gray-400 mx-1.5">|</span><span class="inline-block overflow-hidden align-middle leading-none"><span id="uptimeDisplay" class="text-gray-500 inline-block"></span></span></span>
                                 </span>
-                                <div id="responseActions" class="flex items-center gap-3">
-                                    <button id="clearResponseBtn" class="cursor-pointer text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Clear Response">
+                                <div id="responseActions" class="flex items-center gap-2">
+                                    <button id="clearResponseBtn" class="cursor-pointer p-1.5 text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1 text-xs font-semibold" title="Clear Response">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                                         </svg>
                                         <span>Clear</span>
                                     </button>
-                                    <button id="copyResponseBtn" class="cursor-pointer text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1.5 text-xs font-semibold" title="Copy Response">
+                                    <button id="copyResponseBtn" class="cursor-pointer p-1.5 text-gray-400 hover:text-mint-400 transition-colors flex items-center gap-1 text-xs font-semibold" title="Copy Response">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                         </svg>
@@ -129,8 +129,8 @@ const initSPA = () => {
             </div>
 
             <aside id="categoryTabsDesktop" class="hidden xl:block category-tabs overflow-y-auto flex-shrink-0 xl:h-full min-h-0 border-l border-dark-700 xl:pl-3 pb-1.5 no-scrollbar">
-                <div class="rail-label text-[10px] font-semibold uppercase tracking-widest text-gray-600 px-1 mb-2">Category</div>
-                <nav id="categoryTabsDesktopNav" class="flex flex-col gap-1.5" aria-label="Endpoint categories"></nav>
+                <div class="rail-label text-[10px] font-semibold uppercase tracking-widest text-gray-400 px-1 mb-2">Category</div>
+                <nav id="categoryTabsDesktopNav" class="flex flex-col gap-1" aria-label="Endpoint categories"></nav>
             </aside>
         </div>
         <div id="paletteOverlay" class="palette-overlay" hidden>
@@ -141,7 +141,8 @@ const initSPA = () => {
             </div>
         </div>
         </section>
-    </div>`;
+    </div>
+    </main>`;
 };
 
 initSPA();
@@ -163,6 +164,7 @@ let endpoints = {
 };
 
 let currentCategory = "search";
+let uptimeRevealed = false;
 let currentEndpoint = null;
 let isLoading = false;
 let lastRawResponse = "";
@@ -214,7 +216,7 @@ function renderCategoryTabs() {
     mobileNav.innerHTML = tabs
       .map(
         ([key, label]) =>
-          `<button class="tab-btn cursor-pointer px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="${key}">${label}</button>`,
+          `<button class="tab-btn cursor-pointer px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 whitespace-nowrap" data-category="${key}">${label}</button>`,
       )
       .join("");
   }
@@ -222,7 +224,7 @@ function renderCategoryTabs() {
     desktopNav.innerHTML = tabs
       .map(
         ([key, label]) =>
-          `<button class="tab-btn cursor-pointer block w-full text-left px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="${key}">${label}</button>`,
+          `<button class="tab-btn cursor-pointer block w-full text-left px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white whitespace-nowrap transition-colors" data-category="${key}">${label}</button>`,
       )
       .join("");
   }
@@ -615,13 +617,8 @@ sendBtn.disabled = true;
 sendBtn.classList.add("opacity-50", "cursor-not-allowed");
 sendBtn.classList.remove("opacity-70");
 const responseArea = document.getElementById("responseArea");
-const statusDotEl = document.getElementById("statusDot");
 const statusText = { textContent: "", className: "" };
 
-function setStatusDotColor(colorClass, pulse = false) {
-  if (!statusDotEl) return;
-  statusDotEl.className = `w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full mr-3 bg-${colorClass}${pulse ? " animate-pulse" : ""}`;
-}
 const workspaceGrid = document.getElementById("workspaceGrid");
 const endpointPane = document.getElementById("endpointPane");
 const endpointsList = document.getElementById("endpointsList");
@@ -639,8 +636,53 @@ const STATUS_BASE_CLASS = "absolute inset-0 flex items-center";
 const statusTextWrap = document.getElementById("statusTextWrap");
 const statusSizer = document.getElementById("statusSizer");
 
+// ---- Batched layout pass -------------------------------------------------
+// Geometry reads and style writes for the playground widgets used to happen
+// in separate animation frames (and, in places, as interleaved read/write
+// pairs in the same frame), forcing repeated synchronous reflows. Each widget
+// now registers a read (measurement) and a write (style mutation); a single
+// rAF callback runs every pending read first, then every pending write.
+const layoutJobs = new Map();
+const layoutPending = new Set();
+const layoutCtx = {};
+let layoutRafId = null;
+
+function defineLayoutJob(name, read, write) {
+  layoutJobs.set(name, { read, write });
+}
+
+function requestLayout(name) {
+  if (!layoutJobs.has(name)) return;
+  layoutPending.add(name);
+  if (layoutRafId !== null) return;
+  layoutRafId = requestAnimationFrame(() => {
+    layoutRafId = null;
+    const jobs = [];
+    layoutPending.forEach((name) => jobs.push(layoutJobs.get(name)));
+    layoutPending.clear();
+    // READ PHASE - cache all measurements before touching the DOM.
+    for (const job of jobs) job.read(layoutCtx);
+    // WRITE PHASE - apply all pending style changes from cached values.
+    for (const job of jobs) job.write(layoutCtx);
+  });
+}
+
+function cancelLayout(name) {
+  layoutPending.delete(name);
+}
+
+defineLayoutJob(
+  "statusWidth",
+  (ctx) => {
+    ctx.statusWidth = statusSizer ? statusSizer.offsetWidth : null;
+  },
+  (ctx) => {
+    if (statusTextWrap && ctx.statusWidth !== null) statusTextWrap.style.width = ctx.statusWidth + "px";
+  },
+);
+
 function syncStatusWidth() {
-  if (statusSizer && statusTextWrap) statusTextWrap.style.width = statusSizer.offsetWidth + "px";
+  requestLayout("statusWidth");
 }
 
 function slideStatusText(text, className) {
@@ -670,7 +712,6 @@ function slideStatusText(text, className) {
 
 function setStatus(dotColor, text, textClass, shimmer = false) {
   const shimmerClass = shimmer ? " waiting-loading" : "";
-  setStatusDotColor(dotColor);
   statusText.textContent = text;
   statusText.className = textClass + shimmerClass;
   slideStatusText(text, "font-semibold " + textClass + shimmerClass);
@@ -682,7 +723,6 @@ function setStatusInstant(dotColor, text, textClass, shimmer = false) {
   if (statusSizer) statusSizer.textContent = text;
   syncStatusWidth();
   const shimmerClass = shimmer ? " waiting-loading" : "";
-  setStatusDotColor(dotColor);
   statusText.textContent = text;
   statusText.className = textClass + shimmerClass;
   responseTitle.textContent = text;
@@ -967,13 +1007,26 @@ let currentParams = [];
 
 urlInput.value = apiBaseUrl + (apiBaseUrl.endsWith("/") ? "" : "/");
 
-function adjustHeight() {
-  setTimeout(() => {
+defineLayoutJob(
+  "urlHeight",
+  (ctx) => {
+    if (!urlInput) return;
+    // Measurement setup: restoring "auto" is required to read the natural
+    // content height. This stays in the read phase so the final height/overflow
+    // writes happen together with all other pending style changes.
     urlInput.style.height = "auto";
-    const newHeight = Math.min(urlInput.scrollHeight, 100);
+    ctx.urlScrollHeight = urlInput.scrollHeight;
+  },
+  (ctx) => {
+    if (!urlInput || ctx.urlScrollHeight === undefined) return;
+    const newHeight = Math.min(ctx.urlScrollHeight, 100);
     urlInput.style.height = newHeight + "px";
-    urlInput.style.overflowY = urlInput.scrollHeight > 100 ? "auto" : "hidden";
-  }, 0);
+    urlInput.style.overflowY = ctx.urlScrollHeight > 100 ? "auto" : "hidden";
+  },
+);
+
+function adjustHeight() {
+  requestLayout("urlHeight");
 }
 
 adjustHeight();
@@ -983,7 +1036,6 @@ window.addEventListener("resize", adjustHeight);
 
 function updateStatusUI(ok, status, duration) {
   slideStatusText(`${status} • ${duration}ms`, "font-semibold text-gray-400");
-  setStatusDotColor(ok ? "mint-400" : "red-500");
   statusText.textContent = ok ? "OK" : "Error";
   statusText.className = ok ? "text-mint-400" : "text-red-400";
 }
@@ -1261,7 +1313,6 @@ async function performRequest(targetUrl, retryCount = 0) {
             isLoading = false;
             setSendButtonLabel("Send");
             sendBtn.classList.remove("opacity-70");
-            setStatusDotColor("mint-400");
             statusText.textContent = response.status.toString();
             statusText.className = "text-mint-400";
             lastRawResponse = "";
@@ -1667,7 +1718,9 @@ function renderParamControl(p, i) {
                 <button
                     type="button"
                     class="param-enum-button"
+                    id="param-control-${i}"
                     data-param-index="${i}"
+                    aria-label="${escapeAttribute(p.key)}"
                     aria-haspopup="listbox"
                     aria-expanded="false"
                     ${titleAttr}
@@ -1696,7 +1749,9 @@ function renderParamControl(p, i) {
                 <button
                     type="button"
                     class="param-enum-button"
+                    id="param-control-${i}"
                     data-param-index="${i}"
+                    aria-label="${escapeAttribute(p.key)}"
                     aria-haspopup="listbox"
                     aria-expanded="false"
                     ${titleAttr}
@@ -1717,7 +1772,9 @@ function renderParamControl(p, i) {
   return `
         <textarea
             class="param-input no-scrollbar"
+            id="param-control-${i}"
             data-param-index="${i}"
+            aria-label="${escapeAttribute(p.key)}"
             placeholder="${escapeAttribute(type)}"
             ${titleAttr}
             spellcheck="false"
@@ -1739,21 +1796,30 @@ function closeEnumDropdowns(exceptControl = null) {
     if (menu) menu.hidden = true;
     changed = true;
   });
-  if (changed) requestAnimationFrame(updateParamsBodyHeight);
+  if (changed) updateParamsBodyHeight();
 }
+
+defineLayoutJob(
+  "paramsHeight",
+  (ctx) => {
+    const column = paramsPanel.parentElement;
+    ctx.paramsColumnH = column ? column.clientHeight : 0;
+    ctx.paramsContainerH = paramsContainer.offsetHeight;
+    ctx.paramsVw = window.innerWidth;
+    ctx.paramsVh = window.innerHeight;
+  },
+  (ctx) => {
+    const maxH =
+      ctx.paramsVw < 768 && ctx.paramsColumnH > 0
+        ? Math.max(120, ctx.paramsColumnH * 0.45)
+        : Math.max(140, Math.min(ctx.paramsVh * 0.32, (ctx.paramsColumnH || ctx.paramsVh) - 220));
+    paramsBody.style.height = Math.min(ctx.paramsContainerH, maxH) + "px";
+  },
+);
 
 function updateParamsBodyHeight() {
   if (!paramsOpen || currentParams.length === 0) return;
-
-
-
-  const column = paramsPanel.parentElement;
-  const columnH = column ? column.clientHeight : 0;
-  const maxH =
-    window.innerWidth < 768 && columnH > 0
-      ? Math.max(120, columnH * 0.45)
-      : window.innerHeight * 0.5;
-  paramsBody.style.height = Math.min(paramsContainer.offsetHeight, maxH) + "px";
+  requestLayout("paramsHeight");
 }
 
 function setEnumControlValue(control, value, notify = true) {
@@ -1840,14 +1906,14 @@ function setupEnumControls() {
       control.classList.add("open");
       button.setAttribute("aria-expanded", "true");
       menu.hidden = false;
-      requestAnimationFrame(updateParamsBodyHeight);
+      updateParamsBodyHeight();
     };
 
     const closeMenu = () => {
       control.classList.remove("open");
       button.setAttribute("aria-expanded", "false");
       menu.hidden = true;
-      requestAnimationFrame(updateParamsBodyHeight);
+      updateParamsBodyHeight();
     };
 
     button.addEventListener("click", (e) => {
@@ -1970,7 +2036,7 @@ function renderParams() {
       .map(
         (p, i) => `
             <div class="param-row">
-                <label class="param-label" title="${escapeAttribute(p.key)}">${escapeHTML(p.key)}</label>
+                <label class="param-label" for="param-control-${i}" title="${escapeAttribute(p.key)}">${escapeHTML(p.key)}</label>
                 <div class="param-input-wrap">
                     ${renderParamControl(p, i)}
                 </div>
@@ -2063,7 +2129,7 @@ paramsToggle.addEventListener("click", () => {
     closeEnumDropdowns();
     paramsBody.style.height = null;
   }
-  
+
   scheduleRestoreResponseArea();
 });
 
@@ -2108,6 +2174,35 @@ function scheduleRestoreResponseArea() {
   setTimeout(() => requestAnimationFrame(restoreResponseArea), delay);
 }
 
+// Turnstile is downloaded on demand (only when a 403 actually requires a
+// challenge) instead of being pulled in on every normal playground load.
+let turnstileLoadPromise = null;
+
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve();
+  if (turnstileLoadPromise) return turnstileLoadPromise;
+  turnstileLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.onload = () =>
+      window.turnstile ? resolve() : reject(new Error("Turnstile API unavailable"));
+    script.onerror = () => reject(new Error("Turnstile script failed to load"));
+    document.head.appendChild(script);
+  }).finally(() => {
+    turnstileLoadPromise = null;
+  });
+  return turnstileLoadPromise;
+}
+
+function showTurnstileError(message) {
+  const errEl = document.getElementById("turnstileError");
+  if (errEl) {
+    errEl.textContent = message;
+    errEl.classList.remove("hidden");
+  }
+}
+
 function showTurnstileChallenge() {
   if (turnstileRendered) return;
   turnstileRendered = true;
@@ -2145,24 +2240,18 @@ function showTurnstileChallenge() {
         if (window.turnstile && el) window.turnstile.reset(el);
       },
       "error-callback": () => {
-        const errEl = document.getElementById("turnstileError");
-        if (errEl) {
-          errEl.textContent = "Challenge failed to load. Refresh to retry.";
-          errEl.classList.remove("hidden");
-        }
+        showTurnstileError("Challenge failed to load. Refresh to retry.");
       },
     });
   };
 
-  if (!window.turnstile) {
-    const errEl = document.getElementById("turnstileError");
-    if (errEl) {
-      errEl.textContent = "Could not load Turnstile. Refresh to retry.";
-      errEl.classList.remove("hidden");
-    }
-    return;
-  }
-  renderWidget();
+  loadTurnstileScript()
+    .then(() => {
+      // The widget placeholder may have been replaced while the script loaded.
+      if (!document.getElementById("turnstileWidget")) return;
+      renderWidget();
+    })
+    .catch(() => showTurnstileError("Could not load Turnstile. Refresh to retry."));
 }
 
 async function loadStats() {
@@ -2221,7 +2310,8 @@ async function refreshEndpointsFromJson(forceFresh = false) {
             adjustHeight();
           }
 
-          renderEndpoints();
+          renderEndpoints(!endpointsLoadedOnce);
+          endpointsLoadedOnce = true;
           renderParams();
           if (currentEndpoint) {
             syncUrlToParams();
@@ -2248,6 +2338,7 @@ async function fetchInitialEndpoints() {
 }
 
 let animationTimeout = null;
+let endpointsLoadedOnce = false;
 
 function endpointSkeletonHTML() {
   const row = (w) => `<div class="ep-skeleton-row"><div class="ep-skeleton-line" style="width:${w}%"></div></div>`;
@@ -2304,7 +2395,7 @@ function renderEndpoints(animate = false) {
     if (totalCount === 0) {
       if (hasLoadedEndpoints()) {
         return `
-            <div class="text-gray-600 text-xs p-4 text-center">
+            <div class="text-gray-400 text-xs p-4 text-center">
                 No endpoints found.
             </div>
          `;
@@ -2313,9 +2404,9 @@ function renderEndpoints(animate = false) {
     }
     if (shownCount === 0) {
       return `
-            <div class="text-gray-600 text-xs p-4 text-center">
+            <div class="text-gray-400 text-xs p-4 text-center">
                 <div>No matches for &ldquo;${escapeHTML(q)}&rdquo;</div>
-                <button data-clear-search class="cursor-pointer mt-2 px-3 py-1 rounded-full text-xs font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white transition-colors">Clear search</button>
+                <button data-clear-search class="cursor-pointer mt-2 px-3 py-2 rounded-full text-xs font-medium border border-dark-500 text-gray-300 hover:border-gray-500 hover:text-white transition-colors">Clear search</button>
             </div>
          `;
     }
@@ -2338,13 +2429,13 @@ function renderEndpoints(animate = false) {
           })
           .join("");
         return `
-            <div class="ep-group-wrap">
-                <button class="ep-group" data-group="${escapeAttribute(g.name)}" data-scope="${escapeAttribute(g.scope)}" data-collapsed="${collapsed ? "true" : "false"}" aria-expanded="${collapsed ? "false" : "true"}">
+            <div class="ep-group-wrap" role="group" aria-label="${escapeAttribute(g.name)}">
+                <button class="ep-group" style="min-height:28px;--text-faint:#9ca3af" data-group="${escapeAttribute(g.name)}" data-scope="${escapeAttribute(g.scope)}" data-collapsed="${collapsed ? "true" : "false"}" aria-expanded="${collapsed ? "false" : "true"}">
                     <svg class="ep-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     <span>${escapeHTML(g.name)}</span>
                     <span class="ep-count">${g.items.length}</span>
                 </button>
-                <div class="ep-group-items space-y-1" data-collapsed="${collapsed ? "true" : "false"}">${rows}</div>
+                <div class="ep-group-items space-y-1" role="listbox" aria-label="${escapeAttribute(g.name)} endpoints" data-collapsed="${collapsed ? "true" : "false"}">${rows}</div>
             </div>
         `;
       })
@@ -2356,7 +2447,6 @@ function renderEndpoints(animate = false) {
   if (animationTimeout) clearTimeout(animationTimeout);
 
   const afterPaint = () => {
-    attachEndpointListeners();
     epActiveIndex = visibleEndpoints.findIndex((ep) => currentEndpoint && ep.path === currentEndpoint.path);
     paintKbActive(false);
   };
@@ -2387,6 +2477,12 @@ function renderEndpoints(animate = false) {
     );
 
     animationTimeout = setTimeout(finishSwipe, 700);
+  } else if (animate && (!oldHTML || oldHTML.includes("data-skeleton"))) {
+    // First load: no real previous list to slide out, so just slide the new
+    // list in with the same animation used when switching categories.
+    endpointsList.classList.remove("is-animating");
+    endpointsList.innerHTML = `<div class="ep-first-in space-y-1">${newHTML}</div>`;
+    afterPaint();
   } else {
     endpointsList.classList.remove("is-animating");
     endpointsList.innerHTML = `<div class="space-y-1">${newHTML}</div>`;
@@ -2394,33 +2490,42 @@ function renderEndpoints(animate = false) {
   }
 }
 
-function attachEndpointListeners() {
-  endpointsList.querySelectorAll(".endpoint-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const index = parseInt(btn.dataset.index);
-      const ep = visibleEndpoints[index];
-      if (!ep) return;
-      selectEndpoint(ep, visibleEpCats[index] || currentCategory);
-      setActiveCategoryTab();
-    });
-  });
-  endpointsList.querySelectorAll(".ep-group").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = (btn.dataset.scope || currentCategory) + "/" + btn.dataset.group;
-      if (collapsedGroups.has(key)) collapsedGroups.delete(key);
-      else collapsedGroups.add(key);
-      persistPlaygroundState();
-      renderEndpoints();
-    });
-  });
-  const clearBtn = endpointsList.querySelector("[data-clear-search]");
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      setEndpointSearch("");
-      if (endpointSearchInput) endpointSearchInput.focus();
-    });
+// ONE delegated listener handles every endpoint-list interaction. The list is
+// re-rendered on every filter/category/collapse change, so binding per-element
+// listeners on each paint was needlessly expensive.
+endpointsList.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) return;
+
+  // The outgoing swipe layer is inert; it has no listeners in the old code.
+  if (target.closest(".swipe-layer.old")) return;
+
+  const clearSearchBtn = target.closest("[data-clear-search]");
+  if (clearSearchBtn && endpointsList.contains(clearSearchBtn)) {
+    setEndpointSearch("");
+    if (endpointSearchInput) endpointSearchInput.focus();
+    return;
   }
-}
+
+  const groupBtn = target.closest("[data-group]");
+  if (groupBtn && endpointsList.contains(groupBtn)) {
+    const key = (groupBtn.dataset.scope || currentCategory) + "/" + groupBtn.dataset.group;
+    if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+    else collapsedGroups.add(key);
+    persistPlaygroundState();
+    renderEndpoints();
+    return;
+  }
+
+  const itemBtn = target.closest("[data-index]");
+  if (itemBtn && endpointsList.contains(itemBtn)) {
+    const index = parseInt(itemBtn.dataset.index);
+    const ep = visibleEndpoints[index];
+    if (!ep) return;
+    selectEndpoint(ep, visibleEpCats[index] || currentCategory);
+    setActiveCategoryTab();
+  }
+});
 
 tabBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -3128,6 +3233,15 @@ function updateUptime() {
   uptimeDisplay.textContent = [h, m, s]
     .map((v) => v.toString().padStart(2, "0"))
     .join(":");
+
+  // First real value slides in with the same animation as the status label.
+  if (!uptimeRevealed) {
+    uptimeRevealed = true;
+    document.getElementById("uptimeGroup")?.classList.remove("invisible");
+    uptimeDisplay.classList.remove("status-slide-in");
+    void uptimeDisplay.offsetWidth;
+    uptimeDisplay.classList.add("status-slide-in");
+  }
 }
 
 setInterval(updateUptime, 1000);
@@ -3160,49 +3274,60 @@ fetchInitialEndpoints().then(() => {
   let dragStartY = 0;
   let dragStartScrollTop = 0;
   let lastClientY = 0;
-  let dragRafId = null;
-  let updateRafId = null;
 
-  const update = () => {
-    updateRafId = null;
-    const { scrollHeight, clientHeight, scrollTop } = responseArea;
-    const scrollable = scrollHeight - clientHeight;
-    if (scrollable <= 1) {
-      thumb.style.display = "none";
-      return;
-    }
-    thumb.style.display = "";
-    const trackHeight = track.clientHeight;
-    const thumbHeight = Math.max(24, (clientHeight / scrollHeight) * trackHeight);
-    const maxTop = trackHeight - thumbHeight;
-    thumb.style.height = thumbHeight + "px";
-    thumb.style.transform = `translateY(${(scrollTop / scrollable) * maxTop}px)`;
-  };
+  const scheduleUpdate = () => requestLayout("scrollThumb");
 
-  const scheduleUpdate = () => {
-    if (updateRafId !== null) return;
-    updateRafId = requestAnimationFrame(update);
-  };
+  defineLayoutJob(
+    "scrollThumb",
+    (ctx) => {
+      ctx.thumbScrollHeight = responseArea.scrollHeight;
+      ctx.thumbClientHeight = responseArea.clientHeight;
+      ctx.thumbScrollTop = responseArea.scrollTop;
+      ctx.thumbTrackHeight = track.clientHeight;
+    },
+    (ctx) => {
+      const scrollable = ctx.thumbScrollHeight - ctx.thumbClientHeight;
+      if (scrollable <= 1) {
+        thumb.style.display = "none";
+        return;
+      }
+      thumb.style.display = "";
+      const trackHeight = ctx.thumbTrackHeight;
+      const thumbHeight = Math.max(24, (ctx.thumbClientHeight / ctx.thumbScrollHeight) * trackHeight);
+      const maxTop = trackHeight - thumbHeight;
+      thumb.style.height = thumbHeight + "px";
+      thumb.style.transform = `translateY(${(ctx.thumbScrollTop / scrollable) * maxTop}px)`;
+    },
+  );
 
-  const applyDrag = () => {
-    if (!isDragging) { dragRafId = null; return; }
-    const { scrollHeight, clientHeight } = responseArea;
-    const scrollable = scrollHeight - clientHeight;
-    const trackHeight = track.clientHeight;
-    const thumbHeight = thumb.offsetHeight;
-    const maxThumbTop = trackHeight - thumbHeight;
-    if (maxThumbTop > 0) {
-      const deltaY = lastClientY - dragStartY;
-      const deltaRatio = deltaY / maxThumbTop;
-      responseArea.scrollTop = dragStartScrollTop + deltaRatio * scrollable;
-    }
-    dragRafId = requestAnimationFrame(applyDrag);
-  };
+  defineLayoutJob(
+    "scrollDrag",
+    (ctx) => {
+      ctx.dragScrollHeight = responseArea.scrollHeight;
+      ctx.dragClientHeight = responseArea.clientHeight;
+      ctx.dragTrackHeight = track.clientHeight;
+      ctx.dragThumbHeight = thumb.offsetHeight;
+      ctx.dragClientY = lastClientY;
+      ctx.dragStartY = dragStartY;
+      ctx.dragStartScrollTop = dragStartScrollTop;
+    },
+    (ctx) => {
+      if (!isDragging) return;
+      const scrollable = ctx.dragScrollHeight - ctx.dragClientHeight;
+      const maxThumbTop = ctx.dragTrackHeight - ctx.dragThumbHeight;
+      if (maxThumbTop > 0) {
+        const deltaY = ctx.dragClientY - ctx.dragStartY;
+        const deltaRatio = deltaY / maxThumbTop;
+        responseArea.scrollTop = ctx.dragStartScrollTop + deltaRatio * scrollable;
+      }
+      // Keep the drag loop alive for the next frame, through the same pass.
+      if (isDragging) requestLayout("scrollDrag");
+    },
+  );
 
   const stopDrag = () => {
     if (!isDragging) return;
-    if (dragRafId) cancelAnimationFrame(dragRafId);
-    dragRafId = null;
+    cancelLayout("scrollDrag");
     isDragging = false;
     thumb.classList.remove("dragging");
   };
@@ -3215,7 +3340,7 @@ fetchInitialEndpoints().then(() => {
     dragStartScrollTop = responseArea.scrollTop;
     thumb.classList.add("dragging");
     thumb.setPointerCapture(e.pointerId);
-    dragRafId = requestAnimationFrame(applyDrag);
+    requestLayout("scrollDrag");
   });
 
   thumb.addEventListener("pointermove", (e) => {
@@ -3236,5 +3361,5 @@ fetchInitialEndpoints().then(() => {
 
   responseArea.addEventListener("scroll", scheduleUpdate, { passive: true });
   new ResizeObserver(scheduleUpdate).observe(responseArea);
-  update();
+  requestLayout("scrollThumb");
 })();

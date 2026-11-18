@@ -15284,6 +15284,281 @@ export const googleWebSearch = async (query: string): Promise<any> => googleWebS
 
 export const googleImgWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=2&tbm=isch`, parseGoogleImageItems, 20, "imageUrl");
 
+// ─── Yahoo search (web + image) ───────────────────────────────────────────────
+
+const YAHOO_WEB_RESULTS_RE = /<div class="dd[^"]*\balgo-sr\b[^"]*"[^>]*>/g;
+const YAHOO_IMAGE_TILE_RE = /<li class="[^"]*\btile\b[^"]*"[^>]*>/g;
+
+const yahooDecodeResultUrl = (href: string): string | null => {
+	if (!href) return null;
+	const ru = /\/RU=([^/]+)\//.exec(href)?.[1];
+	if (ru) {
+		try {
+			const decoded = decodeURIComponent(ru);
+			return /^https?:\/\//i.test(decoded) ? decoded : null;
+		} catch {
+			return null;
+		}
+	}
+	return /^https?:\/\//i.test(href) ? href : null;
+};
+
+const yahooBlockText = (block: string, re: RegExp): string =>
+	decodeHTML((re.exec(block)?.[1] || "").replace(TAG_STRIP_RE, ""))
+		.replace(WS_COLLAPSE_RE, " ")
+		.trim();
+
+const yahooResultBlocks = (html: string, re: RegExp, sliceSize: number): string[] => {
+	re.lastIndex = 0;
+	const starts: number[] = [];
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(html))) starts.push(m.index);
+	return starts.map((s, i) => html.slice(s, i + 1 < starts.length ? starts[i + 1] : s + sliceSize));
+};
+
+// Some queries (e.g. branded terms) get a richAlgo block with sitelinks:
+// a title link, a description, and a row of nested deep links.
+const yahooParseSitelinks = (block: string): any[] => {
+	const altStart = block.indexOf("alternative-links");
+	if (altStart < 0) return [];
+	const alt = block.slice(altStart, altStart + 20000);
+	const titleRe = /<a[^>]*class="[^"]*algo-sitelink-title[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+	const titles = [...alt.matchAll(titleRe)];
+	const out: any[] = [];
+	for (let i = 0; i < titles.length; i++) {
+		const m = titles[i];
+		const seg = alt.slice(m.index ?? 0, i + 1 < titles.length ? (titles[i + 1].index ?? alt.length) : alt.length);
+		const url = yahooDecodeResultUrl(decodeHTML(m[1]));
+		const title = decodeHTML(m[2].replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
+		if (!url || !title) continue;
+		const description = decodeHTML((/<p><span[^>]*>([\s\S]*?)<\/span><\/p>/.exec(seg)?.[1] || "").replace(TAG_STRIP_RE, ""))
+			.replace(WS_COLLAPSE_RE, " ")
+			.trim();
+		const links: any[] = [];
+		const linkRe = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+		let lm: RegExpExecArray | null;
+		let seenTitle = false;
+		while ((lm = linkRe.exec(seg))) {
+			if (!seenTitle) {
+				seenTitle = true;
+				continue;
+			}
+			const linkUrl = yahooDecodeResultUrl(decodeHTML(lm[1]));
+			const linkTitle = decodeHTML(lm[2].replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
+			if (linkUrl && linkTitle) links.push({ title: linkTitle, url: linkUrl });
+		}
+		out.push({ title, url, ...(description ? { description } : {}), ...(links.length ? { links } : {}) });
+	}
+	return out;
+};
+
+export const parseYahooWebItems = (html: string): any[] => {
+	const webStart = html.indexOf('<div id="web"');
+	const webEnd = html.indexOf('<div id="right"');
+	const web = webStart >= 0 ? html.slice(webStart, webEnd > webStart ? webEnd : webStart + 200000) : html;
+	const raw: any[] = [];
+	for (const block of yahooResultBlocks(web, YAHOO_WEB_RESULTS_RE, 9000)) {
+		const url = yahooDecodeResultUrl(decodeHTML(/<a[^>]*href="([^"]+)"/.exec(block)?.[1] || ""));
+		if (!url) continue;
+		const title = yahooBlockText(block, /<h3[^>]*>([\s\S]*?)<\/h3>/);
+		if (!title) continue;
+		const siteName = yahooBlockText(block, /<span class="fc-141414 d-b">([\s\S]*?)<\/span>/);
+		const snippet = yahooBlockText(block, /<div class="compText[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+		const displayUrl = decodeHTML(/<span class="fc-141414 d-b">[\s\S]*?<\/span>([^<]*)<\/span>/.exec(block)?.[1] || "")
+			.replace(WS_COLLAPSE_RE, " ")
+			.trim();
+		const imgTag = /<img[^>]*>/.exec(block)?.[0] || "";
+		const favicon = /src="([^"]+)"/.exec(imgTag)?.[1] || "";
+		const sitelinks = yahooParseSitelinks(block);
+		raw.push({
+			title,
+			url,
+			...(siteName ? { siteName } : {}),
+			...(displayUrl ? { displayUrl } : {}),
+			...(snippet ? { snippet } : {}),
+			...(favicon ? { favicon } : {}),
+			...(sitelinks.length ? { sitelinks } : {}),
+		});
+	}
+	const seen = new Set<string>();
+	return raw.filter((item) => (seen.has(item.url) ? false : (seen.add(item.url), true)));
+};
+
+export const parseYahooImageItems = (html: string): any[] => {
+	const listStart = html.indexOf("image-results__list");
+	const list = listStart >= 0 ? html.slice(listStart, listStart + 400000) : html;
+	const raw: any[] = [];
+	for (const block of yahooResultBlocks(list, YAHOO_IMAGE_TILE_RE, 4000)) {
+		const imageUrl = decodeHTML(/data-origurl="([^"]+)"/.exec(block)?.[1] || "");
+		if (!HTTP_URL_RE.test(imageUrl)) continue;
+		const pageUrl = decodeHTML(/data-referenceurl="([^"]+)"/.exec(block)?.[1] || "");
+		const imgTag = /<img[^>]*>/.exec(block)?.[0] || "";
+		const thumbnailUrl = decodeHTML(/src="([^"]+)"/.exec(imgTag)?.[1] || "");
+		const title = yahooBlockText(block, /<p class="[^"]*\btile-title\b[^"]*"[^>]*>([\s\S]*?)<\/p>/);
+		const domain = yahooBlockText(block, /<p class="[^"]*\btile-domain\b[^"]*"[^>]*>([\s\S]*?)<\/p>/);
+		let width: number | undefined;
+		let height: number | undefined;
+		try {
+			const meta = JSON.parse(decodeHTML(/data-meta="([^"]+)"/.exec(block)?.[1] || "{}"));
+			if (Number.isFinite(meta?.ow)) width = meta.ow;
+			if (Number.isFinite(meta?.oh)) height = meta.oh;
+		} catch {}
+		if (!width || !height) {
+			const size = /(\d+)\s*x\s*(\d+)/.exec(yahooBlockText(block, /<p class="[^"]*\btile-more-detail\b[^"]*"[^>]*>([\s\S]*?)<\/p>/));
+			if (size) {
+				width = Number(size[1]);
+				height = Number(size[2]);
+			}
+		}
+		raw.push({
+			title,
+			imageUrl,
+			...(thumbnailUrl ? { thumbnailUrl } : {}),
+			...(pageUrl ? { pageUrl } : {}),
+			...(domain ? { domain } : {}),
+			...(width ? { width } : {}),
+			...(height ? { height } : {}),
+		});
+	}
+	const seen = new Set<string>();
+	return raw.filter((item) => (seen.has(item.imageUrl) ? false : (seen.add(item.imageUrl), true)));
+};
+
+// Related-search suggestions: image pages use an AlsoTry_N carousel of pla-item
+// tiles; web pages use AlsoTry / AlsoTry_M tables of plain links.
+export const yahooParseRelated = (html: string, imageMode: boolean): any[] => {
+	const anchor = imageMode ? 'id="results"' : '<div id="web"';
+	const start = html.indexOf(anchor);
+	const scope = start >= 0 ? html.slice(start, start + 120000) : html;
+	const marker = imageMode ? "AlsoTry_N" : "AlsoTry";
+	const i = scope.indexOf(marker);
+	if (i < 0) return [];
+	const section = scope.slice(i, i + 20000);
+	const out: any[] = [];
+	const seen = new Set<string>();
+	if (imageMode) {
+		const tileRe = /<li class="[^"]*\bpla-item\b[^"]*"[^>]*>([\s\S]*?)<\/li>/g;
+		let m: RegExpExecArray | null;
+		while ((m = tileRe.exec(section))) {
+			const tile = m[1];
+			const href = decodeHTML(/<a[^>]*href="([^"]+)"/.exec(tile)?.[1] || "");
+			const title = yahooBlockText(tile, /<p class="[^"]*"[^>]*>([\s\S]*?)<\/p>/);
+			if (!href || !title || seen.has(title)) continue;
+			seen.add(title);
+			const thumb = decodeHTML(/<img[^>]*src="([^"]+)"/.exec(tile)?.[1] || "");
+			out.push({ title, url: href, ...(thumb ? { thumbnailUrl: thumb } : {}) });
+		}
+	} else {
+		const linkRe = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+		let m: RegExpExecArray | null;
+		while ((m = linkRe.exec(section))) {
+			const href = decodeHTML(m[1]);
+			const title = decodeHTML(m[2].replace(TAG_STRIP_RE, "")).replace(WS_COLLAPSE_RE, " ").trim();
+			if (!title || !href.includes("search.yahoo.com/search") || !href.includes("p=") || seen.has(title)) continue;
+			seen.add(title);
+			out.push({ title, url: href });
+		}
+	}
+	return out.slice(0, 10);
+};
+
+// Firefox-fingerprint client shared by both Yahoo endpoints. The consent flag is
+// preloaded, and every response refreshes the jar so Yahoo's YBV bot cookie sticks.
+let yahooCloakSessionRef: any = null;
+const yahooCloakSession = (): any => {
+	if (!yahooCloakSessionRef) {
+		yahooCloakSessionRef = new HttpcloakSession({
+			preset: HttpcloakPreset.FIREFOX_LATEST_LINUX,
+			httpVersion: "h2",
+			timeout: 30,
+		});
+	}
+	try {
+		yahooCloakSessionRef.setCookie("guccounter", "1", { domain: ".yahoo.com", path: "/", secure: true });
+		// vm=p = "Off - do not filter results" (r = strict, i = moderate). Without
+		// this, literal queries like "nsfw" get an adultRegion notice instead of images.
+		yahooCloakSessionRef.setCookie("sB", "vm=p&pn=10&rw=new&v=1&userset=true", { domain: ".yahoo.com", path: "/", secure: true });
+	} catch {}
+	return yahooCloakSessionRef;
+};
+
+const mergeYahooCloakCookies = (cookies: any[] | undefined): void => {
+	if (!cookies?.length || !yahooCloakSessionRef) return;
+	for (const cookie of cookies) {
+		if (!cookie?.name) continue;
+		try {
+			yahooCloakSessionRef.setCookie(cookie.name, String(cookie.value ?? ""), {
+				domain: cookie.domain || ".yahoo.com",
+				path: cookie.path || "/",
+				secure: !!cookie.secure,
+				httpOnly: !!cookie.httpOnly,
+				sameSite: cookie.sameSite || "Lax",
+			});
+		} catch {}
+	}
+};
+
+const YAHOO_CLOAK_CONCURRENCY = 3;
+let yahooCloakActive = 0;
+const yahooCloakQueue: Array<() => void> = [];
+
+const yahooCloakAcquire = (): Promise<void> => {
+	if (yahooCloakActive < YAHOO_CLOAK_CONCURRENCY) {
+		yahooCloakActive++;
+		return Promise.resolve();
+	}
+	return new Promise<void>((resolve) => yahooCloakQueue.push(resolve));
+};
+
+const yahooCloakRelease = (): void => {
+	const next = yahooCloakQueue.shift();
+	if (next) next();
+	else yahooCloakActive--;
+};
+
+const yahooCloakFetch = async (url: string): Promise<{ html: string; status: number } | null> => {
+	await yahooCloakAcquire();
+	try {
+		const res: any = await yahooCloakSession().get(url, {
+			headers: { Referer: "https://search.yahoo.com/", "Accept-Language": "en-US,en;q=0.9" },
+			fetchMode: "navigate",
+		});
+		mergeYahooCloakCookies(res?.cookies);
+		return { html: String(res?.text ?? ""), status: Number(res?.statusCode ?? 0) };
+	} catch {
+		return null;
+	} finally {
+		yahooCloakRelease();
+	}
+};
+
+const yahooSearchFor = async (url: string, parse: (html: string) => any[], limit: number, parseRelated?: (html: string) => any[]): Promise<any> => {
+	try {
+		const res = await yahooCloakFetch(url);
+		if (!res) return null;
+		if (res.status === 403) return { error: "Blocked / Challenge" };
+		if (res.status === 429) return { error: "Rate-limited" };
+		if (/We had temporary problems searching/i.test(res.html) && !res.html.includes("algo-sr") && !res.html.includes("image-results__list")) return { error: "Yahoo throttled this request; try again later" };
+		// Yahoo replaces image results with an adultRegion notice when Safe Search is on.
+		if (/class="[^"]*adultRegion[^"]*"/.test(res.html) || /Safe Search must be turned off/i.test(res.html)) return { error: "Yahoo Safe Search hid the results for this query" };
+		const items = parse(res.html).slice(0, limit);
+		if (!items.length) return { error: "Yahoo did not return results; try again later" };
+		const out: any = { total: items.length, data: items };
+		if (parseRelated) {
+			const related = parseRelated(res.html);
+			if (related.length) out.related = related;
+		}
+		return out;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+export const yahooWebSearch = async (query: string): Promise<any> => yahooSearchFor(`https://search.yahoo.com/search?p=${encodeURIComponent(query)}&nojs=1`, parseYahooWebItems, 10, (html) => yahooParseRelated(html, false));
+
+export const yahooImageSearch = async (query: string): Promise<any> => yahooSearchFor(`https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`, parseYahooImageItems, 20, (html) => yahooParseRelated(html, true));
+
 export const duckSearch = async (query: string): Promise<any> => {
 	if (!query) return null;
 
@@ -15339,20 +15614,19 @@ export const duckSearch = async (query: string): Promise<any> => {
 		const final = await res2.text();
 
 		let instantAnswers: any = null;
+		let duckbarData: any = null;
 		try {
+			// Parse the entity card unconditionally: deepPayload can be present but
+			// answerless (e.g. "anime"), in which case duckbar.add is the only source.
+			const duckbarMatch = final.match(/DDG\.duckbar\.add\((\{[\s\S]*?\})\);/);
+			if (duckbarMatch) duckbarData = JSON.parse(duckbarMatch[1])?.data || null;
+
 			const deepMatch = final.match(/DDG\.deep\.deepPayload\s*=\s*(\{[\s\S]*?\});/);
 			if (deepMatch) {
 				const payload = JSON.parse(deepMatch[1]);
 				instantAnswers = payload?.instantAnswers?.[0]?.data || null;
 			}
-
-			if (!instantAnswers) {
-				const duckbarMatch = final.match(/DDG\.duckbar\.add\((\{[\s\S]*?"from":"deep_answer"[\s\S]*?\})\);/);
-				if (duckbarMatch) {
-					const duckbarData = JSON.parse(duckbarMatch[1]);
-					instantAnswers = duckbarData?.data || null;
-				}
-			}
+			if (!instantAnswers) instantAnswers = duckbarData;
 
 			if (!instantAnswers) {
 				const iaMatch = final.match(/^(\{.*?\});/);
@@ -15384,6 +15658,10 @@ export const duckSearch = async (query: string): Promise<any> => {
 								snippet: sl.snippet,
 							})) || [],
 						date: r.e || null,
+						...(r.b ? { bang: `!${String(r.b).split("\t")[0]}` } : {}),
+						...(r.c ? { canonicalUrl: r.c } : {}),
+						...(r.da ? { category: r.da } : {}),
+						...(r.richCaption ? { richCaption: r.richCaption } : {}),
 					}));
 			}
 		} catch {}
@@ -15402,16 +15680,41 @@ export const duckSearch = async (query: string): Promise<any> => {
 			}
 		} catch {}
 
+		// deepPayload carries the short generated answer; duckbar.add carries the
+		// entity card (Abstract / Infobox / Definition / image) when one exists.
+		let instantAnswerOut: any = null;
+		if (instantAnswers || duckbarData) {
+			const a = instantAnswers || {};
+			const d = duckbarData || {};
+			instantAnswerOut = {
+				answer: a.answer ?? d.Answer ?? null,
+				expandedAnswer: a.expanded_answer ?? null,
+				sources: a.sources ?? [],
+				query: a.query ?? query,
+				...(d.Abstract ? { abstract: d.Abstract } : {}),
+				...(d.AbstractText ? { abstractText: d.AbstractText } : {}),
+				...(d.AbstractSource ? { abstractSource: d.AbstractSource } : {}),
+				...(d.AbstractURL ? { abstractUrl: d.AbstractURL } : {}),
+				...(d.AnswerType ? { answerType: d.AnswerType } : {}),
+				...(d.Heading ? { heading: d.Heading } : {}),
+				...(d.Entity ? { entity: d.Entity } : {}),
+				...(d.Definition ? { definition: d.Definition } : {}),
+				...(d.DefinitionSource ? { definitionSource: d.DefinitionSource } : {}),
+				...(d.DefinitionURL ? { definitionUrl: d.DefinitionURL } : {}),
+				...(d.Image ? { image: d.Image } : {}),
+				...(d.ImageWidth ? { imageWidth: d.ImageWidth } : {}),
+				...(d.ImageHeight ? { imageHeight: d.ImageHeight } : {}),
+				...(d.OfficialWebsite ? { officialWebsite: d.OfficialWebsite } : {}),
+				...(d.OfficialDomain ? { officialDomain: d.OfficialDomain } : {}),
+				...(d.Infobox ? { infobox: d.Infobox } : {}),
+				...(d.RelatedTopics?.length ? { relatedTopics: d.RelatedTopics } : {}),
+				...(d.Type ? { type: d.Type } : {}),
+			};
+		}
+
 		return {
 			data: {
-				instantAnswer: instantAnswers
-					? {
-							answer: instantAnswers.answer || null,
-							expandedAnswer: instantAnswers.expanded_answer || null,
-							sources: instantAnswers.sources || [],
-							query: instantAnswers.query || query,
-						}
-					: null,
+				instantAnswer: instantAnswerOut,
 				relatedSearches,
 				items: organicResults,
 			},

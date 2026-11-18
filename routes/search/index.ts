@@ -63,9 +63,11 @@ import trakteer from "./trakteer.js";
 import tumblr from "./tumblr.js";
 import twitch from "./twitch.js";
 import unsplash from "./unsplash.js";
+import yahoo from "./yahoo.js";
+import yahooImage from "./yahooImage.js";
 import youtubeChannel from "./youtubeChannel.js";
 import youtubeMusic from "./youtubeMusic.js";
 import youtubePlaylist from "./youtubePlaylist.js";
 import youtubeVideo from "./youtubeVideo.js";
 
-export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, canvaGraphics, canvaTemplates, capcut, cruncy, danbooru, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, googleImage, googleImageV2, googleImageWeb, googleSearch, googleWeb, imdb, imgur, istockphoto, jiosaavn, kick, klipy, konachan, magnific, patreon, pexels, pinterest, pinterestExplore, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, robloxUsers, rule34, safebooru, soundcloud, spotify, spotifyMix, startpage, startpageImage, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];
+export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, canvaGraphics, canvaTemplates, capcut, cruncy, danbooru, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, googleImage, googleImageV2, googleImageWeb, googleSearch, googleWeb, imdb, imgur, istockphoto, jiosaavn, kick, klipy, konachan, magnific, patreon, pexels, pinterest, pinterestExplore, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, robloxUsers, rule34, safebooru, soundcloud, spotify, spotifyMix, startpage, startpageImage, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, yahoo, yahooImage, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];

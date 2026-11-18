@@ -10777,7 +10777,8 @@ export async function HauntProfile(query: string): Promise<any> {
 
 		const findProfile = (obj: any): any => {
 			if (!obj || typeof obj !== "object") return null;
-			if (obj.user && obj.links) return obj;
+			// `links` moved to its own RSC entry; match on user + profile fields.
+			if (obj.user && typeof obj.user === "object" && obj.user.id && (obj.links || obj.effects || obj.nameBadge !== undefined || obj.color)) return obj;
 
 			if (Array.isArray(obj)) {
 				for (const item of obj) {
@@ -10943,9 +10944,151 @@ export async function HauntProfile(query: string): Promise<any> {
 		const finalresult: any = resolveRscRefs(dataResults[0]);
 		if (!finalresult?.user) return { data: null };
 
-		return {
-			data: finalresult,
+		// Profile extras now live in separate RSC components rather than the user object.
+		const links: any[] = [];
+		const projects: any[] = [];
+		const seenLinks = new Set<string>();
+
+		const findProjectMeta = (trackId: string): { title: string | null; description: string | null } => {
+			let title: string | null = null;
+			let description: string | null = null;
+			const walk = (node: any) => {
+				if (!node || typeof node !== "object") return;
+				if (!Array.isArray(node) && node.itemKey === trackId) {
+					const scan = (n: any) => {
+						if (!n || typeof n !== "object") return;
+						if (Array.isArray(n)) {
+							for (const item of n) scan(item);
+						} else {
+							for (const key of Object.keys(n)) {
+								if (key === "children" && typeof n.children === "string") {
+									const parent = Array.isArray(n) ? null : n;
+									if (parent && /line-clamp-2/.test(String(parent.className || ""))) description = parent.children;
+									else if (!title && parent && /text-(?:xl|lg|sm)/.test(String(parent.className || ""))) title = parent.children;
+								}
+								scan(n[key]);
+							}
+						}
+					};
+					scan(node);
+				}
+				const values = Array.isArray(node) ? node : Object.values(node);
+				for (const value of values) walk(value);
+			};
+			for (const entry of Object.values(rscEntries)) walk(entry);
+			return { title, description };
 		};
+
+		const collectExtras = (obj: any) => {
+			if (!obj || typeof obj !== "object") return;
+			if (!Array.isArray(obj)) {
+				if (obj.trackKind === "link" && typeof obj.href === "string") {
+					const label = typeof obj.tooltipContent === "string" ? obj.tooltipContent : typeof obj.ariaLabel === "string" ? obj.ariaLabel : null;
+					if (label && !seenLinks.has(obj.href)) {
+						seenLinks.add(obj.href);
+						links.push({ title: label, url: obj.href });
+					}
+				}
+				if (obj.trackKind === "project" && typeof obj.href === "string") {
+					const meta = findProjectMeta(obj.trackId);
+					projects.push({ ...(meta.title ? { title: meta.title } : {}), ...(meta.description ? { description: meta.description } : {}), url: obj.href });
+				}
+			}
+			const values = Array.isArray(obj) ? obj : Object.values(obj);
+			for (const value of values) collectExtras(value);
+		};
+		for (const entry of Object.values(rscEntries)) collectExtras(entry);
+
+		let customization: any = null;
+		const findCustomization = (obj: any) => {
+			if (!obj || typeof obj !== "object" || customization) return;
+			if (!Array.isArray(obj) && obj.customization && typeof obj.customization === "object") {
+				customization = resolveRscRefs(obj.customization);
+				return;
+			}
+			const values = Array.isArray(obj) ? obj : Object.values(obj);
+			for (const value of values) findCustomization(value);
+		};
+		for (const entry of Object.values(rscEntries)) findCustomization(entry);
+
+		let description: string | null = null;
+		let timeZone: string | null = null;
+		const widgetConfigs: Array<{ platform: string; type: string; identifier: string }> = [];
+		const seenWidgets = new Set<string>();
+		const nodeText = (n: any): string => {
+			if (typeof n === "string") return n;
+			if (Array.isArray(n)) return (n[0] === "$" ? n.slice(3) : n).map(nodeText).join("");
+			if (n && typeof n === "object" && "children" in n) return nodeText(n.children);
+			return "";
+		};
+		const scanExtras = (o: any) => {
+			if (!o || typeof o !== "object") return;
+			if (Array.isArray(o)) {
+				if (o[0] === "$" && o[1] === "h2" && o[2] === "h2-0" && !description) {
+					const text = nodeText(o[3]?.children).trim();
+					if (text) description = text;
+				}
+			} else {
+				if (typeof o.timeZone === "string" && !timeZone) timeZone = o.timeZone;
+				if (typeof o.platform === "string" && typeof o.type === "string" && typeof o.identifier === "string") {
+					const key = `${o.platform}:${o.type}:${o.identifier}`;
+					if (!seenWidgets.has(key) && o.platform !== "audio") {
+						seenWidgets.add(key);
+						widgetConfigs.push({ platform: o.platform, type: o.type, identifier: o.identifier });
+					}
+				}
+			}
+			const values = Array.isArray(o) ? o : Object.values(o);
+			for (const value of values) scanExtras(value);
+		};
+		for (const entry of Object.values(rscEntries)) scanExtras(entry);
+
+		const apiHeaders = {
+			Accept: "application/json, text/plain, */*",
+			"Accept-Language": "en-US,en;q=0.9",
+			Referer: `https://haunt.gg/${username}`,
+			"User-Agent": userAgent,
+		};
+		const getJson = async (path: string) => {
+			try {
+				const res: any = await (httpcloakGet as any)(`https://haunt.gg${path}`, { headers: apiHeaders });
+				if (Number(res?.statusCode) !== 200) return null;
+				const text = await responseText(res);
+				return text ? JSON.parse(text) : null;
+			} catch {
+				return null;
+			}
+		};
+
+		const data: any = { ...finalresult };
+		if (description) data.description = description;
+		if (timeZone) data.timeZone = timeZone;
+		if (customization) data.customization = customization;
+		if (links.length) data.links = links;
+		if (projects.length) data.projects = projects;
+		if (Object.keys(counters).length) data.counters = counters;
+
+		const widgetResults = await Promise.all(
+			widgetConfigs.map(async (cfg) => {
+				const route = cfg.platform === "discord" && cfg.type === "presence" ? `discord/presence/${cfg.identifier}` : cfg.platform === "lastfm" && cfg.type === "profile" ? `lastfm/profile/${cfg.identifier}` : cfg.platform === "weather" && cfg.type === "current" ? `weather/current/${cfg.identifier}` : null;
+				if (!route) return null;
+				const payload = await getJson(`/api/widgets/${route}`);
+				return payload ? { ...cfg, data: payload.data ?? payload } : null;
+			}),
+		);
+		const widgets = widgetResults.filter(Boolean);
+		if (widgets.length) data.widgets = widgets;
+
+		// Counts the SSR payload doesn't carry come from the public /api/user routes.
+		const userId = finalresult?.user?.id;
+		if (userId) {
+			const [counts, feedback, comments] = await Promise.all([getJson(`/api/user/${userId}/comments/count`), getJson(`/api/user/${userId}/feedback`), getJson(`/api/user/${userId}/comments?limit=5&offset=0`)]);
+			if (typeof counts?.count === "number") data.commentsCount = counts.count;
+			if (feedback) data.feedback = feedback;
+			if (Array.isArray(comments?.items)) data.comments = comments.items;
+		}
+
+		return { data };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -15316,8 +15459,7 @@ const yahooResultBlocks = (html: string, re: RegExp, sliceSize: number): string[
 	return starts.map((s, i) => html.slice(s, i + 1 < starts.length ? starts[i + 1] : s + sliceSize));
 };
 
-// Some queries (e.g. branded terms) get a richAlgo block with sitelinks:
-// a title link, a description, and a row of nested deep links.
+// richAlgo blocks carry sitelinks: title, description, nested deep links.
 const yahooParseSitelinks = (block: string): any[] => {
 	const altStart = block.indexOf("alternative-links");
 	if (altStart < 0) return [];
@@ -15424,8 +15566,7 @@ export const parseYahooImageItems = (html: string): any[] => {
 	return raw.filter((item) => (seen.has(item.imageUrl) ? false : (seen.add(item.imageUrl), true)));
 };
 
-// Related-search suggestions: image pages use an AlsoTry_N carousel of pla-item
-// tiles; web pages use AlsoTry / AlsoTry_M tables of plain links.
+// Related searches: AlsoTry_N tiles on images, AlsoTry tables on web.
 export const yahooParseRelated = (html: string, imageMode: boolean): any[] => {
 	const anchor = imageMode ? 'id="results"' : '<div id="web"';
 	const start = html.indexOf(anchor);
@@ -15462,8 +15603,7 @@ export const yahooParseRelated = (html: string, imageMode: boolean): any[] => {
 	return out.slice(0, 10);
 };
 
-// Firefox-fingerprint client shared by both Yahoo endpoints. The consent flag is
-// preloaded, and every response refreshes the jar so Yahoo's YBV bot cookie sticks.
+// Shared Firefox session; responses refresh the jar so YBV sticks.
 let yahooCloakSessionRef: any = null;
 const yahooCloakSession = (): any => {
 	if (!yahooCloakSessionRef) {
@@ -15680,8 +15820,7 @@ export const duckSearch = async (query: string): Promise<any> => {
 			}
 		} catch {}
 
-		// deepPayload carries the short generated answer; duckbar.add carries the
-		// entity card (Abstract / Infobox / Definition / image) when one exists.
+		// Merge the generated answer (deepPayload) with the entity card (duckbar.add).
 		let instantAnswerOut: any = null;
 		if (instantAnswers || duckbarData) {
 			const a = instantAnswers || {};

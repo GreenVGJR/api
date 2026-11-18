@@ -12,12 +12,10 @@ if (firstBoot) {
 
 const bootAt = Date.now();
 const appPromise = import("./app.js");
-// Heavy warmups stay off the app-ready path: appPromise drives readiness while these trickle in.
+// Warmups run off the app-ready path.
 const warmupPromise = firstBoot
 	? Promise.all([
-			// BotGuard needs jsdom + a JS interpreter + network calls. Run it in a worker
-			// so the main thread never blocks on the mint; request.ts adopts the token
-			// from globalThis, and its lazy single-flight mint remains the fallback.
+			// Mint in a worker; request.ts adopts the token from globalThis.
 			new Promise<void>((resolve) => {
 				const bgWorker = new Worker(new URL("./functions/botguardWorker.ts", import.meta.url));
 				const finish = () => {

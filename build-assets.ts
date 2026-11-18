@@ -3,12 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "esbuild";
 
-/**
- * Minifies html/main.js into html/main.min.js while preserving the
- * `{{SSR_STATE}}` placeholder verbatim. app.ts substitutes that token with
- * the injected state script at request time, so it must survive minification
- * byte-for-byte (esbuild otherwise rewrites the raw `{{SSR_STATE}}` token).
- */
+// Minify main.js while keeping {{SSR_STATE}} byte-exact for app.ts to replace.
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, "html", "main.js");
 const OUT = path.join(ROOT, "html", "main.min.js");

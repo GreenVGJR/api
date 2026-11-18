@@ -773,8 +773,7 @@ app.on(["GET"], CHALLENGE_ROUTES, async (c: Context) => {
 		const pageProto = fwdProto || (c.req.url.startsWith("https:") ? "https" : "http");
 		const apiBaseUrl = pageProto === "https" ? `https://${host}` : `http://${host}`;
 		const tsKeys = getTurnstileKeys(host);
-		// No trailing semicolon: the minified bundle places {{SSR_STATE}} in a
-		// comma expression, so the injected state must stay expression-compatible.
+		// No trailing semicolon: the minified placeholder sits in a comma expression.
 		const stateJs = `window.API_BASE_URL = "${apiBaseUrl}";\nwindow.TURNSTILE_SITE_KEY = ${JSON.stringify(tsKeys.siteKey)}`;
 		const finalJs = mainJs.replace("{{SSR_STATE}}", stateJs);
 

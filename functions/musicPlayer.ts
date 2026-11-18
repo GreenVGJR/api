@@ -8,6 +8,7 @@ import { generateChallenge, verifyChallenge, verifyChallengeHash, verifyMcToken,
 import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
 import { discordFetch } from "./request.js";
+import { rateLimit } from "./httpRequest.js";
 
 /** Disable TLS verification only for a node's WebSocket handshake (avoids setting NODE_TLS_REJECT_UNAUTHORIZED globally). */
 function patchNodeTls(node: any) {
@@ -145,6 +146,8 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 	c.header("Content-Type", "application/json");
 	c.header("Cache-Control", "public, no-transform, max-age=0, must-revalidate");
 
+	await rateLimit();
+
 	// BDFD UA must match BDFD-..-..-..- plus optional segment; shape only, values unchecked.
 	const lookExistChallengeC = /^BDFD-[^-]+-[^-]+-[^-]+-([^-]+)?$/;
 	if (!lookExistChallengeC.test(c.req.header("user-agent") || "")) {
@@ -195,6 +198,7 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 
 	return stream(c, async (s: any) => {
 		let isAborted = false;
+		let dataWritten = false;
 		let loggedSuccessfulRequest = false;
 		if (s.onAbort) {
 			s.onAbort(() => {
@@ -232,6 +236,10 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 		const customS = {
 			write: async (data: string) => {
 				await logPromise;
+				// Route callbacks close the log array and append the final data envelope exactly once.
+				if (data.includes('"status":') || data.startsWith('],"data":')) {
+					dataWritten = true;
+				}
 				if (!loggedSuccessfulRequest && data.includes('"status":true')) {
 					loggedSuccessfulRequest = true;
 					recordRequestLog(c, 200);
@@ -247,9 +255,14 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			await logPromise;
 		} catch (err: any) {
 			await logPromise;
-			await log(`Error: ${err?.message || "Failed to process stream"}`);
-			await logPromise;
-			await safeWrite(`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to process stream", type: { primary: "error", alt: "critical" } })}}`);
+			// Nothing may be appended once the final envelope is written.
+			if (dataWritten) {
+				console.error("[music] stream error after final payload:", err);
+			} else {
+				await log(`Error: ${err?.message || "Failed to process stream"}`);
+				await logPromise;
+				await safeWrite(`],"data":${JSON.stringify({ status: false, message: err?.message || "Failed to process stream", type: { primary: "error", alt: "critical" } })}}`);
+			}
 		}
 	});
 }
@@ -498,6 +511,22 @@ const musicLogCooldowns: Map<string, number> = g.__vgjr_musicLogCooldowns || (g.
 // 24/7 state "token:guildId" → bool; kept separate so it survives player recreation.
 const state247: Map<string, boolean> = g.__vgjr_state247 || (g.__vgjr_state247 = new Map<string, boolean>());
 
+// Per-token key index for state247; state247 remains the source of truth.
+let state247ByToken: Map<string, Set<string>> = g.__vgjr_state247_by_token;
+if (!state247ByToken) {
+	state247ByToken = new Map<string, Set<string>>();
+	g.__vgjr_state247_by_token = state247ByToken;
+	// Rebuild when upgrading from a module instance that did not maintain the index.
+	for (const key of state247.keys()) {
+		const sep = key.lastIndexOf(":");
+		if (sep < 0) continue;
+		const token = key.slice(0, sep);
+		let guilds = state247ByToken.get(token);
+		if (!guilds) state247ByToken.set(token, (guilds = new Set<string>()));
+		guilds.add(key);
+	}
+}
+
 // Last known VC "token:guildId" → voiceChannelId; fallback when playerDestroy clears voiceChannelId.
 const lastVoiceChannel: Map<string, string> = g.__vgjr_lastVoiceChannel || (g.__vgjr_lastVoiceChannel = new Map<string, string>());
 
@@ -673,19 +702,49 @@ async function sendMessageStatus(client: any, token: string, guildId: string, ty
 export function get247Key(token: string, guildId: string) {
 	return `${token}:${guildId}`;
 }
+
+function index247Add(token: string, guildId: string) {
+	const key = get247Key(token, guildId);
+	let guilds = state247ByToken.get(token);
+	if (!guilds) state247ByToken.set(token, (guilds = new Set<string>()));
+	guilds.add(key);
+}
+
+function index247Remove(token: string, guildId: string) {
+	const key = get247Key(token, guildId);
+	const guilds = state247ByToken.get(token);
+	if (!guilds) return;
+	guilds.delete(key);
+	if (guilds.size === 0) state247ByToken.delete(token);
+}
+
+/** True when at least one guild under this token still has 24/7 enabled. */
+function hasAny247(token: string): boolean {
+	const guilds = state247ByToken.get(token);
+	if (!guilds) return false;
+	for (const key of guilds) {
+		if (state247.get(key)) return true;
+	}
+	return false;
+}
+
 export function set247(token: string, guildId: string, value: boolean) {
 	state247.set(get247Key(token, guildId), value);
+	index247Add(token, guildId);
 }
 export function get247(token: string, guildId: string): boolean {
 	return state247.get(get247Key(token, guildId)) ?? false;
 }
 export function clear247(token: string, guildId: string) {
 	state247.delete(get247Key(token, guildId));
+	index247Remove(token, guildId);
 }
 // Clear all 24/7 entries for a token so a re-created client never auto-rejoins.
 export function clearAll247(token: string) {
-	for (const [key] of state247) {
-		if (key.startsWith(token + ":")) state247.delete(key);
+	const guilds = state247ByToken.get(token);
+	if (guilds) {
+		for (const key of guilds) state247.delete(key);
+		state247ByToken.delete(token);
 	}
 }
 
@@ -702,11 +761,34 @@ function isKnownTransientMusicError(err: any): boolean {
 	return err?.name === "TimeoutError" || err?.code === 23 || err?.code === "ConnectionRefused" || msg.includes("The operation timed out") || msg.includes("Unable to connect") || msg.includes("ConnectionRefused") || msg.includes("The node is not connected") || msg.includes("Node is not connected") || msg.includes("fetch failed") || msg.includes("ECONNREFUSED");
 }
 
+const MUSIC_LOG_COOLDOWN_MAX = 500;
+const MUSIC_LOG_COOLDOWN_TTL = 5 * 60 * 1000;
+
+function pruneMusicLogCooldowns(now: number) {
+	// Drop stale entries first, then evict the oldest until the map is back under the cap.
+	for (const [key, ts] of musicLogCooldowns) {
+		if (now - ts > MUSIC_LOG_COOLDOWN_TTL) musicLogCooldowns.delete(key);
+	}
+	while (musicLogCooldowns.size > MUSIC_LOG_COOLDOWN_MAX) {
+		let oldestKey: string | null = null;
+		let oldestTs = Infinity;
+		for (const [key, ts] of musicLogCooldowns) {
+			if (ts < oldestTs) {
+				oldestTs = ts;
+				oldestKey = key;
+			}
+		}
+		if (oldestKey === null) break;
+		musicLogCooldowns.delete(oldestKey);
+	}
+}
+
 function warnMusicThrottled(key: string, message: string, cooldownMs = 60_000) {
 	const now = Date.now();
 	const last = musicLogCooldowns.get(key) || 0;
 	if (now - last < cooldownMs) return;
 	musicLogCooldowns.set(key, now);
+	if (musicLogCooldowns.size > MUSIC_LOG_COOLDOWN_MAX) pruneMusicLogCooldowns(now);
 	console.warn(message);
 }
 
@@ -790,7 +872,7 @@ function autoResumePlayer(player: LavalinkPlayer, reason: string) {
 				} catch (err: any) {
 					const msg = musicErrorMessage(err);
 					if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
-						warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+						warnMusicThrottled(`resume:${player.guildId}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
 						return;
 					}
 					console.error(`Failed to auto-resume (${reason}) for guild ${player.guildId}:`, msg);
@@ -799,7 +881,7 @@ function autoResumePlayer(player: LavalinkPlayer, reason: string) {
 				playPromise.catch((err: any) => {
 					const msg = musicErrorMessage(err);
 					if (isKnownTransientMusicError(err) || msg.includes("PlayerOption#position")) {
-						warnMusicThrottled(`resume:${player.guildId}:${msg}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+						warnMusicThrottled(`resume:${player.guildId}`, `Auto-resume (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
 						return;
 					}
 					console.error(`Failed to auto-resume (${reason}) for guild ${player.guildId}:`, msg);
@@ -809,7 +891,7 @@ function autoResumePlayer(player: LavalinkPlayer, reason: string) {
 		.catch((err) => {
 			const msg = musicErrorMessage(err);
 			if (isKnownTransientMusicError(err)) {
-				warnMusicThrottled(`voice-reconnect:${player.guildId}:${msg}`, `Voice reconnect (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
+				warnMusicThrottled(`voice-reconnect:${player.guildId}`, `Voice reconnect (${reason}) skipped for guild ${player.guildId}: ${msg}`, 30_000);
 				return;
 			}
 			console.error(`Failed to re-connect voice (${reason}) for guild ${player.guildId}:`, msg);
@@ -841,12 +923,10 @@ function scheduleAutoDestroy(token: string) {
 			return;
 		}
 	}
-	// Also check state247 map directly (player may already be destroyed)
-	for (const [key] of state247) {
-		if (key.startsWith(token + ":") && state247.get(key)) {
-			console.log(`⏭  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`);
-			return;
-		}
+	// Also check state247 directly (player may already be destroyed)
+	if (hasAny247(token)) {
+		console.log(`⏭  Auto-destroy skipped — 24/7 still set in state map (token: ...${token.slice(-6)})`);
+		return;
 	}
 
 	if (managed.destroyTimer) clearTimeout(managed.destroyTimer);
@@ -856,11 +936,9 @@ function scheduleAutoDestroy(token: string) {
 		if (!current) return;
 
 		// Re-check 24/7 at fire time too
-		for (const [key] of state247) {
-			if (key.startsWith(token + ":") && state247.get(key)) {
-				console.log(`⏭  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`);
-				return;
-			}
+		if (hasAny247(token)) {
+			console.log(`⏭  Auto-destroy cancelled at fire time — 24/7 active (token: ...${token.slice(-6)})`);
+			return;
 		}
 
 		let hasActivity = false;
@@ -896,25 +974,26 @@ if (!g.__vgjr_music_process_handlers_installed) {
 			return;
 		}
 		if (isKnownTransientMusicError(err)) {
-			warnMusicThrottled("uncaught:" + msg, `Suppressed transient music exception: ${msg}`);
+			warnMusicThrottled("uncaught", `Suppressed transient music exception: ${msg}`);
 			return;
 		}
-		// Bun throws DOMException TimeoutError when discord.js tries to close a dead WebSocket
+		// Bun throws DOMException TimeoutError when discord.js closes a dead WebSocket.
 		if (err.name === "TimeoutError" || (err as any).code === 23) {
 			console.warn("Suppressed WebSocket TimeoutError during cleanup:", msg);
 			return;
 		}
-		console.error("Uncaught Exception:", err);
+		console.error("[music] Uncaught Exception (unrecognized):", msg, err);
 	});
 
 	process.on("unhandledRejection", (reason: any) => {
-		// Suppress known non-fatal WebSocket/network errors from discord.js/lavalink internals
 		const msg = musicErrorMessage(reason);
-		if (isKnownTransientMusicError(reason) || reason?.name === "TimeoutError" || (reason as any)?.code === 23 || msg.includes("The operation timed out") || msg.includes("WebSocket was closed") || msg.includes("Cannot send data") || msg.includes("writableStreamDefaultWriterRelease")) {
-			warnMusicThrottled("unhandled:" + msg, `Suppressed transient music rejection: ${msg}`);
+		// Only known non-fatal WebSocket/network errors from discord.js/lavalink are suppressed.
+		const isKnownRejection = isKnownTransientMusicError(reason) || reason?.name === "TimeoutError" || (reason as any)?.code === 23 || msg.includes("The operation timed out") || msg.includes("WebSocket was closed") || msg.includes("Cannot send data") || msg.includes("writableStreamDefaultWriterRelease");
+		if (isKnownRejection) {
+			warnMusicThrottled("unhandled", `Suppressed transient music rejection: ${msg}`);
 			return;
 		}
-		console.error("Unhandled Rejection:", reason);
+		console.error("[music] Unhandled Rejection (unrecognized):", msg, reason);
 	});
 }
 
@@ -1095,7 +1174,7 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 				} catch (err: any) {
 					const msg = musicErrorMessage(err);
 					if (isKnownTransientMusicError(err)) {
-						warnMusicThrottled(`247-reconnect:${guildId}:${msg}`, `24/7 reconnect skipped for guild ${guildId}: ${msg}`, 30_000);
+						warnMusicThrottled(`247-reconnect:${guildId}`, `24/7 reconnect skipped for guild ${guildId}: ${msg}`, 30_000);
 					} else {
 						console.error(`24/7 reconnect failed for guild ${guildId}: ${msg}`);
 					}
@@ -1855,7 +1934,7 @@ export async function fillAutoplay(player: LavalinkPlayer, baseTrack?: Track) {
 	} catch (err) {
 		const msg = musicErrorMessage(err);
 		if (isKnownTransientMusicError(err)) {
-			warnMusicThrottled(`autoplay:${player.guildId}:${msg}`, `Autoplay skipped for guild ${player.guildId}: ${msg}`, 60_000);
+			warnMusicThrottled(`autoplay:${player.guildId}`, `Autoplay skipped for guild ${player.guildId}: ${msg}`, 60_000);
 		} else {
 			console.error(`Autoplay failed for guild ${player.guildId}:`, msg);
 		}

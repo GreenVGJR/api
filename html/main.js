@@ -636,12 +636,7 @@ const STATUS_BASE_CLASS = "absolute inset-0 flex items-center";
 const statusTextWrap = document.getElementById("statusTextWrap");
 const statusSizer = document.getElementById("statusSizer");
 
-// ---- Batched layout pass -------------------------------------------------
-// Geometry reads and style writes for the playground widgets used to happen
-// in separate animation frames (and, in places, as interleaved read/write
-// pairs in the same frame), forcing repeated synchronous reflows. Each widget
-// now registers a read (measurement) and a write (style mutation); a single
-// rAF callback runs every pending read first, then every pending write.
+// One rAF pass per frame: all geometry reads first, then all style writes.
 const layoutJobs = new Map();
 const layoutPending = new Set();
 const layoutCtx = {};
@@ -2478,8 +2473,7 @@ function renderEndpoints(animate = false) {
 
     animationTimeout = setTimeout(finishSwipe, 700);
   } else if (animate && (!oldHTML || oldHTML.includes("data-skeleton"))) {
-    // First load: no real previous list to slide out, so just slide the new
-    // list in with the same animation used when switching categories.
+    // First load: slide the new list in (no outgoing layer).
     endpointsList.classList.remove("is-animating");
     endpointsList.innerHTML = `<div class="ep-first-in space-y-1">${newHTML}</div>`;
     afterPaint();
@@ -2490,9 +2484,7 @@ function renderEndpoints(animate = false) {
   }
 }
 
-// ONE delegated listener handles every endpoint-list interaction. The list is
-// re-rendered on every filter/category/collapse change, so binding per-element
-// listeners on each paint was needlessly expensive.
+// Delegated listener: the list is re-rendered often, so bind only once.
 endpointsList.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) return;

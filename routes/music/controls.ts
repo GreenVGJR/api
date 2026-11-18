@@ -10,29 +10,68 @@ const RM = {
 	QUEUE: "queue" as RMValue,
 };
 
-function parseTimeMS(timeStr: string): number {
-	if (!timeStr) return 0;
-	timeStr = timeStr.toLowerCase().replace(/\s+/g, "");
+function parseTimeMS(timeStr: string): number | null {
+	if (typeof timeStr !== "string") return null;
+	const input = timeStr.trim();
+	if (input === "") return null;
 
-	const hmsRegex = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?/;
-	if (/[hm]/.test(timeStr)) {
-		const match = timeStr.match(hmsRegex);
-		if (match) {
-			const hours = parseInt(match[1] || "0", 10);
-			const minutes = parseInt(match[2] || "0", 10);
-			const seconds = parseInt(match[3] || "0", 10);
-			return (hours * 3600 + minutes * 60 + seconds) * 1000;
+	// Colon form: mm:ss or hh:mm:ss
+	if (input.includes(":")) {
+		const parts = input.split(":");
+		if (parts.length !== 2 && parts.length !== 3) return null;
+		if (!parts.every((part) => /^\d+$/.test(part))) return null;
+		const [a, b, c] = parts.map((part) => parseInt(part, 10));
+
+		// mm:ss — minutes and seconds capped at 59
+		if (parts.length === 2) {
+			if (a > 59 || b > 59) return null;
+			return (a * 60 + b) * 1000;
 		}
+
+		// hh:mm:ss — hours capped at 23, minutes/seconds at 59
+		if (a > 23 || b > 59 || c > 59) return null;
+		return (a * 3600 + b * 60 + c) * 1000;
 	}
 
-	if (timeStr.includes(":")) {
-		const parts = timeStr.split(":").map((p) => parseInt(p, 10));
-		if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 1000;
-		if (parts.length === 3) return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+	// Unit form: h/m/s tokens in any order, whitespace allowed, case-insensitive
+	const unitRegex = /(\d+)\s*([hms])/gi;
+	const matches = [...input.matchAll(unitRegex)];
+	if (matches.length > 0) {
+		// Ensure the whole input consists only of these tokens and whitespace
+		const stripped = input.toLowerCase().replace(/\s+/g, "");
+		const rebuilt = matches.map((m) => `${m[1]}${m[2].toLowerCase()}`).join("");
+		if (stripped !== rebuilt) return null;
+
+		let hours = 0;
+		let minutes = 0;
+		let seconds = 0;
+		const seen = new Set<string>();
+		for (const m of matches) {
+			const value = parseInt(m[1], 10);
+			const unit = m[2].toLowerCase();
+			if (seen.has(unit)) return null; // duplicate unit
+			seen.add(unit);
+			if (unit === "h") {
+				hours = value;
+			} else if (unit === "m") {
+				if (value > 59) return null;
+				minutes = value;
+			} else {
+				if (value > 59) return null;
+				seconds = value;
+			}
+		}
+
+		const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+		if (!Number.isFinite(totalSeconds) || totalSeconds > 24 * 3600) return null;
+		return totalSeconds * 1000;
 	}
 
-	const secs = parseInt(timeStr, 10);
-	return isNaN(secs) ? 0 : secs * 1000;
+	// Anything with non-digit characters here is invalid; otherwise plain seconds
+	if (!/^\d+$/.test(input)) return null;
+	const secs = parseInt(input, 10);
+	if (!Number.isFinite(secs)) return null;
+	return secs * 1000;
 }
 
 function isActive(p: any): boolean {
@@ -363,6 +402,11 @@ app.get("/seek", async (c) => {
 		}
 
 		const ms = parseTimeMS(time);
+
+		if (ms === null) {
+			await s.write(`],"data":${JSON.stringify({ status: false, message: "Invalid time format", type: { primary: "error", alt: "invalid_query" } })}}`);
+			return;
+		}
 
 		if (ms > duration) {
 			await s.write(`],"data":${JSON.stringify({ status: false, message: `Cannot seek beyond song duration (${Math.floor(duration / 1000)}s)`, type: { primary: "error", alt: "invalid_query" } })}}`);

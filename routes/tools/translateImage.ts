@@ -10,16 +10,18 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type OverlayResult = { ok: true; id: string; mime: string; raw: Record<string, any> } | { ok: false; error: string };
 
-async function generateOverlay(url: string, from: string, to: string, sourcePath?: string): Promise<OverlayResult> {
-	let parsed: URL;
+function parseImageUrl(url: string): URL | null {
 	try {
-		parsed = new URL(url);
+		const parsed = new URL(url);
+		return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
 	} catch {
-		return { ok: false, error: "Invalid image URL" };
+		return null;
 	}
-	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-		return { ok: false, error: "Invalid image URL" };
-	}
+}
+
+async function generateOverlay(url: string, from: string, to: string, sourcePath?: string): Promise<OverlayResult> {
+	const parsed = parseImageUrl(url);
+	if (!parsed) return { ok: false, error: "Invalid image URL" };
 
 	let res: Response;
 	try {
@@ -101,6 +103,8 @@ app.get("/translateImage", async (c) => {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
 
+	if (!parseImageUrl(url)) return c.json({ error: "Invalid image URL" }, 202);
+
 	const from = (c.req.query("from") || "auto").toLowerCase();
 	const to = (c.req.query("to") || "en").toLowerCase();
 
@@ -123,7 +127,12 @@ app.get("/translateImage", async (c) => {
 // 302s to /a/g/<ipHash>/img/<id>.<format>, which serves via blobDispatch.
 app.get("/translateImage/img", async (c) => {
 	const url = c.req.query("url");
-	if (!url) return c.body(null, 404);
+	if (url === undefined) {
+		return c.json({ error: "Missing parameter required" }, 202);
+	} else if (url === "") {
+		return c.json({ error: "Nothing to do" }, 202);
+	}
+	if (!parseImageUrl(url)) return c.json({ error: "Invalid image URL" }, 202);
 
 	const from = (c.req.query("from") || "auto").toLowerCase();
 	const to = (c.req.query("to") || "en").toLowerCase();

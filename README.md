@@ -55,6 +55,18 @@ bun run win-browser-install
 
 Installs a local `.venv` with `scrapling[ai]` + Playwright chromium.
 
+---
+
+If you want use `translateImage` endpoints, you must install `chrome-lens`
+
+```bash
+# Linux
+bun run lens-install
+
+# Windows
+bun run win-lens-install
+```
+
 ## Reference
 
 - [AMC](https://github.com/GreenVGJR/amc)

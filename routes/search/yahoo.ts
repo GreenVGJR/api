@@ -4,7 +4,7 @@ const app = new Hono();
 import { yahooWebSearch } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
-app.get("/yahoo/web", async (c) => {
+app.get("/yahoo", async (c) => {
 	const query = c.req.query("q");
 
 	if (query === undefined) {

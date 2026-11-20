@@ -10,8 +10,8 @@ const globalStore = globalThis as typeof globalThis & {
 
 const requestLogs = globalStore.__vgjr_logs || (globalStore.__vgjr_logs = []);
 
-export function recordRequestLog(c: Context, statusCode: number) {
-	const path = c.req.path;
+export function recordRequestLog(c: Context, statusCode: number, pathOverride?: string) {
+	const path = pathOverride ?? c.req.path;
 	const UA = c.req.header("user-agent") || "null";
 
 	requestLogs.unshift([Math.floor(Date.now() / 1000), UA, [path, statusCode]]);

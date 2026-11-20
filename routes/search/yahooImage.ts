@@ -4,7 +4,7 @@ const app = new Hono();
 import { yahooImageSearch } from "../../functions/request.js";
 import { dispatch } from "../../functions/httpRequest.js";
 
-app.get("/yahooImage/web", async (c) => {
+app.get("/yahooImage", async (c) => {
 	const query = c.req.query("q");
 
 	if (query === undefined) {

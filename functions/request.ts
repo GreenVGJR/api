@@ -6872,7 +6872,7 @@ export const infoTwitterUser = async function infoTwitterUser(que: string, refre
 			},
 		};
 
-		return { data: finalres?.rest_id ? finalres : null };
+		return { _warning: "This endpoint may stop working in future due to ongoing migration from Twitter", data: finalres?.rest_id ? finalres : null };
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -16004,6 +16004,140 @@ export const duckVideoSearch = async (query: string): Promise<any> => {
 				items: response.results || [],
 			},
 		};
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+};
+
+// ──── Bing image search (web SERP, raw results) ────
+
+const BING_IMAGE_IUSC_TAG_RE = /<a\b[^>]*\bclass="iusc"[^>]*>/g;
+const BING_IMAGE_M_ATTR_RE = /\bm="([^"]*)"/;
+
+// Shared Chrome session; warmup visits the homepage so the jar carries real
+// Bing cookies (_EDGE_S, MUID, ...) on every image search.
+let bingCloakSessionRef: any = null;
+const bingCloakSession = (): any => {
+	if (!bingCloakSessionRef) {
+		bingCloakSessionRef = new HttpcloakSession({
+			preset: HttpcloakPreset.CHROME_LATEST_WINDOWS,
+			httpVersion: "h2",
+			timeout: 30,
+		});
+	}
+	try {
+		// Keep SafeSearch off even if Bing re-issues a default SRCHHPGUSR later.
+		bingCloakSessionRef.setCookie("SRCHHPGUSR", "SRCHLANG=en&ADLT=OFF", { domain: ".bing.com", path: "/", secure: true });
+	} catch {}
+	return bingCloakSessionRef;
+};
+
+const mergeBingCloakCookies = (cookies: any[] | undefined): void => {
+	if (!cookies?.length || !bingCloakSessionRef) return;
+	for (const cookie of cookies) {
+		if (!cookie?.name || cookie.name === "SRCHHPGUSR") continue;
+		try {
+			bingCloakSessionRef.setCookie(cookie.name, String(cookie.value ?? ""), {
+				domain: cookie.domain || ".bing.com",
+				path: cookie.path || "/",
+				secure: !!cookie.secure,
+				httpOnly: !!cookie.httpOnly,
+				sameSite: cookie.sameSite || "Lax",
+			});
+		} catch {}
+	}
+};
+
+const BING_CLOAK_CONCURRENCY = 3;
+let bingCloakActive = 0;
+const bingCloakQueue: Array<() => void> = [];
+
+const bingCloakAcquire = (): Promise<void> => {
+	if (bingCloakActive < BING_CLOAK_CONCURRENCY) {
+		bingCloakActive++;
+		return Promise.resolve();
+	}
+	return new Promise<void>((resolve) => bingCloakQueue.push(resolve));
+};
+
+const bingCloakRelease = (): void => {
+	const next = bingCloakQueue.shift();
+	if (next) next();
+	else bingCloakActive--;
+};
+
+const bingCloakFetch = async (url: string): Promise<{ html: string; status: number } | null> => {
+	await bingCloakAcquire();
+	try {
+		const res: any = await bingCloakSession().get(url, {
+			headers: { Referer: "https://www.bing.com/", "Accept-Language": "en-US,en;q=0.9" },
+			fetchMode: "navigate",
+		});
+		mergeBingCloakCookies(res?.cookies);
+		return { html: String(res?.text ?? ""), status: Number(res?.statusCode ?? 0) };
+	} catch {
+		return null;
+	} finally {
+		bingCloakRelease();
+	}
+};
+
+export const warmBingCookies = async (): Promise<boolean> => {
+	try {
+		const res: any = await bingCloakSession().get("https://www.bing.com/", {
+			headers: { Referer: "https://www.bing.com/?cc=sg&setlang=en", "Accept-Language": "en-US,en;q=0.9" },
+			fetchMode: "navigate",
+		});
+		mergeBingCloakCookies(res?.cookies);
+		const ok = Number(res?.statusCode) === 200;
+		if (ok) console.log("[Bing] cookies collected");
+		else console.warn("[Bing] warmup status:", res?.statusCode);
+		return ok;
+	} catch (e) {
+		console.warn("[Bing] warmup failed:", String(e).slice(0, 200));
+		return false;
+	}
+};
+
+export const bingImageSearch = async (query: string): Promise<any> => {
+	if (!query) return null;
+
+	try {
+		const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC3&adlt=off&cc=sg&mkt=sg-SG`;
+		const res = await bingCloakFetch(url);
+		if (!res) return null;
+
+		if (res.status !== 200) {
+			console.error("bingImageSearch failed", res.status);
+			return { error: "Upstream failed" };
+		}
+
+		const html = res.html;
+
+		if (/(?:you are not a robot|captcha|verify your identity)/i.test(html) && /class="iusc"/.test(html) === false) {
+			return { error: "Bing asking to verify you're not a bot" };
+		}
+
+		const data: any[] = [];
+		const seen = new Set<string>();
+		BING_IMAGE_IUSC_TAG_RE.lastIndex = 0;
+		let tag: RegExpExecArray | null;
+		while ((tag = BING_IMAGE_IUSC_TAG_RE.exec(html))) {
+			const mAttr = BING_IMAGE_M_ATTR_RE.exec(tag[0])?.[1];
+			if (!mAttr) continue;
+			try {
+				const raw = JSON.parse(decodeHTML(mAttr));
+				if (raw && typeof raw === "object" && typeof raw.murl === "string" && /^https?:\/\//i.test(raw.murl) && !seen.has(raw.murl)) {
+					seen.add(raw.murl);
+					data.push(raw);
+				}
+			} catch {
+				// skip malformed entries
+			}
+		}
+
+		return { total: data.length, data };
 	} catch (e) {
 		console.error(e);
 		return null;

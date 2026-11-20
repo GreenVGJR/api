@@ -5,6 +5,7 @@ import audiomack from "./audiomack.js";
 import bandcamp from "./bandcamp.js";
 import Bilibili from "./Bilibili.js";
 import bilibiliGlobal from "./bilibiliGlobal.js";
+import bingImageWeb from "./bingImageWeb.js";
 import canvaGraphics from "./canvaGraphics.js";
 import canvaTemplates from "./canvaTemplates.js";
 import capcut from "./capcut.js";
@@ -70,4 +71,4 @@ import youtubeMusic from "./youtubeMusic.js";
 import youtubePlaylist from "./youtubePlaylist.js";
 import youtubeVideo from "./youtubeVideo.js";
 
-export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, canvaGraphics, canvaTemplates, capcut, cruncy, danbooru, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, googleImage, googleImageV2, googleImageWeb, googleSearch, googleWeb, imdb, imgur, istockphoto, jiosaavn, kick, klipy, konachan, magnific, patreon, pexels, pinterest, pinterestExplore, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, robloxUsers, rule34, safebooru, soundcloud, spotify, spotifyMix, startpage, startpageImage, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, yahoo, yahooImage, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];
+export default [appleMusic, appStore, audiomack, bandcamp, Bilibili, bilibiliGlobal, bingImageWeb, canvaGraphics, canvaTemplates, capcut, cruncy, danbooru, deezer, deviantart, discordApps, discordDiscovery, duckSearch, flickr, genius, giphy, googleImage, googleImageV2, googleImageWeb, googleSearch, googleWeb, imdb, imgur, istockphoto, jiosaavn, kick, klipy, konachan, magnific, patreon, pexels, pinterest, pinterestExplore, pixabay, pixiv, playstore, radio, redditMedia, robloxAudio, robloxGames, robloxUsers, rule34, safebooru, soundcloud, spotify, spotifyMix, startpage, startpageImage, stockCake, tenor, threadUsers, tidal, tidalOpen, tiktokFeed, tiktokMusic, tiktokUser, tiktokVideo, trakteer, tumblr, twitch, unsplash, yahoo, yahooImage, youtubeChannel, youtubeMusic, youtubePlaylist, youtubeVideo] as any[];

@@ -11,25 +11,9 @@ import { autoGenBuild, autoGenBuildPara, isLocalRequest, isWafChallengeActive } 
 import { maxLimitRequestsPerSec, buildId } from "../config.json";
 import { VS_COOKIE, signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
 
-const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status) => {
-	recordRequestLog(c, statusCode);
+const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status, pathOverride?: string) => {
+	recordRequestLog(c, statusCode, pathOverride);
 	return response;
-};
-
-type AiImageEntry = {
-	prompt: Buffer;
-	image?: Buffer;
-	contentType?: string;
-	ts?: string;
-	expire: number;
-};
-
-const aiImageRegistry = new Map<string, AiImageEntry>();
-const AI_IMAGE_TTL = 7 * 24 * 3600 * 1000;
-
-const pruneAiImageRegistry = () => {
-	const now = Date.now();
-	for (const [k, v] of aiImageRegistry) if (v.expire < now) aiImageRegistry.delete(k);
 };
 
 // Opportunistic playground attestation via `x-sf-l` header.
@@ -59,7 +43,8 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 			return a.length === b.length && crypto.timingSafeEqual(a, b);
 		};
 		if (matches(`GET\n${url.pathname}${url.search}\n${tStr}.${n}`)) return true;
-		// aiImageHandshake 302 appends hs/ts; fetch follows with old header, so also accept pre-redirect URL.
+		// Legacy redirects appended hs/ts; fetch follows with the old header, so
+		// also accept the pre-redirect URL.
 		const stripped = new URL(c.req.url);
 		stripped.searchParams.delete("hs");
 		stripped.searchParams.delete("ts");
@@ -68,70 +53,6 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 	} catch {
 		return false;
 	}
-};
-
-// Handshake/cache key includes prompt and URL path (per-route validation).
-const aiImageKey = (c: Context): string => {
-	const prompt = c.req.query("prompt") || "";
-	const pathname = new URL(c.req.url).pathname;
-	return new Bun.CryptoHasher("md5").update(`${prompt}|${pathname}`, "utf8").digest("hex");
-};
-
-export const aiImageHandshake = async (c: Context): Promise<Response | null> => {
-	const prompt = c.req.query("prompt");
-	if (prompt === undefined || prompt === "") return null;
-	const hash = aiImageKey(c);
-	const hs = c.req.query("hs");
-	const ts = c.req.query("ts");
-	const url = new URL(c.req.url);
-	const fwdProto = (c.req.header("x-forwarded-proto") || "").split(",")[0].trim();
-	if (fwdProto === "https") url.protocol = "https:";
-
-	if (hs || ts) {
-		if (hs !== hash) return c.text("Forbidden", 403);
-		pruneAiImageRegistry();
-		const entry = aiImageRegistry.get(hash);
-		if (entry && entry.expire > Date.now()) {
-			if (ts && entry.ts && ts !== entry.ts) return c.text("Forbidden", 403);
-			if (entry.image) {
-				return new Response(entry.image, {
-					headers: {
-						"Content-Type": entry.contentType || "image/png",
-						"Cache-Control": "public, max-age=3600, s-maxage=3600",
-					},
-				});
-			}
-			return null;
-		}
-	}
-
-	const newTs = String(Date.now());
-	aiImageRegistry.set(hash, {
-		prompt: Buffer.from(prompt, "utf8"),
-		ts: newTs,
-		expire: Date.now() + AI_IMAGE_TTL,
-	});
-	url.searchParams.set("hs", hash);
-	url.searchParams.set("ts", newTs);
-	return c.redirect(url.toString(), 302);
-};
-
-export const cacheAiImage = (c: Context, buffer: Buffer | ArrayBuffer, contentType: string) => {
-	const hash = aiImageKey(c);
-	const prompt = c.req.query("prompt") || "";
-	const existing = aiImageRegistry.get(hash);
-	aiImageRegistry.set(hash, {
-		prompt: existing?.prompt || Buffer.from(prompt, "utf8"),
-		ts: existing?.ts || String(Date.now()),
-		image: buffer instanceof ArrayBuffer ? Buffer.from(new Uint8Array(buffer)) : Buffer.from(buffer),
-		contentType,
-		expire: Date.now() + AI_IMAGE_TTL,
-	});
-};
-
-export const aiImageDispatch = async (c: Context, buffer: Buffer | ArrayBuffer, contentType: string) => {
-	if (c.req.query("prompt")) cacheAiImage(c, buffer, contentType);
-	return await blobDispatch(c, buffer, { "content-type": contentType });
 };
 
 // --- Shared Resource Infrastructure -----------------------------------------
@@ -231,14 +152,17 @@ export const aiImageFailure = async (message: string): Promise<Response> => {
 	});
 };
 
-export const blobDispatch = async (c: Context, body: any, headers?: any, options?: { share?: boolean | string }) => {
+export const blobDispatch = async (c: Context, body: any, headers?: any, options?: { share?: boolean | string; verifySfL?: boolean; logPath?: string }) => {
 	try {
 		if (c.req.method !== "GET") return logResponse(c, c.text("", 200));
 	} catch {
 		return logResponse(c, c.text("", 200));
 	}
 
-	if ((await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+	if (options?.verifySfL !== false && (await verifySfL(c)) === false) return logResponse(c, c.text("Forbidden", 403));
+
+	const vsRes = await applyVsChallenge(c);
+	if (vsRes) return vsRes;
 
 	c.header("X-Enc-Route", "v5");
 
@@ -455,6 +379,8 @@ export const blobDispatch = async (c: Context, body: any, headers?: any, options
 				}
 			}
 		}),
+		200,
+		options?.logPath,
 	);
 };
 // Rate limiting config and state

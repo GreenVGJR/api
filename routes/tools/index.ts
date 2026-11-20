@@ -38,13 +38,13 @@ import duckChat from "./duckChat.js";
 import emoji from "./emoji.js";
 import emojiKitchen from "./emojiKitchen.js";
 import flux from "./flux.js";
-import magicstudio from "./magicstudio.js";
 import md5 from "./md5.js";
 import mealRecipe from "./mealRecipe.js";
 import redditAsk from "./redditAsk.js";
 import timeEvents from "./timeEvents.js";
 import timezone from "./timezone.js";
 import translateAmp from "./translateAmp.js";
+import translateImage from "./translateImage.js";
 import tts from "./tts.js";
 
-export default [chat, cloudTts, country, db, discordCreateRole, discordInfoApp, discordInfoAutomod, discordInfoChannel, discordInfoClient, discordInfoInvite, discordInfoMember, discordInfoMessage, discordInfoMessages, discordInfoRole, discordInfoServer, discordInfoSticker, discordListChannel, discordListInvite, discordListMember, discordListMemberRole, discordListMemberTags, discordListRole, discordListWebhooks, discordModifyAllChannels, discordModifyAllRoles, discordModifyChannel, discordModifyMember, discordModifyRole, discordModifyServer, discordStream, discordTiktokFeed, discordTts, discordVoice, discordWebhook, dnslookup, duckChat, emoji, emojiKitchen, flux, magicstudio, md5, mealRecipe, redditAsk, timeEvents, timezone, translateAmp, tts] as any[];
+export default [chat, cloudTts, country, db, discordCreateRole, discordInfoApp, discordInfoAutomod, discordInfoChannel, discordInfoClient, discordInfoInvite, discordInfoMember, discordInfoMessage, discordInfoMessages, discordInfoRole, discordInfoServer, discordInfoSticker, discordListChannel, discordListInvite, discordListMember, discordListMemberRole, discordListMemberTags, discordListRole, discordListWebhooks, discordModifyAllChannels, discordModifyAllRoles, discordModifyChannel, discordModifyMember, discordModifyRole, discordModifyServer, discordStream, discordTiktokFeed, discordTts, discordVoice, discordWebhook, dnslookup, duckChat, emoji, emojiKitchen, flux, md5, mealRecipe, redditAsk, timeEvents, timezone, translateAmp, translateImage, tts] as any[];

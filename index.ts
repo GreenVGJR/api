@@ -51,6 +51,8 @@ const warmupPromise = firstBoot
 			await import("./functions/browserRequest.js").then(({ warmBrowser }) => warmBrowser()).catch(() => {});
 			// Prime Google trust cookies so the first search skips the cold solve.
 			await import("./functions/googleTrust.js").then(({ warmGoogleTrust }) => warmGoogleTrust()).catch(() => {});
+			// Collect Bing cookies so image searches ride a returning-visitor jar.
+			await import("./functions/request.js").then(({ warmBingCookies }) => warmBingCookies()).catch(() => {});
 		})
 	: Promise.resolve();
 

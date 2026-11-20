@@ -10,7 +10,8 @@ import crypto from "crypto";
 import config from "./config.json" with { type: "json" };
 import os from "os";
 import { getLastRequestedLogs } from "./functions/telemetry.js";
-import { applyVsChallenge } from "./functions/httpRequest.js";
+import { getProxyImage, getIpHash } from "./functions/imageProxy.js";
+import { blobDispatch } from "./functions/httpRequest.js";
 import { commonHeaders } from "./functions/types/headers.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
 import { VS_COOKIE, VS_COOKIE_MAX_AGE, signVsCookie } from "./functions/vsChallenge.js";
@@ -78,7 +79,7 @@ const API_ROUTES = {
 		["/suggest/google?q=", "string"],
 		["/suggest/duckduckgo?q=", "string"],
 	],
-	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/yahoo/web?q=", "string"], ["/search/yahooImage/web?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/googleImage/web?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/spotify/mix?q=", "string"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
+	search: [["/search/duckduckgo?q=", "string"], ["/search/duckduckgo/image?q=", "string"], ["/search/duckduckgo/video?q=", "string"], ["/search/google?q=", "string"], ["/search/google/web?q=", "string"], ["/search/googleImage?q=&sort=", "string", "enum:relevance,latest"], ["/search/googleImage/cse?q=", "string"], ["/search/googleImage/web?q=", "string"], ["/search/bingImage?q=", "string"], ["/search/startpage?q=", "string"], ["/search/startpage/image?q=", "string"], ["/search/yahoo?q=", "string"], ["/search/yahooImage?q=", "string"], ["/search/youtube/video?q=&mix=", "string", "boolean"], ["/search/youtube/music?q=&mix=", "string", "boolean"], ["/search/youtube/channel?q=", "string"], ["/search/youtube/playlist?q=", "string"], ["/search/soundcloud?q=&limit=", "string", "number"], ["/search/spotify?q=&limit=", "string", "number"], ["/search/spotify/mix?q=", "string"], ["/search/applemusic?q=&limit=", "string", "number"], ["/search/deezer?q=&limit=", "string", "number"], ["/search/tidal?q=&limit=", "string", "number"], ["/search/tidal/v2?q=&limit=", "string", "number"], ["/search/genius?q=", "string"], ["/search/appstore?q=&type=", "string", "enum:iphone,ipad,mac,vision,watch,tv"], ["/search/playstore?q=", "string"], ["/search/radio?q=", "string"], ["/search/jiosaavn?q=", "string"], ["/search/audiomack?q=&type=", "string", "enum:songs,albums,playlists,artists"], ["/search/bandcamp?q=", "string"], ["/search/crunchyroll?q=", "string"], ["/search/imdb?q=", "string"], ["/search/pinterest?q=&type=&ratio=&limit=", "string", "enum:all,image,video,gif", "enum:all,portrait,landscape,square", "number"], ["/search/pinterest/explore?q=&ratio=", "string", "enum:all,portrait,landscape,square"], ["/search/deviantart?q=", "string"], ["/search/safebooru?q=", "string"], ["/search/rule34?q=", "string"], ["/search/danbooru?q=", "string"], ["/search/konachan?q=", "string"], ["/search/pixiv?q=", "string"], ["/search/bilibili?q=", "string"], ["/search/bilibili/global?q=", "string"], ["/search/tumblr?q=", "string"], ["/search/imgur/posts?q=", "string"], ["/search/flickr?q=", "string"], ["/search/istockphoto?q=", "string"], ["/search/stockcake?q=", "string"], ["/search/pixabay?q=", "string"], ["/search/unsplash?q=", "string"], ["/search/pexels?q=", "string"], ["/search/magnific?q=", "string"], ["/search/canva/templates?q=", "string"], ["/search/canva/graphics?q=", "string"], ["/search/twitch?q=", "string"], ["/search/kick?q=&withStream=", "string", "boolean"], ["/search/discord/discovery/apps?q=", "string"], ["/search/discord/discovery/servers?q=", "string"], ["/search/capcut/templates?q=&limit=", "string", "number"], ["/search/tiktok/feed"], ["/search/tiktok/video?q=&limit=", "string", "number"], ["/search/tiktok/music?q=&limit=", "string", "number"], ["/search/tiktok/users?q=&limit=", "string", "number"], ["/search/reddit/media?q=", "string"], ["/search/roblox/games?q=", "string"], ["/search/roblox/audio?q=", "string"], ["/search/roblox/users?q=", "string"], ["/search/tenor?q=&type=", "string", "enum:all,sticker,meme"], ["/search/giphy?q=&type=", "string", "enum:gif,sticker,clip"], ["/search/klipy?q=&type=", "string", "enum:gif,sticker,clip,emoji,ai_gif"], ["/search/patreon?q=", "string"], ["/search/trakteer?q=", "string"], ["/search/threads/users?q=", "string"]],
 	profile: [
 		["/profile/guns?q=", "string"],
 		["/profile/drift?q=", "string"],
@@ -110,6 +111,9 @@ const API_ROUTES = {
 				["/tools/chat/zai?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gpt?prompt=&conversation=", "string", "string"],
 				["/tools/chat/gpt/luna?prompt=&conversation=", "string", "string"],
+				["/tools/chat/gpt/mini?prompt=&conversation=", "string", "string"],
+				["/tools/chat/haiku?prompt=&conversation=", "string", "string"],
+				["/tools/chat/mistral?prompt=&conversation=", "string", "string"],
 				["/tools/chat/reddit/ask?prompt=", "string"],
 				["/tools/chat/gemma?prompt=&conversation=", "string", "string"],
 				["/tools/chat/nemotron?prompt=&conversation=", "string", "string"],
@@ -117,8 +121,12 @@ const API_ROUTES = {
 			],
 			image_generation: [
 				["/tools/ai-image/flux_schnell?prompt=", "string"],
-				["/tools/ai-image/magicstudio?prompt=", "string"],
 				["/tools/ai-image/flux_klein?prompt=", "string"],
+				["/tools/ai-image/flux_dev?prompt=", "string"],
+				["/tools/ai-image/lucid_origin?prompt=", "string"],
+				["/tools/ai-image/phoenix?prompt=", "string"],
+				["/tools/translateImage?url=&from=&to=", "string", "string", "string"],
+				["/tools/translateImage/img?url=&from=&to=", "string", "string", "string"],
 			],
 		},
 		misc: [
@@ -721,11 +729,6 @@ if (maintenanceConfig?.enabled) {
 }
 
 app.get("/logs", async (c: Context) => {
-	if (!c.req.header("cache-control")?.startsWith("max-age=0")) {
-		const vsRes = await applyVsChallenge(c);
-		if (vsRes) return vsRes;
-	}
-
 	c.header("Cache-Control", "public, max-age=0, no-transform, must-revalidate");
 	c.header("Content-Type", "text/plain");
 	c.header("Refresh", "3");
@@ -880,6 +883,26 @@ const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "
 
 // Radio proxy: fetch streams for Lavalink to handle non-compliant responses.
 import { radioStreamUrls } from "./functions/radioProxy.js";
+
+// Proxy for translated overlay images: /a/g/<ipHash>/img/<id>.<format>
+// Served directly through blobDispatch (WAF challenge applies); the store
+// expires entries after 1 hour, so no hs/ts handshake is needed.
+app.get("/a/g/:ipHash/img/:file", async (c) => {
+	const file = c.req.param("file");
+	const match = /^([a-f0-9]{16})\.(png|webp|jpe?g)$/i.exec(file || "");
+	if (!match) return c.body(null, 404);
+
+	// Bound to the requester's IP hash; a wrong segment is a 404.
+	const ip = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "";
+	if (c.req.param("ipHash") !== getIpHash(ip)) return c.body(null, 404);
+
+	const entry = getProxyImage(match[1]);
+	if (!entry || !entry.image || entry.image.length === 0) {
+		return c.body(null, 404);
+	}
+
+	return await blobDispatch(c, entry.image, { "content-type": entry.mime }, { verifySfL: false, logPath: entry.sourcePath });
+});
 
 app.get("/radio-proxy/:guildId", async (c) => {
 	// Only allow localhost (Lavalink runs on the same machine)

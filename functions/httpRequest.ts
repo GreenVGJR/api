@@ -43,8 +43,6 @@ export const verifySfL = async (c: Context): Promise<boolean | null> => {
 			return a.length === b.length && crypto.timingSafeEqual(a, b);
 		};
 		if (matches(`GET\n${url.pathname}${url.search}\n${tStr}.${n}`)) return true;
-		// Legacy redirects appended hs/ts; fetch follows with the old header, so
-		// also accept the pre-redirect URL.
 		const stripped = new URL(c.req.url);
 		stripped.searchParams.delete("hs");
 		stripped.searchParams.delete("ts");

@@ -122,9 +122,6 @@ app.get("/translateImage", async (c) => {
 	return c.json({ data: { ...result.raw, overlay_image: overlayUrl } });
 });
 
-// Overlay image endpoint: serves (or generates, then redirects to) the proxy.
-// Same pattern as the ai-image endpoints: request waits for the image, then
-// 302s to /a/g/<ipHash>/img/<id>.<format>, which serves via blobDispatch.
 app.get("/translateImage/img", async (c) => {
 	const url = c.req.query("url");
 	if (url === undefined) {

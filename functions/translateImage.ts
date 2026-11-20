@@ -1,8 +1,3 @@
-// Persistent Playwright bridge for Google Translate image translation.
-// The bgr token is minted inside a live translate.google.com page (ridgeslice VM),
-// so this keeps one browser warm and proxies per-request work through a Python
-// subprocess that speaks JSON lines on stdin/stdout.
-
 import { join } from "path";
 import readline from "readline";
 import { Readable } from "stream";
@@ -113,7 +108,6 @@ function sendRequest(payload: Record<string, any>, timeoutMs = 120000): Promise<
 	});
 }
 
-// Serialized like the scrapling bridge: one browser, one request at a time.
 export async function translateImage(imageB64: string, mime: string, from: string, to: string): Promise<TranslateImageResult> {
 	return new Promise((resolve, reject) => {
 		requestQueue = requestQueue.then(async () => {

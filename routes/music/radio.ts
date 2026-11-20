@@ -6,28 +6,30 @@ import { commonHeaders } from "../../functions/request.js";
 import { radioStreamUrls } from "../../functions/radioProxy.js";
 import { getActiveFilters } from "./filters.js";
 
-async function resolveRedirectUrl(url: string, maxRedirects = 5): Promise<string> {
+export async function resolveRedirectUrl(url: string, maxRedirects = 5): Promise<string> {
 	let current = url;
 	for (let i = 0; i < maxRedirects; i++) {
+		let res: Response | null = null;
 		try {
-			const res = await fetch(current, {
+			res = await fetch(current, {
 				method: "GET",
 				redirect: "manual",
 				headers: commonHeaders,
+				signal: AbortSignal.timeout(10000),
 			});
 			const status = res.status;
-			if (status >= 300 && status < 400) {
-				const location = res.headers.get("location");
-				if (!location) break;
-				// Handle relative redirects
-				const next = location.startsWith("http") ? location : new URL(location, current).href;
-				if (next === current) break;
-				current = next;
-			} else {
-				break;
-			}
+			if (status < 300 || status >= 400) break;
+			const location = res.headers.get("location");
+			if (!location) break;
+			const next = location.startsWith("http") ? location : new URL(location, current).href;
+			if (next === current) break;
+			current = next;
 		} catch {
 			break;
+		} finally {
+			try {
+				await res?.body?.cancel();
+			} catch {}
 		}
 	}
 	return current;

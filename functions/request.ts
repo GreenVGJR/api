@@ -2594,7 +2594,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
 		const res: any = await pull.json();
 
-		if (res?.errors?.[0]?.message.includes("Given jwt")) {
+		if (res?.errors?.[0]?.message.includes("Given jwt") && !refresh_auth) {
 			return await deezerLyrics(que, true);
 		}
 
@@ -2628,7 +2628,7 @@ export const deezerLyrics = async function deezerLyrics(que: string, refresh_aut
 
 			const res2: any = await pull2.json();
 
-			if (res2?.errors?.[0]?.message.includes("Given jwt")) {
+			if (res2?.errors?.[0]?.message.includes("Given jwt") && !refresh_auth) {
 				return await deezerLyrics(que, true);
 			}
 
@@ -2649,8 +2649,10 @@ export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth:
 			keybearer = await tidalKeysToken();
 		}
 
-		const findtrack: any = await Tidal(que, false, 1);
-		const trackid = findtrack.data?.[0]?.id;
+		const findtrack: any = await TidalOpen(que, false, 1);
+		const tracks = findtrack?.data?.tracks;
+		const track = (Array.isArray(tracks) ? tracks[0] : tracks?.items?.[0]) || null;
+		const trackid = track?.id;
 		if (!trackid) {
 			return { data: null };
 		}
@@ -2662,19 +2664,33 @@ export const tidalLyrics = async function tidalLyrics(que: string, refresh_auth:
 				Origin: "https://tidal.com",
 				Authorization: "Bearer " + keybearer,
 			},
+			signal: AbortSignal.timeout(15000),
 		});
 
 		if (pull.status === 429) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
 			return { error: "Rate-limited" };
 		}
 
-		if (pull.status === 400 || pull.status === 401) {
+		if ((pull.status === 400 || pull.status === 401) && !refresh_auth) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
 			return await tidalLyrics(que, true);
+		}
+
+		if (!pull.ok) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
+			return { data: null };
 		}
 
 		const res: any = await pull.json();
 		return {
-			data: [res?.data?.attributes || null, findtrack.data?.[0] || null],
+			data: [res?.data?.attributes || null, track],
 			lyrics: res?.included?.[0]?.attributes?.text || null,
 			syncLyrics: res?.included?.[0]?.attributes?.lrcText || null,
 			...res?.included?.[0]?.attributes?.provider,
@@ -2955,7 +2971,8 @@ export const KugouLyrics = async function KugouLyrics(que: string): Promise<any>
 export const Tidal = async function Tidal(que: string, refresh?: boolean, limits: number = 1): Promise<any> {
 	if (!que) return null;
 	if (refresh) {
-		setKeyTidal(await tidalKeys());
+		const fresh = await tidalKeys();
+		if (fresh) setKeyTidal(fresh);
 	}
 
 	try {
@@ -2964,10 +2981,21 @@ export const Tidal = async function Tidal(que: string, refresh?: boolean, limits
 				...commonHeaders,
 				"X-Tidal-Token": keytidal || "",
 			},
+			signal: AbortSignal.timeout(15000),
 		});
 
-		if (pull.status === 400 || pull.status === 401) {
+		if ((pull.status === 400 || pull.status === 401) && !refresh) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
 			return await Tidal(que, true);
+		}
+
+		if (!pull.ok) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
+			return { data: null };
 		}
 
 		const res: any = await pull.json();
@@ -2992,14 +3020,28 @@ export const TidalOpen = async function TidalOpen(que: string, refresh?: boolean
 				Authorization: "Bearer " + keybearer,
 				"x-tidal-token": keytidalopen,
 			},
+			signal: AbortSignal.timeout(15000),
 		});
 
 		if (pull.status === 429) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
 			return { error: "Rate-limited" };
 		}
 
-		if (pull.status === 400 || pull.status === 401) {
+		if ((pull.status === 400 || pull.status === 401) && !refresh) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
 			return await TidalOpen(que, true);
+		}
+
+		if (!pull.ok) {
+			try {
+				await pull.body?.cancel();
+			} catch {}
+			return { data: null };
 		}
 
 		const res: any = await pull.json();

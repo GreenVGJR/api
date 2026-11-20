@@ -295,7 +295,10 @@ export const tidalKeys = async function tidalKeys() {
 
 export const tidalKeysToken = async function tidalKeysToken(refresh: boolean = false) {
 	try {
-		if (!keytidal || refresh) {
+		if (refresh) {
+			const fresh = await tidalKeys();
+			if (fresh) keytidal = fresh;
+		} else if (!keytidal) {
 			keytidal = await tidalKeys();
 		}
 
@@ -311,10 +314,21 @@ export const tidalKeysToken = async function tidalKeysToken(refresh: boolean = f
 				...commonHeaders,
 				"Content-Type": "application/x-www-form-urlencoded",
 			},
+			signal: AbortSignal.timeout(15000),
 		});
 
-		if (rest.status === 400 || rest.status === 401) {
+		if ((rest.status === 400 || rest.status === 401) && !refresh) {
+			try {
+				await rest.body?.cancel();
+			} catch {}
 			return await tidalKeysToken(true);
+		}
+
+		if (!rest.ok) {
+			try {
+				await rest.body?.cancel();
+			} catch {}
+			return undefined;
 		}
 
 		const res: any = await rest.json();

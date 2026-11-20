@@ -884,15 +884,11 @@ const apiPrefixesRoute = ["/search", "/lyrics", "/tools", "/info", "/profile", "
 // Radio proxy: fetch streams for Lavalink to handle non-compliant responses.
 import { radioStreamUrls } from "./functions/radioProxy.js";
 
-// Proxy for translated overlay images: /a/g/<ipHash>/img/<id>.<format>
-// Served directly through blobDispatch (WAF challenge applies); the store
-// expires entries after 1 hour, so no hs/ts handshake is needed.
 app.get("/a/g/:ipHash/img/:file", async (c) => {
 	const file = c.req.param("file");
 	const match = /^([a-f0-9]{16})\.(png|webp|jpe?g)$/i.exec(file || "");
 	if (!match) return c.body(null, 404);
 
-	// Bound to the requester's IP hash; a wrong segment is a 404.
 	const ip = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "";
 	if (c.req.param("ipHash") !== getIpHash(ip)) return c.body(null, 404);
 
@@ -935,6 +931,9 @@ app.get("/radio-proxy/:guildId", async (c) => {
 	}
 
 	if (!res.ok || !res.body) {
+		try {
+			await res.body?.cancel();
+		} catch {}
 		return c.json({ error: `Upstream returned ${res.status}` }, 502);
 	}
 

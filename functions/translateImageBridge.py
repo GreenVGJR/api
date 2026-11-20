@@ -65,7 +65,6 @@ def handle_request(request):
 	except Exception as exc:
 		return {"ok": False, "error": f"translation failed: {str(exc)[:300]}"}
 
-	# Return the raw Lens result verbatim (all binary fields base64-encoded).
 	return {"ok": True, **json_safe(result)}
 
 

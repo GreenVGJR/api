@@ -1,6 +1,3 @@
-// In-memory store for translated overlay images served by the proxy route.
-// Images expire automatically (1 hour); nothing is written to disk.
-
 import crypto from "crypto";
 import type { Context } from "hono";
 
@@ -8,17 +5,13 @@ type StoredImage = {
 	image: Buffer;
 	mime: string;
 	expire: number;
-	/** Endpoint that produced the image, so /logs shows the target, not /a/g/. */
 	sourcePath?: string;
 };
 
 const IMAGE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// Persist across bun --hot reloads; module-scoped maps would be wiped.
 const g = globalThis as any;
 const images: Map<string, StoredImage> = g.__vgjr_image_proxy || (g.__vgjr_image_proxy = new Map<string, StoredImage>());
-// Maps a translation request (url|from|to) to the stored image id so the
-// overlay URL can redirect to /a/g/... without regenerating.
 const queryImages: Map<string, { id: string; expire: number }> = g.__vgjr_image_proxy_query || (g.__vgjr_image_proxy_query = new Map());
 
 function prune() {
@@ -36,7 +29,6 @@ if (!g.__vgjr_image_proxy_timer) {
 	g.__vgjr_image_proxy_timer.unref?.();
 }
 
-/** Same 8-char MD5-of-IP scheme used by /logs. */
 export function getIpHash(ip: string): string {
 	return crypto
 		.createHash("md5")
@@ -45,7 +37,6 @@ export function getIpHash(ip: string): string {
 		.slice(0, 8);
 }
 
-/** Store the image and return its short content hash (the proxy id). */
 export function storeProxyImage(image: Buffer, mime: string, sourcePath?: string): string {
 	prune();
 	const id = crypto.createHash("sha256").update(image).digest("hex").slice(0, 16);
@@ -80,7 +71,6 @@ export function getQueryImageId(key: string): string | null {
 	return image && image.expire > Date.now() ? entry.id : null;
 }
 
-/** Store a generated image and redirect the client to its /a/g/ proxy URL. */
 export function proxyRedirect(c: Context, image: Buffer | ArrayBuffer, mime: string): Response {
 	const buffer = image instanceof ArrayBuffer ? Buffer.from(new Uint8Array(image)) : Buffer.from(image);
 	const id = storeProxyImage(buffer, mime, c.req.path);

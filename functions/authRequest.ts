@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { post as httpcloakPost, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 import { BotGuardClient, getChallenge } from "bgutils-js/botguard";
 import { commonHeaders, userAgent_mobile } from "./request.js";
+import { userAgentChrome } from "./types/headers.js";
 import { load as rusteerioLoad } from "rusteerio";
 
 const requireModule = createRequire(import.meta.url);
@@ -663,7 +664,7 @@ export const devianKey = async function devianKey(): Promise<{
 	}
 };
 
-const magnificChromeUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+const magnificChromeUA = userAgentChrome;
 
 const mergeCookieJar = (base: string, setCookies: string[]): string => {
 	const jar = new Map<string, string>();
@@ -1405,3 +1406,696 @@ export function hwo_6qi() {
 }
 
 void pmp_7as().catch(() => {});
+
+const SEED_O = 1789537805;
+const SEED_E = 9959949970;
+const ENCRYPT_SEED = 1809053797;
+const IV_XOR = 11027890091;
+const DEFAULT_V = 741130091;
+const DDV = "5.11.5";
+
+export const DATADOME_UA = userAgentChrome;
+
+interface Signal {
+	key: string;
+	value: any;
+}
+
+const toInt32 = (n: number): number => n | 0;
+
+function hashL(s: string): number {
+	if (!s) return SEED_O;
+	let t = 0;
+	for (let i = 0; i < s.length; i++) {
+		t = ((t << 5) - t + s.charCodeAt(i)) | 0;
+	}
+	return t === 0 ? SEED_O : t;
+}
+
+function xorshift32(n: number): number {
+	n = (n ^ (n << 13)) | 0;
+	n = (n ^ (n >> 17)) | 0;
+	n = (n ^ (n << 5)) | 0;
+	return n;
+}
+
+function float64ToInt32(f: number): number {
+	if (!Number.isFinite(f) || f === 0) return 0;
+	if (f >= 9223372036854775808 || f <= -9223372036854775808) return 0;
+	return Math.trunc(f) | 0;
+}
+
+class Prng {
+	c: number;
+	e = -1;
+	i: number;
+	r: boolean;
+	cached: number | null = null;
+
+	constructor(seed: number, iv: number, xorWithIv: boolean) {
+		this.c = toInt32(seed);
+		this.i = toInt32(iv);
+		this.r = xorWithIv;
+	}
+
+	next(peek: boolean): number {
+		if (this.cached !== null) {
+			const t = this.cached;
+			this.cached = null;
+			return t;
+		}
+		this.e++;
+		if (this.e > 2) {
+			this.c = xorshift32(this.c);
+			this.e = 0;
+		}
+		const shift = 16 - 8 * this.e;
+		let raw: number;
+		if (shift >= 0) raw = this.c >> shift;
+		else raw = this.c << -shift;
+		let ivVal = 0;
+		if (this.r) {
+			this.i = (this.i - 1) | 0;
+			ivVal = this.i;
+		}
+		const t = (raw ^ ivVal) & 255;
+		if (peek) this.cached = t;
+		return t;
+	}
+}
+
+function wEncode(n: number): number {
+	if (n > 37) return 59 + n;
+	if (n > 11) return 53 + n;
+	if (n > 1) return 46 + n;
+	return 50 * n + 45;
+}
+
+export function encryptJspl(signals: Signal[], ddjskey: string, cid: string, timestampMs?: number): string {
+	const ts = timestampMs ?? Date.now();
+
+	const nKey = toInt32(toInt32(SEED_E) ^ hashL(ddjskey) ^ DEFAULT_V);
+	const tsShifted = toInt32(toInt32(Math.floor(ts / 8)) ^ IV_XOR);
+	const inner = xorshift32(tsShifted);
+	const product = inner * SEED_E;
+	const f = xorshift32(float64ToInt32(product));
+
+	const sPrng = new Prng(nKey, f, true);
+	const d: number[] = [];
+	let first = true;
+
+	for (const sig of signals) {
+		if (!sig.key) continue;
+		const v = sig.value;
+		if (v !== null && v !== undefined) {
+			const t = typeof v;
+			if (t !== "number" && t !== "string" && t !== "boolean") continue;
+		}
+		const keyJson = JSON.stringify(sig.key);
+		const valJson = JSON.stringify(v ?? null);
+		const separator = first ? 123 : 44;
+		d.push(sPrng.next(false) ^ separator);
+		for (let i = 0; i < keyJson.length; i++) {
+			d.push(keyJson.charCodeAt(i) ^ sPrng.next(false));
+		}
+		d.push(58 ^ sPrng.next(false));
+		for (let i = 0; i < valJson.length; i++) {
+			d.push(valJson.charCodeAt(i) ^ sPrng.next(false));
+		}
+		first = false;
+	}
+
+	const cidStr = cid ?? "";
+	const tPrng = new Prng(toInt32(ENCRYPT_SEED ^ hashL(cidStr)), f, false);
+
+	const c: number[] = new Array(d.length);
+	for (let i = 0; i < d.length; i++) {
+		c[i] = d[i] ^ tPrng.next(false);
+	}
+	c.push(125 ^ sPrng.next(true) ^ tPrng.next(false));
+
+	let aIV = toInt32(f);
+	let output = "";
+	let rPos = 0;
+	while (rPos < c.length) {
+		const b0 = rPos < c.length ? c[rPos] : 0;
+		const b1 = rPos + 1 < c.length ? c[rPos + 1] : 0;
+		const b2 = rPos + 2 < c.length ? c[rPos + 2] : 0;
+
+		aIV = (aIV - 1) | 0;
+		const v0 = (aIV & 255) ^ b0;
+		aIV = (aIV - 1) | 0;
+		const v1 = (aIV & 255) ^ b1;
+		aIV = (aIV - 1) | 0;
+		const v2 = (aIV & 255) ^ b2;
+
+		const u = (v0 << 16) | (v1 << 8) | v2;
+		output += String.fromCharCode(wEncode((u >> 18) & 63), wEncode((u >> 12) & 63), wEncode((u >> 6) & 63), wEncode(u & 63));
+		rPos += 3;
+	}
+
+	const remainder = c.length % 3;
+	if (remainder !== 0) output = output.slice(0, output.length - (3 - remainder));
+	return output;
+}
+
+const BCHK_APIS = ["AppBannerPromptResult", "webkitRTCPeerConnection", "webkitAudioContext", "webkitRequestAnimationFrame", "chrome.runtime", "chrome.webstore", "console.context", "InputMethodContext", "SVGAnimationElement", "SVGPathSegList", "PasswordCredential", "ViewTransition", "VisualViewport.prototype.segments", "DeprecationReportBody", "MathMLElement", "opr", "CSS2Properties.prototype.colorScheme", "WebKitCSSMatrix", "SVGTextPositioningElement", "XMLHttpRequestEventTarget", "TextDecoderStream", "onloadend", "WritableStream", "TransformStream", "TextTrackCue", "WeakRef", "VisualViewport", "StyleSheet", "RTCDtlsTransport", "Atomics", "StaticRange", "UIEvent", "VideoStreamTrack", "OfflineResourceList", "SVGGeometryElement", "RTCDataChannel", "VTTRegion", "AbortController", "Controllers", "onanimationcancel", "SVGDocument", "IIRFilterNode", "RTCStatsReport", "MediaStreamTrack", "CSS2Properties.prototype.MozOsxFontSmoothing", "CropTarget", "BatteryManager", "LaunchQueue", "CSSFontPaletteValuesRule", "PushSubscriptionOptions", "DOMSettableTokenList", "RTCTrackEvent", "MozSmsMessage", "ServiceWorkerContainer", "CanvasCaptureMediaStream", "DeviceStorage", "XPathNSResolver", "SmartCardEvent", "WeakSet", "MozMobileMessageManager", "External.prototype.getHostEnvironmentValue", "WindowUtils", "XPathNamespace", "SVGFEDropShadowElement", "SharedWorker", "WorkerMessageEvent", "CSS2Properties.prototype.MozOSXFontSmoothing", "AudioSinkInfo", "Notification.prototype.image", "ContentVisibilityAutoStateChangeEvent", "PerformanceResourceTiming.prototype.renderBlockingStatus", "console.createTask", "PerformanceServerTiming", "CanvasFilter", "structuredClone", "onslotchange", "EyeDropper", "URLPattern", "VideoFrame", "WritableStreamDefaultController", "SharedArrayBuffer", "CSSCounterStyleRule", "CustomStateSet", "ReadableStreamDefaultController", "XMLDocument.prototype.hasStorageAccess", "CryptoKey", "SubmitEvent", "MediaMetadata", "VideoPlaybackQuality", "ReadableStreamDefaultReader", "UserActivation", "FragmentDirective", "WebKitMediaKeyError", "RTCRtpTransceiver.prototype.stop", "Scheduling", "EventCounts", "VideoTrackList", "SourceBuffer", "RTCError", "FontFaceSet", "CSSCharsetRule", "MediaDeviceInfo", "RTCPeerConnectionIceErrorEvent", "RTCSctpTransport", "MediaSessionCoordinator", "XULPopupElement", "MediaSourceHandle", "RTCEncodedAudioFrame", "__REACT_DEVTOOLS_GLOBAL_HOOK__", "ShadowRealm", "HTMLSlotElement", "DetachedViewControlEvent", "GeolocationPosition", "SiteBoundCredential", "MediaSource", "WebTransport", "GPUSupportedLimits", "ToggleEvent"];
+
+const BCHK_FOUND = "52738db37a1ea50137e79e8181193ac872cd325ba5cacfbe7aab5b36b9c9879e7c0018dbd31a1832a8dc6528387b67451719dcd8b784a518904e3f07c69b9d30";
+const BCHK_ABSENT = "3829ae9642df0d791e41d2159da28bd18d056afadf1bd70fc9222a473eaf58e860ff950e7bf35b66e4aa90b156c80c96913dbd9c23c7262e4adbc3ddd77ff263";
+
+const PRESENT_APIS = new Set(["webkitRTCPeerConnection", "webkitRequestAnimationFrame", "chrome.runtime", "console.context", "SVGAnimationElement", "PasswordCredential", "ViewTransition", "MathMLElement", "WebKitCSSMatrix", "SVGTextPositioningElement", "XMLHttpRequestEventTarget", "TextDecoderStream", "WritableStream", "TransformStream", "TextTrackCue", "WeakRef", "VisualViewport", "StyleSheet", "RTCDtlsTransport", "Atomics", "StaticRange", "UIEvent", "SVGGeometryElement", "RTCDataChannel", "AbortController", "onanimationcancel", "IIRFilterNode", "RTCStatsReport", "MediaStreamTrack", "CropTarget", "BatteryManager", "LaunchQueue", "CSSFontPaletteValuesRule", "PushSubscriptionOptions", "RTCTrackEvent", "ServiceWorkerContainer", "WeakSet", "SVGFEDropShadowElement", "SharedWorker", "AudioSinkInfo", "Notification.prototype.image", "ContentVisibilityAutoStateChangeEvent", "PerformanceResourceTiming.prototype.renderBlockingStatus", "console.createTask", "PerformanceServerTiming", "structuredClone", "onslotchange", "EyeDropper", "URLPattern", "VideoFrame", "WritableStreamDefaultController", "CSSCounterStyleRule", "CustomStateSet", "ReadableStreamDefaultController", "XMLDocument.prototype.hasStorageAccess", "CryptoKey", "SubmitEvent", "MediaMetadata", "VideoPlaybackQuality", "ReadableStreamDefaultReader", "UserActivation", "FragmentDirective", "RTCRtpTransceiver.prototype.stop", "Scheduling", "EventCounts", "SourceBuffer", "RTCError", "MediaDeviceInfo", "RTCPeerConnectionIceErrorEvent", "RTCSctpTransport", "MediaSourceHandle", "RTCEncodedAudioFrame", "HTMLSlotElement", "GeolocationPosition", "MediaSource", "WebTransport", "GPUSupportedLimits", "ToggleEvent"]);
+
+const PROFILE: Record<string, any> = {
+	ua: DATADOME_UA,
+	pf: "Win32",
+	hc: 8,
+	dvm: 8,
+	mob: false,
+	ts_mtp: 0,
+	wbd: false,
+	lg: "en-US",
+	lgs: '["en-US","en"]',
+	vnd: "Google Inc.",
+	bid: "NA",
+	glvd: "Google Inc. (NVIDIA)",
+	glrd: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+	rs_w: 1920,
+	rs_h: 1080,
+	rs_cd: 24,
+	ars_w: 1920,
+	ars_h: 1040,
+	br_oh: 1040,
+	br_ow: 1920,
+	br_w: 1920,
+	br_h: 929,
+	br_iw: 1920,
+	br_ih: 929,
+	pr: 1,
+	cg_w: 1920,
+	cg_h: 0,
+	sg_w: 0,
+	sg_h: 48,
+	so: "landscape-primary",
+	plu: "PDF Viewer,Chrome PDF Viewer,Chromium PDF Viewer,Microsoft Edge PDF Viewer,WebKit built-in PDF",
+	plg: 5,
+	plgne: true,
+	plgre: true,
+	plgof: false,
+	plggt: false,
+	plgod: false,
+	mmt: "application/pdf,text/pdf",
+	med: "defined",
+	tz: -60,
+	k_lyts: 48,
+	k_lytk: "qwertyuiopasdfghjklzxcvbnm1234567890-=[];'#,./\\` ",
+	nhi: "x86,64,false,,Windows,14.0.0,157.0.0.0,false",
+	eva: 40,
+	cokys: ",loadTimes,csi,app,runtime",
+	stqe: 10737418240,
+	stqu: 0,
+	cssS: "4.93,13.26,9.01,0.22,4.57,2.12,14.38,6.39,7.07",
+	css0: "33, 4, 4",
+	css1: "0.218751, 0.0134708, -0.0191417, 0.00133113, -0.160945, 4.09828, 1.04485, -0.0726597, 0.28419, -1.99897, 1.84097, -0.128023, 4.08665, -28.7452, 26.4731, -0.840966",
+	cssH: "0px",
+	csssp: "",
+	niet: "4g",
+	nid: 10,
+	nisd: false,
+};
+
+const VIDEO_CODECS: Record<string, any> = {
+	vco: "",
+	vcots: false,
+	vch: "probably",
+	vchts: true,
+	vcw: "probably",
+	vcwts: true,
+	vc3: "maybe",
+	vc3ts: false,
+	vcmp: "",
+	vcmpts: false,
+	vc1: "probably",
+	vc1ts: true,
+	vcmk: "maybe",
+	vcmkuts: false,
+	vcq: "",
+	vcqts: false,
+};
+
+const AUDIO_CODECS: Record<string, any> = {
+	aco: "probably",
+	acots: false,
+	acmp: "probably",
+	acmpts: true,
+	acmpu: "maybe",
+	acmputs: false,
+	acw: "probably",
+	acwts: false,
+	acma: "maybe",
+	acmats: false,
+	acaa: "probably",
+	acaats: true,
+	ac3: "",
+	ac3ts: false,
+	acf: "probably",
+	acfts: false,
+	acmp4: "maybe",
+	acmp4ts: false,
+	acmp3: "probably",
+	acmp3ts: false,
+	acwm: "maybe",
+	acwmts: false,
+};
+
+const FEATURES: Record<string, any> = {
+	pro_t: true,
+	wglo: true,
+	prso: true,
+	wbst: true,
+	psn: true,
+	edp: true,
+	addt: true,
+	wsdc: true,
+	ccsr: true,
+	nuad: true,
+	bcda: false,
+	idn: true,
+	capi: false,
+	svde: false,
+	vpbq: true,
+};
+
+const BOT_CHECKS: Record<string, any> = {
+	awe: false,
+	phe: false,
+	dat: false,
+	nm: false,
+	geb: false,
+	sqt: false,
+	spwn: false,
+	emt: false,
+};
+
+function djb2Hash(s: string): number {
+	let t = 0;
+	for (let i = 0; i < s.length; i++) {
+		t = ((t << 5) - t + s.charCodeAt(i)) | 0;
+	}
+	return (t + 2147483648) >>> 0;
+}
+
+const rand = (n: number) => Math.floor(Math.random() * n);
+const randFloat = (min: number, max: number, prec: number) => roundFloat(min + Math.random() * (max - min), prec);
+const roundFloat = (v: number, prec: number) => {
+	const p = Math.pow(10, prec);
+	return Math.round(v * p) / p;
+};
+const str = (v: any): string => (v === null || v === undefined ? "" : String(v));
+
+function generateNavTiming(): Record<string, any> {
+	const dns = randFloat(0, 3, 1);
+	const tcp = randFloat(0, 5, 1);
+	const tls = randFloat(3, 15, 6);
+	const requestStart = randFloat(0, 5, 6);
+	const responseTime = randFloat(80, 600, 6);
+	const firstInterim = randFloat(-10, 5, 6);
+	const swTime = randFloat(0, 5, 6);
+
+	const encodedSize = 200000;
+	const decodedSize = encodedSize + rand(250001) + 50000;
+	const compressionDiff = decodedSize - encodedSize;
+
+	const domInteractive = randFloat(500, 2000, 6);
+	const dclDuration = randFloat(0.2, 5, 6);
+	const loadEventDuration = randFloat(0, 2, 1);
+	const domCompleteOffset = randFloat(0, 100, 1);
+
+	const connectEnd = tcp + tls;
+	const secureDiff = connectEnd - tcp;
+	const ntEsc = secureDiff > 0 ? randFloat(0, 2, 6) : 0.0;
+
+	let ttrdDenom = connectEnd - tcp;
+	if (ttrdDenom <= 0) ttrdDenom = 1;
+	const ttrdNumer = responseTime - ttrdDenom;
+	const ntTtrd = connectEnd - tcp > 0 ? roundFloat(ttrdNumer / ttrdDenom, 6) : null;
+
+	return {
+		nt_tcp: roundFloat(tcp, 1),
+		nt_dns: roundFloat(dns, 1),
+		nt_rd: 0,
+		nt_irt: roundFloat(firstInterim, 6),
+		nt_rt: roundFloat(responseTime, 6),
+		nt_tls: roundFloat(tls, 6),
+		nt_ttf: roundFloat(responseTime + swTime + 10, 6),
+		nt_swt: roundFloat(swTime, 6),
+		nt_csd: compressionDiff,
+		nt_nhp: "h2",
+		nt_rdc: 0,
+		nt_it: "navigation",
+		nt_prs: roundFloat(requestStart, 6),
+		nt_esc: ntEsc,
+		nt_ttrd: ntTtrd,
+		nt_le: roundFloat(loadEventDuration, 1),
+		nt_dcle: roundFloat(dclDuration, 6),
+		nt_di: roundFloat(domInteractive, 6),
+		nt_dc: roundFloat(domCompleteOffset, 1),
+	};
+}
+
+function generateTrrd(): number {
+	const sqrt2 = Math.sqrt(2);
+	const r1 = Math.random();
+	const r2 = Math.random();
+	const r3 = Math.random();
+	const r4 = Math.random();
+
+	const e = Math.sqrt(Math.abs(Math.sin((Math.PI / 90) * 100 - (40 * r1 * (Math.PI / 180)) / 2) + Math.cos(100 * sqrt2 * (Math.PI / 180)) * Math.sin((Math.PI / 180) * 40 - (100 * r2 * (Math.PI / 75)) / 2)));
+
+	const cVal = r3 * Math.sqrt(Math.abs(1 - Math.sin(40 * r4 * (Math.PI / 90) - (100 * sqrt2 * (Math.PI / 180)) / 2) + Math.cos(3.7055555555555557) * Math.random() * Math.sin((Math.PI / 180) * 60 - ((Math.PI / 45) * 100) / 2)));
+	return Math.atan2(e, cVal);
+}
+
+function generateBchk(): string {
+	let out = "";
+	for (let i = 0; i < BCHK_APIS.length; i++) {
+		out += PRESENT_APIS.has(BCHK_APIS[i]) ? BCHK_FOUND[i % BCHK_FOUND.length] : BCHK_ABSENT[i % BCHK_ABSENT.length];
+	}
+	return out;
+}
+
+function generateErrorStacks(tagsUrl: string): Record<string, any> {
+	const line = 2;
+	const colT = rand(2001) + 99000;
+	const colB1 = rand(2001) + 77000;
+	const colB2 = rand(2001) + 98000;
+	const colB3 = rand(2001) + 105000;
+
+	const fullStack = `Error\nat y1 (${tagsUrl}:${line}:${colT})\nat ${tagsUrl}:${line}:${colB1}\nat ${tagsUrl}:${line}:${colB2}\nat ${tagsUrl}:${line}:${colB3}`;
+	const ccsT = fullStack.slice(0, 150);
+	const ccsB = fullStack.length > 150 ? fullStack.slice(-150) : fullStack;
+	const ccsV = new Bun.CryptoHasher("sha256").update(fullStack).digest("hex");
+
+	return { ccsT, ccsB, ccsH: djb2Hash(fullStack), ccsV };
+}
+
+function computeFph(): number {
+	const parts = [str(PROFILE.glrd), str(PROFILE.glvd), str(PROFILE.ua), str(PROFILE.hc), str(PROFILE.lgs), str(PROFILE.ts_mtp), str(PROFILE.pf), str(PROFILE.br_oh), str(PROFILE.br_ow), "", "", "", "", str(PROFILE.dvm)];
+	return djb2Hash(parts.join(""));
+}
+
+function computeSignalChecksums(p: Record<string, any>): {
+	sgb: string;
+	sgd: string;
+	sgc: string;
+} {
+	let L = 0;
+	let P = 0;
+	let j = 0;
+	const T = (v: any) => {
+		const h = djb2Hash(str(v));
+		L = (L ^ h) | 0;
+		j = (j ^ h) | 0;
+	};
+	const S = (v: any) => {
+		const h = djb2Hash(str(v));
+		P = (P ^ h) | 0;
+		j = (j ^ h) | 0;
+	};
+	const m = (v: any) => {
+		const h = djb2Hash(str(v));
+		j = (j ^ h) | 0;
+	};
+
+	T(p.lgs);
+	S(p.pf);
+	S(str(p.ts_mtp) + "a");
+	m(str(p.mob) + "bb");
+	m(str(p.hc) + "ccc");
+	m(str(p.dvm) + "dddd");
+	S(p.tz);
+	T(p.eva);
+	T(p.wdifpnh);
+
+	return { sgb: String(L >>> 0), sgd: String(P >>> 0), sgc: String(j >>> 0) };
+}
+
+function generateWdifpnh(): string {
+	return String(rand(2294967296) + 1000000000);
+}
+
+export function buildSignals(origin: string, ddk?: string): Signal[] {
+	const tagsUrl = ddk ? `https://js.datadome.co/tags.js?id=${ddk}` : origin + "/include/tags.js";
+	const jset = Math.floor(Date.now() / 1000);
+	const navTiming = generateNavTiming();
+	const errorStacks = generateErrorStacks(tagsUrl);
+	const wdifpnh = generateWdifpnh();
+	const bchk = generateBchk();
+	const brW = (PROFILE.br_w as number) + rand(101) - 50;
+	const brH = (PROFILE.br_h as number) + rand(101) - 50;
+
+	const payload: Record<string, any> = {
+		log2: "gl,tzp",
+		r3n: 33,
+		glvd: PROFILE.glvd,
+		glrd: PROFILE.glrd,
+		nddc: 1,
+		exp8: 0,
+		plu: PROFILE.plu,
+		plgod: PROFILE.plgod,
+		plg: PROFILE.plg,
+		plgne: PROFILE.plgne,
+		plgre: PROFILE.plgre,
+		plgof: PROFILE.plgof,
+		plggt: PROFILE.plggt,
+		bfr: false,
+		hdn: false,
+		br_w: brW,
+		br_h: brH,
+		br_iw: brW,
+		br_ih: brH,
+		ars_w: PROFILE.ars_w,
+		ars_h: PROFILE.ars_h,
+		rs_w: PROFILE.rs_w,
+		rs_h: PROFILE.rs_h,
+		rs_cd: PROFILE.rs_cd,
+		cg_w: PROFILE.cg_w,
+		cg_h: PROFILE.cg_h,
+		sg_w: PROFILE.sg_w,
+		sg_h: PROFILE.sg_h,
+		pr: PROFILE.pr,
+		so: PROFILE.so,
+		trrd: generateTrrd(),
+		ucdv: false,
+		dp0: false,
+		hcovdr: false,
+		plovdr: false,
+		ftsovdr: false,
+		orf: "",
+		dffls: "",
+		niet: PROFILE.niet,
+		nid: PROFILE.nid,
+		nisd: PROFILE.nisd,
+		...navTiming,
+		lg: PROFILE.lg,
+		isb: false,
+		idp: true,
+		crt: 0,
+		vnd: PROFILE.vnd,
+		bid: PROFILE.bid,
+		med: PROFILE.med,
+		pltod: false,
+		wdifrm: false,
+		npmtm: false,
+		wdif: false,
+		ccsT: errorStacks.ccsT,
+		ccsB: errorStacks.ccsB,
+		ccsH: errorStacks.ccsH,
+		ccsV: errorStacks.ccsV,
+		mmt: PROFILE.mmt,
+		wdifpnh,
+		...VIDEO_CODECS,
+		cssS: PROFILE.cssS,
+		css0: PROFILE.css0,
+		css1: PROFILE.css1,
+		cssH: PROFILE.cssH,
+		csssp: PROFILE.csssp,
+		muev: false,
+		...FEATURES,
+		bchk,
+		tz: PROFILE.tz,
+		ihdn: false,
+		cdhf: false,
+		eva: PROFILE.eva,
+		cokys: PROFILE.cokys,
+		ecpc: false,
+		wop: false,
+		pf: PROFILE.pf,
+		hc: PROFILE.hc,
+		br_oh: PROFILE.br_oh,
+		br_ow: PROFILE.br_ow,
+		ua: PROFILE.ua,
+		wbd: PROFILE.wbd,
+		ts_mtp: PROFILE.ts_mtp,
+		mob: PROFILE.mob,
+		lgs: PROFILE.lgs,
+		dvm: PROFILE.dvm,
+		ckwa: true,
+		...AUDIO_CODECS,
+		ocpt: false,
+		mq: "aptr:fine, ahvr:hover",
+		mq2: "cg:srgb, dr:standard, dm:browser",
+		...BOT_CHECKS,
+		nhi: PROFILE.nhi,
+		k_lyts: PROFILE.k_lyts,
+		k_lytk: PROFILE.k_lytk,
+		bci: true,
+		bcl: 1,
+		bct: 0,
+		bdt: null,
+		stqe: PROFILE.stqe,
+		stqu: PROFILE.stqu,
+		isf: false,
+		isf2: false,
+		pw: false,
+		pcb: false,
+		arc: false,
+		fai: false,
+		gai: false,
+		bbs3: false,
+		dt: true,
+		fph: computeFph(),
+		jset,
+		bpc: 1,
+	};
+
+	const checksums = computeSignalChecksums(payload);
+	payload.sgb = checksums.sgb;
+	payload.sgd = checksums.sgd;
+	payload.sgc = checksums.sgc;
+
+	const order = ["log2", "r3n", "glvd", "glrd", "nddc", "exp8", "plu", "plgod", "plg", "plgne", "plgre", "plgof", "plggt", "bfr", "hdn", "br_w", "br_h", "br_iw", "br_ih", "ars_w", "ars_h", "rs_w", "rs_h", "rs_cd", "cg_w", "cg_h", "sg_w", "sg_h", "pr", "so", "trrd", "ucdv", "dp0", "hcovdr", "plovdr", "ftsovdr", "orf", "dffls", "niet", "nid", "nisd", "nt_tcp", "nt_dns", "nt_rd", "nt_irt", "nt_rt", "nt_tls", "nt_ttf", "nt_swt", "nt_csd", "nt_nhp", "nt_rdc", "nt_it", "nt_prs", "nt_esc", "nt_ttrd", "nt_le", "nt_dcle", "nt_di", "nt_dc", "lg", "isb", "idp", "crt", "vnd", "bid", "med", "pltod", "wdifrm", "npmtm", "wdif", "ccsT", "ccsB", "ccsH", "ccsV", "mmt", "wdifpnh", "vco", "vcots", "vch", "vchts", "vcw", "vcwts", "vc3", "vc3ts", "vcmp", "vcmpts", "vc1", "vc1ts", "vcmk", "vcmkuts", "vcq", "vcqts", "cssS", "css0", "css1", "cssH", "csssp", "muev", "pro_t", "wglo", "prso", "wbst", "psn", "edp", "addt", "wsdc", "ccsr", "nuad", "bcda", "idn", "capi", "svde", "vpbq", "bchk", "tz", "ihdn", "cdhf", "eva", "cokys", "ecpc", "wop", "pf", "hc", "br_oh", "br_ow", "ua", "wbd", "ts_mtp", "mob", "lgs", "dvm", "ckwa", "aco", "acots", "acmp", "acmpts", "acmpu", "acmputs", "acw", "acwts", "acma", "acmats", "acaa", "acaats", "ac3", "ac3ts", "acf", "acfts", "acmp4", "acmp4ts", "acmp3", "acmp3ts", "acwm", "acwmts", "ocpt", "mq", "mq2", "awe", "phe", "dat", "nm", "geb", "sqt", "spwn", "emt", "nhi", "k_lyts", "k_lytk", "bci", "bcl", "bct", "bdt", "stqe", "stqu", "isf", "isf2", "pw", "pcb", "arc", "fai", "gai", "bbs3", "dt", "fph", "sgb", "sgd", "sgc", "jset", "bpc"];
+
+	return order.map((key) => ({ key, value: payload[key] }));
+}
+
+export function parseChallenge(html: string): Record<string, any> | null {
+	const m = html.match(/var dd\s*=\s*(\{[^}]*\})/);
+	if (!m) return null;
+	try {
+		return JSON.parse(m[1].replace(/'/g, '"'));
+	} catch {
+		return null;
+	}
+}
+
+export async function solveDatadome(pageUrl: string, challengeHtml?: string, ua: string = DATADOME_UA): Promise<string | null> {
+	try {
+		let html = challengeHtml;
+		if (!html) {
+			const res = await fetch(pageUrl, {
+				headers: {
+					"User-Agent": ua,
+					Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+					"Accept-Language": "en-US,en;q=0.9",
+				},
+				signal: AbortSignal.timeout(15000),
+			});
+			html = await res.text();
+		}
+
+		const dd = parseChallenge(html);
+		if (!dd?.hsh) return null;
+
+		const origin = new URL(pageUrl).origin;
+		const parsed = new URL(pageUrl);
+		const cid = typeof dd.cookie === "string" ? dd.cookie : "";
+		const ddk = String(dd.hsh);
+		const signals = buildSignals(origin + "/", ddk);
+		const jspl = encryptJspl(signals, ddk, cid);
+
+		const referer = encodeURIComponent(pageUrl.slice(0, 1024));
+		const requestPath = encodeURIComponent((parsed.pathname + parsed.search + parsed.hash).slice(0, 1024));
+		const body = `jspl=${encodeURIComponent(jspl)}&eventCounters=${encodeURIComponent("[]")}&jsType=ch${cid ? "&cid=" + encodeURIComponent(cid) : ""}&ddk=${encodeURIComponent(ddk)}&Referer=${referer}&request=${requestPath}&responsePage=origin&ddv=${DDV}`;
+
+		const res = await fetch(`https://js.datadome.co/js/?id=${encodeURIComponent(ddk)}`, {
+			method: "POST",
+			body,
+			headers: {
+				Accept: "*/*",
+				"Accept-Language": "en-US,en;q=0.9",
+				"Content-Type": "application/x-www-form-urlencoded",
+				Origin: origin,
+				Referer: pageUrl,
+				"User-Agent": ua,
+			},
+			signal: AbortSignal.timeout(15000),
+		});
+
+		if (!res.ok) {
+			try {
+				await res.body?.cancel();
+			} catch {}
+			return null;
+		}
+
+		const json: any = await res.json();
+		const match = String(json?.cookie ?? "").match(/datadome=([^;]+)/);
+		return match ? match[1] : null;
+	} catch {
+		return null;
+	}
+}
+
+const g = globalThis as any;
+const cookies: Map<string, string> = g.__vgjr_datadome_cookies || (g.__vgjr_datadome_cookies = new Map<string, string>());
+const inflight: Map<string, Promise<string | null>> = g.__vgjr_datadome_inflight || (g.__vgjr_datadome_inflight = new Map<string, Promise<string | null>>());
+
+function isChallenge(status: number, body: string): boolean {
+	return status === 403 || body.includes("captcha-delivery.com/i.js") || body.includes("captcha-delivery.com/c.js") || body.includes("var dd=");
+}
+
+async function fetchPage(url: string, ua: string, cookie: string | undefined, timeoutMs: number): Promise<{ status: number; text: string }> {
+	const headers: Record<string, string> = {
+		"User-Agent": ua,
+		Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "en-US,en;q=0.9",
+		"Sec-Fetch-Dest": "document",
+		"Sec-Fetch-Mode": "navigate",
+		"Sec-Fetch-Site": "none",
+		"Sec-Fetch-User": "?1",
+		"Upgrade-Insecure-Requests": "1",
+	};
+	if (cookie) headers.Cookie = `datadome=${cookie}`;
+	const res = await fetch(url, {
+		headers,
+		signal: AbortSignal.timeout(timeoutMs),
+		redirect: "follow",
+	});
+	return { status: res.status, text: await res.text() };
+}
+
+export async function fetchWithDatadome(url: string, ua: string = DATADOME_UA, timeoutMs: number = 20000): Promise<{ status: number; text: string } | null> {
+	try {
+		const host = new URL(url).host;
+		let out = await fetchPage(url, ua, cookies.get(host), timeoutMs);
+
+		if (isChallenge(out.status, out.text)) {
+			let solved = inflight.get(host);
+			if (!solved) {
+				solved = solveDatadome(url, out.text, ua);
+				inflight.set(host, solved);
+				solved.finally(() => inflight.delete(host));
+			}
+			const cookie = await solved;
+			if (cookie) {
+				cookies.set(host, cookie);
+				out = await fetchPage(url, ua, cookie, timeoutMs);
+			}
+		}
+
+		return out;
+	} catch {
+		return null;
+	}
+}

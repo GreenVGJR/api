@@ -59,13 +59,18 @@ def handle_request(request):
 
 	source = (request.get("from") or "auto").lower()
 	target = (request.get("to") or "en").lower()
+	mime = request.get("mime") or "image/jpeg"
 
 	try:
 		result = asyncio.run(translate(image_bytes, source, target))
 	except Exception as exc:
 		return {"ok": False, "error": f"translation failed: {str(exc)[:300]}"}
 
-	return {"ok": True, **json_safe(result)}
+	payload = json_safe(result)
+	if not payload.get("overlay_image"):
+		payload["overlay_image"] = base64.b64encode(image_bytes).decode()
+		payload["overlay_mime_type"] = mime
+	return {"ok": True, **payload}
 
 
 def main():

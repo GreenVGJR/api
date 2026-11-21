@@ -7,7 +7,7 @@
 	"playgroundChallenge": false,
 	"endpointChallenge": false,
 	"wafChallenge": {
-		"enabled": true,
+		"enabled": false,
 		"restrictLocal": false
 	},
 	"turnstile": {

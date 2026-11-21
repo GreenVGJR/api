@@ -1,9 +1,9 @@
 import { type Context } from "hono";
-import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, syncRedditCookies, tiktokSessions, devianKey, magnificKey, solveMagnificPow, fetchMagnificChallenge, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth } from "./authRequest.js";
+import { normalizeCookies, youtubeVisitorKey, googleAuthKey, giphyKey, flickrKey, soundcloudKey, spotifyKey, spotifyKeyToken, mackOauth, tidalKeys, tidalKeysToken, deezerKeys, imgurKey, crunchyKey, saweriaBuildKey, keytidal, keytidalopen, setKeyTidal, instagramSession, twitterKey, twitterObj, refreshRedditAuth, syncRedditCookies, tiktokSessions, devianKey, magnificKey, solveMagnificPow, fetchMagnificChallenge, qcq_6uj, shazamSession, bat_2uw, hwo_6qi, getStartpageAuth, invalidateStartpageAuth, DATADOME_UA, fetchWithDatadome } from "./authRequest.js";
 import { DISCORD_APPLICATION_INTEGRATION_TYPES, DISCORD_PERMISSIONS, PERMISSION_KEYS, DISCORD_CHANNEL_TYPES, DISCORD_STICKER_MAX_BYTES, DISCORD_STICKER_MAX_CONVERT_INPUT_BYTES, DISCORD_STICKER_MIME_TO_EXT, DISCORD_STICKER_CONVERT_MIME_TO_PNG, DISCORD_STICKER_CONVERT_EXT_TO_PNG, DISCORD_STICKER_EXT_TO_MIME, DISCORD_AUTOMOD_TRIGGER_TYPES, DISCORD_AUTOMOD_EVENT_TYPES, DISCORD_AUTOMOD_ACTION_TYPES, DISCORD_AUTOMOD_PRESET_TYPES, GOOGLE_TTS_REGION, resolveFlags, resolveApplicationFlags, listcodes } from "./types/index.js";
 
 import { browserRequest } from "./browserRequest.js";
-import { userAgent, userAgent_mobile, discordUserAgent, commonHeaders } from "./types/headers.js";
+import { userAgent, userAgentChrome, userAgent_mobile, discordUserAgent, commonHeaders } from "./types/headers.js";
 import { googleTrustJar, googleTrustIsFresh, mergeGoogleTrust, mergeGoogleTrustCookies, refreshGoogleTrust } from "./googleTrust.js";
 import { get as httpcloakGet, Session as HttpcloakSession, Preset as HttpcloakPreset } from "httpcloak";
 // @ts-expect-error no types
@@ -307,7 +307,7 @@ function getYoutubeChallengeObject(videoId: string, captionPoToken: string) {
 
 export { userAgent, userAgent_mobile, discordUserAgent, commonHeaders };
 
-const TIKTOK_WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36";
+const TIKTOK_WEB_UA = userAgentChrome;
 const TIKTOK_WEB_UA_VERSION = TIKTOK_WEB_UA.replace("Mozilla/", "");
 const TIKTOK_WEB_SEARCH_CODE = '{"tiktok":{"client_params_x":{"search_engine":{"ies_mt_user_live_video_card_use_libra":1,"mt_search_general_user_live_card":1}},"search_server":{}}}';
 const TIKTOK_WEB_SIGN_OPTS = { ubcode: 14, canvas: 411533585, version: "5.3.2", scm_version: "1.0.0.417", total_reqs: 6, enc_reqs: 1, envcode: 1, field_53: "www.tiktok.com/search" };
@@ -5226,6 +5226,34 @@ export const GettyImage = async function GettyImage(que: string) {
 		const res: any = await req.json();
 		return {
 			data: [res?.gallery?.assets ?? null, res?.relatedTerms ?? null],
+		};
+	} catch {
+		return null;
+	}
+};
+
+export const Shutterstock = async function Shutterstock(que: string) {
+	if (!que) return null;
+
+	const slug = que.trim().toLowerCase().replace(/\s+/g, "-");
+	const url = `https://www.shutterstock.com/search/${encodeURIComponent(slug)}`;
+
+	try {
+		const page = await fetchWithDatadome(url, DATADOME_UA);
+		if (!page) return null;
+		if (page.status !== 200) {
+			return { error: "Unresolved challenge. Your IP may be temp-blocked" };
+		}
+
+		const match = page.text.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+		if (!match) return { data: null };
+
+		const json: any = JSON.parse(match[1]);
+		const assets = json?.props?.pageProps?.assets;
+		if (!Array.isArray(assets) || assets.length === 0) return { data: null };
+
+		return {
+			data: assets,
 		};
 	} catch {
 		return null;
@@ -14704,7 +14732,7 @@ export const googleSearch = async (query: string, refresh_auth: boolean = false)
 	}
 };
 
-const googleWebUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+const googleWebUA = userAgentChrome;
 
 const googleWebJar = googleTrustJar;
 
@@ -14952,6 +14980,8 @@ const GOOGLE_ATTR_RE = /(\w[\w-]*)="([^"]*)"/g;
 const GOOGLE_IMG_ENTRY_RE = /"([A-Za-z0-9_-]{10,})":\[(1,\[)?0,/g;
 const GOOGLE_SITE_SPAN_RE = /VYhLad[^>]*><span>([^<]*)</;
 
+const GOOGLE_IMAGE_HOST_RE = /^https?:\/\/(?:encrypted-tbn\d*\.gstatic\.com|.*\.googleusercontent\.com|.*\.ggpht\.com)/i;
+
 const fillGoogleImageInfo = (info: GoogleImageMeta, fields: any): void => {
 	if (!Array.isArray(fields)) return;
 	if (typeof fields[3] === "string") info.pageTitle = fields[3];
@@ -14960,7 +14990,7 @@ const fillGoogleImageInfo = (info: GoogleImageMeta, fields: any): void => {
 			if (value.includes("about-this-image")) {
 				info.aboutImageUrl ??= value;
 			} else if (/^https?:\/\//i.test(value)) {
-				if (!value.includes("/translate?")) info.pageUrl ??= value;
+				if (!value.includes("/translate?") && !GOOGLE_IMAGE_HOST_RE.test(value)) info.pageUrl ??= value;
 			} else if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(value)) {
 				info.domain ??= value;
 			} else if (value.includes(" - ") && value !== info.pageTitle) {
@@ -14969,7 +14999,7 @@ const fillGoogleImageInfo = (info: GoogleImageMeta, fields: any): void => {
 			continue;
 		}
 		if (Array.isArray(value) && typeof value[0] === "string" && /^https?:\/\//i.test(value[0])) {
-			info.pageUrl ??= value[0];
+			if (!GOOGLE_IMAGE_HOST_RE.test(value[0])) info.pageUrl ??= value[0];
 			if (typeof value[1] === "string" && !/^https?:\/\//i.test(value[1])) info.language ??= value[1];
 		}
 	}
@@ -15072,13 +15102,23 @@ export const parseGoogleImageItems = (html: string): any[] => {
 		}
 		return fallback;
 	};
-	const pushItem = (title: string, src: string, imgId: string, info: GoogleImageMeta | undefined, trackingUrl: string): void => {
+	const googleImagePreviewUrl = (html: string): string => {
+		for (const m of html.matchAll(/https?:\/\/[^"'\\ <)]+/g)) {
+			const url = m[0].replace(/&amp;/g, "&");
+			if (/gstatic|google\.com|googleusercontent|g\.co\/|w3\.org|schema\.org|gmpg\.org/i.test(url)) continue;
+			return url;
+		}
+		return "";
+	};
+
+	const pushItem = (title: string, src: string, imgId: string, info: GoogleImageMeta | undefined, trackingUrl: string, displayUrl = ""): void => {
 		if (!HTTP_URL_RE.test(src) || !title) return;
 		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
 		const dkey = token || src;
 		if (seen.has(dkey)) return;
 		seen.add(dkey);
 		const hash = imgId.replace(/^dimg_/, "").replace(/_\d+$/, "");
+		const pageUrl = displayUrl || info?.pageUrl;
 		raw.push({
 			title,
 			href: src,
@@ -15088,7 +15128,7 @@ export const parseGoogleImageItems = (html: string): any[] => {
 			...(info?.pageTitle ? { pageTitle: info.pageTitle } : {}),
 			...(info?.siteName ? { siteName: info.siteName } : {}),
 			...(info?.domain ? { domain: info.domain } : {}),
-			...(info?.pageUrl ? { pageUrl: info.pageUrl } : {}),
+			...(pageUrl ? { pageUrl } : {}),
 			...(info?.language ? { language: info.language } : {}),
 			...(info?.aboutImageUrl ? { aboutImageUrl: info.aboutImageUrl } : {}),
 			...(info?.imageSize ? { imageSize: info.imageSize } : {}),
@@ -15126,15 +15166,22 @@ export const parseGoogleImageItems = (html: string): any[] => {
 		}
 		paired = checkable > 0 && agree / checkable >= 0.5;
 	}
+	const previews = wins.map((w) => googleImagePreviewUrl(w));
+	const leadingPreview = googleImagePreviewUrl(html.slice(Math.max(0, starts[0] - 12000), starts[0]));
+	const displayUrlFor = (i: number): string => {
+		const candidate = i > 0 ? previews[i - 1] : leadingPreview;
+		if (!candidate) return "";
+		return googleImageEntryAgrees(wins[i], candidate) === false ? "" : candidate;
+	};
 	if (pairedByKey || paired) {
 		for (let i = 0; i < wins.length; i++) {
 			const { imgId, alt } = imgOf(wins[i]);
-			const e = pairedByKey ? byKey.get(cardKey(wins[i])) : bootEntries[i];
+			const entryKey = imgId.replace(/^dimg_/, "").replace(/_(\d+)$/, "$1");
+			const e = byKey.get(entryKey) ?? (pairedByKey ? byKey.get(cardKey(wins[i])) : bootEntries[i]);
 			if (!e) continue;
 			const title = alt.replace(WS_COLLAPSE_RE, " ").trim();
-			const token = e.thumb.split("tbn:")[1]?.split(/&/)[0] ?? "";
 			const trackingUrl = findGoogleTrackingUrl(html, starts[i], wins[i]);
-			pushItem(title, e.thumb, imgId, token ? (byToken.get(token) ?? { ...e.info, originalUrl: e.original || e.info.originalUrl }) : { ...e.info, originalUrl: e.original || e.info.originalUrl }, trackingUrl);
+			pushItem(title, e.thumb, imgId, { ...e.info, originalUrl: e.original || e.info.originalUrl }, trackingUrl, displayUrlFor(i));
 		}
 		return raw;
 	}
@@ -15147,22 +15194,23 @@ export const parseGoogleImageItems = (html: string): any[] => {
 		const token = src.split("tbn:")[1]?.split(/&/)[0] ?? "";
 		const info = token ? byToken.get(token) : undefined;
 		const trackingUrl = findGoogleTrackingUrl(html, starts[i], cardHtml);
-		pushItem(title, src, imgId, info, trackingUrl);
+		pushItem(title, src, imgId, info, trackingUrl, displayUrlFor(i));
 	}
 	return raw;
 };
 
+const googleCloakLocation = (res: any): string => {
+	try {
+		const headers = res?.headers || {};
+		for (const k of Object.keys(headers)) {
+			if (k.toLowerCase() === "location") return String((headers as any)[k] || "");
+		}
+	} catch {}
+	return "";
+};
+
 const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Promise<any[]> => {
 	const sliced = raw.slice(0, limit);
-	const cloakLocation = (res: any): string => {
-		try {
-			const headers = res?.headers || {};
-			for (const k of Object.keys(headers)) {
-				if (k.toLowerCase() === "location") return String((headers as any)[k] || "");
-			}
-		} catch {}
-		return "";
-	};
 	const resolveOne = async (item: any): Promise<string | null> => {
 		const href = item.href;
 		if (HTTP_URL_RE.test(href)) return href;
@@ -15180,7 +15228,7 @@ const resolveGoogleWebUrls = async (raw: any[], limit = 10, urlKey = "url"): Pro
 				allowRedirects: false,
 			});
 			mergeGoogleCloakCookies(res?.cookies);
-			const loc = cloakLocation(res);
+			const loc = googleCloakLocation(res);
 			if (HTTP_URL_RE.test(loc)) return loc;
 		} catch {}
 		try {

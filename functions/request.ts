@@ -15515,7 +15515,7 @@ const googleWebSearchFor = async (query: string, url: string, parse: (html: stri
 
 export const googleWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=web`);
 
-export const googleImgWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=2&tbm=isch`, parseGoogleImageItems, 20, "imageUrl");
+export const googleImgWebSearch = async (query: string): Promise<any> => googleWebSearchFor(query, `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=2&tbm=isch`, parseGoogleImageItems, 100, "imageUrl");
 
 // ─── Yahoo search (web + image) ───────────────────────────────────────────────
 

@@ -9,7 +9,8 @@ import { commonHeaders } from "./types/headers.js";
 import { recordRequestLog } from "./telemetry.js";
 import { autoGenBuild, autoGenBuildPara, isLocalRequest, isWafChallengeActive } from "../app.js";
 import { maxLimitRequestsPerSec, buildId } from "../config.json";
-import { VS_COOKIE, signVsChallenge, verifyVsCookie } from "./vsChallenge.js";
+import { verifyVsCookie } from "./vsChallenge.js";
+import { verifyAltchaCookie } from "./altchaChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status, pathOverride?: string) => {
 	recordRequestLog(c, statusCode, pathOverride);
@@ -132,13 +133,13 @@ export const getFailingImage = async (): Promise<Buffer> => {
 	return _failingImage;
 };
 
-// VS wait page inlines wallpaper as data URI (no-store, ~1s lifetime, never cached).
-let _vsWaitPage: string | null = null;
-const getVsWaitPage = async (): Promise<string> => {
-	if (_vsWaitPage) return _vsWaitPage;
-	const [template, wallpaper] = await Promise.all([readFile(path.join(__dirname, "..", "html", "vsWait.html"), "utf-8"), readFile(path.join(__dirname, "..", "public", "wf.webp"))]);
-	_vsWaitPage = template.replace("{{BG}}", wallpaper.toString("base64"));
-	return _vsWaitPage;
+// ALTCHA wait page inlines wallpaper as data URI (no-store, ~1s lifetime, never cached).
+let _altchaWaitPage: string | null = null;
+const getAltchaWaitPage = async (): Promise<string> => {
+	if (_altchaWaitPage) return _altchaWaitPage;
+	const [template, wallpaper] = await Promise.all([readFile(path.join(__dirname, "..", "html", "altchaWait.html"), "utf-8"), readFile(path.join(__dirname, "..", "public", "wf.webp"))]);
+	_altchaWaitPage = template.replace("{{BG}}", wallpaper.toString("base64"));
+	return _altchaWaitPage;
 };
 
 // Returns the "generation failed" image with the error reason in X-Message.
@@ -409,7 +410,7 @@ export async function rateLimit(): Promise<void> {
 export const applyVsChallenge = async (c: Context): Promise<Response | null> => {
 	const vsUa = c.req.header("user-agent") ?? "";
 	const vsMozilla = vsUa.startsWith("Mozilla/5.0");
-	if (!isWafChallengeActive(c.req.header("host")) || !vsMozilla || (await verifyVsCookie(c))) return null;
+	if (!isWafChallengeActive(c.req.header("host")) || !vsMozilla || (await verifyVsCookie(c)) || (await verifyAltchaCookie(c))) return null;
 
 	const vsSite = c.req.header("sec-fetch-site");
 	const vsMode = c.req.header("sec-fetch-mode");
@@ -418,11 +419,8 @@ export const applyVsChallenge = async (c: Context): Promise<Response | null> => 
 	const vsPartialSet = !vsFullSet && (vsSite !== undefined || vsMode !== undefined || vsDest !== undefined);
 
 	if (vsMode === "navigate") {
-		const challenge = await signVsChallenge(c.req.url, vsUa);
 		c.header("Cache-Control", "no-store");
-		c.header("Link", `</?vs=${challenge}>; rel=preload; as=fetch`);
-		c.header("Refresh", "0");
-		return c.html(await getVsWaitPage(), 403);
+		return c.html(await getAltchaWaitPage(), 403);
 	}
 	if (vsPartialSet) {
 		c.header("Cache-Control", "no-store");
@@ -473,8 +471,6 @@ export const dispatch = async (c: Context, promiseFactory: any, options?: { shar
 	cacheDirectives.push("no-transform");
 	c.header("Cache-Control", cacheDirectives.join(", "));
 	c.header("X-Enc-Route", "v6");
-	if (isWafChallengeActive(c.req.header("host"))) c.header("Set-Cookie", `${VS_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`);
-
 	let shareKey: string | null = null;
 	if (options?.share !== false) {
 		if (typeof options?.share === "string") shareKey = options.share;

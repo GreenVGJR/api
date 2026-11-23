@@ -7243,12 +7243,23 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				version: "",
 				includeProfileFrame: true,
 			},
+			{
+				requestId: `${user.id}::AvatarHeadshot:720x720:webp:regular:::true:true`,
+				type: "AvatarHeadShot",
+				targetId: user.id,
+				token: "",
+				format: "webp",
+				size: "720x720",
+				version: "",
+				includeBackground: true,
+				includeProfileFrame: true,
+			},
 		]);
 		const requestedThumbnails = new Map(thumbnailRequests.map((request) => [request.requestId, request]));
 
 		const [thumbnailData, profileData, userDetailsById] = await Promise.all([
 			(async () => {
-				const mapped = new Map<number, { headshot: string | null; full: string | null }>();
+				const mapped = new Map<number, { headshot: string | null; background: string | null; full: string | null }>();
 				try {
 					const thumbRes: any = await hcSession.post("https://thumbnails.roblox.com/v1/batch?urlLocale=en_us", {
 						headers: { ...commonHeaders, "Content-Type": "application/json" },
@@ -7261,9 +7272,11 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 							if (!request) continue;
 							const images = mapped.get(request.targetId) || {
 								headshot: null,
+								background: null,
 								full: null,
 							};
-							if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
+							if (request.includeBackground) images.background = thumbnail.imageUrl || null;
+							else if (request.type === "AvatarHeadShot") images.headshot = thumbnail.imageUrl || null;
 							else images.full = thumbnail.imageUrl || null;
 							mapped.set(request.targetId, images);
 						}
@@ -7371,8 +7384,62 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
 			),
 		);
-		const wornAssetIdChunks = Array.from({ length: Math.ceil(wornAssetIds.length / 100) }, (_, index) => wornAssetIds.slice(index * 100, index * 100 + 100));
-		const [catalogDetails, wornAssetThumbnails] = await Promise.all([
+		const backgroundAssetIds = Array.from(
+			new Set(
+				Array.from(profilesById.values())
+					.map((profile) => Number(profile?.components?.ProfileBackground?.assetId))
+					.filter((id: number) => Number.isSafeInteger(id) && id > 0),
+			),
+		);
+		const assetIdsForThumbnails = Array.from(new Set([...wornAssetIds, ...backgroundAssetIds]));
+		const assetIdChunks = Array.from({ length: Math.ceil(assetIdsForThumbnails.length / 100) }, (_, index) => assetIdsForThumbnails.slice(index * 100, index * 100 + 100));
+		const fetchAssetThumbnails = async (assetIds: number[]): Promise<any[]> => {
+			const pending = new Set(assetIds);
+			const completed: any[] = [];
+			for (let attempt = 0; attempt < 3 && pending.size > 0; attempt++) {
+				if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+				try {
+					const params = new URLSearchParams({ assetIds: Array.from(pending).join(","), size: "512x512", format: "Png" });
+					const response: any = await hcSession.get(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: { ...commonHeaders } });
+					if (!hcOk(response)) continue;
+					const result: any = hcJson(response) || {};
+					for (const thumbnail of Array.isArray(result?.data) ? result.data : []) {
+						const id = Number(thumbnail?.targetId);
+						if (thumbnail?.state === "Completed" && thumbnail?.imageUrl && pending.has(id)) {
+							completed.push(thumbnail);
+							pending.delete(id);
+						}
+					}
+				} catch {}
+			}
+			if (pending.size > 0) {
+				try {
+					const requests = Array.from(pending).map((id) => ({
+						requestId: `${id}::Asset:150x150:webp:regular:::false:false`,
+						type: "Asset",
+						targetId: id,
+						token: "",
+						format: "webp",
+						size: "150x150",
+						version: "",
+					}));
+					const response: any = await hcSession.post("https://thumbnails.roblox.com/v1/batch?urlLocale=en_us", {
+						headers: { ...commonHeaders, "Content-Type": "application/json" },
+						body: JSON.stringify(requests),
+					});
+					if (hcOk(response)) {
+						const result: any = hcJson(response) || {};
+						for (const thumbnail of Array.isArray(result?.data) ? result.data : []) {
+							if (thumbnail?.state === "Completed" && thumbnail?.imageUrl) {
+								completed.push({ targetId: thumbnail.targetId, imageUrl: thumbnail.imageUrl });
+							}
+						}
+					}
+				} catch {}
+			}
+			return completed;
+		};
+		const [catalogDetails, assetThumbnails] = await Promise.all([
 			(async () => {
 				if (catalogChunks.length === 0) return [];
 				const firstBatch = await fetchCatalogBatch(catalogChunks[0]!);
@@ -7383,33 +7450,17 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				}
 				return details;
 			})(),
-			Promise.all(
-				wornAssetIdChunks.map(async (assetIds) => {
-					try {
-						const params = new URLSearchParams({
-							assetIds: assetIds.join(","),
-							size: "512x512",
-							format: "Png",
-						});
-						const response: any = await hcSession.get(`https://thumbnails.roblox.com/v1/assets?${params}`, { headers: { ...commonHeaders } });
-						if (!hcOk(response)) return [];
-						const result: any = hcJson(response) || {};
-						return Array.isArray(result?.data) ? result.data : [];
-					} catch {
-						return [];
-					}
-				}),
-			),
+			Promise.all(assetIdChunks.map((assetIds) => fetchAssetThumbnails(assetIds))),
 		]);
 		const catalogDetailsByKey = new Map<string, any>();
 		for (const detail of catalogDetails) {
 			if (detail?.id != null && detail?.itemType) catalogDetailsByKey.set(`${detail.itemType}:${detail.id}`, detail);
 		}
-		const wornAssetThumbnailsById = new Map<number, string>(
-			wornAssetThumbnails
+		const assetThumbnailsById = new Map<number, string>(
+			assetThumbnails
 				.flat()
 				.filter((thumbnail: any) => thumbnail?.targetId != null && thumbnail?.imageUrl)
-				.map((thumbnail: any) => [thumbnail.targetId, thumbnail.imageUrl]),
+				.map((thumbnail: any) => [Number(thumbnail.targetId), thumbnail.imageUrl]),
 		);
 
 		return {
@@ -7417,6 +7468,7 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 				const images = thumbnailData.get(u.id);
 				const details = userDetailsById.get(Number(u.id));
 				const originalProfile = profilesById.get(u.id) || null;
+				const backgroundAssetId = Number(originalProfile?.components?.ProfileBackground?.assetId);
 				const currentlyWearing = originalProfile?.components?.CurrentlyWearing;
 				const profile =
 					originalProfile && Array.isArray(currentlyWearing?.assets)
@@ -7432,7 +7484,7 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 											return {
 												...asset,
 												details: catalogDetailsByKey.get(`${itemType}:${assetId}`) || null,
-												thumbnail: wornAssetThumbnailsById.get(assetId) || null,
+												thumbnail: assetThumbnailsById.get(assetId) || null,
 											};
 										}),
 									},
@@ -7445,6 +7497,8 @@ export const RobloxUsers = async function RobloxUsers(que: string) {
 					displayName: details?.displayName || null,
 					avatar: images?.headshot || null,
 					avatarFull: images?.full || null,
+					avatarBackground: images?.background || null,
+					background: Number.isSafeInteger(backgroundAssetId) && backgroundAssetId > 0 ? assetThumbnailsById.get(backgroundAssetId) || null : null,
 					profileUrl: `https://www.roblox.com/users/${u.id}/profile`,
 					profile,
 				};
@@ -7522,8 +7576,8 @@ export const Capcut = async function Capcut(que: string, limit_number: number = 
 			method: "POST",
 			body: JSON.stringify(body),
 			headers: {
-				"Content-Type": "application/json",
 				...commonHeaders,
+				"Content-Type": "application/json",
 				Sign: sign,
 				"Sign-Ver": "1",
 				"Device-Time": time.toString(),
@@ -17470,7 +17524,7 @@ export const PlayStoreSearch = async function PlayStoreSearch(query: string) {
 };
 
 function extractPlayStoreX(html: string): string | null {
-	const marker = "[[8,[20,50]],null,null,[96,108,72,100,27,177";
+	const marker = "[[8,[20,50]],null,null,[";
 	const idx = html.indexOf(marker);
 	if (idx < 0) return null;
 	let depth = 0;

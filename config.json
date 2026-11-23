@@ -7,8 +7,17 @@
 	"playgroundChallenge": false,
 	"endpointChallenge": false,
 	"wafChallenge": {
-		"enabled": false,
+		"enabled": true,
 		"restrictLocal": false
+	},
+	"altcha": {
+		"algorithm": "PBKDF2/SHA-256",
+		"cost": 10,
+		"counterMin": 300,
+		"counterMax": 800,
+		"expiresMs": 600000,
+		"cookie": "altcha",
+		"storeMax": 1000
 	},
 	"turnstile": {
 		"enabled": true,

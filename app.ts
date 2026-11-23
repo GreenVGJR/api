@@ -15,6 +15,7 @@ import { blobDispatch } from "./functions/httpRequest.js";
 import { commonHeaders } from "./functions/types/headers.js";
 import { BACK_CHALLENGE_COOKIE, getBackChallengeValue, cookieChallengeIsValid } from "./functions/backChallenge.js";
 import { VS_COOKIE, VS_COOKIE_MAX_AGE, signVsCookie } from "./functions/vsChallenge.js";
+import { altchaChallengeHandler } from "./functions/altchaChallenge.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -647,7 +648,7 @@ app.use("*", async (c: Context, next: Next) => {
 
 if (BUILD_ID) {
 	const apiPrefixes = ["search", "lyrics", "tools", "info", "music"];
-	const excludedPaths = ["favicon.ico", "robots.txt", "playground", "terms", "privacy"];
+	const excludedPaths = ["favicon.ico", "robots.txt", "playground", "terms", "privacy", "altcha"];
 
 	app.use("*", async (c: Context, next: Next) => {
 		const url = new URL(c.req.url);
@@ -699,6 +700,20 @@ app.use("*", async (c: Context, next: Next) => {
 	c.header("X-Message", "Verifying your browser first before processing");
 	c.status(307);
 	return c.body(new Uint8Array(htmlBuffer));
+});
+
+app.get("/altcha/challenge", altchaChallengeHandler);
+
+let _altchaWidget: string | null = null;
+app.get("/altcha.js", (c: Context) => {
+	try {
+		_altchaWidget ??= readText("node_modules/altcha/dist/main/altcha.min.js");
+		c.header("Content-Type", "text/javascript; charset=utf-8");
+		c.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=86400");
+		return c.body(_altchaWidget);
+	} catch {
+		return c.body(null, 404);
+	}
 });
 
 app.get("/favicon.ico", (c: Context) => {

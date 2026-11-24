@@ -11,7 +11,7 @@ app.get("/roblox/audio", async (c) => {
 	} else if (query === "") {
 		return c.json({ error: "Nothing to do" }, 202);
 	}
-	c.header("X-Route", "apis.roblox.com, thumbnails.roblox.com");
+	c.header("X-Route", "apis.roblox.com, assetdelivery.roblox.com, asset-reviews-api.roblox.com, thumbnails.roblox.com");
 	return await dispatch(c, () => robloxAudio(query));
 });
 

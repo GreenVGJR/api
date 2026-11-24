@@ -7127,38 +7127,104 @@ export const robloxAudio = async function robloxAudio(que: string) {
 	if (!que) return null;
 
 	try {
+		const apiHeaders = {
+			...commonHeaders,
+			Accept: "application/json, text/plain, */*",
+			Origin: "https://create.roblox.com",
+			Referer: "https://create.roblox.com/",
+			"Sec-Fetch-Dest": "empty",
+			"Sec-Fetch-Mode": "cors",
+			"Sec-Fetch-Site": "same-site",
+		};
+		const deliveryHeaders = { ...apiHeaders, "Content-Type": "application/json" };
+		const mapWithConcurrency = async <T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> => {
+			const results = new Array<R>(items.length);
+			let index = 0;
+			await Promise.all(
+				Array.from({ length: Math.min(limit, items.length) }, async () => {
+					while (index < items.length) {
+						const current = index++;
+						results[current] = await fn(items[current]!);
+					}
+				}),
+			);
+			return results;
+		};
+		const parseStreamExpiry = (location: string | null): string | null => {
+			if (!location) return null;
+			try {
+				const raw = new URL(location).searchParams.get("Expires") || location.match(/exp=(\d+)/)?.[1];
+				const exp = Number(raw);
+				return Number.isFinite(exp) && exp > 0 ? new Date(exp * 1000).toISOString() : null;
+			} catch {
+				return null;
+			}
+		};
+
 		const pul1 = await fetch(`https://apis.roblox.com/toolbox-service/v1/marketplace/3?limit=40&keyword=${encodeURIComponent(que)}`, {
 			headers: commonHeaders,
 		});
 
 		const res1: any = await pul1.json();
 		const assetList = res1.data || [];
-		const assetIds = assetList.map((b: any) => b.id).join(",");
+		const ids = assetList.map((b: any) => b.id);
+		const assetIds = ids.join(",");
 
 		if (!assetIds) return { data: null };
 
-		const [pul2, pul3] = await Promise.all([
+		const [pul2, pul3, deliveryResponse, reviewCounts] = await Promise.all([
 			fetch(`https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${assetIds}`, {
 				headers: commonHeaders,
 			}),
-			fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Png`, {
+			fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetIds}&size=420x420&format=Webp`, {
 				headers: commonHeaders,
+			}),
+			fetch("https://assetdelivery.roblox.com/v1/assets/batch", {
+				method: "POST",
+				headers: deliveryHeaders,
+				body: JSON.stringify(ids.map((id: any) => ({ requestId: `${id}`, assetId: Number(id) }))),
+			}).catch(() => null),
+			mapWithConcurrency(ids, 8, async (id: any) => {
+				try {
+					const response = await fetch(`https://apis.roblox.com/asset-reviews-api/v1/assets/${encodeURIComponent(id)}/comments/count`, {
+						headers: apiHeaders,
+					});
+					if (!response.ok) return null;
+					const count = Number(await response.text());
+					return Number.isFinite(count) ? count : null;
+				} catch {
+					return null;
+				}
 			}),
 		]);
 
 		const [res2, res3] = await Promise.all([pul2.json() as Promise<any>, pul3.json() as Promise<any>]);
+		let deliveryData: any[] = [];
+		try {
+			const parsed = deliveryResponse ? await deliveryResponse.json() : null;
+			if (Array.isArray(parsed)) deliveryData = parsed;
+		} catch {}
 
 		const thumbnails = res3.data || [];
 		const details = res2.data || [];
+		const deliveryByRequestId = new Map<string, any>(deliveryData.map((entry: any) => [String(entry?.requestId), entry]));
+		const reviewCountsById = new Map<string, number | null>(ids.map((id: any, index: number) => [String(id), reviewCounts[index] ?? null]));
 
 		return {
 			data: details.map((item: any) => {
-				const thumb = thumbnails.find((t: any) => t.targetId === item.asset.id);
+				const assetId = item.asset?.id;
+				const thumb = thumbnails.find((t: any) => t.targetId === assetId);
+				const deliveryEntry = deliveryByRequestId.get(String(assetId));
+				const streamLocation = deliveryEntry?.location || null;
+				const streamUrl = streamLocation ? [{ url: streamLocation }] : Array.isArray(deliveryEntry?.errors) && deliveryEntry.errors.length > 0 ? deliveryEntry.errors : null;
 				return {
 					title: item.asset.audioDetails?.title || item.asset.name,
 					duration: item.asset.duration || 0,
 					thumbnail: thumb?.imageUrl || "https://prod.docsiteassets.roblox.com/assets/feeds/robloxYoutubeAvatar.webp",
-					url: `https://create.roblox.com/store/asset/${item.asset.id}`,
+					url: `https://create.roblox.com/store/asset/${assetId}`,
+					stream: streamUrl,
+					streamExpiresAt: parseStreamExpiry(streamLocation),
+					reviewCount: reviewCountsById.get(String(assetId)) ?? null,
 					...item,
 				};
 			}),
@@ -16263,6 +16329,48 @@ export const bingImageSearch = async (query: string): Promise<any> => {
 			return { error: "Bing asking to verify you're not a bot" };
 		}
 
+		const numOrNull = (value: string | undefined): number | null => {
+			if (value === undefined || value === "") return null;
+			const parsed = Number(value);
+			return Number.isFinite(parsed) ? parsed : null;
+		};
+		const absoluteBingUrl = (value: string | undefined): string | null => {
+			if (!value) return null;
+			const decoded = decodeHTML(value);
+			if (/^https?:\/\//i.test(decoded)) return decoded;
+			return `https://www.bing.com${decoded.startsWith("/") ? "" : "/"}${decoded}`;
+		};
+		const hostnameOrNull = (value: unknown): string | null => {
+			if (typeof value !== "string" || !value) return null;
+			try {
+				return new URL(value).hostname || null;
+			} catch {
+				return null;
+			}
+		};
+		const extractSerpData = (tagHtml: string, block: string, raw: any) => {
+			const href = tagHtml.match(/\bhref="([^"]*)"/)?.[1];
+			const detailUrl = absoluteBingUrl(href);
+			const label = tagHtml.match(/\baria-label="([^"]*)"/)?.[1];
+			const imgTag = block.match(/<img\b[^>]*>/)?.[0] || "";
+			const thumbSrc = imgTag.match(/\bdata-src="([^"]*)"/)?.[1] || imgTag.match(/\bsrc="([^"]*)"/)?.[1];
+			const dimensions = block.match(/class="nowrap"[^>]*>([^<]*)</)?.[1];
+			const dimensionMatch = dimensions ? decodeHTML(dimensions).match(/(\d+)\s*[×xX]\s*(\d+)/) : null;
+			const domain = block.match(/lnkw[\s\S]*?<a\b[^>]*\btitle="([^"]*)"/)?.[1];
+			const favicon = block.match(/rms_iac[\s\S]*?\bdata-src="([^"]*)"/)?.[1];
+			return {
+				title: label ? decodeHTML(label) : null,
+				idpos: numOrNull(tagHtml.match(/\bdata-idpos="([^"]*)"/)?.[1]),
+				detailUrl,
+				width: dimensionMatch ? Number(dimensionMatch[1]) : numOrNull(detailUrl?.match(/[?&]expw=(\d+)/)?.[1]),
+				height: dimensionMatch ? Number(dimensionMatch[2]) : numOrNull(detailUrl?.match(/[?&]exph=(\d+)/)?.[1]),
+				thumbUrl: thumbSrc ? decodeHTML(thumbSrc) : null,
+				thumbWidth: numOrNull(imgTag.match(/\bwidth="?(\d+)"?/)?.[1]),
+				thumbHeight: numOrNull(imgTag.match(/\bheight="?(\d+)"?/)?.[1]),
+				sourceDomain: domain ? decodeHTML(domain) : hostnameOrNull(raw?.purl) || hostnameOrNull(raw?.murl),
+				favicon: favicon ? decodeHTML(favicon) : null,
+			};
+		};
 		const data: any[] = [];
 		const seen = new Set<string>();
 		BING_IMAGE_IUSC_TAG_RE.lastIndex = 0;
@@ -16273,8 +16381,11 @@ export const bingImageSearch = async (query: string): Promise<any> => {
 			try {
 				const raw = JSON.parse(decodeHTML(mAttr));
 				if (raw && typeof raw === "object" && typeof raw.murl === "string" && /^https?:\/\//i.test(raw.murl) && !seen.has(raw.murl)) {
+					const liStart = html.lastIndexOf("<li ", tag.index);
+					const liEnd = html.indexOf("</li>", tag.index);
+					const block = liStart !== -1 && liEnd !== -1 ? html.slice(liStart, liEnd + 5) : tag[0];
 					seen.add(raw.murl);
-					data.push(raw);
+					data.push({ ...raw, serp: extractSerpData(tag[0], block, raw) });
 				}
 			} catch {
 				// skip malformed entries

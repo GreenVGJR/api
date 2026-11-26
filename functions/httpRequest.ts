@@ -11,6 +11,7 @@ import { autoGenBuild, autoGenBuildPara, isLocalRequest, isWafChallengeActive } 
 import { maxLimitRequestsPerSec, buildId } from "../config.json";
 import { verifyVsCookie } from "./vsChallenge.js";
 import { verifyAltchaCookie } from "./altchaChallenge.js";
+import { createMusicVsSession, MUSIC_VS_POPUP_HEADER, MUSIC_VS_PATH_HEADER, MUSIC_VS_VERIFY_URL, musicVsRequestIp, verifyMusicVsToken } from "./musicVsChallenge.js";
 
 const logResponse = <T extends Response>(c: Context, response: T, statusCode = response.status, pathOverride?: string) => {
 	recordRequestLog(c, statusCode, pathOverride);
@@ -427,6 +428,20 @@ export const applyVsChallenge = async (c: Context): Promise<Response | null> => 
 		return c.text("", 412);
 	}
 	return null;
+};
+
+export const applyMusicVsChallenge = async (c: Context): Promise<Response | null> => {
+	if (!isWafChallengeActive(c.req.header("host"))) return null;
+	const ua = c.req.header("user-agent") ?? "";
+	if (!ua.startsWith("Mozilla/5.0") || ua.startsWith("BDFD-")) return null;
+	if (c.req.header("accept") !== "application/json" || c.req.header("sec-fetch-mode") !== "same-origin") return null;
+	if (await verifyMusicVsToken(c)) return null;
+	const session = createMusicVsSession(musicVsRequestIp(c), ua);
+	c.header("X-Player", "lavalink");
+	c.header(MUSIC_VS_POPUP_HEADER, "true");
+	c.header(MUSIC_VS_PATH_HEADER, `${MUSIC_VS_VERIFY_URL}?id=${encodeURIComponent(session.id)}&sid=${encodeURIComponent(session.sid)}`);
+	c.header("Cache-Control", "no-store");
+	return c.body(null, 403);
 };
 
 export const dispatch = async (c: Context, promiseFactory: any, options?: { share?: boolean | string }) => {

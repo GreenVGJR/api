@@ -972,206 +972,219 @@ export const YTVideo = async function YTVideo(que: string, deepSearch: boolean =
 	if (!que) return null;
 	try {
 		await ensurePoToken();
-		const jsonResult = await fetchYoutubeWithRetry(
-			async () => {
-				await getYoutubeVisitorKey();
-				const bodyload = JSON.stringify({
-					query: que,
-					context: {
-						client: {
-							clientName: "WEB",
-							clientVersion: "2.20261230",
-							hl: "en",
-							gl: "US",
-							...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+		const runSearch = async (sortParams?: string) => {
+			const jsonResult = await fetchYoutubeWithRetry(
+				async () => {
+					await getYoutubeVisitorKey();
+					const bodyload = JSON.stringify({
+						query: que,
+						...(sortParams ? { params: sortParams } : {}),
+						context: {
+							client: {
+								clientName: "WEB",
+								clientVersion: "2.20261230",
+								hl: "en",
+								gl: "US",
+								...(poTokenCache?.visitor_data ? { visitorData: poTokenCache.visitor_data } : {}),
+							},
 						},
-					},
-					...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
-				});
+						...(poTokenCache?.po_token ? { serviceIntegrityDimensions: { poToken: poTokenCache.po_token } } : {}),
+					});
 
-				return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
-					headers: {
-						...commonHeaders,
-						"content-type": "application/json",
-						...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
-					},
-					body: bodyload,
-					method: "POST",
-				});
-			},
-			parseYoutubeJsonResponse,
-			"YTVideo",
-		);
+					return await fetch("https://m.youtube.com/youtubei/v1/search?prettyPrint=false&fields=contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.itemSectionRenderer.contents", {
+						headers: {
+							...commonHeaders,
+							"content-type": "application/json",
+							...(keyYoutubeVisitor?.cookie ? { Cookie: keyYoutubeVisitor.cookie } : {}),
+						},
+						body: bodyload,
+						method: "POST",
+					});
+				},
+				parseYoutubeJsonResponse,
+				"YTVideo",
+			);
 
-		if (!jsonResult.ok) {
-			return { error: "Rate-limited" };
-		}
-
-		const res: any = jsonResult.data;
-
-		const sectionContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-		const inrtubeContents = sectionContents.flatMap((sec: any) => sec?.itemSectionRenderer?.contents || []);
-		const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
-
-		const videoItems = inrtubeContents.flatMap((item: any) => {
-			if (item.shelfRenderer?.content?.verticalListRenderer?.items) {
-				return item.shelfRenderer.content.verticalListRenderer.items;
+			if (!jsonResult.ok) {
+				return { result: { error: "Rate-limited" } };
 			}
-			if (item.shelfRenderer?.content?.horizontalListRenderer?.items) {
-				return item.shelfRenderer.content.horizontalListRenderer.items;
-			}
-			return item;
-		});
 
-		const mappedTasks = videoItems.map(async (item: any) => {
-			const a = item.videoRenderer;
-			if (!a) return null;
-			const checkmix = a?.navigationEndpoint?.watchEndpoint?.playlistId;
-			let mixData: any = null;
+			const res: any = jsonResult.data;
 
-			if (checkmix && deepSearch) {
-				try {
-					const rlkres = await fetchYoutubeMixInitialData(a.videoId, checkmix);
-					if (!rlkres) console.warn(`YTVideo mix skipped for ${a.videoId}: unusable page data`);
+			const sectionContents = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+			const inrtubeContents = sectionContents.flatMap((sec: any) => sec?.itemSectionRenderer?.contents || []);
+			const queryId: any = inrtubeContents?.find((m: any) => !!m.videoRenderer?.searchVideoResultEntityKey)?.videoRenderer?.searchVideoResultEntityKey;
 
-					if (rlkres) {
-						const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
-						if (kkmvytmx) {
-							const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
-							let getmgcf: any = null;
-							try {
-								getmgcf = new URL(kkmvytmx.playlistShareUrl);
-								getmgcf = getmgcf.searchParams.get("list");
-							} catch {}
-							mixData = {
-								playlistId: getmgcf,
-								title: kkmvytmx.title,
-								shareUrl: kkmvytmx.playlistShareUrl,
-								data:
-									kkmvytmx.contents?.map((c: any) => ({
-										videoId: c.playlistPanelVideoRenderer?.videoId,
-										url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
-										altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
-										title: c.playlistPanelVideoRenderer?.title?.simpleText,
-										duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
-										thumbnail: "https://i.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
-										owner: {
-											name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
-											url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
-										},
-									})) || [],
-								altData:
-									kkmvytfd
-										?.filter((c: any) => c.lockupViewModel)
-										?.map((c: any) => {
-											const lvm = c.lockupViewModel;
-											const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
-											const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
-											return {
-												videoId: rId,
-												url: "https://www.youtube.com/watch?v=" + rId,
-												altUrl: "https://www.youtube.com" + nUrl,
-												title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
-												thumbnail: "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
-												owner: {
-													name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
-													url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
-													avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
-												},
-											};
-										}) || [],
-							};
-						}
-					}
-				} catch (e) {
-					console.error("Mix fetch error:", e);
+			const videoItems = inrtubeContents.flatMap((item: any) => {
+				if (item.shelfRenderer?.content?.verticalListRenderer?.items) {
+					return item.shelfRenderer.content.verticalListRenderer.items;
 				}
-			}
+				if (item.shelfRenderer?.content?.horizontalListRenderer?.items) {
+					return item.shelfRenderer.content.horizontalListRenderer.items;
+				}
+				return item;
+			});
 
-			try {
-				const chnl = a.longBylineText?.runs?.[0];
-				const chnl2 = chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
-				const fom = {
-					type: "videoRenderer",
-					videoId: a.videoId,
-					url: "https://www.youtube.com/watch?v=" + a.videoId,
-					altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
-					thumbnail: "https://i.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
-					movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
-					previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || "") ? "https://i.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
-					title: a.title?.runs?.[0]?.text,
-					description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join("") || "",
-					owners: {
-						name: a.ownerText?.runs?.[0]?.text,
-						url:
-							(chnl2
-								? ["https://www.youtube.com" + chnl2]
-								: chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems
-										?.map((d: any) => {
-											const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
-											return u ? "https://www.youtube.com" + u : null;
-										})
-										.filter(Boolean)) || [],
-						avatar: (a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")),
-					},
-					timeChapters:
-						a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map((k: any) => ({
-							text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
-							time: k?.macroMarkersListItemRenderer?.timeDescription?.runs?.[0]?.text,
-							thumbnail: k?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url,
-							isHighlighted: k?.macroMarkersListItemRenderer?.isHighlighted,
-							url: "https://www.youtube.com/" + k?.macroMarkersListItemRenderer?.onTap?.commandMetadata?.webCommandMetadata?.url,
-						})) || null,
-					isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE") || false,
-					isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer?.icon?.iconType === "MUSIC") || false,
-					isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
-					isShorts: SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || ""),
-					mixPlaylist: mixData,
-					viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(" ")?.[0] || a.viewCountText?.runs?.[0]?.text),
-					duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null,
+			const mappedTasks = videoItems.map(async (item: any) => {
+				const a = item.videoRenderer;
+				if (!a) return null;
+				const checkmix = a?.navigationEndpoint?.watchEndpoint?.playlistId;
+				let mixData: any = null;
+
+				if (checkmix && deepSearch) {
+					try {
+						const rlkres = await fetchYoutubeMixInitialData(a.videoId, checkmix);
+						if (!rlkres) console.warn(`YTVideo mix skipped for ${a.videoId}: unusable page data`);
+
+						if (rlkres) {
+							const kkmvytmx = rlkres?.contents?.twoColumnWatchNextResults?.playlist?.playlist;
+							if (kkmvytmx) {
+								const kkmvytfd = rlkres?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results?.[0]?.itemSectionRenderer?.contents;
+								let getmgcf: any = null;
+								try {
+									getmgcf = new URL(kkmvytmx.playlistShareUrl);
+									getmgcf = getmgcf.searchParams.get("list");
+								} catch {}
+								mixData = {
+									playlistId: getmgcf,
+									title: kkmvytmx.title,
+									shareUrl: kkmvytmx.playlistShareUrl,
+									data:
+										kkmvytmx.contents?.map((c: any) => ({
+											videoId: c.playlistPanelVideoRenderer?.videoId,
+											url: "https://www.youtube.com/watch?v=" + c.playlistPanelVideoRenderer?.videoId,
+											altUrl: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+											title: c.playlistPanelVideoRenderer?.title?.simpleText,
+											duration: c.playlistPanelVideoRenderer?.lengthText?.simpleText,
+											thumbnail: "https://i.ytimg.com/vi/" + c.playlistPanelVideoRenderer?.videoId + "/hq720.jpg",
+											owner: {
+												name: c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.text,
+												url: "https://www.youtube.com" + c.playlistPanelVideoRenderer?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+											},
+										})) || [],
+									altData:
+										kkmvytfd
+											?.filter((c: any) => c.lockupViewModel)
+											?.map((c: any) => {
+												const lvm = c.lockupViewModel;
+												const nUrl = lvm?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || "";
+												const rId = nUrl.includes("v=") ? nUrl.split("v=")[1].split("&")[0] : lvm?.contentId;
+												return {
+													videoId: rId,
+													url: "https://www.youtube.com/watch?v=" + rId,
+													altUrl: "https://www.youtube.com" + nUrl,
+													title: lvm?.metadata?.lockupMetadataViewModel?.title?.content,
+													thumbnail: "https://i.ytimg.com/vi/" + rId + "/hq720.jpg",
+													owner: {
+														name: lvm?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
+														url: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url ? "https://www.youtube.com" + lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url : null,
+														avatar: lvm?.metadata?.lockupMetadataViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources?.[0]?.url?.replace(/=s\d+.*/, "=s0"),
+													},
+												};
+											}) || [],
+								};
+							}
+						}
+					} catch (e) {
+						console.error("Mix fetch error:", e);
+					}
+				}
+
+				try {
+					const chnl = a.longBylineText?.runs?.[0];
+					const chnl2 = chnl?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+					const fom = {
+						type: "videoRenderer",
+						videoId: a.videoId,
+						url: "https://www.youtube.com/watch?v=" + a.videoId,
+						altUrl: "https://www.youtube.com" + a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url,
+						thumbnail: "https://i.ytimg.com/vi/" + a.videoId + "/maxresdefault.jpg",
+						movingThumbnail: a.richThumbnail?.movingThumbnailRenderer?.movingThumbnailDetails?.thumbnails?.[0]?.url || null,
+						previewThumbnail: a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.[0]?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url || (SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || "") ? "https://i.ytimg.com/vi/" + a.videoId + "/oardefault.jpg" : null),
+						title: a.title?.runs?.[0]?.text,
+						description: a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text)?.join("") || "",
+						owners: {
+							name: a.ownerText?.runs?.[0]?.text,
+							url:
+								(chnl2
+									? ["https://www.youtube.com" + chnl2]
+									: chnl?.navigationEndpoint?.showDialogCommand?.panelLoadingStrategy?.inlineContent?.dialogViewModel?.customContent?.listViewModel?.listItems
+											?.map((d: any) => {
+												const u = d.listItemViewModel?.rendererContext?.commandContext?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.leadingAccessory?.avatarViewModel?.endpoint?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url || d.listItemViewModel?.title?.commandRuns?.[0]?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url;
+												return u ? "https://www.youtube.com" + u : null;
+											})
+											.filter(Boolean)) || [],
+							avatar: (a.avatar?.avatarStackViewModel?.avatars?.map((e: any) => e?.avatarViewModel?.image?.sources?.[0]?.url) || [a.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url]?.map((k: any) => k))?.map((k: any) => k?.replace(/=s\d+.*/, "=s0")),
+						},
+						timeChapters:
+							a?.expandableMetadata?.expandableMetadataRenderer?.expandedContent?.horizontalCardListRenderer?.cards?.map((k: any) => ({
+								text: k?.macroMarkersListItemRenderer?.title?.runs?.[0]?.text,
+								time: k?.macroMarkersListItemRenderer?.timeDescription?.runs?.[0]?.text,
+								thumbnail: k?.macroMarkersListItemRenderer?.thumbnail?.thumbnails?.[0]?.url,
+								isHighlighted: k?.macroMarkersListItemRenderer?.isHighlighted,
+								url: "https://www.youtube.com/" + k?.macroMarkersListItemRenderer?.onTap?.commandMetadata?.webCommandMetadata?.url,
+							})) || null,
+						isLive: a?.badges?.some((bad: any) => bad?.metadataBadgeRenderer?.icon?.iconType === "LIVE") || false,
+						isATV: ((a.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((b: any) => b.text).join("") || "")?.startsWith("Provided to YouTube by ") && a.thumbnailOverlays?.[0]?.thumbnailOverlayTimeStatusRenderer?.icon?.iconType === "MUSIC") || false,
+						isMix: !!a?.navigationEndpoint?.watchEndpoint?.playlistId,
+						isShorts: SHORTS_URL_RE.test(a.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || ""),
+						mixPlaylist: mixData,
+						viewCount: parseAbbreviatedNumber(a?.viewCountText?.simpleText?.split(" ")?.[0] || a.viewCountText?.runs?.[0]?.text),
+						duration: a.lengthText?.simpleText || a.lengthText?.runs?.[0]?.text || null,
+					};
+					return fom;
+				} catch (err) {
+					console.error("Error parsing YouTube Video item:", err);
+					return null;
+				}
+			});
+
+			const alk = (await Promise.all(mappedTasks)).filter(Boolean);
+
+			const mappedTasks2 = inrtubeContents.map((item: any) => {
+				const a = item.gridShelfViewModel;
+				if (!a) return null;
+				return a.contents.map((e: any) => ({
+					type: "shortsGrid",
+					videoId: e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+					url: "https://www.youtube.com/watch?v=" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
+					altUrl: "https://www.youtube.com" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
+					thumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
+					movingThumbnail: null,
+					previewThumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
+					title: e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content || null,
+					description: "",
+					owners: {},
+					timeChapters: null,
+					isLive: false,
+					isATV: false,
+					isMix: false,
+					isShorts: true,
+					mixPlaylist: null,
+					viewCount: parseAbbreviatedNumber(e?.shortsLockupViewModel?.overlayMetadata?.secondaryText?.content?.split(" ")?.[0]),
+					duration: null,
+				}));
+			});
+			const finalTask2 = mappedTasks2.filter(Boolean).flat();
+
+			if (alk.length === 0) {
+				return {
+					result: { error: "This search may be inappropriate, Youtube asking to sign-in" },
+					alkCount: 0,
+					shortsCount: finalTask2.length,
 				};
-				return fom;
-			} catch (err) {
-				console.error("Error parsing YouTube Video item:", err);
-				return null;
 			}
-		});
 
-		const alk = (await Promise.all(mappedTasks)).filter(Boolean);
+			return { result: { searchParams: queryId, data: alk?.concat(finalTask2) }, alkCount: alk.length, shortsCount: finalTask2.length };
+		};
 
-		const mappedTasks2 = inrtubeContents.map((item: any) => {
-			const a = item.gridShelfViewModel;
-			if (!a) return null;
-			return a.contents.map((e: any) => ({
-				type: "shortsGrid",
-				videoId: e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
-				url: "https://www.youtube.com/watch?v=" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId,
-				altUrl: "https://www.youtube.com" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.commandMetadata?.webCommandMetadata?.url,
-				thumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/maxresdefault.jpg",
-				movingThumbnail: null,
-				previewThumbnail: "https://i.ytimg.com/vi/" + e?.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId + "/oardefault.jpg",
-				title: e?.shortsLockupViewModel?.overlayMetadata?.primaryText?.content || null,
-				description: "",
-				owners: {},
-				timeChapters: null,
-				isLive: false,
-				isATV: false,
-				isMix: false,
-				isShorts: true,
-				mixPlaylist: null,
-				viewCount: parseAbbreviatedNumber(e?.shortsLockupViewModel?.overlayMetadata?.secondaryText?.content?.split(" ")?.[0]),
-				duration: null,
-			}));
-		});
-		const finalTask2 = mappedTasks2.filter(Boolean).flat();
-
-		if (alk.length === 0) {
-			return {
-				error: "This search may be inappropriate, Youtube asking to sign-in",
-			};
-		}
-
-		return { searchParams: queryId, data: alk?.concat(finalTask2) };
+		const first = await runSearch();
+		if (first.result?.error === "Rate-limited") return first.result;
+		if ((first.alkCount ?? 0) > 0 || (first.shortsCount ?? 0) > 0) return first.result;
+		const retried = await runSearch("CAM%3D");
+		if (retried.result?.error === "Rate-limited") return retried.result;
+		if ((retried.alkCount ?? 0) > 0) return retried.result;
+		return first.result;
 	} catch (e) {
 		if (e instanceof Error && e.message === "Rate-limited") {
 			return { error: "Rate-limited" };

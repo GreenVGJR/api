@@ -1212,7 +1212,57 @@ function parseAndFormatJSON(text) {
   }
 }
 
-async function performRequest(targetUrl, retryCount = 0) {
+let eagleToken = null;
+
+async function openMusicVerification(path) {
+  let verifyUrl = null;
+  try {
+    const parsed = new URL(path, location.origin);
+    if (parsed.origin === location.origin && path?.startsWith("/")) verifyUrl = parsed.pathname + parsed.search + parsed.hash;
+  } catch {}
+  if (!verifyUrl) throw new Error("Invalid verification path");
+  setStatus("yellow-400", "Verifying", "text-yellow-400");
+  const popup = window.open(verifyUrl, "_blank", "popup,width=1,height=1");
+  if (!popup) throw new Error("Popup blocked — allow popups for this site and retry");
+  const channel = new BroadcastChannel("vgjr-music-verify");
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let intervalId = null;
+    let timeoutId = null;
+    const cleanup = () => {
+      channel.removeEventListener("message", onMessage);
+      channel.close();
+      if (intervalId !== null) clearInterval(intervalId);
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
+    const finish = (error, token) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) {
+        try { popup.close(); } catch {}
+        reject(error);
+      } else {
+        resolve(token);
+      }
+    };
+    const onMessage = (event) => {
+      if (event.data?.type !== "music-vs-verified" || typeof event.data.token !== "string") return;
+      finish(null, event.data.token);
+    };
+    channel.addEventListener("message", onMessage);
+    let closeDetected = false;
+    intervalId = setInterval(() => {
+      if (popup.closed && !closeDetected) {
+        closeDetected = true;
+        setTimeout(() => finish(new Error("Verification window was closed")), 400);
+      }
+    }, 500);
+    timeoutId = setTimeout(() => finish(new Error("Verification timed out")), 60000);
+  });
+}
+
+async function performRequest(targetUrl, retryCount = 0, vsPopupRetried = false) {
   if (retryCount === 0 && isBusy()) return null;
   if (retryCount === 0 && !hasConnection()) {
     updateConnectionUI();
@@ -1247,6 +1297,7 @@ async function performRequest(targetUrl, retryCount = 0) {
     const headers = {
       Accept: "application/json",
     };
+    if (eagleToken && parseUrl.pathname.startsWith("/music/")) headers["x-eagle-token"] = eagleToken;
     const isDownload = parseUrl.pathname.startsWith("/download/");
     const fetchOptions = { headers, mode: "same-origin", referrerPolicy: "same-origin", redirect: isDownload ? "manual" : undefined };
     let fetchUrl = targetUrl;
@@ -1254,6 +1305,14 @@ async function performRequest(targetUrl, retryCount = 0) {
       fetchUrl = await j9ls(targetUrl, headers);
     } catch {}
     response = await fetch(fetchUrl, fetchOptions);
+    if (response.status === 403 && response.headers.get("x-music-vs") === "true") {
+      await response.body?.cancel?.();
+      if (vsPopupRetried) throw new Error("Browser verification failed");
+      const vsPath = response.headers.get("x-vs-path");
+      if (!vsPath) throw new Error("Verification path missing");
+      eagleToken = await openMusicVerification(vsPath);
+      return await performRequest(targetUrl, Math.max(retryCount, 1), true);
+    }
     if (response.status === 412 && retryCount < 2) {
       const vsToken = (response.headers.get("link") || "").match(/<\/?\?vs=([^>]+)>/)?.[1] ?? "";
       setStatus("yellow-400", "Verifying", "text-yellow-400");

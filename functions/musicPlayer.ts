@@ -8,7 +8,7 @@ import { generateChallenge, verifyChallenge, verifyChallengeHash, verifyMcToken,
 import { recordRequestLog } from "./telemetry.js";
 import { radioStreamUrls } from "./radioProxy.js";
 import { discordFetch } from "./request.js";
-import { rateLimit } from "./httpRequest.js";
+import { applyMusicVsChallenge, rateLimit } from "./httpRequest.js";
 
 /** Disable TLS verification only for a node's WebSocket handshake (avoids setting NODE_TLS_REJECT_UNAUTHORIZED globally). */
 function patchNodeTls(node: any) {
@@ -164,7 +164,11 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			c.header("Content-Type", "text/event-stream");
 			c.header("Cache-Control", "public, no-cache, no-store, no-transform, max-age=0, must-revalidate");
 			if (!(checkAccept && checkBrowserMode)) {
-				c.header("Location", "/playground");
+				c.header("Content-Encoding", "gzip");
+				return stream(c, async (s: any) => {
+					await s.write("");
+					await s.write(zlib.deflateSync("null"));
+				});
 			}
 			const challengeData = generateChallenge(ipLL);
 			c.status(302);
@@ -191,6 +195,9 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			}
 		}
 	}
+
+	const vsRes = await applyMusicVsChallenge(c);
+	if (vsRes) return vsRes;
 
 	c.header("X-Player", "lavalink");
 	c.header("X-Enc-Route", "v4");

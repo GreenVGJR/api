@@ -1222,7 +1222,11 @@ async function openMusicVerification(path) {
   } catch {}
   if (!verifyUrl) throw new Error("Invalid verification path");
   setStatus("yellow-400", "Verifying", "text-yellow-400");
-  const popup = window.open(verifyUrl, "_blank", "popup,width=1,height=1");
+  const width = 480;
+  const height = 600;
+  const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
+  const popup = window.open(verifyUrl, "_blank", `popup,width=${width},height=${height},left=${left},top=${top}`);
   if (!popup) throw new Error("Popup blocked — allow popups for this site and retry");
   const channel = new BroadcastChannel("vgjr-music-verify");
   return await new Promise((resolve, reject) => {

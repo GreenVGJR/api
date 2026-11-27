@@ -18,6 +18,67 @@ interface CustomSearchResult {
 }
 
 const CUSTOM_SEARCH_TIMEOUT_MS = 5_000;
+const CUSTOM_SEARCH_DECISION_MS = 1_200;
+const CUSTOM_SEARCH_LATE_MS = 150;
+const NODE_PROBE_TIMEOUT_MS = 3_000;
+const NODE_CACHE_TTL_MS = 15_000;
+const NODE_CACHE_MAX = 1_000;
+const NODE_COOLDOWN_MS = 30_000;
+const METADATA_CACHE_MAX = 500;
+const METADATA_TTL_MS = 5 * 60 * 1000;
+const METADATA_FAILURE_TTL_MS = 30 * 1000;
+
+const connectedNodeCache = new Map<string, { id: string; exp: number }>();
+const nodeCooldowns = new Map<string, number>();
+const metadataCache = new Map<string, { value: CustomSearchResult | null; exp: number }>();
+
+const setConnectedNode = (token: string, id: string): void => {
+	const now = Date.now();
+	for (const [key, entry] of connectedNodeCache) {
+		if (entry.exp <= now) connectedNodeCache.delete(key);
+	}
+	connectedNodeCache.delete(token);
+	connectedNodeCache.set(token, { id, exp: now + NODE_CACHE_TTL_MS });
+	while (connectedNodeCache.size > NODE_CACHE_MAX) {
+		const oldest = connectedNodeCache.keys().next().value;
+		if (oldest === undefined) break;
+		connectedNodeCache.delete(oldest);
+	}
+};
+
+const raceWithTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	return Promise.race([
+		promise,
+		new Promise<null>((resolve) => {
+			timeoutId = setTimeout(() => resolve(null), timeoutMs);
+		}),
+	]).finally(() => {
+		if (timeoutId) clearTimeout(timeoutId);
+	});
+};
+
+const getCachedMetadata = (key: string): CustomSearchResult | null | undefined => {
+	const entry = metadataCache.get(key);
+	if (!entry) return undefined;
+	if (entry.exp <= Date.now()) {
+		metadataCache.delete(key);
+		return undefined;
+	}
+	metadataCache.delete(key);
+	metadataCache.set(key, entry);
+	return entry.value;
+};
+
+const setCachedMetadata = (key: string, value: CustomSearchResult | null): void => {
+	metadataCache.delete(key);
+	metadataCache.set(key, { value, exp: Date.now() + (value ? METADATA_TTL_MS : METADATA_FAILURE_TTL_MS) });
+	while (metadataCache.size > METADATA_CACHE_MAX) {
+		const oldest = metadataCache.keys().next().value;
+		if (oldest === undefined) break;
+		metadataCache.delete(oldest);
+	}
+};
 
 function normalizeUrl(url: string): string {
 	if (!url) return url;
@@ -193,7 +254,7 @@ async function getUrlMetadata(url: string): Promise<CustomSearchResult | null> {
 	}
 }
 
-async function customSearch(platform: string, query: string): Promise<CustomSearchResult | null> {
+async function customSearchUncached(platform: string, query: string): Promise<CustomSearchResult | null> {
 	try {
 		const isUrl = query.startsWith("http://") || query.startsWith("https://");
 
@@ -310,6 +371,15 @@ async function customSearch(platform: string, query: string): Promise<CustomSear
 	} catch {
 		return null;
 	}
+}
+
+async function customSearch(platform: string, query: string): Promise<CustomSearchResult | null> {
+	const key = `${platform}:${query}`;
+	const cached = getCachedMetadata(key);
+	if (cached !== undefined) return cached;
+	const result = await customSearchUncached(platform, query);
+	setCachedMetadata(key, result);
+	return result;
 }
 
 async function customSearchWithTimeout(platform: string, query: string, timeoutMs: number, log?: (msg: string) => Promise<void>, label = `Custom ${platform} search`): Promise<CustomSearchResult | null> {
@@ -539,13 +609,48 @@ app.get("/play", async (c) => {
 				const normalizedQ = normalizeUrl(q);
 				const nodeIds = getLavalinkNodeIds(false);
 				let lastErr: any = null;
+				const now = Date.now();
+				const allNodeIds = [...new Set([gp.node?.id, ...nodeIds].filter(Boolean))] as string[];
+				const eligibleIds = allNodeIds.filter((id) => (nodeCooldowns.get(id) ?? 0) <= now);
+				const probeIds = eligibleIds.length ? eligibleIds : allNodeIds;
+				const cached = connectedNodeCache.get(token);
+				const preferredId = gp.node?.id || (cached && cached.exp > now ? cached.id : undefined);
+				if (preferredId) probeIds.sort((a, b) => Number(b === preferredId) - Number(a === preferredId));
+				const connectedQueue: any[] = [];
+				const queueWaiters: Array<(node: any | null) => void> = [];
+				let pendingProbes = probeIds.length;
+				const pushConnected = (node: any) => {
+					const waiter = queueWaiters.shift();
+					if (waiter) waiter(node);
+					else connectedQueue.push(node);
+				};
+				const waitForConnected = (): Promise<any | null> => {
+					const node = connectedQueue.shift();
+					if (node) return Promise.resolve(node);
+					if (pendingProbes === 0) return Promise.resolve(null);
+					return new Promise((resolve) => queueWaiters.push(resolve));
+				};
+				for (const id of probeIds) {
+					ensureNodeConnected(manager, id, undefined, NODE_PROBE_TIMEOUT_MS)
+						.then((node) => {
+							if (node?.connected) pushConnected(node);
+							else nodeCooldowns.set(id, Date.now() + NODE_COOLDOWN_MS);
+						})
+						.catch(() => nodeCooldowns.set(id, Date.now() + NODE_COOLDOWN_MS))
+						.finally(() => {
+							pendingProbes--;
+							if (pendingProbes === 0) {
+								while (queueWaiters.length > 0) {
+									const waiter = queueWaiters.shift();
+									if (waiter) waiter(null);
+								}
+							}
+						});
+				}
 
-				const nodesToTry = new Set([gp.node?.id, ...nodeIds].filter(Boolean));
-
-				for (const nodeId of nodesToTry) {
-					const targetNode = await ensureNodeConnected(manager, nodeId as string);
-					if (!targetNode || !targetNode.connected) continue;
-
+				let targetNode = await waitForConnected();
+				while (targetNode) {
+					const nodeId = targetNode.id;
 					try {
 						await log(`Searching for "${q}" on Lavalink node "${nodeId}"...`);
 						const res = await targetNode.search(
@@ -555,17 +660,22 @@ app.get("/play", async (c) => {
 							},
 							requester,
 						);
-						if (res?.tracks?.length) return res;
+						if (res?.tracks?.length) {
+							setConnectedNode(token, nodeId);
+							return res;
+						}
 						await log(`Lavalink node "${nodeId}" returned no tracks for "${q}"`);
 						lastErr = new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
 					} catch (err: any) {
 						lastErr = err;
 						const msg = err?.message || String(err);
-						if (msg.includes("not connected") || msg.includes("Failed to parse JSON") || msg.includes("422")) {
+						if (/not connected|Failed to parse JSON|422|timeout|ECONN|fetch failed/i.test(msg)) {
+							nodeCooldowns.set(nodeId, Date.now() + NODE_COOLDOWN_MS);
+							connectedNodeCache.delete(token);
 							await log(`Lavalink search failed on "${nodeId}": ${msg} — trying next node...`);
-							continue; // Try next node
 						}
 					}
+					targetNode = await waitForConnected();
 				}
 
 				throw lastErr || new Error(`No results for "${normalizedQ}" due unavailable or geo-restriction`);
@@ -595,7 +705,7 @@ app.get("/play", async (c) => {
 			};
 
 			const pPrimaryLavalink = !isUrl && allowFallback ? startLavalinkPlatformSearch(platform, queryStr) : null;
-			const customResult = await pCustom;
+			let customResult = await raceWithTimeout(pCustom, CUSTOM_SEARCH_DECISION_MS);
 
 			let result: any = null;
 			const loadSoundCloudManual = async (sourceUrl: string, overlaySource: CustomSearchResult | null): Promise<boolean> => {
@@ -688,6 +798,7 @@ app.get("/play", async (c) => {
 
 			// Skip the cross-platform fallback chain for YouTube playlist/mix URLs — if playlist and video-only failed, stop
 			if (isUrl && !result && allowFallback && !ytPlaylistUrl && !isYtMix) {
+				if (!customResult) customResult = await pCustom;
 				const metaQuery = customResult?.title ? (customResult.author ? `${customResult.title} ${customResult.author}` : customResult.title) : null;
 
 				if (!metaQuery || !result) {
@@ -896,6 +1007,10 @@ app.get("/play", async (c) => {
 						currentAttempt++;
 					}
 				}
+			}
+			if (!customResult && result) {
+				customResult = await raceWithTimeout(pCustom, CUSTOM_SEARCH_LATE_MS);
+				if (customResult) applyOverlay(result, customResult);
 			}
 			if (!result) throw new Error("All search methods failed");
 			return result;

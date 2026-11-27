@@ -2,6 +2,7 @@ export const userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/201001
 export const userAgentChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36";
 export const userAgent_mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/156.0.0.0 Mobile/15E148 Safari/604.1";
 export const discordUserAgent = "DiscordBot (https://discord.com, 1.0)";
+export const discordbotUserAgent = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)";
 
 export const commonHeaders = {
 	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

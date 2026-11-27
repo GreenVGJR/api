@@ -226,16 +226,15 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 		await safeWrite('{"_logs":[');
 
 		let logPromise = Promise.resolve();
-		const log = (msg: string) => {
+		const log = async (msg: string): Promise<void> => {
+			const elapsed = Date.now() - startTime;
 			logPromise = logPromise.then(async () => {
 				if (isAborted) return;
-				const elapsed = Date.now() - startTime;
 				const entry = `[${elapsed}ms] ${msg}`;
 				const prefix = logIndex > 0 ? "," : "";
 				await safeWrite(`${prefix}${JSON.stringify(entry)}`);
 				logIndex++;
 			});
-			return logPromise;
 		};
 
 		const customS = {
@@ -453,35 +452,77 @@ async function connectLavalinkWithFallback(manager: LavalinkManager, timeoutMs: 
 	const nodeList = nodes.map((n: any) => n.id).join(", ");
 	if (log) await log(`Connecting to Lavalink node(s): ${nodeList}`);
 
-	// Register all nodes up front so untried ones stay available for fallback/moveNode.
+	const perNodeTimeout = Math.max(timeoutMs, 6000);
+	const overallTimeout = Math.min(perNodeTimeout * nodes.length, 15_000);
+
 	createLavalinkNodes(manager, nodes);
 
-	for (const nodeConfig of nodes) {
-		const node = manager.nodeManager.nodes.get(nodeConfig.id);
-		if (node?.connected) {
-			if (log) await log(`Already connected to Lavalink node "${nodeConfig.id}"`);
-			if (!bootstrapNodeId) bootstrapNodeId = nodeConfig.id;
-			return true;
+	const pending = new Set(nodes.map((node) => node.id as string));
+	let settled = false;
+	let winnerId: string | null = null;
+	let resolveResult!: (connected: boolean) => void;
+	const result = new Promise<boolean>((resolve) => {
+		resolveResult = resolve;
+	});
+	const succeed = (id: string) => {
+		if (settled) return;
+		settled = true;
+		winnerId = id;
+		if (!bootstrapNodeId) bootstrapNodeId = id;
+		resolveResult(true);
+	};
+	const fail = (id: string) => {
+		pending.delete(id);
+		if (!settled && pending.size === 0) {
+			settled = true;
+			resolveResult(false);
 		}
+	};
 
-		if (log) await log(`Trying Lavalink node "${nodeConfig.id}"...`);
-		const connected = await waitForSpecificNodeConnection(manager, nodeConfig.id, timeoutMs, connectNodes);
-		if (connected) {
-			// Stability check: wait briefly to see if the node stays connected
-			await new Promise((r) => setTimeout(r, 50));
-			const stableNode = manager.nodeManager.nodes.get(nodeConfig.id);
-			if (stableNode?.connected) {
-				if (log) await log(`Connected to Lavalink node "${nodeConfig.id}"`);
-				if (!bootstrapNodeId) bootstrapNodeId = nodeConfig.id;
-				return true;
-			}
-			if (log) await log(`Lavalink node "${nodeConfig.id}" dropped immediately — trying next`);
-		} else {
-			if (log) await log(`Lavalink node "${nodeConfig.id}" failed to connect`);
+	for (const nodeConfig of nodes) {
+		const id = nodeConfig.id as string;
+		const node = manager.nodeManager.nodes.get(id);
+		if (node?.connected) {
+			void (async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				const stable = manager.nodeManager.nodes.get(id);
+				if (stable?.connected) succeed(id);
+				else fail(id);
+			})();
+			continue;
 		}
+		void waitForSpecificNodeConnection(manager, id, perNodeTimeout, connectNodes).then(async (connected) => {
+			if (!connected) {
+				fail(id);
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			const stable = manager.nodeManager.nodes.get(id);
+			if (stable?.connected) succeed(id);
+			else fail(id);
+		});
 	}
 
-	return false;
+	const timeout = setTimeout(() => {
+		if (!settled) {
+			settled = true;
+			resolveResult(false);
+		}
+	}, overallTimeout);
+	const connected = await result;
+	clearTimeout(timeout);
+	if (!connected) {
+		if (log) await log("All Lavalink nodes failed to connect");
+		return false;
+	}
+
+	const stableNode = manager.nodeManager.nodes.get(winnerId || "");
+	if (!stableNode?.connected) {
+		if (log) await log(`Lavalink node "${winnerId}" dropped immediately`);
+		return false;
+	}
+	if (log) await log(`Connected to Lavalink node "${stableNode.id}"`);
+	return true;
 }
 
 /** Connect the local node for the radio endpoint; null when unavailable. */
@@ -1368,6 +1409,12 @@ export async function getOrCreatePlayer(token: string, log?: (msg: string) => Pr
 									if (!voice?.endpoint || !voice?.sessionId || !voice?.token) return;
 									warnMusicThrottled(`node-switch:${player.guildId}`, `Switched guild ${player.guildId} from "${node.id}" to "${fallbackNode.id}"`, 10_000);
 									await player.changeNode(fallbackNode, false);
+									await new Promise((resolve) => setTimeout(resolve, 1000));
+									if (!players.has(token)) return;
+									if (manager.players.get(player.guildId) !== player) return;
+									if (player.queue.current && !player.playing && !player.paused) {
+										autoResumePlayer(player, `node switch to ${fallbackNode.id}`);
+									}
 								} catch (err) {
 									console.error(`Failed to change node for guild ${player.guildId}:`, (err as any)?.message || err);
 								}
@@ -1574,6 +1621,17 @@ export async function destroyPlayer(token: string): Promise<boolean> {
 		const nodesToKill = [...managed.player.nodeManager.nodes.values()];
 		for (const node of nodesToKill) {
 			try {
+				const socket: any = (node as any).socket;
+				if (socket?.readyState === 0) {
+					if (socket.on) socket.on("error", () => {});
+					try {
+						socket.terminate();
+					} catch {}
+					(node as any).socket = null;
+					(node as any).resetReconnectionAttempts?.();
+					managed.player.nodeManager.nodes.delete(node.id);
+					continue;
+				}
 				node.destroy("discord client destroyed", true, false);
 			} catch {}
 		}

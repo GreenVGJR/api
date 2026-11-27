@@ -1668,16 +1668,16 @@ export const SPMusic = async function SPMusic(que: string, refresh_auth: boolean
 			const finalpes: any = pes2?.data?.searchV2 || {};
 			return {
 				data: {
-					albums: finalpes.albumsV2.items?.map((a: any) => a.data) || null,
-					artists: finalpes.artists.items?.map((a: any) => a.data) || null,
-					audiobooks: finalpes.audiobooks.items?.map((a: any) => a.data) || null,
-					featured: finalpes.topResultsV2.itemsV2?.map((a: any) => a.item.data) || null,
-					episodes: finalpes.episodes.items?.map((a: any) => a.data) || null,
-					genres: finalpes.genres.items?.map((a: any) => a.data) || null,
-					playlists: finalpes.playlists.items?.map((a: any) => a.data) || null,
-					podcasts: finalpes.podcasts.items?.map((a: any) => a.data) || null,
-					tracks: finalpes.tracksV2.items?.map((a: any) => a.item.data) || null,
-					users: finalpes.users.items?.map((a: any) => a.data) || null,
+					albums: finalpes.albumsV2?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					artists: finalpes.artists?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					audiobooks: finalpes.audiobooks?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					featured: finalpes.topResultsV2?.itemsV2?.map((a: any) => a?.item?.data)?.filter(Boolean) || null,
+					episodes: finalpes.episodes?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					genres: finalpes.genres?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					playlists: finalpes.playlists?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					podcasts: finalpes.podcasts?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
+					tracks: finalpes.tracksV2?.items?.map((a: any) => a?.item?.data)?.filter(Boolean) || null,
+					users: finalpes.users?.items?.map((a: any) => a?.data)?.filter(Boolean) || null,
 				},
 			};
 		}

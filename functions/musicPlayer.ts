@@ -165,11 +165,8 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			c.header("Cache-Control", "public, no-cache, no-store, no-transform");
 			if (!(checkAccept && checkBrowserMode)) {
 				c.header("Content-Type", "text/html");
-				c.header("Content-Encoding", "gzip");
-				return stream(c, async (s: any) => {
-					await s.write("");
-					await s.write(zlib.deflateSync("null"));
-				});
+				c.header("Content-Encoding", "n");
+				return c.body(null);
 			}
 			const challengeData = generateChallenge(ipLL);
 			c.status(302);

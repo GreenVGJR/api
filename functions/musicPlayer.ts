@@ -162,9 +162,9 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			c.header("X-Player", "lavalink");
 			c.header("X-Warning", "This music endpoint only for BDFD users. Beside that, you need to solve this challenge");
 			c.header("Content-Type", "text/event-stream");
-			c.header("Cache-Control", "public, no-cache, no-store, no-transform, max-age=0, must-revalidate");
+			c.header("Cache-Control", "public, no-cache, no-store, no-transform");
 			if (!(checkAccept && checkBrowserMode)) {
-				c.header("Content-Type", "application/json");
+				c.header("Content-Type", "text/html");
 				c.header("Content-Encoding", "gzip");
 				return stream(c, async (s: any) => {
 					await s.write("");

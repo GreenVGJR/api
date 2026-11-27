@@ -164,6 +164,7 @@ export async function createMusicStream(c: any, callback: (log: (msg: string) =>
 			c.header("Content-Type", "text/event-stream");
 			c.header("Cache-Control", "public, no-cache, no-store, no-transform, max-age=0, must-revalidate");
 			if (!(checkAccept && checkBrowserMode)) {
+				c.header("Content-Type", "application/json");
 				c.header("Content-Encoding", "gzip");
 				return stream(c, async (s: any) => {
 					await s.write("");
